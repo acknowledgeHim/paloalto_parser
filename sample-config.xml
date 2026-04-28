@@ -1,0 +1,370 @@
+<?xml version="1.0"?>
+<config version="10.1.0">
+  <devices>
+    <!-- Management / system settings -->
+  </devices>
+  <deviceconfig>
+    <system>
+      <hostname>PA-LAB-FW01</hostname>
+      <service>
+        <disable-telnet>no</disable-telnet>
+        <disable-http>no</disable-http>
+        <disable-https>no</disable-https>
+        <disable-ssh>no</disable-ssh>
+      </service>
+      <ntp-servers>
+        <!-- No primary NTP configured -->
+      </ntp-servers>
+      <dns-setting>
+        <servers>
+          <primary>8.8.8.8</primary>
+        </servers>
+      </dns-setting>
+      <snmp-setting>
+        <access-setting>
+          <version>
+            <v2c>
+              <snmp-community-string>public</snmp-community-string>
+            </v2c>
+          </version>
+        </access-setting>
+      </snmp-setting>
+    </system>
+  </deviceconfig>
+  <network>
+    <ike>
+      <crypto-profiles>
+        <ike-crypto-profiles>
+          <entry name="weak-ike-profile">
+            <encryption><member>3des</member><member>aes-128-cbc</member></encryption>
+            <hash><member>md5</member><member>sha1</member></hash>
+            <dh-group><member>group2</member><member>group14</member></dh-group>
+            <lifetime><hours>8</hours></lifetime>
+          </entry>
+          <entry name="strong-ike-profile">
+            <encryption><member>aes-256-gcm</member></encryption>
+            <hash><member>sha256</member></hash>
+            <dh-group><member>group20</member></dh-group>
+            <lifetime><hours>8</hours></lifetime>
+          </entry>
+        </ike-crypto-profiles>
+        <ipsec-crypto-profiles>
+          <entry name="weak-ipsec-profile">
+            <esp>
+              <encryption><member>3des</member></encryption>
+              <authentication><member>md5</member></authentication>
+            </esp>
+            <dh-group>group2</dh-group>
+            <lifetime><hours>1</hours></lifetime>
+          </entry>
+          <entry name="good-ipsec-profile">
+            <esp>
+              <encryption><member>aes-256-gcm</member></encryption>
+              <authentication><member>sha256</member></authentication>
+            </esp>
+            <dh-group>group14</dh-group>
+            <lifetime><hours>1</hours></lifetime>
+          </entry>
+        </ipsec-crypto-profiles>
+      </crypto-profiles>
+      <gateway>
+        <entry name="vpn-gw-ikev1">
+          <protocol>
+            <ikev1>
+              <ike-crypto-profile>weak-ike-profile</ike-crypto-profile>
+            </ikev1>
+          </protocol>
+          <authentication>
+            <pre-shared-key>
+              <key>supersecretkey123</key>
+            </pre-shared-key>
+          </authentication>
+          <peer-ip-value>198.51.100.1</peer-ip-value>
+          <local-ip-value>203.0.113.1</local-ip-value>
+        </entry>
+      </gateway>
+    </ike>
+  </network>
+  <ssl-tls-service-profile>
+    <entry name="old-tls-profile">
+      <protocol-settings>
+        <min-version>tls1-0</min-version>
+        <max-version>max</max-version>
+      </protocol-settings>
+      <certificate>default</certificate>
+    </entry>
+  </ssl-tls-service-profile>
+  <shared>
+    <administrator>
+      <entry name="admin">
+        <permissions>
+          <role-based>
+            <superuser>yes</superuser>
+          </role-based>
+        </permissions>
+        <phash>$1$abc123$hashedpassword</phash>
+        <!-- No authentication-profile = no MFA -->
+      </entry>
+      <entry name="admin2">
+        <permissions>
+          <role-based>
+            <superuser>yes</superuser>
+          </role-based>
+        </permissions>
+        <phash>$1$def456$hashedpassword2</phash>
+      </entry>
+      <entry name="operator">
+        <permissions>
+          <role-based>
+            <custom>
+              <profile>read-only</profile>
+            </custom>
+          </role-based>
+        </permissions>
+        <!-- No password, no key — CRITICAL -->
+      </entry>
+    </administrator>
+  </shared>
+  <devices>
+    <entry name="localhost.localdomain">
+      <vsys>
+        <entry name="vsys1">
+
+          <!-- Address objects -->
+          <address>
+            <entry name="web-server-1"><ip-netmask>10.0.1.100/32</ip-netmask><description>Primary web server</description></entry>
+            <entry name="db-server"><ip-netmask>10.0.2.50/32</ip-netmask><description>Database server</description></entry>
+            <entry name="mgmt-subnet"><ip-netmask>192.168.100.0/24</ip-netmask><description>Management network</description></entry>
+            <entry name="partner-net"><ip-netmask>203.0.113.0/24</ip-netmask></entry>
+          </address>
+
+          <address-group>
+            <entry name="web-servers">
+              <static><member>web-server-1</member></static>
+              <description>All web servers</description>
+            </entry>
+            <entry name="internal-servers">
+              <static><member>web-server-1</member><member>db-server</member></static>
+            </entry>
+          </address-group>
+
+          <!-- Service objects -->
+          <service>
+            <entry name="svc-https"><protocol><tcp><port>443</port></tcp></protocol><description>HTTPS</description></entry>
+            <entry name="svc-rdp"><protocol><tcp><port>3389</port></tcp></protocol></entry>
+            <entry name="svc-ssh"><protocol><tcp><port>22</port></tcp></protocol></entry>
+            <entry name="svc-db"><protocol><tcp><port>1433</port></tcp></protocol><description>SQL Server</description></entry>
+          </service>
+
+          <service-group>
+            <entry name="svc-grp-web"><members><member>svc-https</member></members></entry>
+          </service-group>
+
+          <!-- Security profile groups -->
+          <profile-group>
+            <entry name="strict-security">
+              <virus>default</virus>
+              <vulnerability>strict</vulnerability>
+              <spyware>strict</spyware>
+              <url-filtering>strict-url</url-filtering>
+              <file-blocking>strict-file-blocking</file-blocking>
+              <wildfire-analysis>default</wildfire-analysis>
+            </entry>
+            <entry name="outbound-security">
+              <virus>default</virus>
+              <vulnerability>default</vulnerability>
+              <spyware>default</spyware>
+              <url-filtering>default</url-filtering>
+              <wildfire-analysis>default</wildfire-analysis>
+            </entry>
+          </profile-group>
+
+          <!-- Zones -->
+          <zone>
+            <entry name="untrust">
+              <network><layer3><member>ethernet1/1</member></layer3></network>
+            </entry>
+            <entry name="trust">
+              <network><layer3><member>ethernet1/2</member></layer3></network>
+              <network><zone-protection-profile>trust-zone-protect</zone-protection-profile></network>
+            </entry>
+            <entry name="dmz">
+              <network><layer3><member>ethernet1/3</member></layer3></network>
+              <network><zone-protection-profile>dmz-zone-protect</zone-protection-profile></network>
+            </entry>
+            <entry name="mgmt">
+              <network><layer3><member>ethernet1/4</member></layer3></network>
+              <network><zone-protection-profile>mgmt-zone-protect</zone-protection-profile></network>
+            </entry>
+          </zone>
+
+          <!-- Rulebase -->
+          <rulebase>
+            <security>
+              <rules>
+
+                <!-- GOOD rule: inbound HTTPS to DMZ with profiles -->
+                <entry name="Allow-Inbound-HTTPS">
+                  <from><member>untrust</member></from>
+                  <to><member>dmz</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>web-server-1</member></destination>
+                  <application><member>ssl</member><member>web-browsing</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                  <profile-setting><group><member>strict-security</member></group></profile-setting>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                  <description>Allow public HTTPS access to web servers in DMZ</description>
+                </entry>
+
+                <!-- BAD: any/any/any allow — CRITICAL -->
+                <entry name="Temp-AllowAll-Legacy">
+                  <from><member>any</member></from>
+                  <to><member>any</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>any</member></service>
+                  <action>allow</action>
+                  <log-start>no</log-start>
+                  <log-end>no</log-end>
+                </entry>
+
+                <!-- BAD: allow inbound with no profiles — HIGH -->
+                <entry name="Allow-Partner-Access">
+                  <from><member>untrust</member></from>
+                  <to><member>trust</member></to>
+                  <source><member>partner-net</member></source>
+                  <destination><member>internal-servers</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>svc-https</member></service>
+                  <action>allow</action>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                  <description>Partner HTTPS access</description>
+                </entry>
+
+                <!-- BAD: RDP from any — HIGH -->
+                <entry name="Allow-RDP-Everywhere">
+                  <from><member>untrust</member></from>
+                  <to><member>trust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>rdp</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                  <description>Remote desktop access</description>
+                </entry>
+
+                <!-- BAD: no logging — HIGH -->
+                <entry name="Internal-DMZ-Access">
+                  <from><member>trust</member></from>
+                  <to><member>dmz</member></to>
+                  <source><member>mgmt-subnet</member></source>
+                  <destination><member>web-servers</member></destination>
+                  <application><member>ssh</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                  <log-start>no</log-start>
+                  <log-end>no</log-end>
+                </entry>
+
+                <!-- BAD: disabled rule — LOW -->
+                <entry name="Old-FTP-Rule">
+                  <from><member>trust</member></from>
+                  <to><member>untrust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>ftp</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                  <disabled>yes</disabled>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                </entry>
+
+                <!-- GOOD: outbound internet with profiles and description -->
+                <entry name="Allow-Outbound-Internet">
+                  <from><member>trust</member></from>
+                  <to><member>untrust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>ssl</member><member>web-browsing</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                  <profile-setting><group><member>outbound-security</member></group></profile-setting>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                  <description>Allow outbound web browsing for internal users</description>
+                </entry>
+
+                <!-- BAD: no description — LOW; negated source — MEDIUM -->
+                <entry name="Block-Except-Partners">
+                  <from><member>untrust</member></from>
+                  <to><member>dmz</member></to>
+                  <source><member>partner-net</member></source>
+                  <negate-source>yes</negate-source>
+                  <destination><member>web-server-1</member></destination>
+                  <application><member>ssl</member></application>
+                  <service><member>application-default</member></service>
+                  <action>deny</action>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                </entry>
+
+                <!-- Catch-all deny -->
+                <entry name="Default-Deny">
+                  <from><member>any</member></from>
+                  <to><member>any</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>any</member></service>
+                  <action>deny</action>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                  <description>Default deny all — last rule</description>
+                </entry>
+
+              </rules>
+            </security>
+
+            <nat>
+              <rules>
+                <entry name="Outbound-SNAT">
+                  <from><member>trust</member></from>
+                  <to><member>untrust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <service><member>any</member></service>
+                  <source-translation>
+                    <dynamic-ip-and-port>
+                      <interface-address><interface>ethernet1/1</interface></interface-address>
+                    </dynamic-ip-and-port>
+                  </source-translation>
+                  <description>Outbound PAT/masquerade via outside interface</description>
+                </entry>
+                <entry name="DNAT-WebServer">
+                  <from><member>untrust</member></from>
+                  <to><member>untrust</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>203.0.113.50</member></destination>
+                  <service><member>svc-https</member></service>
+                  <destination-translation>
+                    <translated-address>10.0.1.100</translated-address>
+                    <translated-port>443</translated-port>
+                  </destination-translation>
+                  <description>DNAT public IP to web server</description>
+                </entry>
+              </rules>
+            </nat>
+
+          </rulebase>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>
