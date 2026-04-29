@@ -57,6 +57,92 @@ def _parse_xml_with_linenos(filename: str):
     return builder.close(), linemap
 
 
+# ── CIS Controls v8 mapping ──────────────────────────────────────────────────
+# Short descriptions used in the CIS reference tab
+CIS_CTRL_DESC = {
+    "3.10":  "Encrypt Sensitive Data in Transit",
+    "4.2":   "Secure Configuration Process for Network Infrastructure",
+    "4.7":   "Manage Default Accounts on Enterprise Assets and Software",
+    "4.8":   "Disable Unnecessary Services on Enterprise Assets and Software",
+    "4.9":   "Configure Trusted DNS Servers on Enterprise Assets",
+    "5.2":   "Use Unique Passwords",
+    "5.4":   "Restrict Administrator Privileges to Dedicated Accounts",
+    "6.5":   "Require MFA for Administrative Access",
+    "6.7":   "Centralize Access Control",
+    "6.8":   "Define and Maintain Role-Based Access Control",
+    "8.2":   "Collect Audit Logs",
+    "8.4":   "Standardize Time Synchronization",
+    "8.5":   "Collect Detailed Audit Logs",
+    "8.9":   "Centralize Audit Logs",
+    "10.1":  "Deploy and Maintain Anti-Malware Software",
+    "10.7":  "Use Behavior-Based Anti-Malware Software",
+    "12.2":  "Establish and Maintain a Secure Network Architecture",
+    "12.3":  "Securely Manage Network Infrastructure",
+    "12.6":  "Use Secure Network Management and Communication Protocols",
+    "13.3":  "Deploy a Network Intrusion Detection Solution",
+    "13.4":  "Perform Traffic Filtering Between Network Segments",
+    "13.8":  "Deploy a Network Intrusion Prevention Solution",
+    "13.10": "Perform Application Layer Filtering",
+}
+
+# Maps every check category string → list of CIS v8 safeguard IDs
+CIS_CONTROL_MAP: dict[str, list[str]] = {
+    # ── Firewall rule checks ───────────────────────────────────────────────────
+    "Any/Any/Any Allow Rule":                    ["12.2", "13.4"],
+    "Missing Security Profiles":                 ["10.1", "13.8", "13.10"],
+    "No Logging Configured":                     ["8.2",  "8.5"],
+    "Allow Rule Not Logging Session End":        ["8.2",  "8.5"],
+    "Unrestricted Source Address":               ["12.2", "13.4"],
+    "Unrestricted Destination Address":          ["12.2", "13.4"],
+    "Exposed RDP from Any Source":               ["12.2", "12.6"],
+    "Cleartext Telnet Allowed":                  ["4.8",  "12.6"],
+    "SSH Exposed from Any Source":               ["12.2", "12.3"],
+    "SMB Exposed from Any Source":               ["12.2", "13.4"],
+    "VNC Exposed from Any Source":               ["12.2", "12.6"],
+    "Disabled Rule":                             ["4.2"],
+    "Missing Rule Description":                  ["4.2"],
+    "Negated Source Address":                    ["4.2",  "12.2"],
+    "Negated Destination Address":               ["4.2",  "12.2"],
+    "Zone Missing Protection Profile":           ["13.3", "13.4"],
+    "Potential Shadow Rule":                     ["4.2",  "12.2"],
+    "Application+Service Both Any":              ["13.4", "13.10"],
+    "Inbound Allow Without Inspection":          ["10.1", "13.4", "13.8"],
+    "Service=Any with Specific Application":     ["12.2", "13.4"],
+    # ── Crypto checks ─────────────────────────────────────────────────────────
+    "Weak IKE Encryption":                       ["3.10", "12.6"],
+    "Weak IKE Hash/PRF":                         ["3.10", "12.6"],
+    "Weak IKE DH Group":                         ["3.10", "12.6"],
+    "Weak IPSec Encryption":                     ["3.10", "12.6"],
+    "Weak IPSec Authentication":                 ["3.10", "12.6"],
+    "Weak IPSec DH Group (PFS)":                 ["3.10", "12.6"],
+    "IPSec PFS Disabled":                        ["3.10"],
+    "Weak Minimum TLS Version":                  ["3.10", "12.6"],
+    "IKEv1 in Use":                              ["12.6"],
+    "IKE Pre-Shared Key Authentication":         ["12.6"],
+    # ── Management / system checks ────────────────────────────────────────────
+    "HTTP Management Enabled":                   ["4.2",  "12.3", "12.6"],
+    "Telnet Management Enabled":                 ["4.2",  "12.3", "12.6"],
+    "No Management IP Restrictions":             ["12.3", "6.7"],
+    "NTP Not Configured":                        ["8.4"],
+    "No Login Banner":                           ["4.2"],
+    "DNS Not Configured":                        ["4.9"],
+    "Admin Without Authentication Profile":      ["6.5"],
+    "Admin Account Has No Password":             ["5.2",  "6.5"],
+    "Excessive Superuser Accounts":              ["5.4",  "6.8"],
+    "SNMPv1 Enabled":                            ["4.2",  "12.3", "12.6"],
+    "SNMPv2c Enabled":                           ["4.2",  "12.3"],
+    "Default/Weak SNMP Community String":        ["4.7",  "12.3"],
+    "SNMP Enabled Without Source Restrictions":  ["12.3", "6.7"],
+    "No Syslog Servers Configured":              ["8.2",  "8.9"],
+    "Syslog Transmitted Over UDP":               ["8.9"],
+}
+
+
+def _cis_label(ctrl_ids: list[str]) -> str:
+    """Return a compact string like 'CIS 12.2 · CIS 13.4'."""
+    return " · ".join(f"CIS {c}" for c in ctrl_ids)
+
+
 # ── Colour palette ────────────────────────────────────────────────────────────
 C = {
     "hdr_bg":   "1F3864", "hdr_fg":   "FFFFFF",
@@ -383,6 +469,7 @@ class PaloAltoParser:
     # ── Security checks ───────────────────────────────────────────────────────
     def _issue(self, severity, category, rule_name, description, recommendation,
                details="", line=""):
+        cis_ids = CIS_CONTROL_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
@@ -391,6 +478,8 @@ class PaloAltoParser:
             "description":    description,
             "recommendation": recommendation,
             "details":        details,
+            "cis_controls":   _cis_label(cis_ids),
+            "cis_ids":        cis_ids,
         })
 
     def _run_checks(self):
@@ -1469,7 +1558,8 @@ class ExcelReporter:
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
         headers = ["#", "Severity", "Category",
-                   "Rule / Object", "Config Line(s)", "Description", "Recommendation", "Details"]
+                   "Rule / Object", "Config Line(s)", "CIS v8 Controls",
+                   "Description", "Recommendation", "Details"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
@@ -1485,7 +1575,7 @@ class ExcelReporter:
             row_bg = self._row_fill(row)
 
             values = [idx, sev, iss["category"], iss["rule_name"],
-                      iss.get("line", ""),
+                      iss.get("line", ""), iss.get("cis_controls", ""),
                       iss["description"], iss["recommendation"], iss.get("details", "")]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
@@ -1499,6 +1589,11 @@ class ExcelReporter:
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
+                elif col == 6:  # CIS controls — subtle teal tint
+                    c.font = _font(bold=True, color="17375E", size=9)
+                    c.alignment = _align("center")
+                    if row_bg:
+                        c.fill = _fill(row_bg)
                 else:
                     c.font = _font()
                     c.alignment = _align()
@@ -1506,7 +1601,7 @@ class ExcelReporter:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 36, 14, 62, 62, 36])
+        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 60, 60, 36])
 
     # ── Crypto & System Config ────────────────────────────────────────────────
     def _sheet_crypto_system(self):
@@ -1761,6 +1856,117 @@ class ExcelReporter:
 
         self._set_widths(ws, [30, 22, 30, 25, 20, 22, 18])
 
+    # ── CIS v8 Mapping ────────────────────────────────────────────────────────
+    def _sheet_cis_mapping(self):
+        ws = self.wb.create_sheet("CIS v8 Mapping")
+        ws.sheet_view.showGridLines = False
+
+        # Title
+        ws.merge_cells("A1:F1")
+        t = ws["A1"]
+        t.value = "CIS Controls v8 — Finding Cross-Reference"
+        t.font  = Font(name="Calibri", bold=True, size=14, color="FFFFFF")
+        t.fill  = _fill(C["hdr_bg"])
+        t.alignment = _align("center", wrap=False)
+        ws.row_dimensions[1].height = 36
+
+        ws.merge_cells("A2:F2")
+        s = ws["A2"]
+        s.value = ("Each CIS safeguard lists all findings from this config that map to it, "
+                   "with count and severity breakdown.")
+        s.font  = _font(italic=True, color=C["info"], size=9)
+        s.fill  = _fill("F2F2F2")
+        s.alignment = _align("center", wrap=False)
+        ws.row_dimensions[2].height = 16
+
+        # Build reverse map: ctrl_id → list of issues
+        from collections import defaultdict as _dd
+        ctrl_issues: dict[str, list[dict]] = _dd(list)
+        for iss in self.p.issues:
+            for cid in iss.get("cis_ids", []):
+                ctrl_issues[cid].append(iss)
+
+        SEV_ORDER = self.SEV_ORDER
+        SEV_COLORS = self.SEV_COLORS
+
+        row = 4
+        # Sort controls numerically (e.g. 3.10 < 4.2 < 12.2)
+        def _sort_key(k):
+            parts = k.split(".")
+            return (int(parts[0]), float("0." + parts[1]) if len(parts) > 1 else 0)
+
+        all_ctrl_ids = sorted(CIS_CTRL_DESC.keys(), key=_sort_key)
+
+        for ctrl_id in all_ctrl_ids:
+            ctrl_desc = CIS_CTRL_DESC[ctrl_id]
+            issues_for_ctrl = sorted(
+                ctrl_issues.get(ctrl_id, []),
+                key=lambda x: SEV_ORDER.get(x["severity"], 9),
+            )
+
+            # Control header row
+            ws.merge_cells(f"A{row}:F{row}")
+            hc = ws.cell(row=row, column=1,
+                         value=f"CIS {ctrl_id} — {ctrl_desc}")
+            hc.font  = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
+            hc.fill  = _fill("17375E")
+            hc.alignment = _align("left", wrap=False)
+            hc.border = THIN
+            ws.row_dimensions[row].height = 22
+            row += 1
+
+            if not issues_for_ctrl:
+                ws.merge_cells(f"A{row}:F{row}")
+                nc = ws.cell(row=row, column=1, value="No findings for this control")
+                nc.font = _font(italic=True, color=C["info"])
+                nc.fill = _fill("F9F9F9")
+                nc.alignment = _align()
+                nc.border = THIN
+                row += 1
+            else:
+                # Column sub-headers
+                sub_hdrs = ["Severity", "Category", "Rule / Object",
+                            "Config Line(s)", "Description", "Recommendation"]
+                for col, h in enumerate(sub_hdrs, 1):
+                    c = ws.cell(row=row, column=col, value=h)
+                    c.font  = _font(bold=True, color="FFFFFF")
+                    c.fill  = _fill("2E4057")
+                    c.alignment = _align("center", wrap=False)
+                    c.border = THIN
+                ws.row_dimensions[row].height = 20
+                row += 1
+
+                for iss in issues_for_ctrl:
+                    sev = iss["severity"]
+                    fg, bg = SEV_COLORS[sev]
+                    rb = C["alt_row"] if row % 2 == 0 else None
+                    vals = [sev, iss["category"], iss["rule_name"],
+                            iss.get("line", ""),
+                            iss["description"], iss["recommendation"]]
+                    for col, val in enumerate(vals, 1):
+                        c = ws.cell(row=row, column=col, value=val)
+                        c.border = THIN
+                        if col == 1:
+                            c.fill  = _fill(bg)
+                            c.font  = _font(bold=True, color=fg)
+                            c.alignment = _align("center")
+                        elif col == 4:
+                            c.font = _font(color=C["info"], size=9)
+                            c.alignment = _align("center")
+                            if rb:
+                                c.fill = _fill(rb)
+                        else:
+                            c.font = _font()
+                            c.alignment = _align()
+                            if rb:
+                                c.fill = _fill(rb)
+                    ws.row_dimensions[row].height = 36
+                    row += 1
+
+            row += 1  # gap between controls
+
+        self._set_widths(ws, [12, 34, 36, 14, 60, 60])
+
     # ── Save ──────────────────────────────────────────────────────────────────
     def save(self):
         self._sheet_summary()
@@ -1772,6 +1978,7 @@ class ExcelReporter:
         self._sheet_zones()
         self._sheet_crypto_system()
         self._sheet_issues()
+        self._sheet_cis_mapping()
         self.wb.save(self.out)
 
 
