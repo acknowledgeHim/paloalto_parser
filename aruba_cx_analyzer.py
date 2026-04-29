@@ -83,6 +83,15 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     # ── Logging / time ────────────────────────────────────────────────────────
     "No Syslog Servers Configured":         ["8.2", "8.9"],
     "NTP Not Configured":                   ["8.4"],
+    "Only One NTP Server":                  ["8.4"],
+    "NTP Authentication Not Configured":    ["8.4", "12.6"],
+    # ── Password & session policy ─────────────────────────────────────────────
+    "Password Complexity Not Enforced":     ["5.2"],
+    "Weak Password Minimum Length":         ["5.2"],
+    "No Account Lockout Policy":            ["5.2", "6.5"],
+    "Management Session Timeout Not Set":   ["12.3"],
+    # ── ACL protocol checks ───────────────────────────────────────────────────
+    "ACL Permits Insecure Protocol":        ["4.8", "12.6"],
     # ── Configuration hygiene ─────────────────────────────────────────────────
     "No Login/MOTD Banner":                 ["4.2"],
     "No System Location":                   ["4.2"],
@@ -149,6 +158,7 @@ class ArubaCXParser:
         self.dhcp_snooping: dict  = {}
         self.arp_inspection: dict = {}
         self.spanning_tree: dict  = {}
+        self.password_policy: dict = {}
         self.issues: list[dict]   = []
 
     # ── Entry point ───────────────────────────────────────────────────────────
@@ -174,6 +184,7 @@ class ArubaCXParser:
         self._parse_dhcp_snooping(blocks)
         self._parse_arp_inspection(blocks)
         self._parse_spanning_tree(blocks)
+        self._parse_password_policy(blocks)
         self._run_checks()
 
     # ── Block splitter ────────────────────────────────────────────────────────
@@ -738,6 +749,67 @@ class ArubaCXParser:
                 st["priority"] = m.group(1)
         self.spanning_tree = st
 
+    def _parse_password_policy(self, blocks: list[dict]):
+        """Parse password policy, account lockout, session timeout, and NTP auth settings."""
+        pp: dict = {
+            "login_attempts":     0,  "lockout_time":    0,
+            "min_length":         0,
+            "complexity_upper":   0,  "complexity_lower":   0,
+            "complexity_numeric": 0,  "complexity_special": 0,
+            "session_timeout":    0,
+            "ntp_auth_enabled":   False,
+            "ntp_auth_keys":      [],
+            "line_lockout":       None,
+            "line_length":        None,
+            "line_session":       None,
+        }
+        for blk in blocks:
+            hdr = blk["header"]
+            m = re.match(r"^aaa\s+authentication\s+login-attempts\s+(\d+)", hdr, re.I)
+            if m:
+                pp["login_attempts"] = int(m.group(1))
+                pp["line_lockout"]   = blk["lineno"]
+                continue
+            m = re.match(r"^aaa\s+authentication\s+login-lockout-time\s+(\d+)", hdr, re.I)
+            if m:
+                pp["lockout_time"] = int(m.group(1))
+                continue
+            m = re.match(r"^password\s+min-length\s+(\d+)", hdr, re.I)
+            if m:
+                pp["min_length"]  = int(m.group(1))
+                pp["line_length"] = blk["lineno"]
+                continue
+            m = re.match(r"^password\s+complexity\s+min-uppercase\s+(\d+)", hdr, re.I)
+            if m:
+                pp["complexity_upper"] = int(m.group(1))
+                continue
+            m = re.match(r"^password\s+complexity\s+min-lowercase\s+(\d+)", hdr, re.I)
+            if m:
+                pp["complexity_lower"] = int(m.group(1))
+                continue
+            m = re.match(r"^password\s+complexity\s+min-numeric\s+(\d+)", hdr, re.I)
+            if m:
+                pp["complexity_numeric"] = int(m.group(1))
+                continue
+            m = re.match(r"^password\s+complexity\s+min-special-char\s+(\d+)", hdr, re.I)
+            if m:
+                pp["complexity_special"] = int(m.group(1))
+                continue
+            m = re.match(r"^(?:cli\s+)?session-timeout\s+(\d+)", hdr, re.I)
+            if m:
+                pp["session_timeout"] = int(m.group(1))
+                pp["line_session"]    = blk["lineno"]
+                continue
+            if re.match(r"^ntp\s+authentication$", hdr, re.I):
+                pp["ntp_auth_enabled"] = True
+                continue
+            m = re.match(r"^ntp\s+authentication-key\s+(\d+)\s+(md5|sha1|sha256)\s+\S+", hdr, re.I)
+            if m:
+                pp["ntp_auth_keys"].append(
+                    {"id": m.group(1), "type": m.group(2), "line": blk["lineno"]})
+                continue
+        self.password_policy = pp
+
     # ── VLAN range expander ───────────────────────────────────────────────────
     @staticmethod
     def _expand_vlans(vlan_str: str) -> list[int]:
@@ -770,6 +842,8 @@ class ArubaCXParser:
         self._chk_ntp()
         self._chk_syslog()
         self._chk_system()
+        self._chk_password_policy()
+        self._chk_acl_insecure_protocols()
 
     # Check: plaintext credentials ────────────────────────────────────────────
     def _chk_credentials(self):
@@ -1027,6 +1101,13 @@ class ArubaCXParser:
                 "No NTP servers are configured. Inaccurate timestamps break log correlation, "
                 "certificate validation, and RADIUS/TACACS+ accounting.",
                 "Configure at least two NTP servers: 'ntp server <ip>'.")
+            return
+
+        if len(self.ntp_servers) == 1:
+            self._issue("LOW", "Only One NTP Server", "NTP",
+                "Only one NTP server is configured. Loss of this server leaves the switch without time sync.",
+                "Add a second NTP server: 'ntp server <ip>'.",
+                f"Current: {self.ntp_servers[0]}")
 
     # Check: Syslog ───────────────────────────────────────────────────────────
     def _chk_syslog(self):
@@ -1058,6 +1139,86 @@ class ArubaCXParser:
             self._issue("LOW", "DNS Not Configured", "System",
                 "No DNS server is configured on the switch.",
                 "Configure 'ip dns server-address <ip>' for name resolution in ACLs and logging.")
+
+    def _chk_password_policy(self):
+        pp = self.password_policy
+        if not pp:
+            return
+
+        if not pp.get("login_attempts"):
+            self._issue("HIGH", "No Account Lockout Policy", "Password Policy",
+                "No login-attempt limit is configured — brute-force attacks face no lockout.",
+                "Set 'aaa authentication login-attempts 3' (or ≤ 5) and "
+                "'aaa authentication login-lockout-time 300' (≥ 5 minutes).")
+        elif pp.get("login_attempts", 99) > 5:
+            self._issue("MEDIUM", "No Account Lockout Policy", "Password Policy",
+                f"Login attempt limit is {pp['login_attempts']} (recommended ≤ 5).",
+                "Reduce 'aaa authentication login-attempts' to 5 or fewer.",
+                line=pp.get("line_lockout"))
+
+        if not pp.get("min_length"):
+            self._issue("HIGH", "Weak Password Minimum Length", "Password Policy",
+                "No minimum password length is configured.",
+                "Set 'password min-length 12' or higher.")
+        elif pp.get("min_length", 0) < 12:
+            self._issue("MEDIUM", "Weak Password Minimum Length", "Password Policy",
+                f"Minimum password length is {pp['min_length']} characters (recommended ≥ 12).",
+                "Increase 'password min-length' to 12 or more.",
+                line=pp.get("line_length"))
+
+        has_complexity = any(pp.get(k, 0) > 0 for k in
+                             ("complexity_upper", "complexity_lower",
+                              "complexity_numeric", "complexity_special"))
+        if not has_complexity:
+            self._issue("MEDIUM", "Password Complexity Not Enforced", "Password Policy",
+                "No password complexity requirements are configured.",
+                "Set 'password complexity min-uppercase 1', 'min-lowercase 1', "
+                "'min-numeric 1', 'min-special-char 1'.")
+
+        timeout = pp.get("session_timeout", 0)
+        if timeout == 0:
+            self._issue("HIGH", "Management Session Timeout Not Set", "Password Policy",
+                "No session/idle timeout is configured — management sessions never expire.",
+                "Set 'session-timeout 900' (15 minutes) or 'cli session-timeout 15'.")
+        elif timeout > 1800:
+            self._issue("MEDIUM", "Management Session Timeout Not Set", "Password Policy",
+                f"Session timeout is {timeout} seconds ({timeout // 60} min) — too long.",
+                "Reduce to 'session-timeout 900' (15 minutes) or less.",
+                line=pp.get("line_session"))
+
+        if self.ntp_servers and not pp.get("ntp_auth_enabled"):
+            self._issue("LOW", "NTP Authentication Not Configured", "NTP",
+                "NTP authentication is not enabled. The switch accepts time from any source, "
+                "making it vulnerable to NTP spoofing attacks.",
+                "Enable NTP authentication: 'ntp authentication', "
+                "'ntp authentication-key <id> sha256 <key>', 'ntp trusted-key <id>'.")
+
+    def _chk_acl_insecure_protocols(self):
+        INSECURE: dict[str, tuple[str, str, str]] = {
+            "23":     ("HIGH",   "telnet", "Telnet — plaintext credential protocol"),
+            "21":     ("MEDIUM", "ftp",    "FTP — plaintext credential/data protocol"),
+            "69":     ("MEDIUM", "tftp",   "TFTP — unauthenticated file transfer"),
+            "513":    ("HIGH",   "rlogin", "rlogin — unauthenticated remote login"),
+            "514":    ("HIGH",   "rsh",    "RSH — Remote Shell, no encryption"),
+            "telnet": ("HIGH",   "telnet", "Telnet — plaintext credential protocol"),
+            "ftp":    ("MEDIUM", "ftp",    "FTP — plaintext credential/data protocol"),
+            "tftp":   ("MEDIUM", "tftp",   "TFTP — unauthenticated file transfer"),
+        }
+        for acl in self.acls:
+            for entry in acl["entries"]:
+                if entry["action"] != "permit":
+                    continue
+                ml = entry["match"].lower()
+                for token, (sev, app_name, desc) in INSECURE.items():
+                    if re.search(rf"\beq\s+{re.escape(token)}\b", ml):
+                        self._issue(sev, "ACL Permits Insecure Protocol",
+                            f"ACL {acl['name']} seq {entry['seq']}",
+                            f"ACL '{acl['name']}' entry {entry['seq']} permits {desc}.",
+                            f"Block {app_name} (port {token}). "
+                            "Replace with SSH/SFTP if remote access is needed.",
+                            f"Match: {entry['match']}",
+                            line=entry["line"])
+                        break  # one finding per entry is enough
 
 
 # ── Excel report writer ───────────────────────────────────────────────────────

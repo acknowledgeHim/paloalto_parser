@@ -135,6 +135,26 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "SNMP Enabled Without Source Restrictions":  ["12.3", "6.7"],
     "No Syslog Servers Configured":              ["8.2",  "8.9"],
     "Syslog Transmitted Over UDP":               ["8.9"],
+    # ── Password & session policy ─────────────────────────────────────────────
+    "Password Complexity Not Enforced":          ["5.2"],
+    "Weak Password Minimum Length":              ["5.2"],
+    "No Account Lockout Policy":                 ["5.2", "6.5"],
+    "Long or No Management Session Timeout":     ["12.3"],
+    # ── Content updates ───────────────────────────────────────────────────────
+    "AV/Threat Content Updates Not Automatic":   ["10.1"],
+    "WildFire Updates Not Automatic":            ["10.7"],
+    # ── Security profile quality ──────────────────────────────────────────────
+    "Vulnerability Profile Allows Critical/High": ["13.3", "13.8"],
+    "WildFire Profile Missing Rules":            ["10.7"],
+    "WildFire Profile Incomplete Coverage":      ["10.7"],
+    # ── Zone / User-ID ────────────────────────────────────────────────────────
+    "User-ID Enabled on Untrusted Zone":         ["12.2", "4.2"],
+    # ── NTP ───────────────────────────────────────────────────────────────────
+    "Only One NTP Server":                       ["8.4"],
+    "NTP Authentication Not Configured":         ["8.4", "12.6"],
+    # ── Insecure protocols / certificates ────────────────────────────────────
+    "Insecure Protocol Allowed in Rule":         ["4.8", "12.6"],
+    "TLS Profile Using Default Certificate":     ["4.2", "12.6"],
 }
 
 
@@ -197,6 +217,10 @@ class PaloAltoParser:
         self.admin_accounts: list[dict] = []
         self.mgmt_settings: dict = {}
         self.log_syslog_servers: list[dict] = []
+        self.password_policy:    dict            = {}
+        self.update_schedule:    dict            = {}
+        self.vuln_profiles:      dict[str, dict] = {}
+        self.wildfire_profiles:  dict[str, dict] = {}
 
     # ── Parse entry point ─────────────────────────────────────────────────────
     def parse(self):
@@ -219,6 +243,9 @@ class PaloAltoParser:
         self._parse_admin_accounts()
         self._parse_mgmt_settings()
         self._parse_syslog_servers()
+        self._parse_password_policy()
+        self._parse_update_schedule()
+        self._parse_security_profiles()
         self._run_checks()
 
     # ── Low-level helpers ─────────────────────────────────────────────────────
@@ -488,6 +515,7 @@ class PaloAltoParser:
         self._chk_logging()
         self._chk_overly_permissive()
         self._chk_risky_services_from_any()
+        self._chk_insecure_cleartext_apps()
         self._chk_disabled_rules()
         self._chk_missing_descriptions()
         self._chk_negate_rules()
@@ -496,15 +524,20 @@ class PaloAltoParser:
         self._chk_app_any_svc_any_allow()
         self._chk_inbound_no_inspection()
         self._chk_service_any_allow()
+        self._chk_user_id_untrust()
         # Crypto / system checks
         self._chk_weak_ike_crypto()
         self._chk_weak_ipsec_crypto()
         self._chk_weak_ssl_tls()
+        self._chk_tls_default_cert()
         self._chk_ike_gateways()
         self._chk_management_access()
         self._chk_admin_accounts()
         self._chk_snmp()
         self._chk_no_syslog()
+        self._chk_password_policy()
+        self._chk_update_schedule()
+        self._chk_security_profile_settings()
 
     def _active_allow(self):
         return [r for r in self.security_rules if r["disabled"] != "yes" and r["action"] == "allow"]
@@ -932,6 +965,116 @@ class PaloAltoParser:
                     "facility": self._text(server, "facility", "LOG_USER"),
                 })
 
+    def _parse_password_policy(self):
+        """Parse password complexity, account lockout, session timeout, and NTP auth."""
+        pp: dict = {
+            "complexity_enabled": False,
+            "min_length": 0,
+            "min_upper": 0, "min_lower": 0, "min_numeric": 0, "min_special": 0,
+            "lockout_attempts": 0, "lockout_time": 0,
+            "idle_timeout": 0,
+            "ntp_auth_primary": "", "ntp_auth_secondary": "",
+            "line_pc": "", "line_lockout": "",
+        }
+        pc_el = self.root.find(".//deviceconfig/system/password-complexity")
+        if pc_el is not None:
+            pp["complexity_enabled"] = self._text(pc_el, "enabled", "no").lower() == "yes"
+            for key, tag in [
+                ("min_length",  "minimum-length"),
+                ("min_upper",   "minimum-uppercase-letters"),
+                ("min_lower",   "minimum-lowercase-letters"),
+                ("min_numeric", "minimum-numeric-letters"),
+                ("min_special", "minimum-special-characters"),
+            ]:
+                try:
+                    pp[key] = int(self._text(pc_el, tag, "0"))
+                except ValueError:
+                    pass
+            pp["line_pc"] = self._lineno_str(pc_el)
+
+        mgmt_el = self.root.find(".//deviceconfig/setting/management")
+        if mgmt_el is not None:
+            lockout_el = mgmt_el.find("admin-lockout")
+            if lockout_el is not None:
+                try:
+                    pp["lockout_attempts"] = int(self._text(lockout_el, "failed-attempts", "0"))
+                    pp["lockout_time"]     = int(self._text(lockout_el, "lockout-time", "0"))
+                except ValueError:
+                    pass
+                pp["line_lockout"] = self._lineno_str(lockout_el)
+            try:
+                pp["idle_timeout"] = int(self._text(mgmt_el, "idle-timeout", "0"))
+            except ValueError:
+                pass
+
+        sys_el = self.root.find(".//deviceconfig/system")
+        if sys_el is not None:
+            pp["ntp_auth_primary"]   = self._text(
+                sys_el, "ntp-servers/primary-ntp-server/authentication-type", "")
+            pp["ntp_auth_secondary"] = self._text(
+                sys_el, "ntp-servers/secondary-ntp-server/authentication-type", "")
+        self.password_policy = pp
+
+    def _parse_update_schedule(self):
+        """Parse AV/threat/WildFire content update schedule from deviceconfig/system."""
+        us: dict = {
+            "av_action": "", "av_freq": "",
+            "threats_action": "", "threats_freq": "",
+            "wildfire_action": "", "wildfire_freq": "",
+            "line": "",
+        }
+        us_el = self.root.find(".//deviceconfig/system/update-schedule")
+        if us_el is not None:
+            us["line"] = self._lineno_str(us_el)
+            for section, a_key, f_key in [
+                ("anti-virus", "av_action",      "av_freq"),
+                ("threats",    "threats_action",  "threats_freq"),
+                ("wildfire",   "wildfire_action", "wildfire_freq"),
+            ]:
+                sec = us_el.find(section)
+                if sec is None:
+                    continue
+                rec = sec.find("recurring")
+                if rec is None:
+                    continue
+                for interval_el in rec:
+                    action = self._text(interval_el, "action")
+                    if action:
+                        us[a_key] = action
+                        us[f_key] = interval_el.tag
+                        break
+        self.update_schedule = us
+
+    def _parse_security_profiles(self):
+        """Parse vulnerability and WildFire analysis profiles for depth checks."""
+        for vp in self.root.findall(".//profiles/vulnerability/entry"):
+            name  = vp.get("name", "")
+            rules = []
+            for r in vp.findall("rules/entry"):
+                sevs = self._members(r, "severity")
+                action_el = r.find("action")
+                action = "allow"
+                if action_el is not None:
+                    for act in ("drop", "reset-both", "reset-client", "reset-server",
+                                "block-ip", "alert", "allow"):
+                        if action_el.find(act) is not None:
+                            action = act
+                            break
+                rules.append({"severities": sevs, "action": action})
+            self.vuln_profiles[name] = {"rules": rules, "line": self._lineno_str(vp)}
+
+        for wfp in self.root.findall(".//profiles/wildfire-analysis/entry"):
+            name  = wfp.get("name", "")
+            rules = []
+            for r in wfp.findall("rules/entry"):
+                rules.append({
+                    "file_types": self._members(r, "file-types"),
+                    "apps":       self._members(r, "applications"),
+                    "direction":  self._text(r, "direction", ""),
+                    "analysis":   self._text(r, "analysis", ""),
+                })
+            self.wildfire_profiles[name] = {"rules": rules, "line": self._lineno_str(wfp)}
+
     # ── Crypto / system checks ────────────────────────────────────────────────
 
     # Weak values reference tables
@@ -1066,6 +1209,11 @@ class PaloAltoParser:
                 "No primary NTP server is configured.",
                 "Configure at least two NTP servers for accurate timestamps in logs and certificates.",
                 "Inaccurate time breaks certificate validation, log correlation, and TOTP/MFA.")
+        elif not m.get("ntp_secondary"):
+            self._issue("LOW", "Only One NTP Server", "Management",
+                "Only one NTP server is configured. Loss of this server leaves the firewall without time sync.",
+                "Add a secondary NTP server for redundancy.",
+                f"Primary: {m.get('ntp_primary')}")
 
         if not m.get("login_banner"):
             self._issue("LOW", "No Login Banner", "Management",
@@ -1151,6 +1299,200 @@ class PaloAltoParser:
                         f"Syslog server {srv['server']} uses UDP — logs can be lost or spoofed in transit.",
                         "Switch syslog transport to TCP or SSL for reliable, tamper-evident log delivery.",
                         f"Profile: {srv['profile']}  Port: {srv['port']}")
+
+    def _chk_password_policy(self):
+        pp = self.password_policy
+        if not pp:
+            return
+        if not pp.get("complexity_enabled"):
+            self._issue("HIGH", "Password Complexity Not Enforced", "Password Policy",
+                "Password complexity requirements are disabled in deviceconfig/system/password-complexity.",
+                "Enable password-complexity and require uppercase, lowercase, numeric, and special characters.",
+                line=pp.get("line_pc", ""))
+        elif pp.get("min_length", 0) < 12:
+            self._issue("MEDIUM", "Weak Password Minimum Length", "Password Policy",
+                f"Minimum password length is {pp.get('min_length', 0)} characters (recommended ≥ 12).",
+                "Increase minimum-length to 12 or more in deviceconfig/system/password-complexity.",
+                line=pp.get("line_pc", ""))
+
+        if not pp.get("lockout_attempts"):
+            self._issue("HIGH", "No Account Lockout Policy", "Password Policy",
+                "No admin account lockout policy is configured.",
+                "Set admin-lockout in deviceconfig/setting/management: "
+                "failed-attempts ≤ 5 and lockout-time ≥ 5 minutes.",
+                line=pp.get("line_lockout", ""))
+        elif pp.get("lockout_attempts", 99) > 5:
+            self._issue("MEDIUM", "No Account Lockout Policy", "Password Policy",
+                f"Admin lockout threshold is {pp['lockout_attempts']} failed attempts (recommended ≤ 5).",
+                "Reduce failed-attempts to 5 or fewer.",
+                line=pp.get("line_lockout", ""))
+
+        timeout = pp.get("idle_timeout", 0)
+        if timeout == 0:
+            self._issue("HIGH", "Long or No Management Session Timeout", "Password Policy",
+                "Management session idle timeout is 0 (disabled). Idle sessions never expire.",
+                "Set idle-timeout to 15 or 30 minutes in deviceconfig/setting/management.",
+                line=pp.get("line_lockout", ""))
+        elif timeout > 30:
+            self._issue("MEDIUM", "Long or No Management Session Timeout", "Password Policy",
+                f"Management session idle timeout is {timeout} minutes (recommended ≤ 30).",
+                "Reduce idle-timeout to 15 or 30 minutes.",
+                line=pp.get("line_lockout", ""))
+
+        m = self.mgmt_settings
+        for label, ntp_key, auth_key in [
+            ("Primary",   "ntp_primary",   "ntp_auth_primary"),
+            ("Secondary", "ntp_secondary", "ntp_auth_secondary"),
+        ]:
+            if m.get(ntp_key) and not pp.get(auth_key, "").strip():
+                self._issue("LOW", "NTP Authentication Not Configured", "Management",
+                    f"{label} NTP server '{m[ntp_key]}' has no NTP authentication configured.",
+                    "Enable NTP authentication: set authentication-type to symmetric-key "
+                    "and configure a matching key ID on the NTP server.",
+                    f"NTP server: {m[ntp_key]}")
+
+    def _chk_update_schedule(self):
+        us = self.update_schedule
+        for label, a_key, f_key in [
+            ("Anti-Virus",     "av_action",      "av_freq"),
+            ("Threat content", "threats_action",  "threats_freq"),
+        ]:
+            action = us.get(a_key, "")
+            if not action:
+                self._issue("MEDIUM", "AV/Threat Content Updates Not Automatic", f"Update: {label}",
+                    f"{label} content updates are not scheduled.",
+                    "Configure automatic updates with 'download-and-install' action "
+                    "in Device > Dynamic Updates.",
+                    "Without scheduled updates the device will miss new threat signatures.")
+            elif action != "download-and-install":
+                self._issue("LOW", "AV/Threat Content Updates Not Automatic", f"Update: {label}",
+                    f"{label} update action is '{action}' (not 'download-and-install').",
+                    "Change the update action to 'download-and-install' for fully automatic updates.",
+                    f"Frequency: {us.get(f_key, '')}")
+
+        wf_action = us.get("wildfire_action", "")
+        if not wf_action:
+            self._issue("MEDIUM", "WildFire Updates Not Automatic", "Update: WildFire",
+                "WildFire content updates are not scheduled.",
+                "Configure WildFire updates (every-min or every-15-min) with 'download-and-install'. "
+                "WildFire delivers near-real-time protection against novel malware.")
+        elif wf_action != "download-and-install":
+            self._issue("LOW", "WildFire Updates Not Automatic", "Update: WildFire",
+                f"WildFire update action is '{wf_action}' (not 'download-and-install').",
+                "Change WildFire update action to 'download-and-install'.",
+                f"Frequency: {us.get('wildfire_freq', '')}")
+
+    def _chk_security_profile_settings(self):
+        block_actions = {"drop", "reset-both", "reset-client", "reset-server", "block-ip"}
+        for name, vp in self.vuln_profiles.items():
+            if not vp["rules"]:
+                self._issue("HIGH", "Vulnerability Profile Allows Critical/High Threats",
+                    f"Vuln Profile: {name}",
+                    f"Vulnerability profile '{name}' has no rules — all threats pass through.",
+                    "Add rules to block (reset-both or drop) at minimum critical and high severity threats.",
+                    line=vp["line"])
+                continue
+            blocks_critical = any(
+                any(s in ("critical", "high", "any") for s in r["severities"])
+                and r["action"] in block_actions
+                for r in vp["rules"]
+            )
+            if not blocks_critical:
+                self._issue("HIGH", "Vulnerability Profile Allows Critical/High Threats",
+                    f"Vuln Profile: {name}",
+                    f"Vulnerability profile '{name}' does not block critical or high severity threats.",
+                    "Add a rule with action reset-both (or drop) for critical and high severity threats.",
+                    line=vp["line"])
+
+        for name, wfp in self.wildfire_profiles.items():
+            if not wfp["rules"]:
+                self._issue("HIGH", "WildFire Profile Missing Rules", f"WildFire Profile: {name}",
+                    f"WildFire analysis profile '{name}' has no submission rules.",
+                    "Add rules to submit 'any' file type in 'both' directions to WildFire.",
+                    line=wfp["line"])
+                continue
+            has_broad = any(
+                "any" in r["file_types"]
+                and r.get("direction", "") in ("both", "upload", "download", "")
+                for r in wfp["rules"]
+            )
+            if not has_broad:
+                self._issue("MEDIUM", "WildFire Profile Incomplete Coverage",
+                    f"WildFire Profile: {name}",
+                    f"WildFire profile '{name}' does not submit all file types for analysis.",
+                    "Add a rule covering file-types='any' and direction='both' "
+                    "to maximise unknown-threat detection.",
+                    line=wfp["line"])
+
+    def _chk_user_id_untrust(self):
+        untrusted_kw = {"untrust", "external", "outside", "internet", "wan", "public"}
+        for z in self.zones:
+            if z.get("user_id", "no").lower() == "yes":
+                if any(kw in z["name"].lower() for kw in untrusted_kw):
+                    self._issue("HIGH", "User-ID Enabled on Untrusted Zone", f"Zone: {z['name']}",
+                        f"User-ID is enabled on zone '{z['name']}'. Untrusted hosts can inject "
+                        "forged User-ID mappings, bypassing identity-based policy.",
+                        "Disable User-ID on all untrusted and DMZ zones. "
+                        "Enable only on internal trusted zones.",
+                        line=z["line"])
+
+    def _chk_tls_default_cert(self):
+        for prof in self.ssl_tls_profiles:
+            cert = prof.get("certificate", "")
+            if cert.lower() in ("default", ""):
+                sev = "HIGH" if cert.lower() == "default" else "MEDIUM"
+                self._issue(sev, "TLS Profile Using Default Certificate", f"TLS Profile: {prof['name']}",
+                    f"SSL/TLS service profile '{prof['name']}' uses "
+                    f"{'the factory default self-signed certificate' if cert else 'no certificate'}. "
+                    "Clients cannot validate the server identity.",
+                    "Replace with a CA-signed certificate (Device > Certificate Management).",
+                    line=prof.get("line", ""))
+
+    def _chk_insecure_cleartext_apps(self):
+        """Flag allow rules using cleartext protocols not already caught by _chk_risky_services_from_any."""
+        ALWAYS_INSECURE: dict[str, tuple[str, str]] = {
+            "ftp":    ("MEDIUM", "FTP transmits credentials and data in cleartext."),
+            "tftp":   ("MEDIUM", "TFTP has no authentication or encryption."),
+            "rsh":    ("HIGH",   "Remote Shell (RSH) sends commands over cleartext."),
+            "rlogin": ("HIGH",   "rlogin is unauthenticated and cleartext."),
+            "finger": ("LOW",    "Finger discloses user accounts; obsolete protocol."),
+        }
+        UNTRUSTED_KW = {"untrust", "external", "outside", "internet", "wan", "public"}
+
+        for r in self._active_allow():
+            apps_lower = {a.strip().lower() for a in r["applications"].split(",")}
+            src_zones  = {z.strip().lower() for z in r["src_zones"].split(",")}
+            is_any_src = self._has_any(r["sources"])
+            from_external = any(kw in z for z in src_zones for kw in UNTRUSTED_KW) \
+                            or "any" in src_zones
+
+            for app, (sev, desc) in ALWAYS_INSECURE.items():
+                if app in apps_lower:
+                    self._issue(sev, "Insecure Protocol Allowed in Rule", r["name"],
+                        f"Rule allows '{app}': {desc}",
+                        f"Replace '{app}' with an encrypted equivalent (SSH/SFTP/SCP). "
+                        "Block this application entirely if not required.",
+                        f"Src zones: {r['src_zones']}  Destinations: {r['destinations']}",
+                        line=r["line"])
+
+            # Telnet with specific source — any-source case already handled by _chk_risky_services_from_any
+            if "telnet" in apps_lower and not is_any_src:
+                self._issue("HIGH", "Insecure Protocol Allowed in Rule", r["name"],
+                    "Telnet transmits credentials in cleartext.",
+                    "Replace Telnet with SSH. Block all Telnet traffic.",
+                    f"Src zones: {r['src_zones']}  Sources: {r['sources']}",
+                    line=r["line"])
+
+            # Unencrypted HTTP from an external zone into internal/DMZ
+            if from_external and ("http" in apps_lower or "web-browsing" in apps_lower):
+                dst_zones = {z.strip().lower() for z in r["dst_zones"].split(",")}
+                internal  = dst_zones - UNTRUSTED_KW - {"any"}
+                if internal:
+                    self._issue("LOW", "Insecure Protocol Allowed in Rule", r["name"],
+                        "Rule allows unencrypted HTTP from an external zone into an internal zone.",
+                        "Replace HTTP with HTTPS. If hosting a web service, enforce HTTP→HTTPS redirect.",
+                        f"Src zones: {r['src_zones']}  Dst zones: {r['dst_zones']}",
+                        line=r["line"])
 
 
 # ── Excel report writer ───────────────────────────────────────────────────────
