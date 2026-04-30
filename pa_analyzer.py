@@ -1497,24 +1497,28 @@ class PaloAltoParser:
                     f"{label} content updates are not scheduled.",
                     "Configure automatic updates with 'download-and-install' action "
                     "in Device > Dynamic Updates.",
-                    "Without scheduled updates the device will miss new threat signatures.")
+                    "Without scheduled updates the device will miss new threat signatures.",
+                    line=us.get("line", ""))
             elif action != "download-and-install":
                 self._issue("LOW", "AV/Threat Content Updates Not Automatic", f"Update: {label}",
                     f"{label} update action is '{action}' (not 'download-and-install').",
                     "Change the update action to 'download-and-install' for fully automatic updates.",
-                    f"Frequency: {us.get(f_key, '')}")
+                    f"Frequency: {us.get(f_key, '')}",
+                    line=us.get("line", ""))
 
         wf_action = us.get("wildfire_action", "")
         if not wf_action:
             self._issue("MEDIUM", "WildFire Updates Not Automatic", "Update: WildFire",
                 "WildFire content updates are not scheduled.",
                 "Configure WildFire updates (every-min or every-15-min) with 'download-and-install'. "
-                "WildFire delivers near-real-time protection against novel malware.")
+                "WildFire delivers near-real-time protection against novel malware.",
+                line=us.get("line", ""))
         elif wf_action != "download-and-install":
             self._issue("LOW", "WildFire Updates Not Automatic", "Update: WildFire",
                 f"WildFire update action is '{wf_action}' (not 'download-and-install').",
                 "Change WildFire update action to 'download-and-install'.",
-                f"Frequency: {us.get('wildfire_freq', '')}")
+                f"Frequency: {us.get('wildfire_freq', '')}",
+                line=us.get("line", ""))
 
     def _chk_security_profile_settings(self):
         block_actions = {"drop", "reset-both", "reset-client", "reset-server", "block-ip"}
@@ -1645,7 +1649,8 @@ class PaloAltoParser:
                     "explicitly permitted to be denied.",
                     "Add an explicit deny-all rule as the last rule in every rulebase "
                     "(action=deny, all zones, sources, destinations, applications).",
-                    f"Last rule: '{last['name']}'  Line: {last['line']}")
+                    f"Last rule: '{last['name']}'",
+                    line=last.get("line", ""))
 
     def _chk_file_blocking_inbound(self):
         """PCI DSS 5.3.1: File-blocking profile should be attached to inbound allow rules."""

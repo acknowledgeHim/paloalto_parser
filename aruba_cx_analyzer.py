@@ -364,6 +364,7 @@ class ArubaCXParser:
             "version": "", "ssh_vrfs": [],
             "telnet_enabled": False,
             "ssh_v1_disabled": False,
+            "ssh_line": "", "ssh_v1_line": "",
         }
 
         for blk in blocks:
@@ -396,6 +397,8 @@ class ArubaCXParser:
             m = re.match(r"^ssh\s+server\s+vrf\s+(\S+)", hdr, re.I)
             if m:
                 sys["ssh_vrfs"].append(m.group(1))
+                if not sys["ssh_line"]:
+                    sys["ssh_line"] = str(blk["lineno"])
                 continue
 
             if re.match(r"^telnet\s+server", hdr, re.I):
@@ -406,6 +409,7 @@ class ArubaCXParser:
             if re.match(r"^no\s+ssh\s+server\s+v1", hdr, re.I) or \
                re.match(r"^ssh\s+server\s+version\s+2", hdr, re.I):
                 sys["ssh_v1_disabled"] = True
+                sys["ssh_v1_line"] = str(blk["lineno"])
                 continue
 
             # Version line at top of file
@@ -856,6 +860,7 @@ class ArubaCXParser:
             "line_lockout":       None,
             "line_length":        None,
             "line_session":       None,
+            "line_age":           None,
         }
         for blk in blocks:
             hdr = blk["header"]
@@ -892,6 +897,7 @@ class ArubaCXParser:
             m = re.match(r"^password\s+age\s+(\d+)", hdr, re.I)
             if m:
                 pp["password_age"] = int(m.group(1))
+                pp["line_age"] = blk["lineno"]
                 continue
             m = re.match(r"^(?:cli\s+)?session-timeout\s+(\d+)", hdr, re.I)
             if m:
@@ -1303,7 +1309,8 @@ class ArubaCXParser:
         elif age > 90:
             self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
                 f"Password expiry is {age} days (PCI DSS 8.3.9 requires ≤ 90 days).",
-                "Reduce 'password age' to 90 days or fewer.")
+                "Reduce 'password age' to 90 days or fewer.",
+                line=pp.get("line_age") or "")
 
     def _chk_ssh_version(self):
         """PCI DSS 4.2.1: Only SSH v2 should be permitted."""
@@ -1311,7 +1318,8 @@ class ArubaCXParser:
             self._issue("HIGH", "SSH v1 Enabled", "SSH",
                 "SSH is enabled but SSHv1 has not been explicitly disabled. "
                 "SSHv1 has known vulnerabilities. PCI DSS 4.2.1 requires strong cryptography.",
-                "Disable SSHv1: add 'no ssh server v1' or 'ssh server version 2'.")
+                "Disable SSHv1: add 'no ssh server v1' or 'ssh server version 2'.",
+                line=self.system.get("ssh_line", ""))
 
     def _chk_acl_default_deny(self):
         """PCI DSS 1.2.4: ACLs should end with an explicit deny-all."""
