@@ -155,12 +155,118 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     # ── Insecure protocols / certificates ────────────────────────────────────
     "Insecure Protocol Allowed in Rule":         ["4.8", "12.6"],
     "TLS Profile Using Default Certificate":     ["4.2", "12.6"],
+    "Password Expiry Not Configured":            ["5.2"],
+    "Insufficient Password History":             ["5.2"],
+    "No Default Deny Rule":                      ["12.2", "13.4"],
+    "File Blocking Not Applied":                 ["10.1"],
 }
 
 
 def _cis_label(ctrl_ids: list[str]) -> str:
     """Return a compact string like 'CIS 12.2 · CIS 13.4'."""
     return " · ".join(f"CIS {c}" for c in ctrl_ids)
+
+
+# ── PCI DSS v4.0 mapping ─────────────────────────────────────────────────────
+PCI_DSS_DESC = {
+    "1.2.4":  "All traffic between trusted/untrusted networks is explicitly controlled",
+    "1.3.1":  "Inbound traffic to the CDE is restricted to what is necessary",
+    "1.3.2":  "Outbound traffic from the CDE is restricted to what is necessary",
+    "2.2.1":  "Configuration standards are defined for all system components",
+    "2.2.4":  "Only necessary services, protocols, and functions are enabled",
+    "2.2.7":  "All non-console administrative access is encrypted",
+    "4.2.1":  "Strong cryptography is used to safeguard PAN during transmission",
+    "5.3.1":  "Anti-malware solution is deployed on all applicable system components",
+    "5.3.2":  "Anti-malware mechanisms are kept current and actively running",
+    "6.3.1":  "Security vulnerabilities are identified and managed",
+    "7.2.1":  "All user access is appropriate and access is assigned by business need",
+    "8.2.1":  "All user IDs and authentication credentials are managed securely",
+    "8.2.8":  "If idle for more than 15 minutes, the session re-authenticates the user",
+    "8.3.4":  "Invalid authentication attempts are limited to no more than 10",
+    "8.3.6":  "Passwords/passphrases meet minimum complexity and length requirements",
+    "8.3.7":  "Passwords/passphrases cannot be the same as any of the last four used",
+    "8.3.9":  "Passwords/passphrases for user accounts are changed at least every 90 days",
+    "8.4.1":  "MFA is implemented for all non-console administrative access",
+    "10.2.1": "Audit logs are enabled and active for all system components",
+    "10.2.2": "Audit logs capture all activities by individuals with root or admin privileges",
+    "10.5.4": "Audit log files are protected against destruction and unauthorized modifications",
+    "10.6.1": "System clocks are synchronized using time-synchronization technology",
+}
+
+PCI_DSS_MAP: dict[str, list[str]] = {
+    # ── Firewall rule checks ───────────────────────────────────────────────────
+    "Any/Any/Any Allow Rule":              ["1.2.4", "1.3.1"],
+    "Missing Security Profiles":           ["5.3.1", "6.3.1"],
+    "No Logging Configured":               ["10.2.1", "10.2.2"],
+    "Allow Rule Not Logging Session End":  ["10.2.1"],
+    "Unrestricted Source Address":         ["1.3.1"],
+    "Unrestricted Destination Address":    ["1.3.2"],
+    "Exposed RDP from Any Source":         ["1.3.1"],
+    "Cleartext Telnet Allowed":            ["2.2.4", "2.2.7"],
+    "SSH Exposed from Any Source":         ["1.3.1"],
+    "SMB Exposed from Any Source":         ["1.3.1"],
+    "VNC Exposed from Any Source":         ["1.3.1"],
+    "Disabled Rule":                       ["1.2.4"],
+    "Missing Rule Description":            ["1.2.4"],
+    "Negated Source Address":              ["1.2.4"],
+    "Negated Destination Address":         ["1.2.4"],
+    "Zone Missing Protection Profile":     ["1.2.4", "1.3.1"],
+    "Potential Shadow Rule":               ["1.2.4"],
+    "Application+Service Both Any":        ["1.3.1"],
+    "Inbound Allow Without Inspection":    ["5.3.1", "6.3.1"],
+    "Service=Any with Specific Application": ["1.2.4"],
+    "No Default Deny Rule":                ["1.2.4"],
+    "File Blocking Not Applied":           ["5.3.1"],
+    # ── Crypto checks ─────────────────────────────────────────────────────────
+    "Weak IKE Encryption":                 ["4.2.1"],
+    "Weak IKE Hash/PRF":                   ["4.2.1"],
+    "Weak IKE DH Group":                   ["4.2.1"],
+    "Weak IPSec Encryption":               ["4.2.1"],
+    "Weak IPSec Authentication":           ["4.2.1"],
+    "Weak IPSec DH Group (PFS)":           ["4.2.1"],
+    "IPSec PFS Disabled":                  ["4.2.1"],
+    "Weak Minimum TLS Version":            ["4.2.1"],
+    "IKEv1 in Use":                        ["4.2.1"],
+    "IKE Pre-Shared Key Authentication":   ["4.2.1"],
+    "TLS Profile Using Default Certificate": ["4.2.1"],
+    # ── Management / system ───────────────────────────────────────────────────
+    "HTTP Management Enabled":             ["2.2.4", "2.2.7"],
+    "Telnet Management Enabled":           ["2.2.4", "2.2.7"],
+    "No Management IP Restrictions":       ["1.2.4"],
+    "NTP Not Configured":                  ["10.6.1"],
+    "Only One NTP Server":                 ["10.6.1"],
+    "NTP Authentication Not Configured":   ["10.6.1"],
+    "No Login Banner":                     ["2.2.1"],
+    "Admin Without Authentication Profile": ["8.4.1"],
+    "Admin Account Has No Password":       ["8.2.1", "8.3.6"],
+    "Excessive Superuser Accounts":        ["7.2.1"],
+    "SNMPv1 Enabled":                      ["2.2.4"],
+    "SNMPv2c Enabled":                     ["2.2.4"],
+    "Default/Weak SNMP Community String":  ["2.2.4"],
+    "SNMP Enabled Without Source Restrictions": ["1.2.4"],
+    "No Syslog Servers Configured":        ["10.5.4"],
+    "Syslog Transmitted Over UDP":         ["10.5.4"],
+    # ── Password policy ───────────────────────────────────────────────────────
+    "Password Complexity Not Enforced":    ["8.3.6"],
+    "Weak Password Minimum Length":        ["8.3.6"],
+    "No Account Lockout Policy":           ["8.3.4"],
+    "Long or No Management Session Timeout": ["8.2.8"],
+    "Password Expiry Not Configured":      ["8.3.9"],
+    "Insufficient Password History":       ["8.3.7"],
+    # ── Content updates / profile quality ────────────────────────────────────
+    "AV/Threat Content Updates Not Automatic": ["5.3.2"],
+    "WildFire Updates Not Automatic":      ["5.3.2"],
+    "Vulnerability Profile Allows Critical/High": ["6.3.1"],
+    "WildFire Profile Missing Rules":      ["5.3.2"],
+    "WildFire Profile Incomplete Coverage": ["5.3.2"],
+    # ── Zone / protocol ───────────────────────────────────────────────────────
+    "User-ID Enabled on Untrusted Zone":   ["1.3.1"],
+    "Insecure Protocol Allowed in Rule":   ["2.2.4", "4.2.1"],
+}
+
+
+def _pci_label(req_ids: list[str]) -> str:
+    return " · ".join(f"PCI {r}" for r in req_ids)
 
 
 # ── Colour palette ────────────────────────────────────────────────────────────
@@ -497,6 +603,7 @@ class PaloAltoParser:
     def _issue(self, severity, category, rule_name, description, recommendation,
                details="", line=""):
         cis_ids = CIS_CONTROL_MAP.get(category, [])
+        pci_ids = PCI_DSS_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
@@ -507,6 +614,8 @@ class PaloAltoParser:
             "details":        details,
             "cis_controls":   _cis_label(cis_ids),
             "cis_ids":        cis_ids,
+            "pci_dss":        _pci_label(pci_ids),
+            "pci_ids":        pci_ids,
         })
 
     def _run_checks(self):
@@ -538,6 +647,8 @@ class PaloAltoParser:
         self._chk_password_policy()
         self._chk_update_schedule()
         self._chk_security_profile_settings()
+        self._chk_default_deny_rule()
+        self._chk_file_blocking_inbound()
 
     def _active_allow(self):
         return [r for r in self.security_rules if r["disabled"] != "yes" and r["action"] == "allow"]
@@ -971,6 +1082,7 @@ class PaloAltoParser:
             "complexity_enabled": False,
             "min_length": 0,
             "min_upper": 0, "min_lower": 0, "min_numeric": 0, "min_special": 0,
+            "password_age": 0, "password_history": 0,
             "lockout_attempts": 0, "lockout_time": 0,
             "idle_timeout": 0,
             "ntp_auth_primary": "", "ntp_auth_secondary": "",
@@ -980,11 +1092,13 @@ class PaloAltoParser:
         if pc_el is not None:
             pp["complexity_enabled"] = self._text(pc_el, "enabled", "no").lower() == "yes"
             for key, tag in [
-                ("min_length",  "minimum-length"),
-                ("min_upper",   "minimum-uppercase-letters"),
-                ("min_lower",   "minimum-lowercase-letters"),
-                ("min_numeric", "minimum-numeric-letters"),
-                ("min_special", "minimum-special-characters"),
+                ("min_length",       "minimum-length"),
+                ("min_upper",        "minimum-uppercase-letters"),
+                ("min_lower",        "minimum-lowercase-letters"),
+                ("min_numeric",      "minimum-numeric-letters"),
+                ("min_special",      "minimum-special-characters"),
+                ("password_age",     "password-age-enforcement-period"),
+                ("password_history", "password-history-count"),
             ]:
                 try:
                     pp[key] = int(self._text(pc_el, tag, "0"))
@@ -1339,6 +1453,26 @@ class PaloAltoParser:
                 "Reduce idle-timeout to 15 or 30 minutes.",
                 line=pp.get("line_lockout", ""))
 
+        age = pp.get("password_age", 0)
+        if age == 0:
+            self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
+                "Password expiry is not enforced (password-age-enforcement-period = 0). "
+                "Passwords never expire. PCI DSS 8.3.9 requires passwords changed every 90 days.",
+                "Set password-age-enforcement-period to 90 or fewer days.",
+                line=pp.get("line_pc", ""))
+        elif age > 90:
+            self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
+                f"Password expiry period is {age} days (PCI DSS 8.3.9 requires ≤ 90 days).",
+                "Reduce password-age-enforcement-period to 90 days or fewer.",
+                line=pp.get("line_pc", ""))
+
+        history = pp.get("password_history", 0)
+        if history < 4:
+            self._issue("LOW", "Insufficient Password History", "Password Policy",
+                f"Password history count is {history} (PCI DSS 8.3.7 requires ≥ 4 prior passwords remembered).",
+                "Set password-history-count to at least 4.",
+                line=pp.get("line_pc", ""))
+
         m = self.mgmt_settings
         for label, ntp_key, auth_key in [
             ("Primary",   "ntp_primary",   "ntp_auth_primary"),
@@ -1493,6 +1627,52 @@ class PaloAltoParser:
                         "Replace HTTP with HTTPS. If hosting a web service, enforce HTTP→HTTPS redirect.",
                         f"Src zones: {r['src_zones']}  Dst zones: {r['dst_zones']}",
                         line=r["line"])
+
+    def _chk_default_deny_rule(self):
+        """PCI DSS 1.2.4: Every rulebase should end with an explicit deny-all."""
+        from collections import defaultdict
+        rb_rules: dict[str, list] = defaultdict(list)
+        for r in self.security_rules:
+            rb_rules[r["rulebase"]].append(r)
+        for rb_name, rules in rb_rules.items():
+            if not rules:
+                continue
+            last = rules[-1]
+            if last["action"] not in ("deny", "drop"):
+                self._issue("MEDIUM", "No Default Deny Rule", f"Rulebase: {rb_name}",
+                    f"The last rule in rulebase '{rb_name}' is '{last['action']}' — "
+                    "not an explicit deny-all. PCI DSS 1.2.4 requires all traffic not "
+                    "explicitly permitted to be denied.",
+                    "Add an explicit deny-all rule as the last rule in every rulebase "
+                    "(action=deny, all zones, sources, destinations, applications).",
+                    f"Last rule: '{last['name']}'  Line: {last['line']}")
+
+    def _chk_file_blocking_inbound(self):
+        """PCI DSS 5.3.1: File-blocking profile should be attached to inbound allow rules."""
+        UNTRUSTED_KW = {"untrust", "external", "outside", "internet", "wan", "public"}
+        for r in self._active_allow():
+            src_zones = {z.strip().lower() for z in r["src_zones"].split(",")}
+            from_external = any(kw in z for z in src_zones for kw in UNTRUSTED_KW) \
+                            or "any" in src_zones
+            if not from_external:
+                continue
+            pt = r["profile_type"]
+            if pt == "group":
+                grp_data = self.profile_groups.get(r["profiles"].get("group", ""), {})
+                has_fb = bool(grp_data.get("file-blocking"))
+            elif pt == "profiles":
+                has_fb = bool(r["profiles"].get("file-blocking"))
+            else:
+                has_fb = False
+            if not has_fb:
+                self._issue("MEDIUM", "File Blocking Not Applied", r["name"],
+                    f"Inbound allow rule '{r['name']}' from external zone(s) has no "
+                    "file-blocking profile. PCI DSS 5.3.1 requires anti-malware controls "
+                    "including file-type blocking on inbound traffic.",
+                    "Assign a file-blocking security profile (or profile group) to this rule. "
+                    "Block executable file types at minimum.",
+                    f"Src zones: {r['src_zones']}  Apps: {r['applications']}",
+                    line=r["line"])
 
 
 # ── Excel report writer ───────────────────────────────────────────────────────
@@ -1900,7 +2080,7 @@ class ExcelReporter:
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
         headers = ["#", "Severity", "Category",
-                   "Rule / Object", "Config Line(s)", "CIS v8 Controls",
+                   "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
                    "Description", "Recommendation", "Details"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
@@ -1918,6 +2098,7 @@ class ExcelReporter:
 
             values = [idx, sev, iss["category"], iss["rule_name"],
                       iss.get("line", ""), iss.get("cis_controls", ""),
+                      iss.get("pci_dss", ""),
                       iss["description"], iss["recommendation"], iss.get("details", "")]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
@@ -1931,8 +2112,13 @@ class ExcelReporter:
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 6:  # CIS controls — subtle teal tint
+                elif col == 6:  # CIS controls
                     c.font = _font(bold=True, color="17375E", size=9)
+                    c.alignment = _align("center")
+                    if row_bg:
+                        c.fill = _fill(row_bg)
+                elif col == 7:  # PCI DSS
+                    c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
@@ -1943,7 +2129,7 @@ class ExcelReporter:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 60, 60, 36])
+        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 18, 60, 60, 36])
 
     # ── Crypto & System Config ────────────────────────────────────────────────
     def _sheet_crypto_system(self):
@@ -2309,6 +2495,105 @@ class ExcelReporter:
 
         self._set_widths(ws, [12, 34, 36, 14, 60, 60])
 
+    # ── PCI DSS v4.0 Mapping ──────────────────────────────────────────────────
+    def _sheet_pci_mapping(self):
+        ws = self.wb.create_sheet("PCI DSS Mapping")
+        ws.sheet_view.showGridLines = False
+        PCI_HDR = "5C1A8C"  # purple for PCI DSS
+
+        ws.merge_cells("A1:F1")
+        t = ws["A1"]
+        t.value = "PCI DSS v4.0 — Finding Cross-Reference"
+        t.font  = Font(name="Calibri", bold=True, size=14, color="FFFFFF")
+        t.fill  = _fill(PCI_HDR)
+        t.alignment = _align("center", wrap=False)
+        ws.row_dimensions[1].height = 36
+
+        ws.merge_cells("A2:F2")
+        s = ws["A2"]
+        s.value = ("Each PCI DSS v4.0 requirement lists all findings from this config that map to it.")
+        s.font  = _font(italic=True, color=C["info"], size=9)
+        s.fill  = _fill("F2F2F2")
+        s.alignment = _align("center", wrap=False)
+        ws.row_dimensions[2].height = 16
+
+        from collections import defaultdict as _dd
+        req_issues: dict[str, list[dict]] = _dd(list)
+        for iss in self.p.issues:
+            for pid in iss.get("pci_ids", []):
+                req_issues[pid].append(iss)
+
+        SEV_ORDER  = self.SEV_ORDER
+        SEV_COLORS = self.SEV_COLORS
+        row = 3
+        for req_id in sorted(PCI_DSS_DESC.keys(),
+                              key=lambda x: [int(p) for p in x.split(".")]):
+            desc = PCI_DSS_DESC[req_id]
+            issues_for_req = sorted(
+                req_issues.get(req_id, []),
+                key=lambda x: SEV_ORDER.get(x["severity"], 9),
+            )
+            count = len(issues_for_req)
+            # Requirement header row
+            ws.merge_cells(f"A{row}:F{row}")
+            hc = ws.cell(row=row, column=1,
+                         value=f"PCI DSS {req_id}  [{count} finding{'s' if count != 1 else ''}]  {desc}")
+            hc.font  = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
+            hc.fill  = _fill(PCI_HDR)
+            hc.alignment = _align("left", wrap=False)
+            hc.border = THIN
+            ws.row_dimensions[row].height = 28
+            row += 1
+
+            if not issues_for_req:
+                ws.merge_cells(f"A{row}:F{row}")
+                nc = ws.cell(row=row, column=1, value="No findings for this requirement")
+                nc.font = _font(italic=True, color=C["info"])
+                nc.fill = _fill("F9F9F9")
+                nc.alignment = _align()
+                nc.border = THIN
+                row += 1
+            else:
+                sub_hdrs = ["Severity", "Category", "Rule / Object",
+                            "Config Line(s)", "Description", "Recommendation"]
+                for col, h in enumerate(sub_hdrs, 1):
+                    c = ws.cell(row=row, column=col, value=h)
+                    c.font  = _font(bold=True, color="FFFFFF")
+                    c.fill  = _fill("2E4057")
+                    c.alignment = _align("center", wrap=False)
+                    c.border = THIN
+                ws.row_dimensions[row].height = 20
+                row += 1
+                for iss in issues_for_req:
+                    sev = iss["severity"]
+                    fg, bg = SEV_COLORS[sev]
+                    rb = C["alt_row"] if row % 2 == 0 else None
+                    vals = [sev, iss["category"], iss["rule_name"],
+                            iss.get("line", ""),
+                            iss["description"], iss["recommendation"]]
+                    for col, val in enumerate(vals, 1):
+                        c = ws.cell(row=row, column=col, value=val)
+                        c.border = THIN
+                        if col == 1:
+                            c.fill  = _fill(bg)
+                            c.font  = _font(bold=True, color=fg)
+                            c.alignment = _align("center")
+                        elif col == 4:
+                            c.font = _font(color=C["info"], size=9)
+                            c.alignment = _align("center")
+                            if rb:
+                                c.fill = _fill(rb)
+                        else:
+                            c.font = _font()
+                            c.alignment = _align()
+                            if rb:
+                                c.fill = _fill(rb)
+                    ws.row_dimensions[row].height = 36
+                    row += 1
+            row += 1
+
+        self._set_widths(ws, [12, 34, 36, 14, 60, 60])
+
     # ── Save ──────────────────────────────────────────────────────────────────
     def save(self):
         self._sheet_summary()
@@ -2321,6 +2606,7 @@ class ExcelReporter:
         self._sheet_crypto_system()
         self._sheet_issues()
         self._sheet_cis_mapping()
+        self._sheet_pci_mapping()
         self.wb.save(self.out)
 
 

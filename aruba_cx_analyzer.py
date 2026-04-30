@@ -92,6 +92,10 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "Management Session Timeout Not Set":   ["12.3"],
     # ── ACL protocol checks ───────────────────────────────────────────────────
     "ACL Permits Insecure Protocol":        ["4.8", "12.6"],
+    "ACL Missing Default Deny":             ["12.2", "13.4"],
+    "Password Expiry Not Configured":       ["5.2"],
+    "SSH v1 Enabled":                       ["3.10", "12.6"],
+    "Syslog Not Using TLS":                 ["8.9"],
     # ── Configuration hygiene ─────────────────────────────────────────────────
     "No Login/MOTD Banner":                 ["4.2"],
     "No System Location":                   ["4.2"],
@@ -104,6 +108,82 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
 
 def _cis_label(ctrl_ids: list[str]) -> str:
     return " · ".join(f"CIS {c}" for c in ctrl_ids)
+
+
+# ── PCI DSS v4.0 mapping ─────────────────────────────────────────────────────
+PCI_DSS_DESC = {
+    "1.2.4":  "All traffic between trusted/untrusted networks is explicitly controlled",
+    "1.2.7":  "Unused network access points are disabled",
+    "1.3.1":  "Inbound traffic to the CDE is restricted to what is necessary",
+    "2.2.1":  "Configuration standards are defined for all system components",
+    "2.2.4":  "Only necessary services, protocols, and functions are enabled",
+    "2.2.7":  "All non-console administrative access is encrypted",
+    "4.2.1":  "Strong cryptography is used to safeguard PAN during transmission",
+    "7.2.1":  "All user access is appropriate and assigned by business need",
+    "8.2.1":  "All user IDs and authentication credentials are managed securely",
+    "8.2.8":  "Session idle time-out is 15 minutes or less",
+    "8.3.4":  "Invalid authentication attempts are limited",
+    "8.3.6":  "Passwords meet minimum length and complexity requirements",
+    "8.3.9":  "Passwords are changed at least once every 90 days",
+    "8.4.1":  "MFA is implemented for all non-console administrative access",
+    "10.5.4": "Audit log files are protected (written to external log servers)",
+    "10.6.1": "System clocks are synchronized using time-synchronization technology",
+}
+
+PCI_DSS_MAP: dict[str, list[str]] = {
+    # ── Credentials ───────────────────────────────────────────────────────────
+    "Plaintext User Password":            ["8.2.1"],
+    "Account Without Password":           ["8.2.1"],
+    "Plaintext RADIUS Key":               ["8.2.1"],
+    "Plaintext TACACS+ Key":              ["8.2.1"],
+    "Default/Weak SNMP Community String": ["2.2.4"],
+    "Excessive Privileged Accounts":      ["7.2.1"],
+    # ── Authentication / access ───────────────────────────────────────────────
+    "No RADIUS or TACACS+ Configured":    ["8.4.1"],
+    "Local Auth Only on Console":         ["8.4.1"],
+    "No MFA / AAA for Management":        ["8.4.1"],
+    "SSH Not Enabled":                    ["2.2.7"],
+    "Telnet Enabled":                     ["2.2.4", "2.2.7"],
+    "No Management Access Restriction":   ["1.2.4"],
+    "SSH v1 Enabled":                     ["4.2.1"],
+    # ── SNMP ──────────────────────────────────────────────────────────────────
+    "SNMPv1 Enabled":                     ["2.2.4"],
+    "SNMPv2c in Use":                     ["2.2.4"],
+    "SNMP Read-Write Community":          ["2.2.4"],
+    "SNMP Without ACL Restriction":       ["1.2.4"],
+    # ── Layer 2 ───────────────────────────────────────────────────────────────
+    "DHCP Snooping Not Enabled":          ["1.2.4"],
+    "Dynamic ARP Inspection Not Enabled": ["1.2.4"],
+    "BPDU Guard Not on Access Port":      ["1.2.4"],
+    "STP Root Guard Not Configured":      ["1.2.4"],
+    "IP Source Guard Not Enabled":        ["1.2.4"],
+    "No Port Security / 802.1X":          ["1.2.7"],
+    "VLAN 1 in Use on Access Port":       ["1.2.4"],
+    "Trunk Native VLAN Is VLAN 1":        ["1.2.4"],
+    "Spanning Tree Not Enabled":          ["1.2.4"],
+    "Active Interface Not Shut Down":     ["1.2.7"],
+    # ── Logging / time ────────────────────────────────────────────────────────
+    "No Syslog Servers Configured":       ["10.5.4"],
+    "Syslog Not Using TLS":               ["10.5.4"],
+    "NTP Not Configured":                 ["10.6.1"],
+    "Only One NTP Server":                ["10.6.1"],
+    "NTP Authentication Not Configured":  ["10.6.1"],
+    # ── Password policy ───────────────────────────────────────────────────────
+    "Password Complexity Not Enforced":   ["8.3.6"],
+    "Weak Password Minimum Length":       ["8.3.6"],
+    "No Account Lockout Policy":          ["8.3.4"],
+    "Management Session Timeout Not Set": ["8.2.8"],
+    "Password Expiry Not Configured":     ["8.3.9"],
+    # ── ACL ───────────────────────────────────────────────────────────────────
+    "ACL Permits Insecure Protocol":      ["2.2.4", "4.2.1"],
+    "ACL Missing Default Deny":           ["1.2.4"],
+    # ── Config hygiene ────────────────────────────────────────────────────────
+    "No Login/MOTD Banner":               ["2.2.1"],
+}
+
+
+def _pci_label(req_ids: list[str]) -> str:
+    return " · ".join(f"PCI {r}" for r in req_ids)
 
 
 # ── Colour palette ────────────────────────────────────────────────────────────
@@ -261,6 +341,7 @@ class ArubaCXParser:
                description: str, recommendation: str,
                details: str = "", line: int | str = ""):
         cis_ids = CIS_CONTROL_MAP.get(category, [])
+        pci_ids = PCI_DSS_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
@@ -271,6 +352,8 @@ class ArubaCXParser:
             "details":        details,
             "cis_controls":   _cis_label(cis_ids),
             "cis_ids":        cis_ids,
+            "pci_dss":        _pci_label(pci_ids),
+            "pci_ids":        pci_ids,
         })
 
     # ── System / global settings ──────────────────────────────────────────────
@@ -280,6 +363,7 @@ class ArubaCXParser:
             "banner": "", "dns_servers": [],
             "version": "", "ssh_vrfs": [],
             "telnet_enabled": False,
+            "ssh_v1_disabled": False,
         }
 
         for blk in blocks:
@@ -316,6 +400,12 @@ class ArubaCXParser:
 
             if re.match(r"^telnet\s+server", hdr, re.I):
                 sys["telnet_enabled"] = True
+                continue
+
+            # "no ssh server v1" or "ssh server version 2" → SSHv1 disabled
+            if re.match(r"^no\s+ssh\s+server\s+v1", hdr, re.I) or \
+               re.match(r"^ssh\s+server\s+version\s+2", hdr, re.I):
+                sys["ssh_v1_disabled"] = True
                 continue
 
             # Version line at top of file
@@ -640,13 +730,16 @@ class ArubaCXParser:
     def _parse_syslog(self, blocks: list[dict]):
         for blk in blocks:
             hdr = blk["header"]
-            # logging remote <ip> [severity] [vrf <vrf>]
+            # logging remote <ip> [port <n>] [tls] or sub-command "transport tls"
             m = re.match(r"^logging\s+remote\s+(\S+)", hdr, re.I)
             if m:
+                tls_inline = bool(re.search(r"\btls\b", hdr, re.I))
+                tls_sub    = self._sub_has(blk["sub"], r"^transport\s+tls")
                 self.syslog_servers.append({
                     "host":     m.group(1),
                     "severity": self._sub_val(blk["sub"], r"^severity\s+(\S+)"),
                     "vrf":      self._sub_val(blk["sub"], r"^vrf\s+(\S+)"),
+                    "tls":      tls_inline or tls_sub,
                     "line":     blk["lineno"],
                 })
                 continue
@@ -655,7 +748,7 @@ class ArubaCXParser:
             if m:
                 self.syslog_servers.append({
                     "host": m.group(1), "severity": "", "vrf": "",
-                    "line": blk["lineno"],
+                    "tls": False, "line": blk["lineno"],
                 })
                 continue
             # Plain "logging <ip-or-hostname>" (AOS-CX native form)
@@ -663,7 +756,7 @@ class ArubaCXParser:
             if m and not re.match(r"^logging\s+severity", hdr, re.I):
                 self.syslog_servers.append({
                     "host": m.group(1), "severity": "", "vrf": "",
-                    "line": blk["lineno"],
+                    "tls": False, "line": blk["lineno"],
                 })
 
     # ── Local users ───────────────────────────────────────────────────────────
@@ -756,6 +849,7 @@ class ArubaCXParser:
             "min_length":         0,
             "complexity_upper":   0,  "complexity_lower":   0,
             "complexity_numeric": 0,  "complexity_special": 0,
+            "password_age":       0,
             "session_timeout":    0,
             "ntp_auth_enabled":   False,
             "ntp_auth_keys":      [],
@@ -794,6 +888,10 @@ class ArubaCXParser:
             m = re.match(r"^password\s+complexity\s+min-special-char\s+(\d+)", hdr, re.I)
             if m:
                 pp["complexity_special"] = int(m.group(1))
+                continue
+            m = re.match(r"^password\s+age\s+(\d+)", hdr, re.I)
+            if m:
+                pp["password_age"] = int(m.group(1))
                 continue
             m = re.match(r"^(?:cli\s+)?session-timeout\s+(\d+)", hdr, re.I)
             if m:
@@ -843,7 +941,10 @@ class ArubaCXParser:
         self._chk_syslog()
         self._chk_system()
         self._chk_password_policy()
+        self._chk_ssh_version()
         self._chk_acl_insecure_protocols()
+        self._chk_acl_default_deny()
+        self._chk_syslog_tls()
 
     # Check: plaintext credentials ────────────────────────────────────────────
     def _chk_credentials(self):
@@ -1192,6 +1293,54 @@ class ArubaCXParser:
                 "making it vulnerable to NTP spoofing attacks.",
                 "Enable NTP authentication: 'ntp authentication', "
                 "'ntp authentication-key <id> sha256 <key>', 'ntp trusted-key <id>'.")
+
+        age = pp.get("password_age", 0)
+        if age == 0:
+            self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
+                "No password age limit is configured. Passwords never expire. "
+                "PCI DSS 8.3.9 requires passwords changed every 90 days.",
+                "Set 'password age 90' (days) or less.")
+        elif age > 90:
+            self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
+                f"Password expiry is {age} days (PCI DSS 8.3.9 requires ≤ 90 days).",
+                "Reduce 'password age' to 90 days or fewer.")
+
+    def _chk_ssh_version(self):
+        """PCI DSS 4.2.1: Only SSH v2 should be permitted."""
+        if self.system.get("ssh_vrfs") and not self.system.get("ssh_v1_disabled"):
+            self._issue("HIGH", "SSH v1 Enabled", "SSH",
+                "SSH is enabled but SSHv1 has not been explicitly disabled. "
+                "SSHv1 has known vulnerabilities. PCI DSS 4.2.1 requires strong cryptography.",
+                "Disable SSHv1: add 'no ssh server v1' or 'ssh server version 2'.")
+
+    def _chk_acl_default_deny(self):
+        """PCI DSS 1.2.4: ACLs should end with an explicit deny-all."""
+        for acl in self.acls:
+            if not acl["entries"]:
+                continue
+            last = acl["entries"][-1]
+            match_lower = last["match"].lower().strip()
+            is_deny = last["action"] == "deny"
+            is_any  = match_lower in ("any any any", "any", "ip any any")
+            if not (is_deny and is_any):
+                self._issue("MEDIUM", "ACL Missing Default Deny", f"ACL: {acl['name']}",
+                    f"ACL '{acl['name']}' does not end with an explicit deny-all entry. "
+                    "PCI DSS 1.2.4 requires all traffic not explicitly permitted to be denied.",
+                    "Add a final entry: '<seq> deny any any any' to explicitly block "
+                    "all unmatched traffic.",
+                    f"Last entry: seq {last['seq']} {last['action']} {last['match']}",
+                    line=last["line"])
+
+    def _chk_syslog_tls(self):
+        """PCI DSS 10.5.4: Syslog should use encrypted transport."""
+        for srv in self.syslog_servers:
+            if not srv.get("tls"):
+                self._issue("MEDIUM", "Syslog Not Using TLS", f"Syslog: {srv['host']}",
+                    f"Syslog server {srv['host']} does not use TLS transport. "
+                    "Log data transmitted in cleartext can be intercepted or tampered. "
+                    "PCI DSS 10.5.4 requires log files to be protected.",
+                    "Configure syslog with TLS: 'logging remote <ip> port 6514 tls'.",
+                    line=srv["line"])
 
     def _chk_acl_insecure_protocols(self):
         INSECURE: dict[str, tuple[str, str, str]] = {
@@ -1646,7 +1795,7 @@ class ExcelReporter:
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
         headers = ["#", "Severity", "Category", "Object / Interface",
-                   "Config Line", "CIS v8 Controls",
+                   "Config Line", "CIS v8 Controls", "PCI DSS",
                    "Description", "Recommendation", "Details"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
@@ -1662,6 +1811,7 @@ class ExcelReporter:
 
             vals = [idx, sev, iss["category"], iss["object"],
                     iss.get("line", ""), iss.get("cis_controls", ""),
+                    iss.get("pci_dss", ""),
                     iss["description"], iss["recommendation"], iss.get("details", "")]
             for col, val in enumerate(vals, 1):
                 c = ws.cell(row=row, column=col, value=val)
@@ -1673,8 +1823,13 @@ class ExcelReporter:
                     c.font = _font(bold=(col == 1)); c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 6:
+                elif col == 6:  # CIS controls
                     c.font = _font(bold=True, color="17375E", size=9)
+                    c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
+                elif col == 7:  # PCI DSS
+                    c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
@@ -1684,7 +1839,7 @@ class ExcelReporter:
                         c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 60, 60, 30])
+        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30])
 
     # ── CIS v8 Mapping ────────────────────────────────────────────────────────
     def _sheet_cis_mapping(self):
@@ -1776,6 +1931,93 @@ class ExcelReporter:
 
         self._set_widths(ws, [12, 34, 30, 12, 60, 60])
 
+    # ── PCI DSS v4.0 Mapping ──────────────────────────────────────────────────
+    def _sheet_pci_mapping(self):
+        ws = self.wb.create_sheet("PCI DSS Mapping")
+        ws.sheet_view.showGridLines = False
+        PCI_HDR = "5C1A8C"
+
+        ws.merge_cells("A1:F1")
+        t = ws["A1"]
+        t.value = "PCI DSS v4.0 — Finding Cross-Reference"
+        t.font  = Font(name="Calibri", bold=True, size=14, color="FFFFFF")
+        t.fill  = _fill(PCI_HDR)
+        t.alignment = _align("center", wrap=False)
+        ws.row_dimensions[1].height = 36
+
+        ws.merge_cells("A2:F2")
+        s = ws["A2"]
+        s.value = "Each PCI DSS v4.0 requirement lists all findings from this config that map to it."
+        s.font  = _font(italic=True, color=C["info"], size=9)
+        s.fill  = _fill("F2F2F2")
+        s.alignment = _align("center", wrap=False)
+        ws.row_dimensions[2].height = 16
+
+        from collections import defaultdict as _dd
+        req_issues: dict[str, list[dict]] = _dd(list)
+        for iss in self.p.issues:
+            for pid in iss.get("pci_ids", []):
+                req_issues[pid].append(iss)
+
+        SEV_ORDER  = self.SEV_ORDER
+        SEV_COLORS = self.SEV_COLORS
+        row = 3
+        for req_id in sorted(PCI_DSS_DESC.keys(),
+                              key=lambda x: [int(p) for p in x.split(".")]):
+            desc = PCI_DSS_DESC[req_id]
+            issues_for_req = sorted(req_issues.get(req_id, []),
+                                    key=lambda x: SEV_ORDER.get(x["severity"], 9))
+            count = len(issues_for_req)
+            ws.merge_cells(f"A{row}:F{row}")
+            hc = ws.cell(row=row, column=1,
+                         value=f"PCI DSS {req_id}  [{count} finding{'s' if count != 1 else ''}]  {desc}")
+            hc.font  = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
+            hc.fill  = _fill(PCI_HDR)
+            hc.alignment = _align("left", wrap=False)
+            hc.border = THIN
+            ws.row_dimensions[row].height = 28
+            row += 1
+
+            if not issues_for_req:
+                ws.merge_cells(f"A{row}:F{row}")
+                nc = ws.cell(row=row, column=1, value="No findings for this requirement")
+                nc.font = _font(italic=True, color=C["info"]); nc.fill = _fill("F9F9F9")
+                nc.alignment = _align(); nc.border = THIN
+                row += 1
+            else:
+                sub_hdrs = ["Severity", "Category", "Object / Interface",
+                            "Config Line", "Description", "Recommendation"]
+                for col, h in enumerate(sub_hdrs, 1):
+                    c = ws.cell(row=row, column=col, value=h)
+                    c.font = _font(bold=True, color="FFFFFF"); c.fill = _fill("2E4057")
+                    c.alignment = _align("center", wrap=False); c.border = THIN
+                ws.row_dimensions[row].height = 20
+                row += 1
+                for iss in issues_for_req:
+                    sev = iss["severity"]
+                    fg, bg = SEV_COLORS[sev]
+                    rb = C["alt_row"] if row % 2 == 0 else None
+                    vals = [sev, iss["category"], iss["object"],
+                            iss.get("line", ""), iss["description"], iss["recommendation"]]
+                    for col, val in enumerate(vals, 1):
+                        c = ws.cell(row=row, column=col, value=val)
+                        c.border = THIN
+                        if col == 1:
+                            c.fill = _fill(bg); c.font = _font(bold=True, color=fg)
+                            c.alignment = _align("center")
+                        elif col == 4:
+                            c.font = _font(color=C["info"], size=9)
+                            c.alignment = _align("center")
+                            if rb: c.fill = _fill(rb)
+                        else:
+                            c.font = _font(); c.alignment = _align()
+                            if rb: c.fill = _fill(rb)
+                    ws.row_dimensions[row].height = 36
+                    row += 1
+            row += 1
+
+        self._set_widths(ws, [12, 34, 30, 12, 60, 60])
+
     # ── Save ──────────────────────────────────────────────────────────────────
     def save(self):
         self._sheet_summary()
@@ -1785,6 +2027,7 @@ class ExcelReporter:
         self._sheet_aaa()
         self._sheet_issues()
         self._sheet_cis_mapping()
+        self._sheet_pci_mapping()
         self.wb.save(self.out)
 
 
