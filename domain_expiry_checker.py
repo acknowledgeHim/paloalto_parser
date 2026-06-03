@@ -12,6 +12,7 @@ Requires:
 """
 
 import argparse
+import csv
 import json
 import sys
 import time
@@ -19,10 +20,17 @@ from datetime import datetime, timezone
 from typing import Optional
 
 try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+
+try:
     import whois
 except ImportError:
-    print("Missing dependency: pip install python-whois", file=sys.stderr)
-    sys.exit(1)
+    whois = None
 
 try:
     import requests
@@ -32,43 +40,98 @@ except ImportError:
 
 
 VT_API_BASE = "https://www.virustotal.com/api/v3"
-# Pause between requests to stay under VirusTotal free-tier rate limit (4 req/min)
-VT_REQUEST_DELAY = 16
+RDAP_BASE = "https://rdap.org/domain"
+# Pause between VirusTotal requests
+VT_REQUEST_DELAY = 30
+
+
+def _parse_expiry_date(date_str: str) -> Optional[datetime]:
+    """Parse ISO 8601 or common WHOIS date strings into a UTC-aware datetime."""
+    if not date_str:
+        return None
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d",
+    ):
+        try:
+            dt = datetime.strptime(date_str[:26], fmt)
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _expiry_from_rdap(domain: str) -> tuple[Optional[datetime], Optional[str]]:
+    """Query RDAP over HTTPS and return (expiry_datetime, error_string)."""
+    try:
+        resp = requests.get(
+            f"{RDAP_BASE}/{domain}",
+            timeout=15,
+            headers={"Accept": "application/rdap+json"},
+            allow_redirects=True,
+        )
+        if resp.status_code == 404:
+            return None, "Domain not found in RDAP (may be unregistered or unsupported TLD)"
+        resp.raise_for_status()
+        data = resp.json()
+        for event in data.get("events", []):
+            if event.get("eventAction") == "expiration":
+                dt = _parse_expiry_date(event.get("eventDate", ""))
+                if dt:
+                    return dt, None
+        return None, "No expiration event in RDAP response"
+    except requests.RequestException as exc:
+        return None, f"RDAP request failed: {exc}"
+
+
+def _expiry_from_whois(domain: str) -> tuple[Optional[datetime], Optional[str]]:
+    """Fall back to python-whois and return (expiry_datetime, error_string)."""
+    if whois is None:
+        return None, "python-whois not installed (pip install python-whois)"
+    try:
+        w = whois.whois(domain)
+        exp = w.expiration_date
+        if exp is None:
+            return None, "No expiration date in WHOIS response"
+        if isinstance(exp, list):
+            exp = exp[0]
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return exp, None
+    except Exception as exc:
+        return None, f"WHOIS error: {exc}"
 
 
 def get_expiry_info(domain: str) -> dict:
-    """Return expiry status for a domain via WHOIS."""
+    """Return expiry status for a domain, trying RDAP first then WHOIS."""
     result = {
         "domain": domain,
         "expiry_date": None,
         "expired": False,
         "days_since_expiry": None,
         "whois_error": None,
+        "lookup_method": None,
     }
-    try:
-        w = whois.whois(domain)
-        exp = w.expiration_date
-        if exp is None:
-            result["whois_error"] = "No expiration date found"
+
+    exp, err = _expiry_from_rdap(domain)
+    if exp:
+        result["lookup_method"] = "RDAP"
+    else:
+        rdap_err = err
+        exp, err = _expiry_from_whois(domain)
+        if exp:
+            result["lookup_method"] = "WHOIS"
+        else:
+            result["whois_error"] = f"RDAP: {rdap_err} | WHOIS: {err}"
             return result
 
-        # python-whois can return a list (multiple registrars)
-        if isinstance(exp, list):
-            exp = exp[0]
-
-        # Normalize to UTC-aware datetime
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-
-        now = datetime.now(timezone.utc)
-        result["expiry_date"] = exp.isoformat()
-
-        if exp < now:
-            result["expired"] = True
-            result["days_since_expiry"] = (now - exp).days
-
-    except Exception as exc:
-        result["whois_error"] = str(exc)
+    now = datetime.now(timezone.utc)
+    result["expiry_date"] = exp.isoformat()
+    if exp < now:
+        result["expired"] = True
+        result["days_since_expiry"] = (now - exp).days
 
     return result
 
@@ -163,11 +226,13 @@ def print_report(results: list[dict], verbose: bool = False) -> None:
         print(f"\n  Domain  : {domain}")
 
         if r.get("whois_error"):
-            print(f"  WHOIS   : ERROR — {r['whois_error']}")
+            print(f"  Lookup  : ERROR — {r['whois_error']}")
         elif r.get("expired"):
-            print(f"  Status  : EXPIRED  ({r['days_since_expiry']} days ago — {r['expiry_date']})")
+            method = r.get("lookup_method", "?")
+            print(f"  Status  : EXPIRED  ({r['days_since_expiry']} days ago — {r['expiry_date']})  [{method}]")
         else:
-            print(f"  Status  : Active  (expires {r['expiry_date']})")
+            method = r.get("lookup_method", "?")
+            print(f"  Status  : Active  (expires {r['expiry_date']})  [{method}]")
 
         vt = r.get("virustotal")
         if vt:
@@ -199,6 +264,184 @@ def print_report(results: list[dict], verbose: bool = False) -> None:
                         print(f"    [{det['category']}] {eng}: {det['result']}")
 
         print(f"  {'-' * 66}")
+
+
+CSV_FIELDS = [
+    "domain",
+    "expired",
+    "days_since_expiry",
+    "expiry_date",
+    "lookup_method",
+    "risk",
+    "vt_reputation",
+    "vt_categories",
+    "vt_tags",
+    "vt_malicious",
+    "vt_suspicious",
+    "vt_harmless",
+    "vt_total_engines",
+    "vt_last_analysis",
+    "registrar",
+    "country",
+    "vt_error",
+    "whois_error",
+]
+
+
+def _flatten(r: dict) -> dict:
+    """Flatten a result dict into a single-level row for CSV/XLSX."""
+    vt = r.get("virustotal") or {}
+    stats = vt.get("analysis_stats") or {}
+    cats = vt.get("categories") or {}
+    return {
+        "domain": r["domain"],
+        "expired": "Yes" if r.get("expired") else "No",
+        "days_since_expiry": r.get("days_since_expiry") or "",
+        "expiry_date": r.get("expiry_date") or "",
+        "lookup_method": r.get("lookup_method") or "",
+        "risk": r.get("risk") or "",
+        "vt_reputation": vt.get("reputation") if vt and "vt_error" not in vt else "",
+        "vt_categories": "; ".join(f"{k}: {v}" for k, v in cats.items()),
+        "vt_tags": "; ".join(vt.get("tags") or []),
+        "vt_malicious": vt.get("malicious_count") if vt and "vt_error" not in vt else "",
+        "vt_suspicious": vt.get("suspicious_count") if vt and "vt_error" not in vt else "",
+        "vt_harmless": stats.get("harmless", "") if vt and "vt_error" not in vt else "",
+        "vt_total_engines": vt.get("total_engines") if vt and "vt_error" not in vt else "",
+        "vt_last_analysis": vt.get("last_analysis_date") or "",
+        "registrar": vt.get("registrar") or "",
+        "country": vt.get("country") or "",
+        "vt_error": vt.get("vt_error") or "",
+        "whois_error": r.get("whois_error") or "",
+    }
+
+
+def write_csv(results: list[dict], path: str) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=CSV_FIELDS)
+        writer.writeheader()
+        for r in results:
+            writer.writerow(_flatten(r))
+
+
+def write_xlsx(results: list[dict], path: str) -> None:
+    if not HAS_OPENPYXL:
+        print("Missing dependency for xlsx: pip install openpyxl", file=sys.stderr)
+        return
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Domain Report"
+
+    HEADERS = {
+        "domain": "Domain",
+        "expired": "Expired",
+        "days_since_expiry": "Days Since Expiry",
+        "expiry_date": "Expiry Date",
+        "lookup_method": "Lookup Method",
+        "risk": "Risk Level",
+        "vt_reputation": "VT Reputation",
+        "vt_categories": "VT Categories",
+        "vt_tags": "VT Tags",
+        "vt_malicious": "Malicious Engines",
+        "vt_suspicious": "Suspicious Engines",
+        "vt_harmless": "Harmless Engines",
+        "vt_total_engines": "Total Engines",
+        "vt_last_analysis": "VT Last Scan",
+        "registrar": "Registrar",
+        "country": "Country",
+        "vt_error": "VT Error",
+        "whois_error": "Lookup Error",
+    }
+
+    COL_WIDTHS = {
+        "domain": 30, "expired": 10, "days_since_expiry": 18,
+        "expiry_date": 28, "lookup_method": 14, "risk": 14,
+        "vt_reputation": 16, "vt_categories": 40, "vt_tags": 30,
+        "vt_malicious": 18, "vt_suspicious": 18, "vt_harmless": 16,
+        "vt_total_engines": 15, "vt_last_analysis": 28, "registrar": 28,
+        "country": 10, "vt_error": 35, "whois_error": 35,
+    }
+
+    RISK_FILLS = {
+        "HIGH RISK":  PatternFill("solid", fgColor="FF4444"),
+        "SUSPICIOUS": PatternFill("solid", fgColor="FFAA00"),
+        "CLEAN":      PatternFill("solid", fgColor="44BB44"),
+    }
+    EXPIRED_FILL  = PatternFill("solid", fgColor="FFE0E0")
+    HEADER_FILL   = PatternFill("solid", fgColor="2D4A8A")
+    HEADER_FONT   = Font(bold=True, color="FFFFFF", size=11)
+    BOLD          = Font(bold=True)
+    thin          = Side(style="thin", color="CCCCCC")
+    CELL_BORDER   = Border(left=thin, right=thin, top=thin, bottom=thin)
+    CENTER        = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    LEFT          = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+
+    fields = list(HEADERS.keys())
+
+    # Header row
+    for col_idx, field in enumerate(fields, 1):
+        cell = ws.cell(row=1, column=col_idx, value=HEADERS[field])
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+        cell.alignment = CENTER
+        cell.border = CELL_BORDER
+        ws.column_dimensions[get_column_letter(col_idx)].width = COL_WIDTHS[field]
+    ws.row_dimensions[1].height = 22
+    ws.freeze_panes = "A2"
+
+    # Data rows
+    for row_idx, r in enumerate(results, 2):
+        flat = _flatten(r)
+        is_expired = r.get("expired", False)
+        risk = flat["risk"]
+        for col_idx, field in enumerate(fields, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=flat[field])
+            cell.border = CELL_BORDER
+            cell.alignment = CENTER if field in (
+                "expired", "days_since_expiry", "lookup_method", "risk",
+                "vt_reputation", "vt_malicious", "vt_suspicious",
+                "vt_harmless", "vt_total_engines", "country",
+            ) else LEFT
+
+            if field == "risk" and risk in RISK_FILLS:
+                cell.fill = RISK_FILLS[risk]
+                cell.font = Font(bold=True, color="FFFFFF")
+            elif field == "expired" and is_expired:
+                cell.fill = EXPIRED_FILL
+                cell.font = BOLD
+            elif field == "domain":
+                cell.font = BOLD
+        ws.row_dimensions[row_idx].height = 18
+
+    # Summary tab
+    ws2 = wb.create_sheet("Summary")
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    total = len(results)
+    expired = sum(1 for r in results if r.get("expired"))
+    high_risk = sum(1 for r in results if r.get("risk") == "HIGH RISK")
+    suspicious = sum(1 for r in results if r.get("risk") == "SUSPICIOUS")
+    vt_checked = sum(1 for r in results if r.get("virustotal"))
+
+    summary_rows = [
+        ("Report generated", now_str),
+        ("Total domains", total),
+        ("Expired", expired),
+        ("Active", total - expired),
+        ("VirusTotal checked", vt_checked),
+        ("High risk", high_risk),
+        ("Suspicious", suspicious),
+        ("Clean", vt_checked - high_risk - suspicious),
+    ]
+    ws2.column_dimensions["A"].width = 22
+    ws2.column_dimensions["B"].width = 28
+    for i, (label, value) in enumerate(summary_rows, 1):
+        a = ws2.cell(row=i, column=1, value=label)
+        b = ws2.cell(row=i, column=2, value=value)
+        a.font = BOLD
+        a.border = CELL_BORDER
+        b.border = CELL_BORDER
+
+    wb.save(path)
 
 
 def load_domains(args) -> list[str]:
@@ -249,6 +492,14 @@ def main() -> None:
     parser.add_argument(
         "--output", metavar="FILE",
         help="Save full JSON results to this file",
+    )
+    parser.add_argument(
+        "--csv", metavar="FILE",
+        help="Save results to a CSV file",
+    )
+    parser.add_argument(
+        "--xlsx", metavar="FILE",
+        help="Save results to a formatted Excel (.xlsx) file",
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true",
@@ -304,7 +555,15 @@ def main() -> None:
     if args.output:
         with open(args.output, "w") as fh:
             json.dump(results, fh, indent=2, default=str)
-        print(f"\nFull JSON saved to: {args.output}", file=sys.stderr)
+        print(f"JSON saved to: {args.output}", file=sys.stderr)
+
+    if args.csv:
+        write_csv(results, args.csv)
+        print(f"CSV saved to:  {args.csv}", file=sys.stderr)
+
+    if args.xlsx:
+        write_xlsx(results, args.xlsx)
+        print(f"XLSX saved to: {args.xlsx}", file=sys.stderr)
 
 
 if __name__ == "__main__":
