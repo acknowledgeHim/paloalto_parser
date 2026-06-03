@@ -16,6 +16,7 @@ import csv
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -64,26 +65,33 @@ def _parse_expiry_date(date_str: str) -> Optional[datetime]:
 
 
 def _expiry_from_rdap(domain: str) -> tuple[Optional[datetime], Optional[str]]:
-    """Query RDAP over HTTPS and return (expiry_datetime, error_string)."""
-    try:
-        resp = requests.get(
-            f"{RDAP_BASE}/{domain}",
-            timeout=15,
-            headers={"Accept": "application/rdap+json"},
-            allow_redirects=True,
-        )
-        if resp.status_code == 404:
-            return None, "Domain not found in RDAP (may be unregistered or unsupported TLD)"
-        resp.raise_for_status()
-        data = resp.json()
-        for event in data.get("events", []):
-            if event.get("eventAction") == "expiration":
-                dt = _parse_expiry_date(event.get("eventDate", ""))
-                if dt:
-                    return dt, None
-        return None, "No expiration event in RDAP response"
-    except requests.RequestException as exc:
-        return None, f"RDAP request failed: {exc}"
+    """Query RDAP over HTTPS and return (expiry_datetime, error_string). Retries up to 3 times."""
+    last_err = ""
+    for attempt in range(3):
+        try:
+            resp = requests.get(
+                f"{RDAP_BASE}/{domain}",
+                timeout=20,
+                headers={"Accept": "application/rdap+json"},
+                allow_redirects=True,
+            )
+            if resp.status_code == 404:
+                return None, "Domain not found in RDAP (may be unregistered or unsupported TLD)"
+            resp.raise_for_status()
+            data = resp.json()
+            for event in data.get("events", []):
+                if event.get("eventAction") == "expiration":
+                    dt = _parse_expiry_date(event.get("eventDate", ""))
+                    if dt:
+                        return dt, None
+            return None, "No expiration event in RDAP response"
+        except requests.Timeout:
+            last_err = "timed out"
+            time.sleep(2 ** attempt)
+        except requests.RequestException as exc:
+            last_err = str(exc)
+            time.sleep(2 ** attempt)
+    return None, f"RDAP failed after 3 attempts: {last_err}"
 
 
 def _expiry_from_whois(domain: str) -> tuple[Optional[datetime], Optional[str]]:
@@ -502,6 +510,10 @@ def main() -> None:
         help="Save results to a formatted Excel (.xlsx) file",
     )
     parser.add_argument(
+        "--workers", type=int, default=10, metavar="N",
+        help="Parallel workers for WHOIS/RDAP lookups (default: 10)",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true",
         help="Show per-engine flagging details",
     )
@@ -522,33 +534,51 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    results: list[dict] = []
+    # Phase 1 — parallel RDAP/WHOIS lookups
+    print(f"Looking up {len(domains)} domain(s) with {args.workers} workers ...", file=sys.stderr)
+    expiry_map: dict[str, dict] = {}
+    completed = 0
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        futures = {pool.submit(get_expiry_info, d): d for d in domains}
+        for fut in as_completed(futures):
+            completed += 1
+            info = fut.result()
+            expiry_map[info["domain"]] = info
+            print(f"  [{completed}/{len(domains)}] {info['domain']} — "
+                  f"{'EXPIRED ' + str(info.get('days_since_expiry','?')) + 'd ago' if info.get('expired') else info.get('expiry_date', info.get('whois_error', '?'))[:28]}",
+                  file=sys.stderr)
 
-    for i, domain in enumerate(domains, 1):
-        print(f"[{i}/{len(domains)}] Checking {domain} ...", file=sys.stderr)
-        info = get_expiry_info(domain)
+    # Preserve original input order
+    ordered = [expiry_map[d] for d in domains]
 
-        should_query_vt = False
+    # Phase 2 — sequential VirusTotal (rate-limited)
+    vt_queue = []
+    for info in ordered:
         if api_key:
             if args.check_all:
-                should_query_vt = True
+                vt_queue.append(info)
             elif info.get("expired"):
                 days = info.get("days_since_expiry") or 0
                 if args.days == 0 or days <= args.days:
-                    should_query_vt = True
+                    vt_queue.append(info)
 
-        if should_query_vt:
-            print(f"         → Querying VirusTotal ...", file=sys.stderr)
-            info["virustotal"] = query_virustotal(domain, api_key)
-            info["risk"] = risk_label(info["virustotal"])
-            # Respect free-tier rate limit (4 req/min) unless last domain
-            if i < len(domains):
-                time.sleep(VT_REQUEST_DELAY)
-        else:
+    if vt_queue:
+        print(f"\nQuerying VirusTotal for {len(vt_queue)} domain(s) "
+              f"({VT_REQUEST_DELAY}s between requests) ...", file=sys.stderr)
+
+    for i, info in enumerate(vt_queue, 1):
+        print(f"  [VT {i}/{len(vt_queue)}] {info['domain']} ...", file=sys.stderr)
+        info["virustotal"] = query_virustotal(info["domain"], api_key)
+        info["risk"] = risk_label(info["virustotal"])
+        if i < len(vt_queue):
+            time.sleep(VT_REQUEST_DELAY)
+
+    for info in ordered:
+        if "virustotal" not in info:
             info["virustotal"] = None
             info["risk"] = None
 
-        results.append(info)
+    results = ordered
 
     print_report(results, verbose=args.verbose)
 
@@ -561,9 +591,9 @@ def main() -> None:
         write_csv(results, args.csv)
         print(f"CSV saved to:  {args.csv}", file=sys.stderr)
 
-    if args.xlsx:
-        write_xlsx(results, args.xlsx)
-        print(f"XLSX saved to: {args.xlsx}", file=sys.stderr)
+    xlsx_path = args.xlsx or f"domain_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    write_xlsx(results, xlsx_path)
+    print(f"XLSX saved to: {xlsx_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
