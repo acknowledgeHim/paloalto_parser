@@ -109,7 +109,9 @@ def _expiry_from_whois(domain: str) -> tuple[Optional[datetime], Optional[str]]:
             exp = exp.replace(tzinfo=timezone.utc)
         return exp, None
     except Exception as exc:
-        return None, f"WHOIS error: {exc}"
+        # WHOIS responses embed long TOS blocks — keep only the first useful line
+        first_line = str(exc).strip().splitlines()[0][:120]
+        return None, f"WHOIS error: {first_line}"
 
 
 def get_expiry_info(domain: str) -> dict:
@@ -234,7 +236,7 @@ def print_report(results: list[dict], verbose: bool = False) -> None:
         print(f"\n  Domain  : {domain}")
 
         if r.get("whois_error"):
-            print(f"  Lookup  : ERROR — {r['whois_error']}")
+            print(f"  Lookup  : ERROR — {r['whois_error'][:120]}")
         elif r.get("expired"):
             method = r.get("lookup_method", "?")
             print(f"  Status  : EXPIRED  ({r['days_since_expiry']} days ago — {r['expiry_date']})  [{method}]")
@@ -544,9 +546,12 @@ def main() -> None:
             completed += 1
             info = fut.result()
             expiry_map[info["domain"]] = info
-            print(f"  [{completed}/{len(domains)}] {info['domain']} — "
-                  f"{'EXPIRED ' + str(info.get('days_since_expiry','?')) + 'd ago' if info.get('expired') else info.get('expiry_date', info.get('whois_error', '?'))[:28]}",
-                  file=sys.stderr)
+            status = (
+                f"EXPIRED {info.get('days_since_expiry', '?')}d ago"
+                if info.get("expired")
+                else (info.get("expiry_date") or info.get("whois_error") or "?")[:28]
+            )
+            print(f"  [{completed}/{len(domains)}] {info['domain']} — {status}", file=sys.stderr)
 
     # Preserve original input order
     ordered = [expiry_map[d] for d in domains]
