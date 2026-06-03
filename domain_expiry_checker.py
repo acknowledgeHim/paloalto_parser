@@ -64,8 +64,16 @@ def _parse_expiry_date(date_str: str) -> Optional[datetime]:
     return None
 
 
+NOT_IN_REGISTRY = "__NOT_IN_REGISTRY__"
+
+
 def _expiry_from_rdap(domain: str) -> tuple[Optional[datetime], Optional[str]]:
-    """Query RDAP over HTTPS and return (expiry_datetime, error_string). Retries up to 3 times."""
+    """Query RDAP over HTTPS and return (expiry_datetime, error_string).
+
+    Returns (None, NOT_IN_REGISTRY) when the registry confirms the domain
+    doesn't exist (404) — i.e. it has been deleted/dropped. Retries up to 3
+    times on network errors.
+    """
     last_err = ""
     for attempt in range(3):
         try:
@@ -76,7 +84,7 @@ def _expiry_from_rdap(domain: str) -> tuple[Optional[datetime], Optional[str]]:
                 allow_redirects=True,
             )
             if resp.status_code == 404:
-                return None, "Domain not found in RDAP (may be unregistered or unsupported TLD)"
+                return None, NOT_IN_REGISTRY
             resp.raise_for_status()
             data = resp.json()
             for event in data.get("events", []):
@@ -115,11 +123,16 @@ def _expiry_from_whois(domain: str) -> tuple[Optional[datetime], Optional[str]]:
 
 
 def get_expiry_info(domain: str) -> dict:
-    """Return expiry status for a domain, trying RDAP first then WHOIS."""
+    """Return expiry status for a domain, trying RDAP first then WHOIS.
+
+    A domain confirmed absent from the registry (404) is marked deleted=True
+    so it still flows through to VirusTotal for historical reputation data.
+    """
     result = {
         "domain": domain,
         "expiry_date": None,
         "expired": False,
+        "deleted": False,   # True = confirmed gone from registry, no record at all
         "days_since_expiry": None,
         "whois_error": None,
         "lookup_method": None,
@@ -128,6 +141,23 @@ def get_expiry_info(domain: str) -> dict:
     exp, err = _expiry_from_rdap(domain)
     if exp:
         result["lookup_method"] = "RDAP"
+    elif err == NOT_IN_REGISTRY:
+        # Registry confirmed the domain doesn't exist — deleted/dropped
+        # Try WHOIS anyway in case it has residual data
+        exp, whois_err = _expiry_from_whois(domain)
+        if exp:
+            result["lookup_method"] = "WHOIS"
+            now = datetime.now(timezone.utc)
+            result["expiry_date"] = exp.isoformat()
+            if exp < now:
+                result["expired"] = True
+                result["days_since_expiry"] = (now - exp).days
+        else:
+            result["deleted"] = True
+            result["expired"] = True  # treat as expired for VT queuing
+            result["lookup_method"] = "N/A"
+            result["whois_error"] = "Deleted/dropped from registry — no registration record"
+        return result
     else:
         rdap_err = err
         exp, err = _expiry_from_whois(domain)
@@ -224,18 +254,22 @@ def print_report(results: list[dict], verbose: bool = False) -> None:
     print(f"  DOMAIN EXPIRY & REPUTATION REPORT  —  {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}")
     print(sep)
 
-    expired_count = sum(1 for r in results if r.get("expired"))
+    expired_count = sum(1 for r in results if r.get("expired") and not r.get("deleted"))
+    deleted_count = sum(1 for r in results if r.get("deleted"))
     checked_vt = sum(1 for r in results if r.get("virustotal"))
-    print(f"  Domains checked : {len(results)}")
-    print(f"  Expired         : {expired_count}")
-    print(f"  VirusTotal hits : {checked_vt}")
+    print(f"  Domains checked  : {len(results)}")
+    print(f"  Expired          : {expired_count}")
+    print(f"  Deleted/dropped  : {deleted_count}")
+    print(f"  VirusTotal hits  : {checked_vt}")
     print(sep)
 
     for r in results:
         domain = r["domain"]
         print(f"\n  Domain  : {domain}")
 
-        if r.get("whois_error"):
+        if r.get("deleted"):
+            print(f"  Status  : DELETED/DROPPED — no registration record (expired & purged from registry)")
+        elif r.get("whois_error"):
             print(f"  Lookup  : ERROR — {r['whois_error'][:120]}")
         elif r.get("expired"):
             method = r.get("lookup_method", "?")
@@ -279,6 +313,7 @@ def print_report(results: list[dict], verbose: bool = False) -> None:
 CSV_FIELDS = [
     "domain",
     "expired",
+    "deleted",
     "days_since_expiry",
     "expiry_date",
     "lookup_method",
@@ -306,6 +341,7 @@ def _flatten(r: dict) -> dict:
     return {
         "domain": r["domain"],
         "expired": "Yes" if r.get("expired") else "No",
+        "deleted": "Yes" if r.get("deleted") else "No",
         "days_since_expiry": r.get("days_since_expiry") or "",
         "expiry_date": r.get("expiry_date") or "",
         "lookup_method": r.get("lookup_method") or "",
@@ -345,6 +381,7 @@ def write_xlsx(results: list[dict], path: str) -> None:
     HEADERS = {
         "domain": "Domain",
         "expired": "Expired",
+        "deleted": "Deleted/Dropped",
         "days_since_expiry": "Days Since Expiry",
         "expiry_date": "Expiry Date",
         "lookup_method": "Lookup Method",
@@ -364,7 +401,7 @@ def write_xlsx(results: list[dict], path: str) -> None:
     }
 
     COL_WIDTHS = {
-        "domain": 30, "expired": 10, "days_since_expiry": 18,
+        "domain": 30, "expired": 10, "deleted": 16, "days_since_expiry": 18,
         "expiry_date": 28, "lookup_method": 14, "risk": 14,
         "vt_reputation": 16, "vt_categories": 40, "vt_tags": 30,
         "vt_malicious": 18, "vt_suspicious": 18, "vt_harmless": 16,
@@ -547,7 +584,9 @@ def main() -> None:
             info = fut.result()
             expiry_map[info["domain"]] = info
             status = (
-                f"EXPIRED {info.get('days_since_expiry', '?')}d ago"
+                "DELETED/DROPPED"
+                if info.get("deleted")
+                else f"EXPIRED {info.get('days_since_expiry', '?')}d ago"
                 if info.get("expired")
                 else (info.get("expiry_date") or info.get("whois_error") or "?")[:28]
             )
@@ -562,6 +601,8 @@ def main() -> None:
         if api_key:
             if args.check_all:
                 vt_queue.append(info)
+            elif info.get("deleted"):
+                vt_queue.append(info)  # always check deleted domains
             elif info.get("expired"):
                 days = info.get("days_since_expiry") or 0
                 if args.days == 0 or days <= args.days:
