@@ -1,0 +1,14 @@
+Step 4 — Add CSS + load the script in your base template
+
+  <!-- in <head> or before </body> -->
+  <style>
+    .lt-wrapper { display: inline-block; width: 100%; }
+    .lt-errors  { margin: 4px 0 0; padding: 0; list-style: none; font-size: 0.83em; color: #c0392b; }
+    .lt-errors li { padding: 2px 0; }
+  </style>
+
+  {% load static %}
+  <script src="{% static 'js/languagetool.js' %}" defer></script>
+
+  ---
+
