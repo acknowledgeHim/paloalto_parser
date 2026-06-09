@@ -2136,6 +2136,39 @@ class ExcelReporter:
 
         self._set_widths(ws, [4, 12, 32, 36, 14, 20, 18, 60, 60, 36])
 
+    # ── Ticketing Export ──────────────────────────────────────────────────────
+    def _sheet_export(self):
+        ws = self.wb.create_sheet("Export")
+        ws.sheet_view.showGridLines = False
+        headers = ["Hostname", "line#", "protocol", "port", "output"]
+        self._hdr(ws, headers)
+        ws.freeze_panes = "A2"
+
+        hostname = self.p.mgmt_settings.get("hostname", "") or ""
+        sorted_issues = sorted(
+            self.p.issues,
+            key=lambda x: self.SEV_ORDER.get(x["severity"], 9),
+        )
+        for idx, iss in enumerate(sorted_issues, 1):
+            row = idx + 1
+            output_text = (
+                f"{iss['rule_name']}\n"
+                f"{iss['description']}\n"
+                f"{iss['recommendation']}"
+            )
+            values = [hostname, iss.get("line", ""), "tcp", 0, output_text]
+            row_bg = self._row_fill(row)
+            for col, val in enumerate(values, 1):
+                c = ws.cell(row=row, column=col, value=val)
+                c.border = THIN
+                c.font = _font()
+                c.alignment = _align("left" if col == 5 else "center", wrap=(col == 5))
+                if row_bg:
+                    c.fill = _fill(row_bg)
+            ws.row_dimensions[row].height = 60
+
+        self._set_widths(ws, [24, 10, 10, 8, 80])
+
     # ── Crypto & System Config ────────────────────────────────────────────────
     def _sheet_crypto_system(self):
         ws = self.wb.create_sheet("Crypto & System")
@@ -2610,6 +2643,7 @@ class ExcelReporter:
         self._sheet_zones()
         self._sheet_crypto_system()
         self._sheet_issues()
+        self._sheet_export()
         self._sheet_cis_mapping()
         self._sheet_pci_mapping()
         self.wb.save(self.out)
