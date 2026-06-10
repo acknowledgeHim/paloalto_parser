@@ -387,7 +387,7 @@ JSON format: array or NDJSON with keys  client, output, start_date
 
     print(f"[*] Writing Excel...")
     build_excel(tab1, tab2, tab3, args.output)
-    print(f"[+] Saved: {args.output}")
+    print(f"[+] Saved: {os.path.abspath(args.output)}")
 
 
 if __name__ == "__main__":
