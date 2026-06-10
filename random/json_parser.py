@@ -15,20 +15,17 @@ Produces a 3-tab Excel report:
                                          that client has)
     Tab 3 — Installation Dates         : client, software, installed_on
 
-Uses streaming JSON parsing (ijson) so the 1 GB file is never fully loaded.
+Uses a streaming bracket-counter parser so the 1 GB file is never fully loaded.
+Handles: JSON arrays, NDJSON, MySQL INTO OUTFILE (raw newlines inside strings),
+multi-line objects, and concatenated objects.
 """
 
 import re
 import os
 import sys
+import json
 import argparse
 from collections import defaultdict
-from datetime import datetime
-
-try:
-    import ijson
-except ImportError:
-    sys.exit("ERROR: ijson is required.  Run:  pip install ijson")
 
 try:
     import openpyxl
@@ -51,96 +48,118 @@ def parse_line(raw: str) -> tuple[str, str]:
     return name, installed
 
 
+# ── JSON streaming ────────────────────────────────────────────────────────────
+#
+# MySQL INTO OUTFILE writes raw control bytes (newline 0x0A, tab 0x09, etc.)
+# inside string field values without JSON-escaping them.  Standard parsers
+# (ijson, json.loads) reject this as invalid JSON.
+#
+# _iter_records() uses a bracket-counter that:
+#   1. Reads the file in 64 KB chunks — memory is bounded to one object at a time
+#   2. Tracks string/escape state character-by-character
+#   3. Replaces any bare control character inside a JSON string with its
+#      two-char JSON escape sequence  (\n  \t  etc.)
+#   4. Emits each complete {…} object to json.loads once the closing } is found
+#
+# This handles: JSON arrays, NDJSON, MySQL OUTFILE, multi-line objects,
+# and concatenated objects — without needing ijson.
+
+_CTRL = {'\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f'}
+
+
+def _iter_records(file_path: str):
+    """Yield one dict per JSON object from any supported format."""
+    CHUNK = 65_536  # 64 KB per read
+    buf: list[str] = []
+    depth = 0
+    in_str = False
+    esc_next = False
+    parsed = skipped = 0
+
+    with open(file_path, "r", encoding="utf-8", errors="replace", newline="") as fh:
+        while True:
+            chunk = fh.read(CHUNK)
+            if not chunk:
+                break
+            for ch in chunk:
+                if esc_next:
+                    if depth:
+                        buf.append(ch)
+                    esc_next = False
+                    continue
+                if ch == "\\" and in_str:
+                    if depth:
+                        buf.append(ch)
+                    esc_next = True
+                    continue
+                if ch == '"':
+                    in_str = not in_str
+                    if depth:
+                        buf.append(ch)
+                    continue
+                if in_str:
+                    if depth:
+                        if ord(ch) < 0x20:
+                            # Sanitize bare control chars MySQL OUTFILE leaves unescaped
+                            buf.append(_CTRL.get(ch, f"\\u{ord(ch):04x}"))
+                        else:
+                            buf.append(ch)
+                    continue
+                # Outside strings
+                if ch == "{":
+                    depth += 1
+                    buf.append(ch)
+                elif ch == "}":
+                    if depth:
+                        buf.append(ch)
+                        depth -= 1
+                        if depth == 0:
+                            s = "".join(buf)
+                            buf.clear()
+                            try:
+                                obj = json.loads(s)
+                                if isinstance(obj, dict):
+                                    yield obj
+                                    parsed += 1
+                            except json.JSONDecodeError as e:
+                                print(f"  [!] Skipping object: {e}", file=sys.stderr)
+                                skipped += 1
+                elif depth:
+                    buf.append(ch)
+
+    print(f"[*] Parsed {parsed:,} records ({skipped:,} skipped)", file=sys.stderr)
+
+
 # ── Aggregation ───────────────────────────────────────────────────────────────
 
 def aggregate(input_path: str) -> tuple[dict, dict, list]:
-    """
-    Stream-parse the JSON file and return three data structures:
-
-    tab1  : dict  (client, start_date, software) → occurrence count
-    tab2  : dict  software → occurrence count
-              (each (client, software) pair counted once regardless of
-               how many start_dates that client has)
-    tab3  : list  of (client, software, installed_date) — only rows that
-              have an installed_on date
-    """
-    # Tab 1: (client, start_date, software) → int
     tab1: dict[tuple[str, str, str], int] = defaultdict(int)
-
-    # Tab 2: software → int  (deduplicated per client)
     tab2: dict[str, int] = defaultdict(int)
-    # Track (client, software) pairs already counted for tab2
     tab2_seen: set[tuple[str, str]] = set()
-
-    # Tab 3: rows with an installation date
     tab3: list[tuple[str, str, str]] = []
 
-    record_count = 0
-
-    # Peek at the first non-whitespace byte to detect format:
-    #   '[' → JSON array  [{...}, {...}]
-    #   '{' → NDJSON / newline-delimited JSON  (one object per line)
     with open(input_path, "rb") as fh:
-        first_byte = b""
-        while True:
-            ch = fh.read(1)
-            if not ch:
-                break
-            if ch.strip():
-                first_byte = ch
-                break
+        probe = fh.read(256).decode("utf-8", errors="replace")
+    print(f"[*] File probe: {probe[:120]!r}", file=sys.stderr)
 
-    if first_byte == b"[":
-        # Standard JSON array — stream with ijson
-        with open(input_path, "rb") as fh:
-            _process_stream(ijson.items(fh, "item"), tab1, tab2, tab2_seen, tab3)
-
-    else:
-        # NDJSON (one JSON object per line) — read line by line, never loads
-        # more than one record into memory at a time
-        import json
-        with open(input_path, "r", encoding="utf-8", errors="replace") as fh:
-            for lineno, line in enumerate(fh, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError as e:
-                    print(f"  [!] Skipping line {lineno}: {e}", file=sys.stderr)
-                    continue
-                _process_stream([record], tab1, tab2, tab2_seen, tab3)
-
-    return tab1, tab2, tab3
-
-
-def _process_stream(items, tab1, tab2, tab2_seen, tab3):
-    for record in items:
-        client     = str(record.get("client", "")).strip()
+    for record in _iter_records(input_path):
+        client     = str(record.get("client",     "")).strip()
         start_date = str(record.get("start_date", "")).strip()
-        output     = str(record.get("output", ""))
+        output     = str(record.get("output",     ""))
 
-        # Split on both real newlines and literal \n sequences
-        lines = re.split(r'\\n|\n', output)
-
-        for raw in lines:
+        for raw in re.split(r'\\n|\n', output):
             name, installed = parse_line(raw)
             if not name:
                 continue
-
-            # ── Tab 1 ──────────────────────────────────────────────────────
             tab1[(client, start_date, name)] += 1
-
-            # ── Tab 2 ──────────────────────────────────────────────────────
-            # Count software once per client (deduplicate across start_dates)
             pair = (client, name)
             if pair not in tab2_seen:
                 tab2_seen.add(pair)
                 tab2[name] += 1
-
-            # ── Tab 3 ──────────────────────────────────────────────────────
             if installed:
                 tab3.append((client, name, installed))
+
+    return tab1, tab2, tab3
 
 
 # ── Styling helpers ───────────────────────────────────────────────────────────
