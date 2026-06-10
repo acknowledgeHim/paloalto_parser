@@ -66,6 +66,27 @@ def parse_line(raw: str) -> tuple[str, str]:
 
 _CTRL = {'\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f'}
 
+# Excel hard row limit (row 1 is header; max data rows = 1_048_575)
+EXCEL_MAX_ROWS = 1_048_575
+
+
+def _try_parse(s: str) -> dict | None:
+    """Try json.loads, then retry after undoing MySQL OUTFILE backslash-doubling."""
+    try:
+        obj = json.loads(s)
+        return obj if isinstance(obj, dict) else None
+    except json.JSONDecodeError:
+        pass
+    # MySQL INTO OUTFILE doubles every backslash (\ → \\), which turns JSON's
+    # \" (escaped quote) into \\" (escaped backslash + raw quote = end-of-string).
+    # Halving all backslash-pairs restores the original JSON text.
+    try:
+        obj = json.loads(s.replace('\\\\', '\\'))
+        return obj if isinstance(obj, dict) else None
+    except json.JSONDecodeError as e:
+        print(f"  [!] Skipping object: {e}", file=sys.stderr)
+        return None
+
 
 def _iter_records(file_path: str):
     """Yield one dict per JSON object from any supported format."""
@@ -116,13 +137,11 @@ def _iter_records(file_path: str):
                         if depth == 0:
                             s = "".join(buf)
                             buf.clear()
-                            try:
-                                obj = json.loads(s)
-                                if isinstance(obj, dict):
-                                    yield obj
-                                    parsed += 1
-                            except json.JSONDecodeError as e:
-                                print(f"  [!] Skipping object: {e}", file=sys.stderr)
+                            obj = _try_parse(s)
+                            if obj is not None:
+                                yield obj
+                                parsed += 1
+                            else:
                                 skipped += 1
                 elif depth:
                     buf.append(ch)
@@ -130,23 +149,46 @@ def _iter_records(file_path: str):
     print(f"[*] Parsed {parsed:,} records ({skipped:,} skipped)", file=sys.stderr)
 
 
+# ── CSV parser ────────────────────────────────────────────────────────────────
+
+def _iter_csv_records(file_path: str):
+    """
+    Yield dicts with keys client/output/start_date from a CSV file.
+    The output column may contain newlines (quoted field) or literal \\n sequences.
+    Column order is detected from the header row; column names are case-insensitive.
+    """
+    import csv
+    parsed = 0
+    with open(file_path, "r", encoding="utf-8-sig", errors="replace", newline="") as fh:
+        reader = csv.DictReader(fh)
+        # Normalise header names to lowercase for flexible matching
+        if reader.fieldnames is None:
+            print("[!] CSV has no header row", file=sys.stderr)
+            return
+        norm = {f.strip().lower(): f for f in reader.fieldnames}
+        client_col     = norm.get("client")
+        output_col     = norm.get("output")
+        start_date_col = norm.get("start_date") or norm.get("startdate") or norm.get("start date")
+        if not all([client_col, output_col, start_date_col]):
+            print(f"[!] CSV missing required columns. Found: {list(reader.fieldnames)}", file=sys.stderr)
+            return
+        for row in reader:
+            yield {
+                "client":     (row.get(client_col)     or "").strip(),
+                "output":     (row.get(output_col)     or ""),
+                "start_date": (row.get(start_date_col) or "").strip(),
+            }
+            parsed += 1
+    print(f"[*] CSV: read {parsed:,} rows", file=sys.stderr)
+
+
 # ── Aggregation ───────────────────────────────────────────────────────────────
 
-def aggregate(input_path: str) -> tuple[dict, dict, list]:
-    tab1: dict[tuple[str, str, str], int] = defaultdict(int)
-    tab2: dict[str, int] = defaultdict(int)
-    tab2_seen: set[tuple[str, str]] = set()
-    tab3: list[tuple[str, str, str]] = []
-
-    with open(input_path, "rb") as fh:
-        probe = fh.read(256).decode("utf-8", errors="replace")
-    print(f"[*] File probe: {probe[:120]!r}", file=sys.stderr)
-
-    for record in _iter_records(input_path):
+def _accumulate(records, tab1, tab2, tab2_seen, tab3):
+    for record in records:
         client     = str(record.get("client",     "")).strip()
         start_date = str(record.get("start_date", "")).strip()
         output     = str(record.get("output",     ""))
-
         for raw in re.split(r'\\n|\n', output):
             name, installed = parse_line(raw)
             if not name:
@@ -158,6 +200,23 @@ def aggregate(input_path: str) -> tuple[dict, dict, list]:
                 tab2[name] += 1
             if installed:
                 tab3.append((client, name, installed))
+
+
+def aggregate(input_path: str) -> tuple[dict, dict, list]:
+    tab1: dict[tuple[str, str, str], int] = defaultdict(int)
+    tab2: dict[str, int] = defaultdict(int)
+    tab2_seen: set[tuple[str, str]] = set()
+    tab3: list[tuple[str, str, str]] = []
+
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext == ".csv":
+        print(f"[*] Format: CSV", file=sys.stderr)
+        _accumulate(_iter_csv_records(input_path), tab1, tab2, tab2_seen, tab3)
+    else:
+        with open(input_path, "rb") as fh:
+            probe = fh.read(256).decode("utf-8", errors="replace")
+        print(f"[*] File probe: {probe[:120]!r}", file=sys.stderr)
+        _accumulate(_iter_records(input_path), tab1, tab2, tab2_seen, tab3)
 
     return tab1, tab2, tab3
 
@@ -215,6 +274,9 @@ def build_excel(tab1: dict, tab2: dict, tab3: list, out_path: str):
         ((k[0], k[1], k[2], v) for k, v in tab1.items()),
         key=lambda x: (x[1], x[0], x[3])   # client, start_date, software
     )
+    if len(rows1) > EXCEL_MAX_ROWS:
+        print(f"[!] Tab1: {len(rows1):,} rows exceeds Excel limit; truncating to {EXCEL_MAX_ROWS:,}", file=sys.stderr)
+        rows1 = rows1[:EXCEL_MAX_ROWS]
 
     for i, (client, start_date, name, count) in enumerate(rows1, 2):
         rb = ALT_ROW if i % 2 == 0 else None
@@ -238,6 +300,9 @@ def build_excel(tab1: dict, tab2: dict, tab3: list, out_path: str):
 
     # Sort by count descending, then name
     rows2 = sorted(tab2.items(), key=lambda x: (-x[1], x[0]))
+    if len(rows2) > EXCEL_MAX_ROWS:
+        print(f"[!] Tab2: {len(rows2):,} rows exceeds Excel limit; truncating to {EXCEL_MAX_ROWS:,}", file=sys.stderr)
+        rows2 = rows2[:EXCEL_MAX_ROWS]
 
     for i, (name, count) in enumerate(rows2, 2):
         rb = ALT_ROW if i % 2 == 0 else None
@@ -261,6 +326,9 @@ def build_excel(tab1: dict, tab2: dict, tab3: list, out_path: str):
 
     # Sort by client, software name
     rows3 = sorted(tab3, key=lambda x: (x[0], x[1]))
+    if len(rows3) > EXCEL_MAX_ROWS:
+        print(f"[!] Tab3: {len(rows3):,} rows exceeds Excel limit; truncating to {EXCEL_MAX_ROWS:,}", file=sys.stderr)
+        rows3 = rows3[:EXCEL_MAX_ROWS]
 
     for i, (client, name, installed) in enumerate(rows3, 2):
         rb = ALT_ROW if i % 2 == 0 else None
@@ -281,14 +349,19 @@ def build_excel(tab1: dict, tab2: dict, tab3: list, out_path: str):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Convert software inventory JSON to Excel (streaming, low-memory)",
+        description="Convert software inventory JSON or CSV to Excel (streaming, low-memory)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Example:
-  python software_inventory_parser.py inventory.json
-  python software_inventory_parser.py inventory.json -o report.xlsx
+Examples:
+  python json_parser.py inventory.json
+  python json_parser.py inventory.csv
+  python json_parser.py inventory.json -o report.xlsx
+
+CSV format: header row with columns  client, output, start_date
+JSON format: array or NDJSON with keys  client, output, start_date
+  (MySQL INTO OUTFILE output is handled automatically)
 """)
-    ap.add_argument("input",  help="Input JSON file")
+    ap.add_argument("input",  help="Input JSON or CSV file")
     ap.add_argument("-o", "--output", default=None,
                     help="Output Excel file (default: <input-stem>_report.xlsx)")
     args = ap.parse_args()
