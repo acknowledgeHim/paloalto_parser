@@ -369,9 +369,13 @@ JSON format: array or NDJSON with keys  client, output, start_date
     if not os.path.isfile(args.input):
         sys.exit(f"File not found: {args.input}")
 
+    input_dir = os.path.dirname(os.path.abspath(args.input))
     if not args.output:
         stem = os.path.splitext(os.path.basename(args.input))[0]
-        args.output = f"{stem}_report.xlsx"
+        args.output = os.path.join(input_dir, f"{stem}_report.xlsx")
+    elif not os.path.dirname(args.output):
+        # bare filename with no path — write next to the input file
+        args.output = os.path.join(input_dir, args.output)
 
     print(f"[*] Streaming: {args.input}")
     tab1, tab2, tab3 = aggregate(args.input)
