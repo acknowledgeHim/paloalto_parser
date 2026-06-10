@@ -1,71 +1,85 @@
-Step 3 — Create the JS file
+(function () {
+  const LT_ENDPOINT = "/lt/check/";
+  const DEBOUNCE_MS = 900;
+  const MIN_LENGTH = 20;
 
-  Save as static/js/languagetool.js:
+  async function checkText(text) {
+    const resp = await fetch(LT_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ text: text, language: "auto" }),
+    });
+    if (!resp.ok) throw new Error("LT request failed: " + resp.status);
+    return resp.json();
+  }
 
-  (function () {
-    const API = "/lt/check/";
-    const DEBOUNCE_MS = 800;
-    const timers = new WeakMap();
-
-    function getCsrf() {
-      return document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? "";
+  function renderErrors(errorBox, matches) {
+    if (!matches.length) {
+      errorBox.innerHTML = "";
+      return;
     }
+    errorBox.innerHTML = matches
+      .map(function (m) {
+        var suggestions = m.replacements
+          .slice(0, 3)
+          .map(function (r) { return r.value; })
+          .join(", ");
+        return (
+          '<li class="lt-error-item">' +
+          '<span class="lt-rule-type">' + m.rule.issueType + "</span> " +
+          m.message +
+          (suggestions ? ' &mdash; <span class="lt-suggestions">' + suggestions + "</span>" : "") +
+          "</li>"
+        );
+      })
+      .join("");
+  }
 
-    async function check(text) {
-      const r = await fetch(API, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "X-CSRFToken": getCsrf(),
-        },
-        body: new URLSearchParams({ text, language: "auto" }),
-      });
-      return r.json();
-    }
+  function attachToTextarea(textarea) {
+    if (textarea.dataset.ltBound) return;
+    textarea.dataset.ltBound = "1";
 
-    function renderErrors(wrapper, matches) {
-      let ul = wrapper.querySelector(".lt-errors");
-      if (!ul) {
-        ul = document.createElement("ul");
-        ul.className = "lt-errors";
-        wrapper.appendChild(ul);
-      }
-      ul.innerHTML = matches.map((m) => {
-        const suggestions = m.replacements.slice(0, 3).map((r) => r.value).join(", ");
-        return `<li><b>${m.rule.issueType}:</b> ${m.message}${suggestions ? ` — <em>${suggestions}</em>` : ""}</li>`;
-      }).join("");
-    }
+    var errorBox = document.createElement("ul");
+    errorBox.className = "lt-error-box";
+    textarea.insertAdjacentElement("afterend", errorBox);
 
-    function attach(textarea) {
-      if (textarea.dataset.ltAttached) return;
-      textarea.dataset.ltAttached = "1";
+    var timer = null;
 
-      const wrapper = document.createElement("div");
-      wrapper.className = "lt-wrapper";
-      textarea.parentNode.insertBefore(wrapper, textarea);
-      wrapper.appendChild(textarea);
+    textarea.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        var text = textarea.value.trim();
+        if (text.length < MIN_LENGTH) {
+          errorBox.innerHTML = "";
+          return;
+        }
+        checkText(text)
+          .then(function (data) { renderErrors(errorBox, data.matches); })
+          .catch(function (err) { console.warn("LanguageTool error:", err); });
+      }, DEBOUNCE_MS);
+    });
+  }
 
-      let timer;
-      textarea.addEventListener("input", () => {
-        clearTimeout(timer);
-        timer = setTimeout(async () => {
-          const text = textarea.value.trim();
-          if (text.length < 20) return;
-          try {
-            const data = await check(text);
-            renderErrors(wrapper, data.matches);
-          } catch (_) {}
-        }, DEBOUNCE_MS);
-      });
-    }
+  function attachAll() {
+    document.querySelectorAll("textarea").forEach(attachToTextarea);
+  }
 
-    function attachAll() {
-      document.querySelectorAll("textarea").forEach(attach);
-    }
-
+  function init() {
     attachAll();
-    new MutationObserver(attachAll).observe(document.body, { childList: true, subtree: true });
-  })();
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        mutation.addedNodes.forEach(function (node) {
+          if (node.nodeType !== 1) return;
+          if (node.tagName === "TEXTAREA") attachToTextarea(node);
+          node.querySelectorAll && node.querySelectorAll("textarea").forEach(attachToTextarea);
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  }
 
-  ---
-
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
