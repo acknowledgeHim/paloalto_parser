@@ -77,18 +77,39 @@ def aggregate(input_path: str) -> tuple[dict, dict, list]:
 
     record_count = 0
 
+    # Peek at the first non-whitespace byte to detect format:
+    #   '[' → JSON array  [{...}, {...}]
+    #   '{' → NDJSON / newline-delimited JSON  (one object per line)
     with open(input_path, "rb") as fh:
-        # ijson.items streams one top-level array element at a time
-        # Works whether the file is [{...}, {...}] or a single {...}
-        try:
-            items = ijson.items(fh, "item")
-            _process_stream(items, tab1, tab2, tab2_seen, tab3)
-        except ijson.JSONError:
-            # Fallback: maybe it's a single object, not an array
-            fh.seek(0)
-            import json
-            record = json.load(fh)
-            _process_stream([record], tab1, tab2, tab2_seen, tab3)
+        first_byte = b""
+        while True:
+            ch = fh.read(1)
+            if not ch:
+                break
+            if ch.strip():
+                first_byte = ch
+                break
+
+    if first_byte == b"[":
+        # Standard JSON array — stream with ijson
+        with open(input_path, "rb") as fh:
+            _process_stream(ijson.items(fh, "item"), tab1, tab2, tab2_seen, tab3)
+
+    else:
+        # NDJSON (one JSON object per line) — read line by line, never loads
+        # more than one record into memory at a time
+        import json
+        with open(input_path, "r", encoding="utf-8", errors="replace") as fh:
+            for lineno, line in enumerate(fh, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as e:
+                    print(f"  [!] Skipping line {lineno}: {e}", file=sys.stderr)
+                    continue
+                _process_stream([record], tab1, tab2, tab2_seen, tab3)
 
     return tab1, tab2, tab3
 
