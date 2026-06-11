@@ -12,8 +12,8 @@
 
   function colorFor(t) { return ISSUE_COLORS[t] || "#e65100"; }
 
-  function escapeHtml(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   // ── element helpers ──────────────────────────────────────────────────
@@ -22,6 +22,17 @@
 
   function getText(el) {
     return isTextarea(el) ? el.value : (el.innerText || el.textContent || "");
+  }
+
+  // Character offset of the caret inside the element
+  function getCaretOffset(el) {
+    if (isTextarea(el)) return el.selectionStart || 0;
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return 0;
+    var r = sel.getRangeAt(0).cloneRange();
+    r.selectNodeContents(el);
+    r.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+    return r.toString().length;
   }
 
   function replaceAt(el, offset, len, replacement, currentText) {
@@ -72,14 +83,9 @@
       if (m.offset < pos) return;
       html += escapeHtml(text.slice(pos, m.offset));
       var color = colorFor(m.rule.issueType);
-      var sugs  = JSON.stringify(m.replacements.slice(0, 5).map(function (r) { return r.value; }));
       html +=
         "<span class='lt-mark'" +
-        " data-msg=\""   + m.message.replace(/"/g, "&quot;") + "\"" +
-        " data-sugs='"   + sugs.replace(/'/g, "&#39;") + "'" +
-        " data-offset='" + m.offset  + "'" +
-        " data-len='"    + m.length  + "'" +
-        " style='border-bottom:2.5px solid " + color + ";cursor:pointer;'>" +
+        " style='border-bottom:2.5px solid " + color + ";'>" +
         escapeHtml(text.slice(m.offset, m.offset + m.length)) +
         "</span>";
       pos = m.offset + m.length;
@@ -100,9 +106,10 @@
     ].forEach(function (p) { overlay.style[p] = cs[p]; });
   }
 
-  // ── inline underline popup ───────────────────────────────────────────
+  // ── popup helpers ────────────────────────────────────────────────────
 
-  function positionNear(floater, anchor, above) {
+  // Position a floater above a badge/anchor element
+  function positionNear(floater, anchor) {
     floater.style.visibility = "hidden";
     floater.style.display    = "block";
     var rect  = anchor.getBoundingClientRect();
@@ -110,102 +117,101 @@
     var sx    = window.scrollX || window.pageXOffset;
     var fh    = floater.offsetHeight;
     var fw    = floater.offsetWidth;
-    var useAbove = above && (rect.top - fh > 10);
-    floater.style.top  = (useAbove ? rect.top + sy - fh - 5 : rect.bottom + sy + 5) + "px";
+    floater.style.top  = (rect.top - fh > 10
+      ? rect.top  + sy - fh - 5
+      : rect.bottom + sy + 5) + "px";
     var left = rect.left + sx;
     if (left + fw > window.innerWidth - 10) left = window.innerWidth - fw - 10 + sx;
     floater.style.left = Math.max(sx, left) + "px";
     floater.style.visibility = "visible";
   }
 
-  function showInlinePopup(popup, mark, el) {
-    var offset      = parseInt(mark.dataset.offset);
-    var len         = parseInt(mark.dataset.len);
-    var sugs        = JSON.parse(mark.dataset.sugs || "[]");
-    var capturedTxt = getText(el);
+  // Position a floater at mouse click coordinates
+  function positionAtClick(floater, clientX, clientY) {
+    floater.style.visibility = "hidden";
+    floater.style.display    = "block";
+    var sy = window.scrollY || window.pageYOffset;
+    var sx = window.scrollX || window.pageXOffset;
+    floater.style.top  = (clientY + sy + 10) + "px";
+    var left = clientX + sx;
+    var fw   = floater.offsetWidth;
+    if (left + fw > window.innerWidth - 10) left = window.innerWidth - fw - 10 + sx;
+    floater.style.left = Math.max(sx, left) + "px";
+    floater.style.visibility = "visible";
+  }
 
+  function buildPopupContent(popup, match, el, onReplace) {
+    var capturedTxt = getText(el);
     popup.innerHTML = "";
     var msgEl = document.createElement("div");
-    msgEl.className = "lt-popup-msg"; msgEl.textContent = mark.dataset.msg;
+    msgEl.className   = "lt-popup-msg";
+    msgEl.textContent = match.message;
     popup.appendChild(msgEl);
-
-    if (sugs.length) {
+    if (match.replacements.length) {
       var row = document.createElement("div"); row.className = "lt-popup-sugs";
-      sugs.forEach(function (s) {
+      match.replacements.slice(0, 5).forEach(function (r) {
         var btn = document.createElement("button");
-        btn.className = "lt-popup-btn"; btn.textContent = s;
+        btn.className = "lt-popup-btn"; btn.textContent = r.value;
         btn.addEventListener("mousedown", function (e) {
           e.preventDefault();
-          replaceAt(el, offset, len, s, capturedTxt);
-          popup.style.display = "none";
+          replaceAt(el, match.offset, match.length, r.value, capturedTxt);
+          onReplace();
         });
         row.appendChild(btn);
       });
       popup.appendChild(row);
     }
-    positionNear(popup, mark, true);
   }
 
   // ── badge + issues panel ─────────────────────────────────────────────
 
-  function buildIssuesPanel(panel, matches, el) {
+  function buildIssuesPanel(panel, matches, el, onReplace) {
     panel.innerHTML = "";
-
     var hdr = document.createElement("div");
     hdr.className   = "lt-panel-hdr";
     hdr.textContent = matches.length + " issue" + (matches.length !== 1 ? "s" : "") + " found";
     panel.appendChild(hdr);
 
     matches.forEach(function (m) {
+      var color  = colorFor(m.rule.issueType);
       var capturedTxt = getText(el);
-      var color = colorFor(m.rule.issueType);
-
-      var item = document.createElement("div"); item.className = "lt-panel-item";
-
-      var top = document.createElement("div"); top.className = "lt-panel-item-top";
+      var item   = document.createElement("div"); item.className = "lt-panel-item";
+      var top    = document.createElement("div"); top.className  = "lt-panel-item-top";
       var typeEl = document.createElement("span");
-      typeEl.className = "lt-panel-type";
-      typeEl.style.color = color;
+      typeEl.className = "lt-panel-type"; typeEl.style.color = color;
       typeEl.textContent = m.rule.issueType;
-      var msgEl = document.createElement("span");
+      var msgEl  = document.createElement("span");
       msgEl.className = "lt-panel-item-msg"; msgEl.textContent = " " + m.message;
-      top.appendChild(typeEl); top.appendChild(msgEl);
-      item.appendChild(top);
+      top.appendChild(typeEl); top.appendChild(msgEl); item.appendChild(top);
 
       if (m.replacements.length) {
-        var sugsRow = document.createElement("div"); sugsRow.className = "lt-panel-sugs";
+        var row = document.createElement("div"); row.className = "lt-panel-sugs";
         m.replacements.slice(0, 5).forEach(function (r) {
           var btn = document.createElement("button");
           btn.className = "lt-popup-btn"; btn.textContent = r.value;
-          var offset = m.offset, len = m.length;
           btn.addEventListener("mousedown", function (e) {
             e.preventDefault();
-            replaceAt(el, offset, len, r.value, capturedTxt);
-            panel.style.display = "none";
+            replaceAt(el, m.offset, m.length, r.value, capturedTxt);
+            onReplace();
           });
-          sugsRow.appendChild(btn);
+          row.appendChild(btn);
         });
-        item.appendChild(sugsRow);
+        item.appendChild(row);
       }
-
       panel.appendChild(item);
     });
   }
 
-  function updateBadge(badge, panel, matches, el) {
+  function updateBadge(badge, panel, matches, el, onReplace) {
     if (matches === null) {
-      badge.className   = "lt-badge lt-badge-checking";
-      badge.textContent = "…";
-      return;
+      badge.className = "lt-badge lt-badge-checking"; badge.textContent = "…"; return;
     }
     if (matches.length === 0) {
-      badge.className  = "lt-badge lt-badge-ok";
-      badge.innerHTML  = "&#10003;";
+      badge.className = "lt-badge lt-badge-ok"; badge.innerHTML = "&#10003;";
       panel.style.display = "none";
     } else {
-      badge.className   = "lt-badge lt-badge-err";
-      badge.textContent = matches.length;
-      buildIssuesPanel(panel, matches, el);
+      badge.className = "lt-badge lt-badge-err"; badge.textContent = matches.length;
+      buildIssuesPanel(panel, matches, el, onReplace);
     }
   }
 
@@ -216,77 +222,100 @@
     el.dataset.ltBound = "1";
 
     var cs = window.getComputedStyle(el);
+
+    // Container
     var container = document.createElement("div");
     container.style.position = "relative";
     container.style.display  = cs.display === "block" ? "block" : "inline-block";
     el.parentNode.insertBefore(container, el);
     container.appendChild(el);
 
-    // Overlay — use the element's own text color so dark-mode themes work automatically
+    // Overlay — sits BELOW the element (z-index 1) so the element's caret
+    // renders on top of it and stays fully visible
     var overlay = document.createElement("div");
-    overlay.className = "lt-overlay";
+    overlay.className  = "lt-overlay";
     overlay.style.color = cs.color;
     container.appendChild(overlay);
     mirrorStyles(el, overlay);
 
-    // Badge (bottom-right corner of the element)
+    // Element sits above the overlay so its caret is never hidden
+    el.style.position  = "relative";
+    el.style.zIndex    = "2";
+    el.style.color     = "transparent";
+    el.style.caretColor = cs.color;
+    el.style.background = "transparent";
+
+    // Badge
     var badge = document.createElement("div");
-    badge.className = "lt-badge lt-badge-checking";
-    badge.textContent = "…";
+    badge.className = "lt-badge lt-badge-checking"; badge.textContent = "…";
     container.appendChild(badge);
 
-    // Issues panel (appended to body)
+    // Issues panel
     var issuesPanel = document.createElement("div");
-    issuesPanel.className   = "lt-panel";
-    issuesPanel.style.display = "none";
+    issuesPanel.className = "lt-panel"; issuesPanel.style.display = "none";
     document.body.appendChild(issuesPanel);
 
+    // Inline popup (shown when clicking on an underlined word)
+    var inlinePopup = document.createElement("div");
+    inlinePopup.className = "lt-popup"; inlinePopup.style.display = "none";
+    document.body.appendChild(inlinePopup);
+
+    var lastMatches = null;
+
+    function hidePopups() {
+      inlinePopup.style.display = "none";
+      issuesPanel.style.display = "none";
+    }
+
+    // Badge click → toggle issues panel
     badge.addEventListener("mousedown", function (e) {
       e.preventDefault(); e.stopPropagation();
       if (issuesPanel.style.display === "none" && issuesPanel.children.length) {
-        positionNear(issuesPanel, badge, true);
+        positionNear(issuesPanel, badge);
       } else {
         issuesPanel.style.display = "none";
       }
     });
 
-    // Inline underline popup (appended to body)
-    var inlinePopup = document.createElement("div");
-    inlinePopup.className   = "lt-popup";
-    inlinePopup.style.display = "none";
-    document.body.appendChild(inlinePopup);
-
-    // Close both floaters on outside click
+    // Close floaters on outside click
     document.addEventListener("mousedown", function (e) {
-      if (!inlinePopup.contains(e.target) && !overlay.contains(e.target))
-        inlinePopup.style.display = "none";
-      if (!issuesPanel.contains(e.target) && e.target !== badge)
-        issuesPanel.style.display = "none";
+      if (!inlinePopup.contains(e.target)) inlinePopup.style.display = "none";
+      if (!issuesPanel.contains(e.target) && e.target !== badge) issuesPanel.style.display = "none";
     }, true);
 
-    el.style.color      = "transparent";
-    el.style.caretColor = cs.color;
-
+    // Scroll sync
     el.addEventListener("scroll", function () {
       overlay.scrollTop  = el.scrollTop;
       overlay.scrollLeft = el.scrollLeft;
     });
 
-    overlay.addEventListener("mousedown", function (e) {
-      var mark = e.target.closest && e.target.closest(".lt-mark");
-      if (mark) { e.preventDefault(); showInlinePopup(inlinePopup, mark, el); }
+    // Click inside the element: check if caret landed on a match → show popup
+    el.addEventListener("mouseup", function (e) {
+      if (!lastMatches || !lastMatches.length) return;
+      var mx = e.clientX, my = e.clientY;
+      setTimeout(function () {
+        var pos = getCaretOffset(el);
+        for (var i = 0; i < lastMatches.length; i++) {
+          var m = lastMatches[i];
+          if (pos >= m.offset && pos <= m.offset + m.length) {
+            buildPopupContent(inlinePopup, m, el, hidePopups);
+            positionAtClick(inlinePopup, mx, my);
+            return;
+          }
+        }
+      }, 10);
     });
 
-    var timer = null, lastChecked = null, lastMatches = null;
+    var timer = null, lastChecked = null;
 
     function runCheck() {
       var text = getText(el);
       if (text === lastChecked) return;
-      updateBadge(badge, issuesPanel, null, el); // show "…"
+      updateBadge(badge, issuesPanel, null, el, hidePopups);
       if (text.trim().length < MIN_LENGTH) {
         overlay.innerHTML = escapeHtml(text);
         lastChecked = text; lastMatches = [];
-        updateBadge(badge, issuesPanel, [], el);
+        updateBadge(badge, issuesPanel, [], el, hidePopups);
         return;
       }
       checkText(text)
@@ -295,7 +324,7 @@
           lastMatches = data.matches;
           overlay.innerHTML = buildOverlayHTML(text, data.matches);
           lastChecked = text;
-          updateBadge(badge, issuesPanel, data.matches, el);
+          updateBadge(badge, issuesPanel, data.matches, el, hidePopups);
         })
         .catch(function (err) { console.warn("LanguageTool:", err); });
     }
@@ -316,7 +345,7 @@
       mirrorStyles(el, overlay);
       overlay.innerHTML = escapeHtml(getText(el));
       if (getText(el).trim().length >= MIN_LENGTH) runCheck();
-      else updateBadge(badge, issuesPanel, [], el);
+      else updateBadge(badge, issuesPanel, [], el, hidePopups);
     }
 
     if (window.ResizeObserver) {
@@ -342,23 +371,19 @@
       "box-sizing:border-box!important;" +
       "pointer-events:none;overflow:hidden;" +
       "border-color:transparent;background:transparent;" +
-      "z-index:2;" +
+      "z-index:1;" +   /* below the element so caret is always on top */
     "}" +
-    ".lt-mark{pointer-events:all;}" +
-    // Badge
+    ".lt-mark{pointer-events:none;}" +
     ".lt-badge{" +
-      "position:absolute;bottom:5px;right:6px;" +
-      "z-index:10;min-width:20px;height:20px;" +
-      "border-radius:10px;padding:0 6px;" +
+      "position:absolute;bottom:5px;right:6px;z-index:10;" +
+      "min-width:20px;height:20px;border-radius:10px;padding:0 6px;" +
       "font-size:11px;font-weight:700;line-height:20px;text-align:center;" +
       "cursor:pointer;user-select:none;" +
-      "box-shadow:0 1px 4px rgba(0,0,0,.25);" +
-      "transition:background .2s;" +
+      "box-shadow:0 1px 4px rgba(0,0,0,.25);transition:background .2s;" +
     "}" +
     ".lt-badge-checking{background:#90a4ae;color:#fff;}" +
     ".lt-badge-ok{background:#1565c0;color:#fff;}" +
     ".lt-badge-err{background:#e53935;color:#fff;}" +
-    // Inline underline popup
     ".lt-popup{" +
       "position:absolute;z-index:9999;" +
       "background:#fff;border:1px solid #ddd;border-radius:6px;" +
@@ -374,7 +399,6 @@
       "padding:3px 10px;cursor:pointer;font-size:12px;" +
     "}" +
     ".lt-popup-btn:hover{background:#0d47a1;}" +
-    // Issues panel
     ".lt-panel{" +
       "position:absolute;z-index:9999;" +
       "background:#fff;border:1px solid #ddd;border-radius:8px;" +
@@ -397,7 +421,8 @@
   // ── discovery ────────────────────────────────────────────────────────
 
   function attachAll() {
-    document.querySelectorAll("textarea,[contenteditable='true']").forEach(attachToElement);
+    document.querySelectorAll("textarea").forEach(attachToElement);
+    // document.querySelectorAll("[contenteditable='true']").forEach(attachToElement);
   }
 
   function init() {
@@ -406,10 +431,11 @@
       mutations.forEach(function (mutation) {
         mutation.addedNodes.forEach(function (node) {
           if (node.nodeType !== 1) return;
-          if (node.tagName === "TEXTAREA" || node.getAttribute("contenteditable") === "true")
-            attachToElement(node);
+          if (node.tagName === "TEXTAREA") attachToElement(node);
+          // if (node.getAttribute("contenteditable") === "true") attachToElement(node);
           if (node.querySelectorAll)
-            node.querySelectorAll("textarea,[contenteditable='true']").forEach(attachToElement);
+            node.querySelectorAll("textarea").forEach(attachToElement);
+            // node.querySelectorAll("[contenteditable='true']").forEach(attachToElement);
         });
       });
     }).observe(document.body, { childList: true, subtree: true });
