@@ -70,8 +70,7 @@
       "borderTopStyle", "borderRightStyle", "borderBottomStyle", "borderLeftStyle",
       "boxSizing", "tabSize",
     ].forEach(function (p) { overlay.style[p] = cs[p]; });
-    overlay.style.width  = textarea.offsetWidth  + "px";
-    overlay.style.height = textarea.offsetHeight + "px";
+    // width/height handled by CSS inset:0 so init timing doesn't matter
   }
 
   function positionPopup(popup, mark) {
@@ -221,8 +220,9 @@
   var style = document.createElement("style");
   style.textContent =
     ".lt-overlay{" +
-      "position:absolute;top:0;left:0;" +
-      "pointer-events:none;" +          /* pass clicks through to textarea… */
+      "position:absolute;top:0;left:0;right:0;bottom:0;" +
+      "box-sizing:border-box!important;" +
+      "pointer-events:none;" +
       "overflow:hidden;" +
       "white-space:pre-wrap;" +
       "word-wrap:break-word;" +
