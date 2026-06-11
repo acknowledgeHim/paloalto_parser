@@ -1,0 +1,1607 @@
+{
+  "templates": [
+    {
+      "id": "checkin_01",
+      "subject": "Checking in",
+      "greeting": "Hey,",
+      "body_text": "Hope your week is going well. Just wanted to check in and see where things stand on your end.\n\nLet me know whenever you get a chance.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "checkin_02",
+      "subject": "Quick check-in",
+      "greeting": "Hi,",
+      "body_text": "Haven't heard back so I wanted to make sure my last message didn't get buried. No rush at all — just want to make sure we're on the same page.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "checkin_03",
+      "subject": "How's it going on your end?",
+      "greeting": "Hey,",
+      "body_text": "Just wanted to see how things are coming along. Let me know if there's anything you need from me in the meantime.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "checkin_04",
+      "subject": "Circling back",
+      "greeting": "Hi,",
+      "body_text": "Just circling back on this — I know things get busy. Whenever you have a minute, I'd love to hear where you're at.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "checkin_05",
+      "subject": "Still on your radar?",
+      "greeting": "",
+      "body_text": "I know you've got a lot on your plate, so no pressure. Just wanted to make sure this didn't fall off your radar entirely.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "checkin_06",
+      "subject": "Any updates on your end?",
+      "greeting": "Hi there,",
+      "body_text": "Hope things have been good. I was curious if there were any updates on your end — even just a quick status would be helpful.",
+      "signature": "Thanks for the heads up either way"
+    },
+    {
+      "id": "checkin_07",
+      "subject": "Touching base",
+      "greeting": "Morning,",
+      "body_text": "Touching base before the week gets away from us. Let me know how things are looking on your end and if there's anything I should be aware of.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "checkin_08",
+      "subject": "Just wanted to check in",
+      "greeting": "Hey,",
+      "body_text": "I've been meaning to reach out. How are things going? Anything I can do to help move things along on my side?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "followup_01",
+      "subject": "Following up from earlier",
+      "greeting": "Hi,",
+      "body_text": "Just following up on the conversation we had earlier. I want to make sure I didn't miss anything on my end before things move forward.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "followup_02",
+      "subject": "Re: our conversation",
+      "greeting": "Hey,",
+      "body_text": "I've been thinking about what we discussed and wanted to follow up while it was still fresh. Let me know if you have a few minutes to connect.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "followup_03",
+      "subject": "One thing I forgot to mention",
+      "greeting": "Hi,",
+      "body_text": "I should have brought this up when we talked, but it slipped my mind. Figured I'd send it over now before it got lost in the shuffle.",
+      "signature": "Let me know your thoughts"
+    },
+    {
+      "id": "followup_04",
+      "subject": "Quick follow-up",
+      "greeting": "",
+      "body_text": "I wanted to follow up quickly since I know the timeline on this is a bit tight. Let me know what works on your end.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "followup_05",
+      "subject": "From our call last week",
+      "greeting": "Hey,",
+      "body_text": "Following up from our call last week — I tracked down what you were asking about. Let me know if this is what you needed.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "followup_06",
+      "subject": "Still thinking about what you said",
+      "greeting": "Hi,",
+      "body_text": "I've been mulling over what you mentioned and wanted to come back to it. I think there might be more to dig into here.",
+      "signature": "Let me know when you're free"
+    },
+    {
+      "id": "followup_07",
+      "subject": "Wanted to get back to you sooner",
+      "greeting": "Hi,",
+      "body_text": "Sorry for the delay — this ended up taking longer than expected on my end. I have what you need now though.",
+      "signature": "Thanks for your patience"
+    },
+    {
+      "id": "followup_08",
+      "subject": "Getting back to you",
+      "greeting": "Hey,",
+      "body_text": "I promised I'd get back to you and I'm a little late doing it. Here's where things stand from my end.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "meeting_01",
+      "subject": "Coffee this week?",
+      "greeting": "Hey,",
+      "body_text": "Are you free to grab coffee at some point this week? I'd love to catch up and there's something I wanted to run by you.",
+      "signature": "Let me know what works"
+    },
+    {
+      "id": "meeting_02",
+      "subject": "Lunch Thursday?",
+      "greeting": "Hi,",
+      "body_text": "Any chance you're free for lunch Thursday? Figured it'd be a good excuse to catch up — it's been a while.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "meeting_03",
+      "subject": "Can we find 30 minutes?",
+      "greeting": "Hey,",
+      "body_text": "I've got something I'd like to walk you through — nothing complicated, just easier to show than explain over email. Do you have 30 minutes this week or next?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "meeting_04",
+      "subject": "Quick call?",
+      "greeting": "Hi,",
+      "body_text": "Would you be open to a quick call sometime today or tomorrow? I have a few things I want to run by you and it'd be faster than going back and forth over email.",
+      "signature": "Just let me know"
+    },
+    {
+      "id": "meeting_05",
+      "subject": "Do you have time this week?",
+      "greeting": "Hi there,",
+      "body_text": "I know you're busy but I wanted to see if you had any pockets of time this week. Even 20 minutes would be plenty.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "meeting_06",
+      "subject": "When works for you?",
+      "greeting": "Hey,",
+      "body_text": "I want to set up some time to connect. What does your schedule look like over the next week or so? I'm pretty flexible.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "meeting_07",
+      "subject": "Let's find a time",
+      "greeting": "Hi,",
+      "body_text": "We keep meaning to connect and it keeps getting pushed. Let's just put something on the calendar — what days work best for you?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "meeting_08",
+      "subject": "Can we move our meeting?",
+      "greeting": "Hey,",
+      "body_text": "Something came up on my end and I need to move our meeting. Would you be open to shifting it by a day or two? Sorry for the inconvenience.",
+      "signature": "Let me know what works"
+    },
+    {
+      "id": "meeting_09",
+      "subject": "Still on for tomorrow?",
+      "greeting": "Hi,",
+      "body_text": "Just wanted to confirm we're still on for tomorrow. Let me know if anything has changed on your end and I'll adjust.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "meeting_10",
+      "subject": "Happy to work around your schedule",
+      "greeting": "Hey,",
+      "body_text": "I know mornings can be hectic. I'm happy to work around whatever schedule makes most sense for you — just let me know.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "question_01",
+      "subject": "Quick question",
+      "greeting": "Hey,",
+      "body_text": "I have a question that came up and I figured you'd be the right person to ask. It shouldn't take long — do you have a few minutes?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "question_02",
+      "subject": "Had a question for you",
+      "greeting": "Hi,",
+      "body_text": "I was thinking about something and realized I don't have a clear answer. Do you happen to know off the top of your head?",
+      "signature": "Appreciate the help"
+    },
+    {
+      "id": "question_03",
+      "subject": "One quick thing",
+      "greeting": "",
+      "body_text": "This might be a dumb question but I'd rather ask than guess wrong. What's your take on this?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "question_04",
+      "subject": "Can I ask you something?",
+      "greeting": "Hi there,",
+      "body_text": "I wanted to pick your brain on something. It's not urgent, but when you have a few minutes I'd love to hear your perspective.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "question_05",
+      "subject": "Curious what you think",
+      "greeting": "Hey,",
+      "body_text": "I've been going back and forth on something and I'd value your input. What's your gut reaction to this?",
+      "signature": "Let me know your thoughts"
+    },
+    {
+      "id": "question_06",
+      "subject": "Something I've been wondering about",
+      "greeting": "Hi,",
+      "body_text": "I've had this question sitting in the back of my mind for a while and finally decided to just send it. Do you have thoughts on this?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "question_07",
+      "subject": "Not sure who else to ask",
+      "greeting": "Hey,",
+      "body_text": "You're the most likely person to have dealt with this before. Any chance you have a minute to walk me through it?",
+      "signature": "Really appreciate it"
+    },
+    {
+      "id": "question_08",
+      "subject": "You'd probably know this",
+      "greeting": "Hi,",
+      "body_text": "I thought of you right away when this question came up. It's right up your alley — do you have a few minutes?",
+      "signature": "Thanks in advance"
+    },
+    {
+      "id": "question_09",
+      "subject": "Trying to figure something out",
+      "greeting": "Hey,",
+      "body_text": "I've been trying to figure something out and I'm going in circles a little. Do you have experience with this kind of thing?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "question_10",
+      "subject": "Quick one",
+      "greeting": "",
+      "body_text": "Quick one — do you know offhand or would I need to look this up somewhere else?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "request_01",
+      "subject": "Small favor",
+      "greeting": "Hey,",
+      "body_text": "I have a small favor to ask — nothing major. Let me know if you have a couple of minutes and I'll explain.",
+      "signature": "Thanks a lot"
+    },
+    {
+      "id": "request_02",
+      "subject": "Could you help me out?",
+      "greeting": "Hi,",
+      "body_text": "I could use a hand with something that's a little outside my wheelhouse. I think it'd be quick for someone with your background.",
+      "signature": "Really appreciate it"
+    },
+    {
+      "id": "request_03",
+      "subject": "Can I ask a favor?",
+      "greeting": "Hey,",
+      "body_text": "I know you're busy so feel free to say no, but I wanted to ask. Would you be able to help me out with something this week?",
+      "signature": "Thanks no matter what"
+    },
+    {
+      "id": "request_04",
+      "subject": "Need your input on something",
+      "greeting": "Hi,",
+      "body_text": "I've been working through something and could really use your input. Your perspective on this would be valuable — do you have a few minutes?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "request_05",
+      "subject": "Any chance you could help with this?",
+      "greeting": "Hey,",
+      "body_text": "I wouldn't ask if I could figure it out on my own, but I think you'd know exactly what to do here. Any chance you have time to take a look?",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "request_06",
+      "subject": "Would you be able to take a look?",
+      "greeting": "Hi there,",
+      "body_text": "I put something together and I'd feel better getting a second set of eyes on it before I move forward. Would you be willing to take a look?",
+      "signature": "Thanks in advance"
+    },
+    {
+      "id": "request_07",
+      "subject": "Can you review this before I send it?",
+      "greeting": "Hey,",
+      "body_text": "Before I pull the trigger on this, I want to make sure I'm not missing anything obvious. Would you mind taking a quick look?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "request_08",
+      "subject": "Mind taking a look?",
+      "greeting": "Hi,",
+      "body_text": "I don't want to send this out without having someone else read it first. Would you mind taking a quick look and letting me know if anything seems off?",
+      "signature": "Really appreciate it"
+    },
+    {
+      "id": "request_09",
+      "subject": "Would love your feedback",
+      "greeting": "Hey,",
+      "body_text": "I've been working on something and I'd genuinely love your feedback. You tend to notice things I miss.",
+      "signature": "Let me know your honest thoughts"
+    },
+    {
+      "id": "request_10",
+      "subject": "Can you help me think through this?",
+      "greeting": "Hi,",
+      "body_text": "I'm trying to work through something and I think talking it out would help more than staring at it alone. Do you have a few minutes?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "fyi_01",
+      "subject": "Heads up",
+      "greeting": "Hey,",
+      "body_text": "Just wanted to give you a quick heads up before this makes its way to you through other channels. Nothing to worry about, just wanted you to have the context.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "fyi_02",
+      "subject": "FYI",
+      "greeting": "Hi,",
+      "body_text": "Passing this along in case it's useful. No action needed on your end — just thought you'd want to know.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "fyi_03",
+      "subject": "Just so you know",
+      "greeting": "Hey,",
+      "body_text": "Wanted to loop you in on something before it came as a surprise. Just so you have the full picture.",
+      "signature": "Let me know if you have questions"
+    },
+    {
+      "id": "fyi_04",
+      "subject": "Thought you'd want to see this",
+      "greeting": "",
+      "body_text": "I came across something and thought of you immediately. Figured I'd pass it along — might be relevant to what you're working on.",
+      "signature": "Let me know what you think"
+    },
+    {
+      "id": "fyi_05",
+      "subject": "Keeping you in the loop",
+      "greeting": "Hi,",
+      "body_text": "I wanted to keep you in the loop on this. Nothing you need to act on right now — just didn't want it to catch you off guard later.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "fyi_06",
+      "subject": "Something you might find useful",
+      "greeting": "Hey,",
+      "body_text": "I ran into this and thought it might be relevant to something you've been working on. Take it or leave it — just thought it was worth passing along.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "fyi_07",
+      "subject": "Worth knowing",
+      "greeting": "Hi,",
+      "body_text": "Not sure if you're already aware of this, but I figured it was better to mention it than assume you knew.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "fyi_08",
+      "subject": "Just a quick note",
+      "greeting": "",
+      "body_text": "I wanted to drop a quick note before things got too hectic. Nothing pressing — just thought this was worth mentioning.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "fyi_09",
+      "subject": "Passing this along",
+      "greeting": "Hey,",
+      "body_text": "Someone shared this with me and I immediately thought of you. Not sure if it's directly useful but it seemed worth sending over.",
+      "signature": "Hope it helps"
+    },
+    {
+      "id": "fyi_10",
+      "subject": "Quick note",
+      "greeting": "Hi,",
+      "body_text": "Just a quick note — I don't want to make this a bigger deal than it is, but I thought it was worth mentioning in case it affects anything on your end.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "intro_01",
+      "subject": "Good to reconnect",
+      "greeting": "Hey,",
+      "body_text": "It's been a while! I was thinking about our last conversation and figured it was time to reconnect. How have things been on your end?",
+      "signature": "Hope to catch up soon"
+    },
+    {
+      "id": "intro_02",
+      "subject": "Long time no talk",
+      "greeting": "Hi,",
+      "body_text": "I know it's been a while since we've been in touch. I've been meaning to reach out and kept putting it off — figured now was as good a time as any.",
+      "signature": "Take care"
+    },
+    {
+      "id": "intro_03",
+      "subject": "Been meaning to reach out",
+      "greeting": "Hey,",
+      "body_text": "I've had your name on my mental to-do list for a while now. Glad I finally got around to sending this. Would love to catch up when you have time.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "intro_04",
+      "subject": "Reaching out",
+      "greeting": "Hi there,",
+      "body_text": "I hope this finds you well. I wanted to reach out because I think there might be a good opportunity for us to connect. Let me know if you'd be open to a quick chat.",
+      "signature": "Looking forward to hearing from you"
+    },
+    {
+      "id": "intro_05",
+      "subject": "Thought I'd say hi",
+      "greeting": "Hey,",
+      "body_text": "I thought I'd drop a note and say hi. It's been too long and I feel bad about letting so much time pass without being in touch.",
+      "signature": "Hope you're doing well"
+    },
+    {
+      "id": "thankyou_01",
+      "subject": "Thank you",
+      "greeting": "Hi,",
+      "body_text": "I just wanted to say thank you. It meant a lot that you took the time to help, and I didn't want it to go unacknowledged.",
+      "signature": "Genuinely appreciate it"
+    },
+    {
+      "id": "thankyou_02",
+      "subject": "Really appreciate your help",
+      "greeting": "Hey,",
+      "body_text": "I wanted to reach out and say how much I appreciated your help with this. It made a real difference and I'm grateful.",
+      "signature": "Thank you again"
+    },
+    {
+      "id": "thankyou_03",
+      "subject": "That was really helpful",
+      "greeting": "Hi,",
+      "body_text": "I just wanted to let you know that was genuinely helpful. I feel a lot better about where things stand now. Thank you for making the time.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "thankyou_04",
+      "subject": "Thanks for yesterday",
+      "greeting": "Hey,",
+      "body_text": "Thanks for making time yesterday — I know your schedule is packed. The conversation was exactly what I needed.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "thankyou_05",
+      "subject": "Wanted to say thanks",
+      "greeting": "",
+      "body_text": "I know I probably don't say this enough, but I really do appreciate everything you do. This was particularly helpful.",
+      "signature": "Thanks again"
+    },
+    {
+      "id": "thankyou_06",
+      "subject": "You saved me a lot of time",
+      "greeting": "Hi,",
+      "body_text": "Seriously — you saved me a lot of time on this one. I would have been spinning my wheels for hours without your help.",
+      "signature": "Really appreciate it"
+    },
+    {
+      "id": "thankyou_07",
+      "subject": "That went well, thanks to you",
+      "greeting": "Hey,",
+      "body_text": "I just wanted to let you know it went well. I don't think it would have without your help in the lead-up. Really appreciate it.",
+      "signature": "Thank you"
+    },
+    {
+      "id": "thankyou_08",
+      "subject": "Thank you for being patient",
+      "greeting": "Hi,",
+      "body_text": "I know I've been a bit scattered lately and you've been patient with me. I just wanted to acknowledge that and say thank you.",
+      "signature": "Appreciate your understanding"
+    },
+    {
+      "id": "apology_01",
+      "subject": "Sorry for the delay",
+      "greeting": "Hi,",
+      "body_text": "I'm sorry for taking so long to get back to you. Things got hectic and this fell further down the list than it should have.",
+      "signature": "Thanks for your patience"
+    },
+    {
+      "id": "apology_02",
+      "subject": "My apologies",
+      "greeting": "Hey,",
+      "body_text": "I owe you an apology. I dropped the ball on this one and I want to make sure it doesn't happen again.",
+      "signature": "Sorry again"
+    },
+    {
+      "id": "apology_03",
+      "subject": "Sorry about that",
+      "greeting": "Hi,",
+      "body_text": "That was on me and I'm sorry. I should have handled it differently and I appreciate your patience in the meantime.",
+      "signature": "Thanks for bearing with me"
+    },
+    {
+      "id": "apology_04",
+      "subject": "I should have gotten back to you sooner",
+      "greeting": "Hey,",
+      "body_text": "I know I should have responded sooner — I don't have a great excuse. I just wanted to acknowledge it and make sure we're good.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "apology_05",
+      "subject": "Apologies for the confusion",
+      "greeting": "Hi,",
+      "body_text": "I think I may have caused some confusion with my last message and I wanted to clear it up. That wasn't my intention at all.",
+      "signature": "Thanks for understanding"
+    },
+    {
+      "id": "response_01",
+      "subject": "Got your message",
+      "greeting": "Hey,",
+      "body_text": "Got your message — sorry for the slow reply. Things have been a bit hectic on my end. I'll have more to share once I have a chance to look into it properly.",
+      "signature": "Thanks for your patience"
+    },
+    {
+      "id": "response_02",
+      "subject": "Re: your note",
+      "greeting": "Hi,",
+      "body_text": "Thanks for sending this over. I've had a chance to read through it and I have a few thoughts I'd like to share when we next connect.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "response_03",
+      "subject": "Saw your message",
+      "greeting": "Hey,",
+      "body_text": "I saw your message and wanted to get back to you quickly. I think I have what you're looking for — let me pull it together.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "response_04",
+      "subject": "Good point",
+      "greeting": "Hi,",
+      "body_text": "That's actually a really good point and I hadn't thought about it that way. Let me sit with it for a bit and I'll get back to you with my thoughts.",
+      "signature": "Thanks for bringing it up"
+    },
+    {
+      "id": "response_05",
+      "subject": "That makes sense",
+      "greeting": "Hey,",
+      "body_text": "That makes a lot more sense now that you've explained it. I think I was overcomplicating it on my end. Let's go with what you suggested.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "response_06",
+      "subject": "Noted — I'll look into it",
+      "greeting": "Hi,",
+      "body_text": "Thanks for flagging that. I'll look into it on my end and get back to you with what I find. Shouldn't take long.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "response_07",
+      "subject": "Good to hear from you",
+      "greeting": "Hey,",
+      "body_text": "Good to hear from you! I'll take a look at what you sent and follow up shortly. Thanks for sending it over.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "response_08",
+      "subject": "Thanks for the update",
+      "greeting": "Hi,",
+      "body_text": "Thanks for keeping me in the loop. I'll review what you sent and let you know if I have any questions.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "coordination_01",
+      "subject": "Just making sure we're aligned",
+      "greeting": "Hey,",
+      "body_text": "Before we go too far down this road, I just want to make sure we're aligned on a few things. Can we find a few minutes to sync up?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "coordination_02",
+      "subject": "Who's handling this?",
+      "greeting": "Hi,",
+      "body_text": "I want to make sure we're not duplicating effort here. Do you know who's taking the lead on this? Happy to coordinate however makes the most sense.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "coordination_03",
+      "subject": "Can we get everyone on the same page?",
+      "greeting": "Hey,",
+      "body_text": "I feel like there are a few moving pieces here and not everyone has the same picture. Is now a good time to get everyone aligned?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "coordination_04",
+      "subject": "Dividing up the work",
+      "greeting": "Hi,",
+      "body_text": "I want to make sure we're splitting things up in a way that makes sense. Can we spend a few minutes mapping out who's doing what?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "coordination_05",
+      "subject": "Making sure nothing falls through the cracks",
+      "greeting": "Hey,",
+      "body_text": "I just want to make sure nothing falls through the cracks on this. Can you let me know what's on your end and I'll do the same?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "coordination_06",
+      "subject": "Quick sync?",
+      "greeting": "Hi,",
+      "body_text": "I think a quick sync would help us both move faster. It shouldn't take more than 15 minutes. Does that work for you?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "coordination_07",
+      "subject": "Can we walk through this together?",
+      "greeting": "Hey,",
+      "body_text": "I'd feel a lot better walking through this together before we commit to anything. Are you free sometime this week?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "coordination_08",
+      "subject": "Thinking through the next steps",
+      "greeting": "Hi,",
+      "body_text": "I've been thinking through the next steps here and I want to make sure my thinking lines up with yours before I move forward.",
+      "signature": "Let me know your thoughts"
+    },
+    {
+      "id": "coordination_09",
+      "subject": "Let's get ahead of this",
+      "greeting": "Hey,",
+      "body_text": "I'd rather get ahead of this now than deal with it later. Can we carve out some time this week to talk through where things stand?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "coordination_10",
+      "subject": "Just want to make sure I have the right info",
+      "greeting": "Hi,",
+      "body_text": "Before I go any further, I want to make sure I have the right information. Can you confirm a couple of things for me?",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "personal_01",
+      "subject": "How's everything going?",
+      "greeting": "Hey,",
+      "body_text": "I've been thinking about you and wanted to reach out. How's everything going? I hope things have been good on your end.",
+      "signature": "Take care"
+    },
+    {
+      "id": "personal_02",
+      "subject": "Hope you're doing well",
+      "greeting": "Hi,",
+      "body_text": "Just wanted to send a quick note and hope you're doing well. It's been a while and I miss catching up.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "personal_03",
+      "subject": "How's the family?",
+      "greeting": "Hey,",
+      "body_text": "How's the family doing? It's been a while since we've had a chance to really catch up. Would love to hear what's going on with everyone.",
+      "signature": "Hope all is well"
+    },
+    {
+      "id": "personal_04",
+      "subject": "Thinking of you",
+      "greeting": "",
+      "body_text": "I was thinking of you today and figured I'd send a quick note. Hope things are going well on your end. Let's find a time to catch up soon.",
+      "signature": "Take care"
+    },
+    {
+      "id": "personal_05",
+      "subject": "Heard the news — congrats!",
+      "greeting": "Hey,",
+      "body_text": "I heard the news and I just wanted to say congratulations! That's really exciting and you deserve it. Let's celebrate when you have a free moment.",
+      "signature": "So happy for you"
+    },
+    {
+      "id": "personal_06",
+      "subject": "Just wanted to check in on you",
+      "greeting": "Hi,",
+      "body_text": "I heard things have been a bit rough lately and I just wanted to check in. No need to go into detail — I just want you to know I'm thinking about you.",
+      "signature": "Here if you need anything"
+    },
+    {
+      "id": "personal_07",
+      "subject": "Miss catching up",
+      "greeting": "Hey,",
+      "body_text": "It's been way too long. I miss our conversations — we need to make more of an effort to stay in touch. When are you free?",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "reminder_01",
+      "subject": "Friendly reminder",
+      "greeting": "Hey,",
+      "body_text": "Just a friendly reminder in case this got buried. No pressure — I just wanted to make sure it didn't slip through the cracks.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "reminder_02",
+      "subject": "Don't forget",
+      "greeting": "Hi,",
+      "body_text": "I know you've got a lot going on, so just a quick reminder. Better to catch it early than scramble later.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "reminder_03",
+      "subject": "Quick reminder before the weekend",
+      "greeting": "Hey,",
+      "body_text": "Didn't want this to get lost over the weekend. Just a quick reminder before everyone checks out.",
+      "signature": "Have a good one"
+    },
+    {
+      "id": "reminder_04",
+      "subject": "Coming up soon",
+      "greeting": "Hi,",
+      "body_text": "I just wanted to flag that this is coming up sooner than it probably feels like. Let me know if there's anything I can do to help.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "reminder_05",
+      "subject": "Just a nudge",
+      "greeting": "",
+      "body_text": "I hate to be the person who follows up on their own follow-up, but I wanted to send a gentle nudge. Totally understand if it's not the right time.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "sharing_01",
+      "subject": "Sharing something I found",
+      "greeting": "Hey,",
+      "body_text": "I came across something I thought you'd find interesting. No particular reason — it just made me think of you.",
+      "signature": "Enjoy"
+    },
+    {
+      "id": "sharing_02",
+      "subject": "You might like this",
+      "greeting": "Hi,",
+      "body_text": "I thought of you when I saw this. Not sure if it's directly useful but it seemed worth passing along.",
+      "signature": "Let me know what you think"
+    },
+    {
+      "id": "sharing_03",
+      "subject": "Have you seen this?",
+      "greeting": "Hey,",
+      "body_text": "Have you come across this yet? I stumbled on it and thought it was worth sharing. Curious what your take is.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "sharing_04",
+      "subject": "This reminded me of our conversation",
+      "greeting": "Hi,",
+      "body_text": "I saw this and immediately thought of what we were talking about the other day. Thought you'd appreciate it.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "sharing_05",
+      "subject": "Came across something relevant",
+      "greeting": "Hey,",
+      "body_text": "I came across something that might be relevant to what you're working on. Happy to talk through it if it's useful.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_01",
+      "subject": "One more thing",
+      "greeting": "Hey,",
+      "body_text": "I forgot to mention this earlier — figured I'd send it now before it slipped my mind entirely.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_02",
+      "subject": "Sorry for the short notice",
+      "greeting": "Hi,",
+      "body_text": "Apologies for the last-minute message — something came up and I wanted to get ahead of it before it became a bigger problem.",
+      "signature": "Thanks for bearing with me"
+    },
+    {
+      "id": "misc_03",
+      "subject": "This is a bit out of the blue",
+      "greeting": "Hey,",
+      "body_text": "I know this might be coming a little out of nowhere, but I wanted to reach out. I hope it's not a bad time.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_04",
+      "subject": "I might be wrong about this",
+      "greeting": "Hi,",
+      "body_text": "I might be wrong about this so take it with a grain of salt, but I figured it was worth mentioning in case it changes anything.",
+      "signature": "Let me know what you think"
+    },
+    {
+      "id": "misc_05",
+      "subject": "Thought of you",
+      "greeting": "Hey,",
+      "body_text": "Something came up that made me think of you right away. I figured you'd either find it interesting or have some thoughts on it.",
+      "signature": "Curious what you think"
+    },
+    {
+      "id": "misc_06",
+      "subject": "Worth a quick conversation",
+      "greeting": "Hi,",
+      "body_text": "I don't think this is a big deal but I think it's worth a quick conversation before anyone moves forward. Do you have a few minutes?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_07",
+      "subject": "I have an idea",
+      "greeting": "Hey,",
+      "body_text": "I had an idea I wanted to run by you before I go any further with it. It might be nothing, but I think there's something there.",
+      "signature": "Let me know what you think"
+    },
+    {
+      "id": "misc_08",
+      "subject": "Can I get your opinion on something?",
+      "greeting": "Hi,",
+      "body_text": "I value your opinion and I'd love to hear what you think about something I've been mulling over. It won't take long — promise.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_09",
+      "subject": "Not sure this is your area but worth asking",
+      "greeting": "Hey,",
+      "body_text": "I wasn't sure if this was your area but I figured it was worth asking. If not, do you know who would be the right person?",
+      "signature": "Appreciate it either way"
+    },
+    {
+      "id": "misc_10",
+      "subject": "Can we talk offline?",
+      "greeting": "Hi,",
+      "body_text": "I'd rather talk through this offline than try to do it over email. Would you have a few minutes sometime today?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_11",
+      "subject": "Something to consider",
+      "greeting": "Hey,",
+      "body_text": "I've been thinking about something and I think it's worth bringing up. I don't want to overstep but I thought you'd want to know.",
+      "signature": "Let me know your thoughts"
+    },
+    {
+      "id": "misc_12",
+      "subject": "Keeping this short",
+      "greeting": "",
+      "body_text": "I'll keep this short — I just wanted to get this to you before the end of the day. We can talk through the details whenever works for you.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_13",
+      "subject": "While I have your attention",
+      "greeting": "Hey,",
+      "body_text": "Since I have your attention — there's something I wanted to mention that I keep forgetting to bring up. This seemed like as good a time as any.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_14",
+      "subject": "Got a minute?",
+      "greeting": "Hi,",
+      "body_text": "Do you have a minute? I have something I want to run by you and it'd be faster to just talk through it.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_15",
+      "subject": "Might be nothing but worth mentioning",
+      "greeting": "Hey,",
+      "body_text": "This might be nothing, but I wanted to mention it just in case. Better to say something now than wish I had later.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_16",
+      "subject": "Had a thought",
+      "greeting": "",
+      "body_text": "I had a thought and wanted to get it out of my head before I forgot it. Let me know if it's useful or if I'm way off base.",
+      "signature": "Curious what you think"
+    },
+    {
+      "id": "misc_17",
+      "subject": "Something I've been putting off",
+      "greeting": "Hi,",
+      "body_text": "I've been putting this off for longer than I should have. I finally decided to just send it and see what you think.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_18",
+      "subject": "Before I forget",
+      "greeting": "Hey,",
+      "body_text": "I keep meaning to send this and getting sidetracked. Sending it now before I forget again.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_19",
+      "subject": "Wanted to give you a heads up",
+      "greeting": "Hi,",
+      "body_text": "I just wanted to give you a heads up before you hear it from someone else. It's not a big deal but I wanted you to have the full context.",
+      "signature": "Let me know if you have questions"
+    },
+    {
+      "id": "misc_20",
+      "subject": "You probably already know this",
+      "greeting": "Hey,",
+      "body_text": "You probably already know this, but I wanted to mention it just in case. Ignore me if I'm behind the curve here.",
+      "signature": "Cheers"
+    },
+    {
+      "id": "misc_21",
+      "subject": "Can I borrow your brain for a second?",
+      "greeting": "Hi,",
+      "body_text": "Can I borrow your brain for a second? I'm trying to think through something and I think you'd have useful perspective on it.",
+      "signature": "Thanks in advance"
+    },
+    {
+      "id": "misc_22",
+      "subject": "Something worth revisiting",
+      "greeting": "Hey,",
+      "body_text": "I've been thinking about something we touched on a while back and I think it might be worth revisiting. What do you think?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_23",
+      "subject": "This is probably a long shot",
+      "greeting": "Hi,",
+      "body_text": "I know this might be a long shot, but I figured it was worth asking before I go looking elsewhere. Do you happen to know anything about this?",
+      "signature": "Thanks regardless"
+    },
+    {
+      "id": "misc_24",
+      "subject": "Let me know what you think",
+      "greeting": "Hey,",
+      "body_text": "I'd genuinely love to hear your take on this. No right or wrong answer — I'm just trying to get a few different perspectives.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "misc_25",
+      "subject": "Wanted to loop you in",
+      "greeting": "Hi,",
+      "body_text": "I wanted to make sure you were looped in on this. It might end up being relevant to something you're working on.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_26",
+      "subject": "I think this involves you",
+      "greeting": "Hey,",
+      "body_text": "I think this might involve you at some point so I wanted to give you advance notice. Better to know early than be surprised.",
+      "signature": "Let me know if you want to talk through it"
+    },
+    {
+      "id": "misc_27",
+      "subject": "Just need a quick answer",
+      "greeting": "Hi,",
+      "body_text": "I just need a quick answer on this — one line is fine. I don't need a big explanation, just enough to know how to proceed.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_28",
+      "subject": "I'll keep it brief",
+      "greeting": "",
+      "body_text": "I'll keep it brief. I just wanted to flag something before the end of the week in case it changes anything for you.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_29",
+      "subject": "Ran into a snag",
+      "greeting": "Hey,",
+      "body_text": "I ran into a bit of a snag and wanted to flag it early rather than wait until it becomes a bigger issue. Do you have a few minutes?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_30",
+      "subject": "Wasn't sure who to ask",
+      "greeting": "Hi,",
+      "body_text": "I wasn't sure who the right person to ask was, but I figured you'd either know or know who does. Any help is appreciated.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_31",
+      "subject": "Slight change of plans",
+      "greeting": "Hey,",
+      "body_text": "There's been a slight change of plans on my end. I wanted to let you know as soon as possible so you can adjust if needed.",
+      "signature": "Sorry for the inconvenience"
+    },
+    {
+      "id": "misc_32",
+      "subject": "Just heard back",
+      "greeting": "Hi,",
+      "body_text": "I just heard back and wanted to pass the information along while it's fresh. Let me know if you have any questions.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_33",
+      "subject": "Wasn't expecting this",
+      "greeting": "Hey,",
+      "body_text": "I wasn't expecting this to come up but it did, and I wanted to make sure you were aware of it. Let me know how you'd like to handle it.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_34",
+      "subject": "Just checking something",
+      "greeting": "Hi,",
+      "body_text": "I'm just checking something before I commit to anything. Can you confirm this is still accurate on your end?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_35",
+      "subject": "Something came up",
+      "greeting": "Hey,",
+      "body_text": "Something came up that I think we need to talk about. Nothing catastrophic — just better to address it sooner rather than later.",
+      "signature": "Let me know when you're free"
+    },
+    {
+      "id": "misc_36",
+      "subject": "This might be useful for you",
+      "greeting": "Hi,",
+      "body_text": "I'm not sure if you need this, but I figured it was better to send it and have you not need it than the other way around.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_37",
+      "subject": "Making progress",
+      "greeting": "Hey,",
+      "body_text": "Just wanted to let you know things are moving along on my end. I'll have something more concrete to share soon.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_38",
+      "subject": "Almost there",
+      "greeting": "Hi,",
+      "body_text": "I'm almost done with my part of this. Just a couple more things to tie up and I'll have it to you by end of day.",
+      "signature": "Thanks for your patience"
+    },
+    {
+      "id": "misc_39",
+      "subject": "Hit a wall",
+      "greeting": "Hey,",
+      "body_text": "I've hit a bit of a wall on this and could use a fresh pair of eyes. Would you have a few minutes to talk it through?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_40",
+      "subject": "Changed my mind",
+      "greeting": "Hi,",
+      "body_text": "I thought about it more and I think I was wrong earlier. Let me explain where my head is at now.",
+      "signature": "Let me know your thoughts"
+    },
+    {
+      "id": "misc_41",
+      "subject": "Rethinking this",
+      "greeting": "Hey,",
+      "body_text": "The more I think about it, the more I think we might want to reconsider the approach here. Would you be open to talking it through?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_42",
+      "subject": "Are you the right person for this?",
+      "greeting": "Hi,",
+      "body_text": "I want to make sure I'm going to the right person with this. Is this your area or should I be talking to someone else?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_43",
+      "subject": "Any chance you have bandwidth?",
+      "greeting": "Hey,",
+      "body_text": "I know you're stretched, so I want to be upfront that this is a genuine ask — not an assumption. Any chance you have bandwidth for one more thing this week?",
+      "signature": "No pressure either way"
+    },
+    {
+      "id": "misc_44",
+      "subject": "Just wanted to say",
+      "greeting": "Hi,",
+      "body_text": "I just wanted to say something I probably should have said sooner. I hope it comes across the right way over email.",
+      "signature": "Thanks for reading this"
+    },
+    {
+      "id": "misc_45",
+      "subject": "Quick heads up before you hear otherwise",
+      "greeting": "Hey,",
+      "body_text": "I wanted to give you a quick heads up before you heard it through the grapevine. I figured you'd rather hear it directly from me.",
+      "signature": "Let me know if you want to talk"
+    },
+    {
+      "id": "misc_46",
+      "subject": "This worked out",
+      "greeting": "Hi,",
+      "body_text": "Just wanted to let you know this ended up working out. I'm relieved and I wanted to pass that along.",
+      "signature": "Thanks again"
+    },
+    {
+      "id": "misc_47",
+      "subject": "Didn't go as planned",
+      "greeting": "Hey,",
+      "body_text": "Things didn't go quite as planned but I don't think it's a big setback. I'll fill you in when we next talk.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_48",
+      "subject": "Might need your help on something",
+      "greeting": "Hi,",
+      "body_text": "I might need your help on something coming up. Nothing definite yet, but I wanted to give you advance notice in case the timing becomes tight.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_49",
+      "subject": "Quick update from my end",
+      "greeting": "Hey,",
+      "body_text": "Just a quick update from my end — things are moving but there are a couple of things I want to flag before we go further.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_50",
+      "subject": "Could use a second opinion",
+      "greeting": "Hi,",
+      "body_text": "I've been going back and forth on this and I think I need a second opinion before I make a decision. Do you have a few minutes?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_51",
+      "subject": "Meant to mention this earlier",
+      "greeting": "Hey,",
+      "body_text": "I meant to mention this earlier but we ran out of time. I'll keep it brief — just wanted to make sure it got to you.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_52",
+      "subject": "Last thing — I promise",
+      "greeting": "Hi,",
+      "body_text": "Last thing, I promise. I just want to make sure this is on your radar before we wrap up.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_53",
+      "subject": "I may have spoken too soon",
+      "greeting": "Hey,",
+      "body_text": "I may have spoken too soon earlier — things have shifted a bit and I want to make sure you have the updated picture.",
+      "signature": "Sorry for any confusion"
+    },
+    {
+      "id": "misc_54",
+      "subject": "Not trying to be pushy",
+      "greeting": "Hi,",
+      "body_text": "I want to be clear that I'm not trying to be pushy here — I just want to make sure this doesn't get lost in the shuffle.",
+      "signature": "Thanks for understanding"
+    },
+    {
+      "id": "misc_55",
+      "subject": "Happy to jump on a call",
+      "greeting": "Hey,",
+      "body_text": "If it's easier to just talk through this, I'm happy to jump on a call. Sometimes email isn't the best medium for these things.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_56",
+      "subject": "Don't want to make a big deal of this",
+      "greeting": "Hi,",
+      "body_text": "I don't want to make a big deal of this, but I did want to mention it. Take it however you want — no pressure.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_57",
+      "subject": "Thought we resolved this",
+      "greeting": "Hey,",
+      "body_text": "I thought we had resolved this but it seems like it's come back up. Can we take another look at it together?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_58",
+      "subject": "Just wanted your take",
+      "greeting": "Hi,",
+      "body_text": "I'm not looking for a definitive answer here — I just wanted your take on it before I decide anything.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "misc_59",
+      "subject": "This is time-sensitive",
+      "greeting": "Hey,",
+      "body_text": "I hate to do this, but this one is a bit time-sensitive. I wouldn't rush you if it weren't genuinely urgent.",
+      "signature": "Really appreciate your help"
+    },
+    {
+      "id": "misc_60",
+      "subject": "No rush — but when you get a chance",
+      "greeting": "Hi,",
+      "body_text": "No rush on this at all. Whenever you get a chance is fine. I just wanted to make sure it was on your radar.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_61",
+      "subject": "Between you and me",
+      "greeting": "Hey,",
+      "body_text": "Between you and me, I wanted to give you a heads up on something before it becomes official. Take it for what it's worth.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_62",
+      "subject": "Something I noticed",
+      "greeting": "Hi,",
+      "body_text": "I noticed something I wanted to flag. It might be nothing, but it seemed worth mentioning in case it means something to you.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_63",
+      "subject": "Just to be safe",
+      "greeting": "Hey,",
+      "body_text": "Just to be safe, I wanted to confirm a few things before we move forward. I'd rather over-communicate than have something fall through the cracks.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_64",
+      "subject": "Are we still good?",
+      "greeting": "Hi,",
+      "body_text": "Just checking in to make sure we're still good. I haven't heard anything but wanted to confirm nothing has changed on your end.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_65",
+      "subject": "Wanted to give you advance notice",
+      "greeting": "Hey,",
+      "body_text": "I wanted to give you some advance notice so this doesn't sneak up on you. Better to have too much lead time than too little.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_66",
+      "subject": "This might affect your plans",
+      "greeting": "Hi,",
+      "body_text": "I wanted to flag this in case it affects anything you have planned. You might need to adjust and I'd rather you know sooner.",
+      "signature": "Let me know if you have questions"
+    },
+    {
+      "id": "misc_67",
+      "subject": "Let me know if this works",
+      "greeting": "Hey,",
+      "body_text": "I put together what I think makes sense on my end. Let me know if this works for you or if you'd like to approach it differently.",
+      "signature": "Happy to adjust"
+    },
+    {
+      "id": "misc_68",
+      "subject": "Open to your suggestions",
+      "greeting": "Hi,",
+      "body_text": "I'm genuinely open to suggestions on this one. I don't think I have the full picture and I'd value your perspective.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_69",
+      "subject": "Good news",
+      "greeting": "Hey,",
+      "body_text": "I have some good news to share. I didn't want to let it sit in my inbox without saying something.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_70",
+      "subject": "Could have gone better",
+      "greeting": "Hi,",
+      "body_text": "It could have gone better, honestly. I'll fill you in on what happened when we talk — no need to get into it all over email.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_71",
+      "subject": "Pleasantly surprised",
+      "greeting": "Hey,",
+      "body_text": "I was honestly pleasantly surprised by how this turned out. I'll share more when we catch up — just wanted to give you a preview.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_72",
+      "subject": "This took longer than expected",
+      "greeting": "Hi,",
+      "body_text": "This took longer than I expected, but I think it was worth the time. Let me know if you need anything else from me on this.",
+      "signature": "Thanks for your patience"
+    },
+    {
+      "id": "misc_73",
+      "subject": "Glad that's sorted",
+      "greeting": "Hey,",
+      "body_text": "Glad that's finally sorted. I know it took longer than it should have, but I appreciate your patience throughout.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_74",
+      "subject": "Wasn't as complicated as I thought",
+      "greeting": "Hi,",
+      "body_text": "Turns out it wasn't as complicated as I thought it was going to be. I'll walk you through it when we connect.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_75",
+      "subject": "More complicated than expected",
+      "greeting": "Hey,",
+      "body_text": "This turned out to be more complicated than I anticipated. I'm making progress but I wanted to flag that it's going to take a bit more time.",
+      "signature": "Thanks for your understanding"
+    },
+    {
+      "id": "misc_76",
+      "subject": "I have good and bad news",
+      "greeting": "Hi,",
+      "body_text": "I have good news and bad news. The good news is I'll start with — the bad news I'll let you bring up if you need to. Let me know when you're ready to talk.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_77",
+      "subject": "Think I found a solution",
+      "greeting": "Hey,",
+      "body_text": "I think I found a solution. It might not be perfect but it should work for now. Let me know what you think when you get a chance.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_78",
+      "subject": "Happy to take this off your plate",
+      "greeting": "Hi,",
+      "body_text": "If it would help, I'm happy to take this off your plate. Just let me know and I'll pick it up from where you left off.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_79",
+      "subject": "Can I hand this off to you?",
+      "greeting": "Hey,",
+      "body_text": "I've gotten to a good stopping point and I think it makes sense for you to take it from here. Would that work for you?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_80",
+      "subject": "I'll take it from here if you want",
+      "greeting": "Hi,",
+      "body_text": "If you've got too much on your plate, I can take this from here. Just let me know what you've done so far and I'll pick it up.",
+      "signature": "Happy to help"
+    },
+    {
+      "id": "misc_81",
+      "subject": "Just want to be transparent",
+      "greeting": "Hey,",
+      "body_text": "I just want to be transparent about where things stand. I don't want there to be any surprises down the line.",
+      "signature": "Let me know if you have questions"
+    },
+    {
+      "id": "misc_82",
+      "subject": "Wanted to be upfront about this",
+      "greeting": "Hi,",
+      "body_text": "I thought it was important to be upfront about this rather than hope it resolves itself. Let me know how you want to proceed.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_83",
+      "subject": "This shouldn't take long",
+      "greeting": "Hey,",
+      "body_text": "I promise this shouldn't take long. I just need a quick answer to keep things moving on my end.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "misc_84",
+      "subject": "I'll be brief",
+      "greeting": "",
+      "body_text": "I'll be brief. I have one question and depending on your answer, I might have a follow-up. But let's start with the first one.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_85",
+      "subject": "You may have already thought of this",
+      "greeting": "Hey,",
+      "body_text": "You may have already thought of this, but just in case you hadn't — I wanted to throw it out there.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_86",
+      "subject": "Wanted to run something by you",
+      "greeting": "Hi,",
+      "body_text": "I wanted to run something by you before I took any action on it. I'd rather get your input first than have to backtrack later.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_87",
+      "subject": "Had second thoughts",
+      "greeting": "Hey,",
+      "body_text": "I had second thoughts about what we discussed. I'm not sure I was seeing the full picture and I want to revisit it.",
+      "signature": "Let me know when you're free"
+    },
+    {
+      "id": "misc_88",
+      "subject": "What do you need from me?",
+      "greeting": "Hi,",
+      "body_text": "I want to make sure I'm doing my part here. Is there anything you need from me to help move things along?",
+      "signature": "Just let me know"
+    },
+    {
+      "id": "misc_89",
+      "subject": "Let me know how I can help",
+      "greeting": "Hey,",
+      "body_text": "I want to make sure I'm being as useful as I can be. Let me know where I can contribute and I'll make it a priority.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_90",
+      "subject": "What are your thoughts on this?",
+      "greeting": "Hi,",
+      "body_text": "I've laid out my thinking below but I'm genuinely curious what your take is. Don't hold back — I'm looking for honest input.",
+      "signature": "Appreciate the candor"
+    },
+    {
+      "id": "misc_91",
+      "subject": "Am I missing something here?",
+      "greeting": "Hey,",
+      "body_text": "I feel like I might be missing something here and I'd rather ask than keep spinning on it. Does this make sense to you?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_92",
+      "subject": "Tell me if I'm off base",
+      "greeting": "Hi,",
+      "body_text": "I have a theory about this and I want you to tell me if I'm off base. I'd rather be wrong now than later.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_93",
+      "subject": "I think we're on the same page",
+      "greeting": "Hey,",
+      "body_text": "I think we're on the same page here, but I just wanted to confirm before we both move forward with that assumption.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_94",
+      "subject": "Just making sure I understood correctly",
+      "greeting": "Hi,",
+      "body_text": "I want to make sure I understood correctly — can you confirm my understanding before I act on it?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_95",
+      "subject": "Did I get that right?",
+      "greeting": "Hey,",
+      "body_text": "I want to make sure I got that right. My understanding was one thing, but I don't want to run with the wrong information.",
+      "signature": "Thanks for clarifying"
+    },
+    {
+      "id": "misc_96",
+      "subject": "Let me know what you decide",
+      "greeting": "Hi,",
+      "body_text": "No pressure — take the time you need to think it over. Just let me know what you decide when you're ready.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_97",
+      "subject": "Your call",
+      "greeting": "Hey,",
+      "body_text": "Ultimately it's your call and I'll support whatever direction you decide to go. I just wanted to make sure you had all the relevant information.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_98",
+      "subject": "I'll defer to you on this one",
+      "greeting": "Hi,",
+      "body_text": "I'll defer to your judgment on this one. You know this area better than I do and I trust your read on it.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_99",
+      "subject": "Wanted to get your blessing on this",
+      "greeting": "Hey,",
+      "body_text": "Before I move forward, I just want to make sure you're comfortable with this. I'm not going to do anything without checking in first.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_100",
+      "subject": "Let's not overcomplicate this",
+      "greeting": "Hi,",
+      "body_text": "I think we're at risk of overcomplicating this. Can we take a step back and think about what actually needs to happen here?",
+      "signature": "Let me know your thoughts"
+    },
+    {
+      "id": "misc_101",
+      "subject": "Simpler than it looks",
+      "greeting": "Hey,",
+      "body_text": "I think this is actually simpler than it looks. Let me walk you through how I'm thinking about it and see if you agree.",
+      "signature": "Talk soon"
+    },
+    {
+      "id": "misc_102",
+      "subject": "Worth the effort",
+      "greeting": "Hi,",
+      "body_text": "I know this seems like a lot of effort, but I genuinely think it's worth it. Let me know if you need me to make the case more clearly.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_103",
+      "subject": "Might not be worth it",
+      "greeting": "Hey,",
+      "body_text": "I've been thinking about it and I'm not sure this is worth the effort at this point. I wanted to surface that concern before we go too far.",
+      "signature": "Let me know your take"
+    },
+    {
+      "id": "misc_104",
+      "subject": "Let's table this for now",
+      "greeting": "Hi,",
+      "body_text": "I think it might make sense to table this for now and come back to it when we have more information. What do you think?",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_105",
+      "subject": "Can we revisit this?",
+      "greeting": "Hey,",
+      "body_text": "I think this deserves another look. We might have moved past it too quickly and I want to make sure we didn't miss anything.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_106",
+      "subject": "Something doesn't add up",
+      "greeting": "Hi,",
+      "body_text": "Something doesn't quite add up to me and I'd rather raise it than let it go. Can we talk through it?",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_107",
+      "subject": "I keep coming back to this",
+      "greeting": "Hey,",
+      "body_text": "I keep coming back to this one thing and I can't shake it. I think we need to address it head-on.",
+      "signature": "Let me know when you're free"
+    },
+    {
+      "id": "misc_108",
+      "subject": "One last thing",
+      "greeting": "Hi,",
+      "body_text": "One last thing before I let you get on with your day — I promise to keep it short.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_109",
+      "subject": "Before you leave for the day",
+      "greeting": "Hey,",
+      "body_text": "Before you leave for the day, can you take a quick look at this? It won't take long and it'd help me move forward tomorrow.",
+      "signature": "Appreciate it"
+    },
+    {
+      "id": "misc_110",
+      "subject": "If you have a free moment",
+      "greeting": "Hi,",
+      "body_text": "No rush on this at all — if you have a free moment sometime in the next few days, I'd love your input.",
+      "signature": "Thanks whenever you get to it"
+    },
+    {
+      "id": "misc_111",
+      "subject": "Whenever you get a chance",
+      "greeting": "Hey,",
+      "body_text": "Whenever you get a chance is fine for this one. I'm not under any immediate deadline — I just don't want it to fall off both of our radars.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_112",
+      "subject": "First thing tomorrow?",
+      "greeting": "Hi,",
+      "body_text": "Would you be able to take a look at this first thing tomorrow? I want to have a plan in place before our day gets too busy.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_113",
+      "subject": "End of week works",
+      "greeting": "Hey,",
+      "body_text": "End of week is totally fine for this — I just wanted to get it on your radar so it doesn't surprise you.",
+      "signature": "Thanks"
+    },
+    {
+      "id": "misc_114",
+      "subject": "Before the end of the week",
+      "greeting": "Hi,",
+      "body_text": "Can you get back to me before the end of the week on this? I need to have an answer going into the weekend.",
+      "signature": "Thanks in advance"
+    },
+    {
+      "id": "misc_115",
+      "subject": "Not trying to rush you",
+      "greeting": "Hey,",
+      "body_text": "I'm not trying to rush you — I just want to make sure it doesn't get buried under everything else that comes in.",
+      "signature": "Appreciate your time"
+    },
+    {
+      "id": "misc_116",
+      "subject": "Taking a different approach",
+      "greeting": "Hi,",
+      "body_text": "I've been thinking about it and I think I want to take a different approach. I wanted to run it by you before I made any changes.",
+      "signature": "Let me know your thoughts"
+    },
+    {
+      "id": "misc_117",
+      "subject": "Going back to basics",
+      "greeting": "Hey,",
+      "body_text": "I think it might help to go back to basics on this one and make sure we haven't lost sight of what we're actually trying to accomplish.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_118",
+      "subject": "Starting fresh",
+      "greeting": "Hi,",
+      "body_text": "I think the cleanest path forward is to start fresh on this. I know that's not ideal, but I think it's the right call.",
+      "signature": "Let me know what you think"
+    },
+    {
+      "id": "misc_119",
+      "subject": "Worth a second look",
+      "greeting": "Hey,",
+      "body_text": "I took another look at this and I think it's worth revisiting. I noticed a few things I want to flag.",
+      "signature": "Let me know"
+    },
+    {
+      "id": "misc_120",
+      "subject": "I may have been wrong",
+      "greeting": "Hi,",
+      "body_text": "I've been thinking about it and I may have been wrong in my earlier assessment. I wanted to come back to it with a clearer head.",
+      "signature": "Let me know your thoughts"
+    }
+  ]
+}
