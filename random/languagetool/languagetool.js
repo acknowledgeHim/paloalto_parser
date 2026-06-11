@@ -172,13 +172,6 @@
       }
     }, true);
 
-    // Re-mirror if textarea is resized (e.g. user drags the resize handle)
-    if (window.ResizeObserver) {
-      new ResizeObserver(function () {
-        mirrorStyles(textarea, overlay);
-      }).observe(textarea);
-    }
-
     var timer = null;
     var lastChecked = null;
 
@@ -199,18 +192,28 @@
         .catch(function (err) { console.warn("LanguageTool:", err); });
     }
 
-    // Initialize overlay with any text already in the textarea on page load
-    overlay.innerHTML = escapeHtml(textarea.value);
-
     textarea.addEventListener("input", function () {
       overlay.innerHTML = escapeHtml(textarea.value);
       clearTimeout(timer);
       timer = setTimeout(runCheck, DEBOUNCE_MS);
     });
 
-    // On click-in: run check if text has changed since last check (covers pre-filled textareas)
     textarea.addEventListener("focus", function () {
       if (textarea.value !== lastChecked && textarea.value.trim().length >= MIN_LENGTH) {
+        runCheck();
+      }
+    });
+
+    // Re-mirror on resize (user drags handle)
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () { mirrorStyles(textarea, overlay); }).observe(textarea);
+    }
+
+    // Defer first render to after layout is complete so dimensions are non-zero
+    requestAnimationFrame(function () {
+      mirrorStyles(textarea, overlay);
+      overlay.innerHTML = escapeHtml(textarea.value);
+      if (textarea.value.trim().length >= MIN_LENGTH) {
         runCheck();
       }
     });
