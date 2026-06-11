@@ -181,34 +181,37 @@
     }
 
     var timer = null;
-    var lastText = null;
+    var lastChecked = null;
 
     function runCheck() {
       var text = textarea.value;
-      if (text === lastText) return;
+      if (text === lastChecked) return;
       if (text.trim().length < MIN_LENGTH) {
         overlay.innerHTML = escapeHtml(text);
-        lastText = text;
+        lastChecked = text;
         return;
       }
       checkText(text)
         .then(function (data) {
           if (text !== textarea.value) return; // response is stale
           overlay.innerHTML = buildOverlayHTML(text, data.matches);
-          lastText = text;
+          lastChecked = text;
         })
         .catch(function (err) { console.warn("LanguageTool:", err); });
     }
 
+    // Initialize overlay with any text already in the textarea on page load
+    overlay.innerHTML = escapeHtml(textarea.value);
+
     textarea.addEventListener("input", function () {
-      // Sync overlay text immediately so it tracks the cursor
       overlay.innerHTML = escapeHtml(textarea.value);
       clearTimeout(timer);
       timer = setTimeout(runCheck, DEBOUNCE_MS);
     });
 
+    // On click-in: run check if text has changed since last check (covers pre-filled textareas)
     textarea.addEventListener("focus", function () {
-      if (!overlay.querySelector(".lt-mark") && textarea.value.trim().length >= MIN_LENGTH) {
+      if (textarea.value !== lastChecked && textarea.value.trim().length >= MIN_LENGTH) {
         runCheck();
       }
     });
