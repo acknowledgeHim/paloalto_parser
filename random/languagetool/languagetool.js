@@ -204,19 +204,34 @@
       }
     });
 
-    // Re-mirror on resize (user drags handle)
-    if (window.ResizeObserver) {
-      new ResizeObserver(function () { mirrorStyles(textarea, overlay); }).observe(textarea);
-    }
+    var initialized = false;
 
-    // Defer first render to after layout is complete so dimensions are non-zero
-    requestAnimationFrame(function () {
+    function initOverlay() {
+      if (initialized) return;
+      initialized = true;
       mirrorStyles(textarea, overlay);
       overlay.innerHTML = escapeHtml(textarea.value);
-      if (textarea.value.trim().length >= MIN_LENGTH) {
-        runCheck();
-      }
-    });
+      if (textarea.value.trim().length >= MIN_LENGTH) runCheck();
+    }
+
+    if (window.ResizeObserver) {
+      // initRO fires as soon as the textarea gets non-zero dimensions —
+      // works for both page-load textareas and ones revealed later inside
+      // hidden/animated divs (rAF alone isn't enough for those cases).
+      var initRO = new ResizeObserver(function (entries) {
+        var r = entries[0].contentRect;
+        if (r.width > 0 || r.height > 0) {
+          initRO.disconnect();
+          initOverlay();
+          // Separate observer for ongoing resize (user dragging handle)
+          new ResizeObserver(function () { mirrorStyles(textarea, overlay); }).observe(textarea);
+        }
+      });
+      initRO.observe(textarea);
+    } else {
+      // Fallback for browsers without ResizeObserver
+      requestAnimationFrame(initOverlay);
+    }
   }
 
   // Inject required CSS
