@@ -21,6 +21,56 @@
       .replace(/>/g, "&gt;");
   }
 
+  // --- element type helpers -------------------------------------------
+
+  function isTextarea(el) {
+    return el.tagName === "TEXTAREA";
+  }
+
+  function getText(el) {
+    return isTextarea(el) ? el.value : (el.innerText || el.textContent || "");
+  }
+
+  function replaceAt(el, offset, len, replacement, currentText) {
+    if (isTextarea(el)) {
+      el.value = currentText.slice(0, offset) + replacement + currentText.slice(offset + len);
+      el.dispatchEvent(new Event("input"));
+    } else {
+      // Walk text nodes to find the range matching the offset
+      var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+      var node, pos = 0, startNode = null, startOff = 0, endNode = null, endOff = 0;
+      while ((node = walker.nextNode())) {
+        var nodeLen = node.textContent.length;
+        if (!startNode && pos + nodeLen > offset) {
+          startNode = node;
+          startOff  = offset - pos;
+        }
+        if (!endNode && pos + nodeLen >= offset + len) {
+          endNode = node;
+          endOff  = (offset + len) - pos;
+          break;
+        }
+        pos += nodeLen;
+      }
+      if (startNode && endNode) {
+        var range = document.createRange();
+        range.setStart(startNode, startOff);
+        range.setEnd(endNode, endOff);
+        range.deleteContents();
+        var textNode = document.createTextNode(replacement);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+  }
+
+  // --- LT API ---------------------------------------------------------
+
   function checkText(text) {
     return fetch(LT_ENDPOINT, {
       method: "POST",
@@ -32,46 +82,45 @@
     });
   }
 
+  // --- overlay rendering ----------------------------------------------
+
   function buildOverlayHTML(text, matches) {
     var sorted = matches.slice().sort(function (a, b) { return a.offset - b.offset; });
     var html = "";
-    var pos = 0;
-
+    var pos  = 0;
     sorted.forEach(function (m) {
-      if (m.offset < pos) return; // skip overlapping matches
+      if (m.offset < pos) return;
       html += escapeHtml(text.slice(pos, m.offset));
       var color = colorFor(m.rule.issueType);
-      var sugs = JSON.stringify(
-        m.replacements.slice(0, 5).map(function (r) { return r.value; })
-      );
+      var sugs  = JSON.stringify(m.replacements.slice(0, 5).map(function (r) { return r.value; }));
       html +=
         "<span class='lt-mark'" +
-        " data-msg=\"" + m.message.replace(/"/g, "&quot;") + "\"" +
-        " data-sugs='" + sugs.replace(/'/g, "&#39;") + "'" +
-        " data-offset='" + m.offset + "'" +
-        " data-len='" + m.length + "'" +
+        " data-msg=\""    + m.message.replace(/"/g, "&quot;") + "\"" +
+        " data-sugs='"    + sugs.replace(/'/g, "&#39;")       + "'" +
+        " data-offset='"  + m.offset  + "'" +
+        " data-len='"     + m.length  + "'" +
         " style='border-bottom:2.5px solid " + color + ";cursor:pointer;'>" +
         escapeHtml(text.slice(m.offset, m.offset + m.length)) +
         "</span>";
       pos = m.offset + m.length;
     });
-
     html += escapeHtml(text.slice(pos));
     return html;
   }
 
-  function mirrorStyles(textarea, overlay) {
-    var cs = window.getComputedStyle(textarea);
+  function mirrorStyles(el, overlay) {
+    var cs = window.getComputedStyle(el);
     [
       "fontFamily", "fontSize", "fontWeight", "fontStyle", "fontVariant",
       "lineHeight", "letterSpacing", "wordSpacing", "textAlign",
       "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
       "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
       "borderTopStyle", "borderRightStyle", "borderBottomStyle", "borderLeftStyle",
-      "boxSizing", "tabSize",
+      "boxSizing", "tabSize", "whiteSpace", "overflowWrap", "wordBreak",
     ].forEach(function (p) { overlay.style[p] = cs[p]; });
-    // width/height handled by CSS inset:0 so init timing doesn't matter
   }
+
+  // --- popup ----------------------------------------------------------
 
   function positionPopup(popup, mark) {
     popup.style.display = "block";
@@ -80,22 +129,22 @@
     var scrollX = window.scrollX || window.pageXOffset;
     popup.style.top  = (rect.bottom + scrollY + 5) + "px";
     popup.style.left = (rect.left   + scrollX) + "px";
-    // nudge left if it overflows the viewport
     var pr = popup.getBoundingClientRect();
     if (pr.right > window.innerWidth - 10) {
       popup.style.left = (window.innerWidth - pr.width - 10 + scrollX) + "px";
     }
   }
 
-  function showPopup(popup, mark, textarea) {
+  function showPopup(popup, mark, el) {
     var offset = parseInt(mark.dataset.offset);
     var len    = parseInt(mark.dataset.len);
     var sugs   = JSON.parse(mark.dataset.sugs || "[]");
+    var capturedText = getText(el);
 
     popup.innerHTML = "";
 
     var msgEl = document.createElement("div");
-    msgEl.className = "lt-popup-msg";
+    msgEl.className   = "lt-popup-msg";
     msgEl.textContent = mark.dataset.msg;
     popup.appendChild(msgEl);
 
@@ -104,13 +153,11 @@
       row.className = "lt-popup-sugs";
       sugs.forEach(function (s) {
         var btn = document.createElement("button");
-        btn.className = "lt-popup-btn";
+        btn.className   = "lt-popup-btn";
         btn.textContent = s;
         btn.addEventListener("mousedown", function (e) {
           e.preventDefault();
-          var val = textarea.value;
-          textarea.value = val.slice(0, offset) + s + val.slice(offset + len);
-          textarea.dispatchEvent(new Event("input"));
+          replaceAt(el, offset, len, s, capturedText);
           popup.style.display = "none";
         });
         row.appendChild(btn);
@@ -121,62 +168,65 @@
     positionPopup(popup, mark);
   }
 
-  function attachToTextarea(textarea) {
-    if (textarea.dataset.ltBound) return;
-    textarea.dataset.ltBound = "1";
+  // --- core attach ----------------------------------------------------
 
-    // Wrap in a relative container so overlay aligns to textarea
-    var cs = window.getComputedStyle(textarea);
+  function attachToElement(el) {
+    if (el.dataset.ltBound) return;
+    el.dataset.ltBound = "1";
+
+    var cs = window.getComputedStyle(el);
+
+    // Wrap in a relative container so the overlay can be positioned over el
     var container = document.createElement("div");
     container.style.position = "relative";
     container.style.display  = cs.display === "block" ? "block" : "inline-block";
-    textarea.parentNode.insertBefore(container, textarea);
-    container.appendChild(textarea);
+    el.parentNode.insertBefore(container, el);
+    container.appendChild(el);
 
-    // Overlay: sits on top, passes all pointer events through except on .lt-mark spans
+    // Overlay sits on top; pointer-events none except on .lt-mark spans
     var overlay = document.createElement("div");
     overlay.className = "lt-overlay";
     container.appendChild(overlay);
-    mirrorStyles(textarea, overlay);
+    mirrorStyles(el, overlay);
 
-    // Make textarea text invisible; keep caret colour
+    // Make element text invisible but keep caret visible
     var origColor = cs.color;
-    textarea.style.color     = "transparent";
-    textarea.style.caretColor = origColor;
+    el.style.color      = "transparent";
+    el.style.caretColor = origColor;
 
-    // Popup appended to <body> so it is never clipped by overflow:hidden parents
+    // Popup appended to body to avoid overflow clipping
     var popup = document.createElement("div");
-    popup.className  = "lt-popup";
+    popup.className     = "lt-popup";
     popup.style.display = "none";
     document.body.appendChild(popup);
 
-    // Scroll sync: overlay scrolls with textarea
-    textarea.addEventListener("scroll", function () {
-      overlay.scrollTop  = textarea.scrollTop;
-      overlay.scrollLeft = textarea.scrollLeft;
+    // Scroll sync
+    el.addEventListener("scroll", function () {
+      overlay.scrollTop  = el.scrollTop;
+      overlay.scrollLeft = el.scrollLeft;
     });
 
-    // Clicks on underlined words open the popup
+    // Click underlined word → popup
     overlay.addEventListener("mousedown", function (e) {
       var mark = e.target.closest && e.target.closest(".lt-mark");
       if (mark) {
         e.preventDefault();
-        showPopup(popup, mark, textarea);
+        showPopup(popup, mark, el);
       }
     });
 
-    // Close popup when clicking elsewhere
+    // Close popup on outside click
     document.addEventListener("mousedown", function (e) {
       if (!popup.contains(e.target) && !overlay.contains(e.target)) {
         popup.style.display = "none";
       }
     }, true);
 
-    var timer = null;
+    var timer       = null;
     var lastChecked = null;
 
     function runCheck() {
-      var text = textarea.value;
+      var text = getText(el);
       if (text === lastChecked) return;
       if (text.trim().length < MIN_LENGTH) {
         overlay.innerHTML = escapeHtml(text);
@@ -185,21 +235,21 @@
       }
       checkText(text)
         .then(function (data) {
-          if (text !== textarea.value) return; // response is stale
+          if (text !== getText(el)) return; // stale
           overlay.innerHTML = buildOverlayHTML(text, data.matches);
           lastChecked = text;
         })
         .catch(function (err) { console.warn("LanguageTool:", err); });
     }
 
-    textarea.addEventListener("input", function () {
-      overlay.innerHTML = escapeHtml(textarea.value);
+    el.addEventListener("input", function () {
+      overlay.innerHTML = escapeHtml(getText(el));
       clearTimeout(timer);
       timer = setTimeout(runCheck, DEBOUNCE_MS);
     });
 
-    textarea.addEventListener("focus", function () {
-      if (textarea.value !== lastChecked && textarea.value.trim().length >= MIN_LENGTH) {
+    el.addEventListener("focus", function () {
+      if (getText(el) !== lastChecked && getText(el).trim().length >= MIN_LENGTH) {
         runCheck();
       }
     });
@@ -209,32 +259,28 @@
     function initOverlay() {
       if (initialized) return;
       initialized = true;
-      mirrorStyles(textarea, overlay);
-      overlay.innerHTML = escapeHtml(textarea.value);
-      if (textarea.value.trim().length >= MIN_LENGTH) runCheck();
+      mirrorStyles(el, overlay);
+      overlay.innerHTML = escapeHtml(getText(el));
+      if (getText(el).trim().length >= MIN_LENGTH) runCheck();
     }
 
     if (window.ResizeObserver) {
-      // initRO fires as soon as the textarea gets non-zero dimensions —
-      // works for both page-load textareas and ones revealed later inside
-      // hidden/animated divs (rAF alone isn't enough for those cases).
       var initRO = new ResizeObserver(function (entries) {
         var r = entries[0].contentRect;
         if (r.width > 0 || r.height > 0) {
           initRO.disconnect();
           initOverlay();
-          // Separate observer for ongoing resize (user dragging handle)
-          new ResizeObserver(function () { mirrorStyles(textarea, overlay); }).observe(textarea);
+          new ResizeObserver(function () { mirrorStyles(el, overlay); }).observe(el);
         }
       });
-      initRO.observe(textarea);
+      initRO.observe(el);
     } else {
-      // Fallback for browsers without ResizeObserver
       requestAnimationFrame(initOverlay);
     }
   }
 
-  // Inject required CSS
+  // --- CSS injection --------------------------------------------------
+
   var style = document.createElement("style");
   style.textContent =
     ".lt-overlay{" +
@@ -242,14 +288,12 @@
       "box-sizing:border-box!important;" +
       "pointer-events:none;" +
       "overflow:hidden;" +
-      "white-space:pre-wrap;" +
-      "word-wrap:break-word;" +
       "border-color:transparent;" +
       "background:transparent;" +
       "z-index:2;" +
       "color:#000;" +
     "}" +
-    ".lt-mark{pointer-events:all;}" +   /* …except on underlined words */
+    ".lt-mark{pointer-events:all;}" +
     ".lt-popup{" +
       "position:absolute;z-index:9999;" +
       "background:#fff;" +
@@ -270,8 +314,11 @@
     ".lt-popup-btn:hover{background:#388e3c;}";
   document.head.appendChild(style);
 
+  // --- discovery ------------------------------------------------------
+
   function attachAll() {
-    document.querySelectorAll("textarea").forEach(attachToTextarea);
+    document.querySelectorAll("textarea").forEach(attachToElement);
+    document.querySelectorAll("[contenteditable='true']").forEach(attachToElement);
   }
 
   function init() {
@@ -280,8 +327,12 @@
       mutations.forEach(function (mutation) {
         mutation.addedNodes.forEach(function (node) {
           if (node.nodeType !== 1) return;
-          if (node.tagName === "TEXTAREA") attachToTextarea(node);
-          if (node.querySelectorAll) node.querySelectorAll("textarea").forEach(attachToTextarea);
+          if (node.tagName === "TEXTAREA" || node.getAttribute("contenteditable") === "true") {
+            attachToElement(node);
+          }
+          if (node.querySelectorAll) {
+            node.querySelectorAll("textarea,[contenteditable='true']").forEach(attachToElement);
+          }
         });
       });
     }).observe(document.body, { childList: true, subtree: true });
