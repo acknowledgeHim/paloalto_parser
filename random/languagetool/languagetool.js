@@ -222,9 +222,10 @@
     el.parentNode.insertBefore(container, el);
     container.appendChild(el);
 
-    // Overlay
+    // Overlay — use the element's own text color so dark-mode themes work automatically
     var overlay = document.createElement("div");
     overlay.className = "lt-overlay";
+    overlay.style.color = cs.color;
     container.appendChild(overlay);
     mirrorStyles(el, overlay);
 
@@ -341,7 +342,7 @@
       "box-sizing:border-box!important;" +
       "pointer-events:none;overflow:hidden;" +
       "border-color:transparent;background:transparent;" +
-      "z-index:2;color:#000;" +
+      "z-index:2;" +
     "}" +
     ".lt-mark{pointer-events:all;}" +
     // Badge
