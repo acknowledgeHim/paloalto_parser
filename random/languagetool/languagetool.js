@@ -24,17 +24,6 @@
     return isTextarea(el) ? el.value : (el.innerText || el.textContent || "");
   }
 
-  // Character offset of the caret inside the element
-  function getCaretOffset(el) {
-    if (isTextarea(el)) return el.selectionStart || 0;
-    var sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return 0;
-    var r = sel.getRangeAt(0).cloneRange();
-    r.selectNodeContents(el);
-    r.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
-    return r.toString().length;
-  }
-
   function replaceAt(el, offset, len, replacement, currentText) {
     if (isTextarea(el)) {
       el.value = currentText.slice(0, offset) + replacement + currentText.slice(offset + len);
@@ -75,6 +64,8 @@
   }
 
   // ── overlay rendering ────────────────────────────────────────────────
+  // The overlay text is transparent — only the border-bottom on .lt-mark
+  // spans is visible. The textarea keeps its own text and caret untouched.
 
   function buildOverlayHTML(text, matches) {
     var sorted = matches.slice().sort(function (a, b) { return a.offset - b.offset; });
@@ -83,8 +74,13 @@
       if (m.offset < pos) return;
       html += escapeHtml(text.slice(pos, m.offset));
       var color = colorFor(m.rule.issueType);
+      var sugs  = JSON.stringify(m.replacements.slice(0, 5).map(function (r) { return r.value; }));
       html +=
         "<span class='lt-mark'" +
+        " data-msg=\""   + m.message.replace(/"/g, "&quot;") + "\"" +
+        " data-sugs='"   + sugs.replace(/'/g, "&#39;") + "'" +
+        " data-offset='" + m.offset  + "'" +
+        " data-len='"    + m.length  + "'" +
         " style='border-bottom:2.5px solid " + color + ";'>" +
         escapeHtml(text.slice(m.offset, m.offset + m.length)) +
         "</span>";
@@ -125,41 +121,34 @@
     floater.style.visibility = "visible";
   }
 
-  function positionAtClick(floater, clientX, clientY) {
-    floater.style.visibility = "hidden";
-    floater.style.display    = "block";
-    var sy = window.scrollY || window.pageYOffset;
-    var sx = window.scrollX || window.pageXOffset;
-    floater.style.top  = (clientY + sy + 10) + "px";
-    var left = clientX + sx;
-    if (left + floater.offsetWidth > window.innerWidth - 10)
-      left = window.innerWidth - floater.offsetWidth - 10 + sx;
-    floater.style.left = Math.max(sx, left) + "px";
-    floater.style.visibility = "visible";
-  }
-
   // ── inline popup ─────────────────────────────────────────────────────
 
-  function buildPopupContent(popup, match, el, onReplace) {
+  function showInlinePopup(popup, mark, el) {
+    var offset      = parseInt(mark.dataset.offset);
+    var len         = parseInt(mark.dataset.len);
+    var sugs        = JSON.parse(mark.dataset.sugs || "[]");
     var capturedTxt = getText(el);
+
     popup.innerHTML = "";
     var msgEl = document.createElement("div");
-    msgEl.className = "lt-popup-msg"; msgEl.textContent = match.message;
+    msgEl.className = "lt-popup-msg"; msgEl.textContent = mark.dataset.msg;
     popup.appendChild(msgEl);
-    if (match.replacements.length) {
+
+    if (sugs.length) {
       var row = document.createElement("div"); row.className = "lt-popup-sugs";
-      match.replacements.slice(0, 5).forEach(function (r) {
+      sugs.forEach(function (s) {
         var btn = document.createElement("button");
-        btn.className = "lt-popup-btn"; btn.textContent = r.value;
+        btn.className = "lt-popup-btn"; btn.textContent = s;
         btn.addEventListener("mousedown", function (e) {
           e.preventDefault();
-          replaceAt(el, match.offset, match.length, r.value, capturedTxt);
-          onReplace();
+          replaceAt(el, offset, len, s, capturedTxt);
+          popup.style.display = "none";
         });
         row.appendChild(btn);
       });
       popup.appendChild(row);
     }
+    positionNear(popup, mark, true);
   }
 
   // ── badge + issues panel ─────────────────────────────────────────────
@@ -225,20 +214,14 @@
     el.parentNode.insertBefore(container, el);
     container.appendChild(el);
 
-    // Overlay sits BELOW the element (z-index 1) so the element's caret
-    // always renders on top and stays fully visible
+    // Overlay sits on top (z-index 2) but its text is fully transparent —
+    // only the border-bottom underlines on .lt-mark spans are visible.
+    // The textarea is left completely unmodified so its text and caret
+    // both render normally with no interference.
     var overlay = document.createElement("div");
-    overlay.className   = "lt-overlay";
-    overlay.style.color = cs.color;
+    overlay.className = "lt-overlay";
     container.appendChild(overlay);
     mirrorStyles(el, overlay);
-
-    // Element sits above the overlay so its caret is never hidden
-    el.style.position   = "relative";
-    el.style.zIndex     = "2";
-    el.style.color      = "transparent";
-    el.style.caretColor = cs.color;
-    el.style.background = "transparent";
 
     // Badge
     var badge = document.createElement("div");
@@ -255,13 +238,6 @@
     inlinePopup.className = "lt-popup"; inlinePopup.style.display = "none";
     document.body.appendChild(inlinePopup);
 
-    var lastMatches = null;
-
-    function hideAll() {
-      inlinePopup.style.display = "none";
-      issuesPanel.style.display = "none";
-    }
-
     // Badge click → toggle issues panel
     badge.addEventListener("mousedown", function (e) {
       e.preventDefault(); e.stopPropagation();
@@ -274,8 +250,10 @@
 
     // Close floaters on outside click
     document.addEventListener("mousedown", function (e) {
-      if (!inlinePopup.contains(e.target)) inlinePopup.style.display = "none";
-      if (!issuesPanel.contains(e.target) && e.target !== badge) issuesPanel.style.display = "none";
+      if (!inlinePopup.contains(e.target) && !overlay.contains(e.target))
+        inlinePopup.style.display = "none";
+      if (!issuesPanel.contains(e.target) && e.target !== badge)
+        issuesPanel.style.display = "none";
     }, true);
 
     // Scroll sync
@@ -284,22 +262,14 @@
       overlay.scrollLeft = el.scrollLeft;
     });
 
-    // Click within the element: if caret landed inside a match, show inline popup
-    el.addEventListener("mouseup", function (e) {
-      if (!lastMatches || !lastMatches.length) return;
-      var mx = e.clientX, my = e.clientY;
-      setTimeout(function () {
-        var pos = getCaretOffset(el);
-        for (var i = 0; i < lastMatches.length; i++) {
-          var m = lastMatches[i];
-          if (pos >= m.offset && pos <= m.offset + m.length) {
-            buildPopupContent(inlinePopup, m, el, hideAll);
-            positionAtClick(inlinePopup, mx, my);
-            return;
-          }
-        }
-        inlinePopup.style.display = "none";
-      }, 10);
+    // Clicking an underlined word shows the inline popup and focuses the textarea
+    overlay.addEventListener("mousedown", function (e) {
+      var mark = e.target.closest && e.target.closest(".lt-mark");
+      if (mark) {
+        e.preventDefault();
+        el.focus();
+        showInlinePopup(inlinePopup, mark, el);
+      }
     });
 
     var timer = null, lastChecked = null;
@@ -310,14 +280,13 @@
       updateBadge(badge, issuesPanel, null, el);
       if (text.trim().length < MIN_LENGTH) {
         overlay.innerHTML = escapeHtml(text);
-        lastChecked = text; lastMatches = [];
+        lastChecked = text;
         updateBadge(badge, issuesPanel, [], el);
         return;
       }
       checkText(text)
         .then(function (data) {
           if (text !== getText(el)) return;
-          lastMatches = data.matches;
           overlay.innerHTML = buildOverlayHTML(text, data.matches);
           lastChecked = text;
           updateBadge(badge, issuesPanel, data.matches, el);
@@ -367,8 +336,10 @@
       "box-sizing:border-box!important;" +
       "pointer-events:none;overflow:hidden;" +
       "border-color:transparent;background:transparent;" +
-      "z-index:1;" +
+      "color:transparent;" +  /* text invisible — only border-bottom underlines show */
+      "z-index:2;" +
     "}" +
+    ".lt-mark{pointer-events:all;cursor:pointer;}" +
     ".lt-badge{" +
       "position:absolute;bottom:5px;right:6px;z-index:10;" +
       "min-width:20px;height:20px;border-radius:10px;padding:0 6px;" +
