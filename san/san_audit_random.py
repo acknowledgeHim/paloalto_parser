@@ -973,7 +973,8 @@ class ExcelReporter:
 
         headers = ["#", "Severity", "Category", "Object / Interface",
                    "Config Line", "CIS v8 Controls", "PCI DSS",
-                   "Description", "Recommendation", "Details"]
+                   "Description", "Recommendation", "Details",
+                   "Verified", "Asset", "Target", "Vuln"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
@@ -984,12 +985,17 @@ class ExcelReporter:
             fg, bg = self.SEV_COLORS[sev]
             rb = self._row_fill(row)
 
+            line = iss.get("line", "")
+            target = iss["object"] + (f" ({line})" if line else "")
+            vuln   = "SAN - " + iss["category"]
+
             vals = [idx, sev, iss["category"], iss["object"],
-                    iss.get("line", ""),
+                    line,
                     iss.get("cis_controls", ""),
                     iss.get("pci_dss", ""),
                     iss["description"], iss["recommendation"],
-                    iss.get("details", "")]
+                    iss.get("details", ""),
+                    "Y", iss["device"], target, vuln]
             for col, val in enumerate(vals, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
@@ -1007,12 +1013,15 @@ class ExcelReporter:
                     c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if rb: c.fill = _fill(rb)
+                elif col == 11:  # Verified
+                    c.font = _font(bold=True, color=C["ok"]); c.alignment = _align("center")
+                    c.fill = _fill(C["ok_l"])
                 else:
                     c.font = _font(); c.alignment = _align()
                     if rb: c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30])
+        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30, 10, 24, 36, 34])
 
     # ── Sheet 5: CIS v8 Mapping (exact Aruba format) ──────────────────────────
     def _sheet_cis_mapping(self):
