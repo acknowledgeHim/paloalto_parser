@@ -1,0 +1,195 @@
+=~=~=~=~=~=~=~=~=~=~=~= PuTTY log 2026.06.09 12:45:37 =~=~=~=~=~=~=~=~=~=~=~=
+ZZZZZ01p-mp cli% showsys 
+                                                                 ----------------(MiB)----------------
+     ID --Name--- --------Model--------- --Serial-- Nodes Master TotalCap  AllocCap  FreeCap FailedCap
+0x2E9BD ZZZZZ01p-mp HPE Alletra Storage MP 2M2D3K00XW     2      0 131825664 30782552 90745768         0
+
+ZZZZZ01p-mp cli% showuser -d 
+showuser: Invalid option: -d
+
+SYNTAX
+    The syntax for the showuser command can be the following:
+        showuser [<user_name>]
+        showuser [-oneline] [<user_name>]
+        showuser -domain <domain_name> [<user_name>]
+        showuser -k
+        showuser -showcols <column>[,<column>...] [<user_name>]
+        showuser -listcols
+
+OPTIONS
+    -domain
+        Show the list of users for the specified domain.
+    -k
+        Show users who have set a public SSH key.
+
+    -oneline
+        Shows all information about a user on one line.
+
+    -listcols
+        List the columns available to be shown in the -showcols option
+        described below (see 'clihelp -col showuser' for help on each column).
+        By default (if none of the information selection options below are
+        specified) the following columns are shown:
+        Default Domain Role Username
+
+    -showcols <column>[,<column>...]
+        Explicitly select the columns to be shown using a comma-separated list of
+        column names.  For this option the full column names are shown in
+        the header.
+        Run 'showuser -listcols' to list the available columns.
+        Run 'clihelp -col showuser' for a description of each column.
+
+ZZZZZ01p-mp cli% showpasswordpolicy 
+invalid command name "showpasswordpolicy"
+
+ZZZZZ01p-mp cli% showsnmp 
+invalid command name "showsnmp"
+
+ZZZZZ01p-mp cli% showsyslog 
+invalid command name "showsyslog"
+
+ZZZZZ01p-mp cli% showaudit 
+invalid command name "showaudit"
+
+ZZZZZ01p-mp cli% showtime -zone 
+invalid command name "showtime"
+
+ZZZZZ01p-mp cli% shownet 
+IP Address Netmask/PrefixLen Nodes Active Speed Duplex AutoNeg Status Mode  
+xx.x.x.200       255.255.0.0    01      1  1000 Full   Yes     Active Static
+
+Default IPv4 route :              xx.x.x.105
+Default IPv6 route :                    None
+NTP server         :   xx.x.x.159 xx.x.x.154
+DNS server         :   xx.x.x.159 xx.x.x.154
+Proxy server       :                    None
+ZZZZZ01p-mp cli% shownet 
+ZZZZZ01p-mp cli% showhost 
+Id Name  Persona -WWN/iSCSI_Name/NQN- Port 
+ 4 ESX02 VMware  VVVVVVVVV089C696     1:3:3
+                 VVVVVVVVV089C697     ---  
+                 VVVVVVVVV089C694     0:3:1
+                 VVVVVVVVV089C695     ---  
+ 0 ESX04 VMware  MMMMMMMM16E0745     1:3:3
+                 MMMMMMMM16E0746     0:3:1
+                 2000B47AF16E0746     ---  
+                 2000B47AF16E0745     ---  
+ 3 ESX05 VMware  100008F1EAB93ED0     ---  
+                 200008F1EAB93ED0     ---  
+                 200008F1EAB92EC4     ---  
+                 100008F1EAB92EC4     ---  
+ 2 ESX06 VMware  MMMMMMMM16E0710     1:3:3
+                 2000B47AF16E0710     ---  
+                 MMMMMMMM16E070F     0:3:1
+                 2000B47AF16E070F     ---  
+ 1 ESX07 VMware  MMMMMMMM16EF6ED     1:3:3
+                 2000B47AF16EF6EE     ---  
+                 2000B47AF16EF6ED     ---  
+                 MMMMMMMM16EF6EE     0:3:1
+-------------------------------------------
+20 total                                   
+
+ZZZZZ01p-mp cli% showhost -chap 
+Id Name  -Initiator_CHAP_Name- -Target_CHAP_Name-
+ 4 ESX02 --                    --                
+ 0 ESX04 --                    --                
+ 3 ESX05 --                    --                
+ 2 ESX06 --                    --                
+ 1 ESX07 --                    --                
+-------------------------------------------------
+ 5 total                                         
+
+ZZZZZ01p-mp cli% showhostset 
+Id Name      Members
+11 ESX-Hosts ESX04  
+             ESX07  
+             ESX06  
+             ESX05  
+             ESX02  
+--------------------
+ 1 total     5      
+
+ZZZZZ01p-mp cli% showvlun 
+Active VLUNs
+Lun VVName          HostName -Host_WWN/iSCSI_Name/Host_NQN-  Port     Type Status ID
+  0 Production1     ESX02    VVVVVVVVV089C694               0:3:1 host set active 10
+  1 Production2     ESX02    VVVVVVVVV089C694               0:3:1 host set nonopt 10
+  2 Infrastructure1 ESX02    VVVVVVVVV089C694               0:3:1 host set active 10
+  3 Infrastructure2 ESX02    VVVVVVVVV089C694               0:3:1 host set nonopt 10
+  4 DevTest1        ESX02    VVVVVVVVV089C694               0:3:1 host set active 10
+  0 Production1     ESX02    VVVVVVVVV089C696               1:3:3 host set nonopt 11
+  1 Production2     ESX02    VVVVVVVVV089C696               1:3:3 host set active 11
+  2 Infrastructure1 ESX02    VVVVVVVVV089C696               1:3:3 host set nonopt 11
+  3 Infrastructure2 ESX02    VVVVVVVVV089C696               1:3:3 host set active 11
+  4 DevTest1        ESX02    VVVVVVVVV089C696               1:3:3 host set nonopt 11
+  0 Production1     ESX04    MMMMMMMM16E0746               0:3:1 host set active 10
+  1 Production2     ESX04    MMMMMMMM16E0746               0:3:1 host set nonopt 10
+  2 Infrastructure1 ESX04    MMMMMMMM16E0746               0:3:1 host set active 10
+  3 Infrastructure2 ESX04    MMMMMMMM16E0746               0:3:1 host set nonopt 10
+  4 DevTest1        ESX04    MMMMMMMM16E0746               0:3:1 host set active 10
+  0 Production1     ESX04    MMMMMMMM16E0745               1:3:3 host set nonopt 11
+  1 Production2     ESX04    MMMMMMMM16E0745               1:3:3 host set active 11
+  2 Infrastructure1 ESX04    MMMMMMMM16E0745               1:3:3 host set nonopt 11
+  3 Infrastructure2 ESX04    MMMMMMMM16E0745               1:3:3 host set active 11
+  4 DevTest1        ESX04    MMMMMMMM16E0745               1:3:3 host set nonopt 11
+  0 Production1     ESX06    MMMMMMMM16E070F               0:3:1 host set active 10
+  1 Production2     ESX06    MMMMMMMM16E070F               0:3:1 host set nonopt 10
+  2 Infrastructure1 ESX06    MMMMMMMM16E070F               0:3:1 host set active 10
+  3 Infrastructure2 ESX06    MMMMMMMM16E070F               0:3:1 host set nonopt 10
+  4 DevTest1        ESX06    MMMMMMMM16E070F               0:3:1 host set active 10
+  0 Production1     ESX06    MMMMMMMM16E0710               1:3:3 host set nonopt 11
+  1 Production2     ESX06    MMMMMMMM16E0710               1:3:3 host set active 11
+  2 Infrastructure1 ESX06    MMMMMMMM16E0710               1:3:3 host set nonopt 11
+  3 Infrastructure2 ESX06    MMMMMMMM16E0710               1:3:3 host set active 11
+  4 DevTest1        ESX06    MMMMMMMM16E0710               1:3:3 host set nonopt 11
+  0 Production1     ESX07    MMMMMMMM16EF6EE               0:3:1 host set active 10
+  1 Production2     ESX07    MMMMMMMM16EF6EE               0:3:1 host set nonopt 10
+  2 Infrastructure1 ESX07    MMMMMMMM16EF6EE               0:3:1 host set active 10
+  3 Infrastructure2 ESX07    MMMMMMMM16EF6EE               0:3:1 host set nonopt 10
+  4 DevTest1        ESX07    MMMMMMMM16EF6EE               0:3:1 host set active 10
+  0 Production1     ESX07    MMMMMMMM16EF6ED               1:3:3 host set nonopt 11
+  1 Production2     ESX07    MMMMMMMM16EF6ED               1:3:3 host set active 11
+  2 Infrastructure1 ESX07    MMMMMMMM16EF6ED               1:3:3 host set nonopt 11
+  3 Infrastructure2 ESX07    MMMMMMMM16EF6ED               1:3:3 host set active 11
+  4 DevTest1        ESX07    MMMMMMMM16EF6ED               1:3:3 host set nonopt 11
+------------------------------------------------------------------------------------
+ 40 total                                                                           
+
+VLUN Templates
+Lun VVName          HostName      -Host_WWN/iSCSI_Name- Port     Type
+  0 Production1     set:ESX-Hosts ----------------       --- host set
+  1 Production2     set:ESX-Hosts ----------------       --- host set
+  2 Infrastructure1 set:ESX-Hosts ----------------       --- host set
+  3 Infrastructure2 set:ESX-Hosts ----------------       --- host set
+  4 DevTest1        set:ESX-Hosts ----------------       --- host set
+---------------------------------------------------------------------
+  5 total                                                            
+
+ZZZZZ01p-mp cli% showvv -showcols Name,VSize,Prov,State 
+Invalid columns specified: VSize
+
+ZZZZZ01p-mp cli% showport 
+N:S:P   Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr-    Type Protocol Label
+0:3:1 target     ready 2FF70002AC02E9BD   20310002AC02E9BD    host       FC     -
+0:3:2 target loss_sync 2FF70002AC02E9BD   20320002AC02E9BD    free       FC     -
+0:3:3 target     ready 2FF70002AC02E9BD   20330002AC02E9BD    free       FC     -
+0:3:4 target loss_sync 2FF70002AC02E9BD   20340002AC02E9BD    free       FC     -
+0:5:1   peer     ready                -        202AC000103 cluster       IP     -
+0:5:2   peer     ready                -        202AC000103 cluster       IP     -
+1:3:1 target     ready 2FF70002AC02E9BD   21310002AC02E9BD    free       FC     -
+1:3:2 target loss_sync 2FF70002AC02E9BD   21320002AC02E9BD    free       FC     -
+1:3:3 target     ready 2FF70002AC02E9BD   21330002AC02E9BD    host       FC     -
+1:3:4 target loss_sync 2FF70002AC02E9BD   21340002AC02E9BD    free       FC     -
+1:5:1   peer     ready                -        202AC000105 cluster       IP     -
+1:5:2   peer     ready                -        202AC000105 cluster       IP     -
+---------------------------------------------------------------------------------
+   12                                                                            
+
+ZZZZZ01p-mp cli% showwsapi 
+-Service- -State- HTTPS_Port -Version- ---------API_URL---------
+Enabled   Active         443 1.15.0    https://xx.x.x.200/api/v1
+
+ZZZZZ01p-mp cli% showsshkey 
+No SSH key found
+
+ZZZZZ01p-mp cli% exit

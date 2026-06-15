@@ -1,0 +1,8 @@
+"Name","Identifier","LUN","Type","Capacity","Datastore","Operational State","Hardware Acceleration","Drive Type","Adapter","Owner","Physical Location","Sector Format","Perennially Reserved","Transport"
+"3PARdata Fibre Channel Disk (naa.60002ac0000000000000002b0002e9bd)","naa.60002ac0000000000000002b0002e9bd","1","disk","22.00 TB","Production2","Attached","Supported","Flash","vmhba0","NMP","","512n","No","Fibre Channel"
+"3PARdata Fibre Channel Disk (naa.60002ac0000000000000002c0002e9bd)","naa.60002ac0000000000000002c0002e9bd","2","disk","4.00 TB","Infrastructure1","Attached","Supported","Flash","vmhba0","NMP","","512n","No","Fibre Channel"
+"3PARdata Fibre Channel Disk (naa.60002ac0000000000000002e0002e9bd)","naa.60002ac0000000000000002e0002e9bd","4","disk","8.00 TB","DevTest1","Attached","Supported","Flash","vmhba0","NMP","","512n","No","Fibre Channel"
+"Local BROADCOM Enclosure Svc Dev (mpx.vmhba2:C1:T124:L0)","mpx.vmhba2:C1:T124:L0","","enclosure","","Not Consumed","Attached","Not supported","HDD","vmhba2","HPP","","","No","SAS"
+"3PARdata Fibre Channel Disk (naa.60002ac000000000000000130002e9bd)","naa.60002ac000000000000000130002e9bd","","disk","20.00 TB","Production1","Attached","Supported","Flash","vmhba1","NMP","","512n","No","Fibre Channel"
+"Local HPE Disk (naa.600062b22193c3402ff6a3a288b94f78)","naa.600062b22193c3402ff6a3a288b94f78","","disk","446.63 GB","ESX02_LocalStorage","Attached","Not supported","Flash","vmhba2","HPP","enclosure 252 slot 3, enclosure 252 slot 2","512e","No","SAS"
+"3PARdata Fibre Channel Disk (naa.60002ac0000000000000002d0002e9bd)","naa.60002ac0000000000000002d0002e9bd","3","disk","8.00 TB","Infrastructure2","Attached","Supported","Flash","vmhba0","NMP","","512n","No","Fibre Channel"
