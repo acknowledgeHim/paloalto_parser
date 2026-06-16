@@ -1021,7 +1021,7 @@ class ExcelReporter:
         headers = ["#", "Severity", "Category", "Object / Interface",
                    "Config Line", "CIS v8 Controls", "PCI DSS",
                    "Description", "Recommendation", "Details", "Output",
-                   "Verified", "Asset", "Target", "Vuln"]
+                   "Verified", "Asset", "Source", "Target", "Vuln"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
@@ -1042,8 +1042,7 @@ class ExcelReporter:
                     iss.get("pci_dss", ""),
                     iss["description"], iss["recommendation"],
                     iss.get("details", ""), iss.get("output", ""),
-                    "Y",
-                    f"{iss.get('source_file', '')}: {iss['device']}" if iss.get('source_file') else iss["device"],
+                    "Y", iss["device"], iss.get("source_file", ""),
                     target, vuln]
             for col, val in enumerate(vals, 1):
                 c = ws.cell(row=row, column=col, value=val)
@@ -1070,7 +1069,7 @@ class ExcelReporter:
                     if rb: c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30, 60, 10, 24, 36, 34])
+        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30, 60, 10, 24, 34, 36, 34])
 
     # ── Sheet 5: CIS v8 Mapping (exact Aruba format) ──────────────────────────
     def _sheet_cis_mapping(self):
