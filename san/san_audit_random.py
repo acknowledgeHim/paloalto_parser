@@ -147,18 +147,21 @@ class IssueStore:
 
     def add(self, severity: str, category: str, device: str, obj: str,
             description: str, recommendation: str,
-            details: str = "", line: int | str = 0):
+            details: str = "", line: int | str = 0, output: str = "",
+            source_file: str = ""):
         cis_ids = CIS_CONTROL_MAP.get(category, [])
         pci_ids = PCI_DSS_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
             "device":         device,
+            "source_file":    source_file,
             "object":         obj,
             "line":           str(line) if line else "",
             "description":    description,
             "recommendation": recommendation,
             "details":        details,
+            "output":         output,
             "cis_controls":   _cis_label(cis_ids),
             "cis_ids":        cis_ids,
             "pci_dss":        _pci_label(pci_ids),
@@ -308,45 +311,56 @@ class BrocadeParser:
 
     def run_checks(self, store: IssueStore):
         device = self.fabric_label
+        src    = os.path.basename(self.path)
 
         if self.auth_policy == 0:
             store.add(
                 "CRITICAL", "FC Authentication Policy Disabled", device,
                 "auth.policy: 0 (off)",
-                "FC Authentication Policy is disabled (auth.policy=0). No DH-CHAP "
-                "authentication is required between fabric ports. An unauthorized "
-                "switch or rogue HBA can join the fabric without credentials, "
-                "enabling eavesdropping and spoofed SCSI commands on VMware datastores.",
+                "FC Authentication Policy (DH-CHAP) is disabled. No authentication is "
+                "required between fabric ports, allowing unauthorized switches or rogue "
+                "HBAs to join the fabric without credentials and enabling fabric "
+                "eavesdropping and spoofed SCSI commands.",
                 "Enable FC authentication: 'authutil --set -policy active'. "
                 "Configure DH-CHAP shared secrets on ISL partners: 'secauthsecret --set'. "
                 "Minimum acceptable: passive (1) for mixed-firmware environments.",
                 details=f"configShow line {self.auth_policy_ln}",
-                line=self.auth_policy_ln)
+                line=self.auth_policy_ln,
+                output=f"configShow: auth.policy=0 (off) at line {self.auth_policy_ln}. "
+                       f"DH-CHAP authentication is not enforced on any fabric port. "
+                       f"Active config: {self.active_cfg}.",
+                source_file=src)
 
         if self.default_zone in ("allaccess", "all access", "all_access"):
             store.add(
                 "CRITICAL", "Default Zone Allows All Access", device,
                 f"defzone: {self.default_zone}",
-                "The default zone is set to 'allaccess'. Any device not placed in a "
-                "named zone can communicate with ALL other unzoned devices, creating "
-                "an open fabric. A rogue HBA inserted into any open port gains full "
-                "fabric visibility. This violates SAN isolation requirements for VMware.",
+                "The default zone policy is set to 'allaccess'. Devices not placed in a "
+                "named zone can communicate with all other unzoned devices, creating an "
+                "open fabric with no isolation between initiators and targets.",
                 "Set default zone to 'noaccess': 'defzone --noaccess; cfgsave'. "
                 "This is the Brocade security baseline and required for PCI DSS.",
                 details=f"configShow line {self.defzone_ln}",
-                line=self.defzone_ln)
+                line=self.defzone_ln,
+                output=f"configShow: defzone={self.default_zone} at line {self.defzone_ln}. "
+                       f"Active config: {self.active_cfg}. "
+                       "All fabric ports without explicit zone membership have unrestricted access.",
+                source_file=src)
 
         if self.banner_empty:
             store.add(
                 "MEDIUM", "No Login Banner Configured", device,
                 "[Banner] section empty",
-                "No login warning banner (MOTD) is configured. The [Banner] section in "
-                "configShow is empty. A legal notice banner is required by most compliance "
-                "frameworks and establishes legal standing for access monitoring.",
+                "No login warning banner (MOTD) is configured on the switch. A legal "
+                "notice banner is required by most compliance frameworks to establish "
+                "legal standing for access monitoring and deter unauthorized use.",
                 "Configure a banner: 'bannercfg --set "
                 "\"Authorized access only. All sessions are logged.\"'",
                 details=f"configShow line {self.banner_ln}",
-                line=self.banner_ln)
+                line=self.banner_ln,
+                output=f"configShow: [Banner] section is empty (line {self.banner_ln}). "
+                       "No warning is presented to users at login.",
+                source_file=src)
 
         orphans = self.orphaned_zones()
         if orphans:
@@ -354,26 +368,32 @@ class BrocadeParser:
             store.add(
                 "MEDIUM", "Stale Zone Definitions", device,
                 f"{len(orphans)} orphaned zone(s)",
-                f"{len(orphans)} zone(s) are defined but not included in any active zone "
-                f"configuration (cfg): {names}. These may represent decommissioned hosts "
-                "or legacy storage (e.g., EVA2 arrays) removed without zone cleanup. "
-                "Stale zones inflate configuration and may be accidentally re-activated.",
+                "Zone definitions exist in the fabric that are not included in any active "
+                "zone configuration. Orphaned zones may represent decommissioned hosts or "
+                "storage removed without cleaning up the zone database, and can be "
+                "accidentally re-activated.",
                 "Delete orphaned zones: 'zonedelete <zonename>; cfgsave'. "
                 "Remove unused aliases: 'alicedelete <alias>'. "
                 "Review all zone definitions against current fabric topology.",
                 details=names,
-                line=orphans[0]["line"])
+                line=orphans[0]["line"],
+                output=f"{len(orphans)} zone(s) defined but not in active cfg "
+                       f"'{self.active_cfg}': {names}.",
+                source_file=src)
 
         if self.maps_enabled and "dflt" in self.maps_policy.lower():
             store.add(
                 "LOW", "Default MAPS Monitoring Policy", device,
                 f"maps.activePolicy: {self.maps_policy}",
-                f"MAPS is using the default policy '{self.maps_policy}' rather than a "
-                "customized environment-specific policy. Default thresholds may not match "
-                "this fabric's traffic patterns, causing missed alerts or excessive noise.",
+                "MAPS (Monitoring and Alerting Policy Suite) is using the default "
+                "monitoring policy rather than a customized environment-specific policy. "
+                "Default thresholds may miss or over-alert on issues specific to this fabric.",
                 "Create a custom MAPS policy tuned to this fabric: "
                 "'mapsconfig --addpolicy custom_policy --clonedfrom dflt_base_policy'. "
-                "Adjust thresholds for port errors, frame drops, and link instability.")
+                "Adjust thresholds for port errors, frame drops, and link instability.",
+                output=f"configShow: maps.activePolicy={self.maps_policy}. "
+                       "Default policy thresholds not tuned to this environment's traffic patterns.",
+                source_file=src)
 
 
 # ── HP Alletra MP PuTTY log parser ─────────────────────────────────────────────
@@ -491,75 +511,91 @@ class AlletraParser:
 
     def run_checks(self, store: IssueStore):
         device = self.system_name or "HP Alletra MP"
+        src    = os.path.basename(self.path)
 
         if self.hosts_no_chap:
             hosts = ", ".join(self.hosts_no_chap)
             store.add(
                 "HIGH", "No CHAP on Storage Hosts", device,
                 f"{len(self.hosts_no_chap)} host(s) without CHAP",
-                f"No CHAP authentication is configured for {len(self.hosts_no_chap)} "
-                f"ESX host(s): {hosts}. Both Initiator CHAP and Target CHAP show '--' "
-                "in 'showhost -chap'. Without CHAP, any host presenting the correct "
-                "WWN can authenticate to the array. In a compromised or miscabled "
-                "environment this allows unauthorized LUN access.",
+                "No CHAP (Challenge-Handshake Authentication Protocol) authentication is "
+                "configured for storage hosts. Without CHAP, any host presenting the "
+                "correct WWN can authenticate to the array, enabling unauthorized LUN "
+                "access in a compromised or miscabled environment.",
                 "Configure per-host CHAP credentials on the Alletra MP for all "
                 "production hosts using 'createhost -chap <initiator_name> <secret>'. "
                 "Enable target CHAP to prevent host-spoofing attacks.",
-                details=f"showhost -chap: {hosts}")
+                details=f"showhost -chap: {hosts}",
+                output=f"showhost -chap: {len(self.hosts_no_chap)} host(s) show '--' "
+                       f"(not configured) for both Initiator CHAP Name and Target CHAP Name: "
+                       f"{hosts}.",
+                source_file=src)
 
         if self.invalid_commands:
             cmds = ", ".join(self.invalid_commands)
             store.add(
                 "HIGH", "Security Baseline Not Verifiable", device,
                 "commands: " + cmds,
-                f"The following security baseline commands returned 'invalid command name' "
-                f"on this firmware version: {cmds}. Password policy, SNMP configuration, "
-                "syslog/audit logging, and time synchronization cannot be verified from "
-                "the CLI, leaving key security controls in an unknown compliance state.",
+                "Security baseline commands are not available on this firmware version. "
+                "Password policy, SNMP configuration, syslog, audit logging, and time "
+                "synchronization settings cannot be verified from the CLI, leaving key "
+                "security controls in an unknown compliance state.",
                 "Verify password policy, SNMP, syslog, and NTP via the GreenLake Cloud "
                 "Console or HPE SSMC. Update firmware to restore CLI security commands, "
                 "or document equivalent GUI controls for the compliance record.",
-                details=f"Invalid on this firmware: {cmds}")
+                details=f"Invalid on this firmware: {cmds}",
+                output=f"Commands returning 'invalid command name' on this firmware: {cmds}. "
+                       "These settings cannot be audited via CLI.",
+                source_file=src)
 
         if not self.ssh_key_found:
             store.add(
                 "HIGH", "No SSH Keys Configured", device,
                 "showsshkey: No SSH key found",
-                "No SSH public keys are configured on the Alletra MP. Administrative "
-                "access relies exclusively on password authentication. Password-only "
-                "authentication is weaker than key-based auth and does not meet PCI DSS "
-                "requirements for strong cryptographic access controls.",
+                "No SSH public keys are configured on the storage array. Administrative "
+                "access relies exclusively on password authentication, which does not "
+                "meet requirements for strong cryptographic access controls.",
                 "Install SSH public keys for admin accounts: "
                 "'setsshkey -add <keyfile>' or via GreenLake Console SSH key page. "
                 "Prefer Ed25519 or RSA-4096 keys.",
-                details="showsshkey: No SSH key found")
+                details="showsshkey: No SSH key found",
+                output="showsshkey: 'No SSH key found'. "
+                       "All administrative authentication uses passwords only; "
+                       "no public-key authentication is configured.",
+                source_file=src)
 
         if self.ports_loss_sync:
             ports = ", ".join(self.ports_loss_sync)
             store.add(
                 "MEDIUM", "Degraded FC Ports", device,
                 f"loss_sync: {ports}",
-                f"{len(self.ports_loss_sync)} FC port(s) are in 'loss_sync' state: "
-                f"{ports}. These ports have lost synchronization with their SAN fabric "
-                "counterpart and are not passing traffic. This reduces path redundancy "
-                "and may indicate a cabling, SFP, or switch-side fault.",
+                "One or more FC target ports are in 'loss_sync' state, indicating lost "
+                "synchronization with the fabric. Degraded ports are not passing traffic, "
+                "reducing path redundancy for connected hosts and indicating a potential "
+                "hardware or cabling fault.",
                 "Investigate each port: check SFP health ('showport -sfp'), verify "
                 "cabling to the Brocade switch, and check Brocade switchShow for the "
                 "matching F-Port state. Replace faulty SFPs or cables.",
-                details=f"Ports in loss_sync: {ports}")
+                details=f"Ports in loss_sync: {ports}",
+                output=f"showport: {len(self.ports_loss_sync)} port(s) in loss_sync state: "
+                       f"{ports}. These ports have lost link-level synchronization with "
+                       "the connected Brocade switch and are not carrying I/O.",
+                source_file=src)
 
         if self.wsapi_enabled:
             store.add(
                 "MEDIUM", "REST API Exposed", device,
                 "WSAPI: Enabled / Active on HTTPS 443",
-                "The HP Alletra MP REST API (WSAPI) is enabled and active on HTTPS 443. "
-                "The REST API exposes full array management including volume creation, "
-                "deletion, VLUN mapping, and host definitions. Unauthorized access allows "
-                "complete storage compromise without FC fabric access.",
+                "The array REST API (WSAPI) is enabled and active. The API exposes full "
+                "array management capabilities including volume, host, and VLUN management "
+                "without requiring FC fabric access to execute changes.",
                 "Restrict WSAPI access by source IP via management network ACLs. "
                 "Use dedicated service accounts with least-privilege for automation. "
                 "Disable WSAPI if REST API management is not actively used: 'stopwsapi'.",
-                details="WSAPI: Enabled / Active, HTTPS 443")
+                details="WSAPI: Enabled / Active, HTTPS 443",
+                output="showwsapi: Service=Enabled, State=Active on HTTPS port 443. "
+                       "REST API is accessible and accepting connections.",
+                source_file=src)
 
 
 # ── HP Alletra Volume CSV parser ──────────────────────────────────────────────
@@ -599,6 +635,7 @@ class AlletraVolumesParser:
         return True
 
     def run_checks(self, store: IssueStore):
+        src      = os.path.basename(self.path)
         exported = [v for v in self.volumes if v["export_status"] == "Exported"]
         for vol in exported:
             if vol["replication_type"].lower() in ("none", "--", ""):
@@ -606,16 +643,20 @@ class AlletraVolumesParser:
                 store.add(
                     "HIGH", "No Volume Replication Configured", device,
                     f"Volume Set: {vol['name']}",
-                    f"Volume set '{vol['name']}' is exported to production hosts with "
-                    f"Protection Level '{vol['protection_level']}' and Replication Type "
-                    f"'{vol['replication_type']}'. No remote replication is configured. "
-                    "Local snapshots alone cannot protect against a site-level failure, "
-                    "storage hardware failure, or ransomware that corrupts all snapshots.",
+                    "No remote replication is configured for this exported volume set. "
+                    "Local snapshots alone cannot protect against site-level failure, "
+                    "storage hardware failure, or ransomware that corrupts all local "
+                    "snapshots before a recovery point is reached.",
                     "Configure remote replication to a secondary Alletra MP or cloud target "
                     "via GreenLake Data Services. Define RPO/RTO targets for each volume "
                     "set, test failover regularly, and document the DR procedure.",
                     details=f"Protection: {vol['protection_level']} | "
-                            f"Replication: {vol['replication_type']}")
+                            f"Replication: {vol['replication_type']}",
+                    output=f"Volumes CSV: Volume Set '{vol['name']}' — "
+                           f"Protection Level='{vol['protection_level']}', "
+                           f"Replication Type='{vol['replication_type']}', "
+                           f"Export Status=Exported. No DR replication target configured.",
+                    source_file=src)
 
 
 # ── VMware ESXi storage device CSV parser ─────────────────────────────────────
@@ -638,25 +679,31 @@ class ESXiStorageParser:
         return True
 
     def run_checks(self, store: IssueStore):
+        src      = os.path.basename(self.path)
         fc_disks = [d for d in self.devices
                     if d.get("Transport", "").lower() == "fibre channel"
                     and d.get("Type", "").lower() == "disk"]
         not_reserved = [d for d in fc_disks
                         if d.get("Perennially Reserved", "").lower() != "yes"]
         if not_reserved:
-            names = "; ".join(d.get("Identifier", d.get("Name", "?"))[:40]
-                              for d in not_reserved[:5])
+            ids = "; ".join(d.get("Identifier", d.get("Name", "?"))[:40]
+                            for d in not_reserved[:5])
             store.add(
                 "LOW", "Perennially Reserved Not Configured",
                 "VMware ESXi",
                 f"{len(not_reserved)} FC disk(s)",
-                f"{len(not_reserved)} FC storage device(s) have 'Perennially Reserved' = 'No'. "
-                "For FC LUNs not consumed as VMFS datastores on this host, this causes "
-                "unnecessary SCSI reservation probes and path thrashing at host boot.",
+                "FC storage devices presented to ESXi hosts do not have 'Perennially "
+                "Reserved' enabled. For FC LUNs not actively consumed as VMFS datastores, "
+                "this causes unnecessary SCSI reservation probes and potential path "
+                "thrashing at ESXi host boot.",
                 "Set Perennially Reserved for non-datastore FC LUNs: "
                 "esxcli storage core device setconfig -d <naa.id> --perennially-reserved=true. "
                 "Review whether all presented LUNs are required on each ESXi host.",
-                details=names)
+                details=ids,
+                output=f"storage-devices-export-data.csv: {len(not_reserved)} FC disk(s) "
+                       f"with Perennially Reserved=No: {ids}. "
+                       "ESXi will probe these LUNs for SCSI reservations on every boot.",
+                source_file=src)
 
 
 # ── Excel Report Builder ───────────────────────────────────────────────────────
@@ -973,7 +1020,7 @@ class ExcelReporter:
 
         headers = ["#", "Severity", "Category", "Object / Interface",
                    "Config Line", "CIS v8 Controls", "PCI DSS",
-                   "Description", "Recommendation", "Details",
+                   "Description", "Recommendation", "Details", "Output",
                    "Verified", "Asset", "Target", "Vuln"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
@@ -985,7 +1032,7 @@ class ExcelReporter:
             fg, bg = self.SEV_COLORS[sev]
             rb = self._row_fill(row)
 
-            line = iss.get("line", "")
+            line   = iss.get("line", "")
             target = iss["object"] + (f" ({line})" if line else "")
             vuln   = "SAN - " + iss["category"]
 
@@ -994,8 +1041,10 @@ class ExcelReporter:
                     iss.get("cis_controls", ""),
                     iss.get("pci_dss", ""),
                     iss["description"], iss["recommendation"],
-                    iss.get("details", ""),
-                    "Y", iss["device"], target, vuln]
+                    iss.get("details", ""), iss.get("output", ""),
+                    "Y",
+                    f"{iss.get('source_file', '')}: {iss['device']}" if iss.get('source_file') else iss["device"],
+                    target, vuln]
             for col, val in enumerate(vals, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
@@ -1013,7 +1062,7 @@ class ExcelReporter:
                     c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if rb: c.fill = _fill(rb)
-                elif col == 11:  # Verified
+                elif col == 12:  # Verified
                     c.font = _font(bold=True, color=C["ok"]); c.alignment = _align("center")
                     c.fill = _fill(C["ok_l"])
                 else:
@@ -1021,7 +1070,7 @@ class ExcelReporter:
                     if rb: c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30, 10, 24, 36, 34])
+        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30, 60, 10, 24, 36, 34])
 
     # ── Sheet 5: CIS v8 Mapping (exact Aruba format) ──────────────────────────
     def _sheet_cis_mapping(self):
