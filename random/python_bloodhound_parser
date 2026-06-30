@@ -1,0 +1,50 @@
+DANGEROUS_EDGES = {
+    # ACL abuse
+    "GenericAll",
+    "GenericWrite",
+    "WriteDacl",
+    "WriteOwner",
+    "Owns",
+    "AllExtendedRights",
+
+    # Password abuse
+    "ForceChangePassword",
+    "AddKeyCredentialLink",
+    "WriteSPN",
+
+    # Group abuse
+    "AddMember",
+
+    # LAPS
+    "ReadLAPSPassword",
+
+    # Replication
+    "GetChanges",
+    "GetChangesAll",
+    "GetChangesInFilteredSet",
+
+    # Delegation
+    "AllowedToDelegate",
+    "AllowedToAct",
+
+    # Sessions / Admin
+    "AdminTo",
+    "CanPSRemote",
+    "CanRDP",
+    "ExecuteDCOM",
+    "CanSSH",
+
+    # GPO
+    "GpLink",
+    "Contains",
+
+    # AD CS
+    "Enroll",
+    "ManageCA",
+    "ManageCertificates",
+
+    # Computer relationships
+    "MemberOfLocalGroup",
+    "HasSession",
+    "DCFor",
+}
