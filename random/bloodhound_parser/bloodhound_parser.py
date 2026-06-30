@@ -224,28 +224,18 @@ def _members(field_value):
         return field_value.get("Results", field_value.get("Members", []))
     return []
 
-def _finding(edge, principal, principal_type, target, target_type, inherited=False, extra=None):
-    desc = ISSUE_DESCRIPTIONS.get(edge, edge)
-    sev  = SEVERITY_MAP.get(edge, "Informational")
-    ev   = {
-        "edge":           edge,
+def _flat(edge, principal, principal_type, target, target_type, inherited=False, extra=None):
+    """Internal flat finding — one record per edge instance. Grouped into output by group_findings()."""
+    return {
         "principal":      principal,
         "principal_type": principal_type,
+        "_edge":          edge,
         "target":         target,
         "target_type":    target_type,
         "inherited":      inherited,
-    }
-    if extra:
-        ev.update(extra)
-    return {
-        "issue":          f"{edge}: {principal_type} '{principal}' → {target_type} '{target}'",
-        "severity":       sev,
-        "target":         target,
-        "target_type":    target_type,
-        "principal":      principal,
-        "principal_type": principal_type,
-        "details":        desc,
-        "evidence":       ev,
+        "severity":       SEVERITY_MAP.get(edge, "Informational"),
+        "details":        ISSUE_DESCRIPTIONS.get(edge, edge),
+        "_extra":         extra or {},
     }
 
 
@@ -260,15 +250,15 @@ def parse_aces(obj, obj_name, obj_type, sid_map):
         p_sid  = ace.get("PrincipalSID", "")
         p_type = ace.get("PrincipalType", "Unknown")
         p_name = _resolve(p_sid, sid_map)
-        findings.append(_finding(
+        findings.append(_flat(
             edge, p_name, p_type, obj_name, obj_type,
             inherited=ace.get("IsInherited", False),
-            extra={"principal_sid": p_sid},
         ))
     return findings
 
 
 def parse_delegation(obj, obj_name, obj_type, sid_map):
+    """AllowedToDelegate / AllowedToAct: principal = the delegating computer, target = where it delegates."""
     findings = []
     for field, edge in [("AllowedToDelegate", "AllowedToDelegate"),
                         ("AllowedToAct",      "AllowedToAct")]:
@@ -276,30 +266,12 @@ def parse_delegation(obj, obj_name, obj_type, sid_map):
             t_sid  = t.get("ObjectIdentifier", "")
             t_type = t.get("ObjectType", "Unknown")
             t_name = _resolve(t_sid, sid_map)
-            # Direction is reversed: obj delegates TO target
-            sev  = SEVERITY_MAP.get(edge, "Medium")
-            desc = ISSUE_DESCRIPTIONS.get(edge, edge)
-            findings.append({
-                "issue":          f"{edge}: {obj_type} '{obj_name}' → {t_type} '{t_name}'",
-                "severity":       sev,
-                "target":         t_name,
-                "target_type":    t_type,
-                "principal":      obj_name,
-                "principal_type": obj_type,
-                "details":        desc,
-                "evidence": {
-                    "edge":        edge,
-                    "principal":   obj_name,
-                    "principal_type": obj_type,
-                    "target":      t_name,
-                    "target_sid":  t_sid,
-                    "target_type": t_type,
-                },
-            })
+            findings.append(_flat(edge, obj_name, obj_type, t_name, t_type))
     return findings
 
 
 def parse_relationship_list(obj, obj_name, obj_type, field, edge, sid_map):
+    """Computer relationship lists: principal = the member, target = the computer."""
     findings = []
     if edge not in DANGEROUS_EDGES:
         return findings
@@ -308,45 +280,79 @@ def parse_relationship_list(obj, obj_name, obj_type, field, edge, sid_map):
                   or member.get("UserSID") or "")
         m_type = (member.get("ObjectType") or member.get("MemberType") or "Unknown")
         m_name = _resolve(m_sid, sid_map)
-        findings.append(_finding(
-            edge, m_name, m_type, obj_name, obj_type,
-            extra={"principal_sid": m_sid},
-        ))
+        findings.append(_flat(edge, m_name, m_type, obj_name, obj_type))
     return findings
 
 
-def detect_dcsync(findings):
-    """Promote principals with GetChanges+GetChangesAll on the same domain to DCSync/Critical.
-    Also surfaces the CE composite DCSync edge as Critical if not already."""
+def detect_dcsync(flat_findings):
+    """Inject a synthetic DCSync flat-finding when a principal has GetChanges+GetChangesAll
+    on the same domain (or the CE composite DCSync edge is present)."""
     domain_rights = {}
-    for f in findings:
-        edge = f["evidence"].get("edge", "")
+    for f in flat_findings:
+        edge = f["_edge"]
         if edge in ("GetChanges", "GetChangesAll", "GetChangesInFilteredSet", "DCSync"):
-            key = (f["principal"], f["target"])
+            key = (f["principal"], f["principal_type"], f["target"])
             domain_rights.setdefault(key, set()).add(edge)
 
-    dcsync = []
-    for (principal, domain), rights in domain_rights.items():
+    extra = []
+    for (principal, p_type, domain), rights in domain_rights.items():
         if "DCSync" in rights or ("GetChanges" in rights and "GetChangesAll" in rights):
-            dcsync.append({
-                "issue":          f"DCSync: '{principal}' can replicate all secrets from '{domain}'",
-                "severity":       "Critical",
+            extra.append({
+                "principal":      principal,
+                "principal_type": p_type,
+                "_edge":          "DCSync",
                 "target":         domain,
                 "target_type":    "Domain",
-                "principal":      principal,
-                "principal_type": "Unknown",
+                "inherited":      False,
+                "severity":       "Critical",
                 "details":        (
                     "Principal holds both GetChanges and GetChangesAll on the domain, "
                     "enabling full DCSync — extraction of NTLM hashes and Kerberos keys for all accounts"
                 ),
-                "evidence": {
-                    "edge":      "DCSync",
-                    "principal": principal,
-                    "target":    domain,
-                    "rights":    sorted(rights),
-                },
+                "_extra":         {"rights": sorted(rights)},
             })
-    return dcsync
+    return extra
+
+
+def group_findings(flat_findings):
+    """Convert flat per-edge findings into grouped output:
+       target  = the node that HOLDS the permission (the dangerous account)
+       evidence = list of nodes it has that permission over.
+    """
+    groups = {}
+    for f in flat_findings:
+        principal = f["principal"]
+        p_type    = f["principal_type"]
+        edge      = f["_edge"]
+        key       = (principal, p_type, edge)
+
+        if key not in groups:
+            groups[key] = {
+                "issue":       f"{edge}: {p_type} '{principal}'",
+                "severity":    f["severity"],
+                "target":      principal,
+                "target_type": p_type,
+                "edge":        edge,
+                "details":     f["details"],
+                "evidence":    [],
+            }
+
+        ev_entry = {
+            "node":      f["target"],
+            "node_type": f["target_type"],
+        }
+        if f.get("inherited") is not None:
+            ev_entry["inherited"] = f["inherited"]
+        if f.get("_extra"):
+            ev_entry.update(f["_extra"])
+
+        # Avoid duplicate evidence entries
+        if ev_entry not in groups[key]["evidence"]:
+            groups[key]["evidence"].append(ev_entry)
+
+    findings = list(groups.values())
+    findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 5), f["target"]))
+    return findings
 
 
 # ── file loading ──────────────────────────────────────────────────────────────
@@ -402,29 +408,26 @@ def parse_bloodhound(input_paths):
             obj["_type_label"] = label
         all_objects.setdefault(obj_type, []).extend(objects)
 
-    sid_map  = build_sid_map(all_objects)
-    findings = []
+    sid_map   = build_sid_map(all_objects)
+    flat      = []
 
     for obj_type, objects in all_objects.items():
         for obj in objects:
             obj_name  = _name(obj)
             obj_label = obj.get("_type_label", obj_type.rstrip("s").capitalize())
 
-            findings.extend(parse_aces(obj, obj_name, obj_label, sid_map))
-            findings.extend(parse_delegation(obj, obj_name, obj_label, sid_map))
+            flat.extend(parse_aces(obj, obj_name, obj_label, sid_map))
+            flat.extend(parse_delegation(obj, obj_name, obj_label, sid_map))
 
-            # Computer-specific relationship lists
-            if obj_type in ("computers",):
+            if obj_type == "computers":
                 for field, edge in COMPUTER_RELATIONSHIP_FIELDS:
-                    findings.extend(
+                    flat.extend(
                         parse_relationship_list(obj, obj_name, obj_label, field, edge, sid_map)
                     )
 
-    # Promote DCSync
-    findings = detect_dcsync(findings) + findings
-
-    # Sort by severity then target name
-    findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 5), f["target"]))
+    # Inject DCSync synthetic findings, then group everything
+    flat     = detect_dcsync(flat) + flat
+    findings = group_findings(flat)
 
     summary = {
         "total":         len(findings),
