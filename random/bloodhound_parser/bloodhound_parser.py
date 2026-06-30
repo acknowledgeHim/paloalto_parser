@@ -198,6 +198,141 @@ COMPUTER_RELATIONSHIP_FIELDS = [
 
 SEVERITY_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Informational": 4}
 
+# ── privileged group suppression ──────────────────────────────────────────────
+# Findings are suppressed when the principal (dangerous account) is a recursive
+# member of one of these groups, OR when an evidence node IS one of these groups
+# or is a recursive member of one.
+
+# Well-known SID suffixes that identify privileged domain groups
+PRIVILEGED_SID_SUFFIXES = {
+    "-512",   # Domain Admins
+    "-519",   # Enterprise Admins
+    "-518",   # Schema Admins
+    "-516",   # Domain Controllers
+    "-520",   # Group Policy Creator Owners
+    "-498",   # Enterprise Read-Only Domain Controllers
+}
+# Well-known fixed SIDs
+PRIVILEGED_FIXED_SIDS = {
+    "S-1-5-32-544",   # BUILTIN\Administrators
+    "S-1-5-32-548",   # Account Operators
+    "S-1-5-32-549",   # Server Operators
+    "S-1-5-32-550",   # Print Operators
+    "S-1-5-32-551",   # Backup Operators
+}
+# Short name prefixes (before the @domain part), lower-cased
+PRIVILEGED_NAME_PREFIXES = {
+    "administrators",
+    "domain admins",
+    "enterprise admins",
+    "schema admins",
+    "domain controllers",
+    "enterprise read-only domain controllers",
+    "group policy creator owners",
+    "account operators",
+    "server operators",
+    "print operators",
+    "backup operators",
+}
+
+
+def _is_privileged_group(name, sid):
+    short = (name or "").lower().split("@")[0].strip()
+    if short in PRIVILEGED_NAME_PREFIXES:
+        return True
+    if sid in PRIVILEGED_FIXED_SIDS:
+        return True
+    return any(sid.endswith(s) for s in PRIVILEGED_SID_SUFFIXES)
+
+
+def build_privileged_set(all_objects, sid_map):
+    """Return (privileged_sids, privileged_names) — all SIDs/names that are
+    seeds or recursive members of the privileged groups above."""
+    # sid → list[member_sid] from groups data
+    group_members = {}
+    for obj in all_objects.get("groups", []):
+        g_sid = _sid(obj)
+        members = [m.get("ObjectIdentifier", "") for m in _members(obj.get("Members", [])) if m.get("ObjectIdentifier")]
+        group_members[g_sid] = members
+
+    # Seed with privileged group SIDs found in the data
+    seeds = set()
+    for obj in all_objects.get("groups", []):
+        g_sid  = _sid(obj)
+        g_name = _name(obj)
+        if _is_privileged_group(g_name, g_sid):
+            seeds.add(g_sid)
+
+    # BFS — collect every recursive member of the privileged groups
+    privileged_sids = set(seeds)
+    queue = list(seeds)
+    while queue:
+        g_sid = queue.pop()
+        for m_sid in group_members.get(g_sid, []):
+            if m_sid not in privileged_sids:
+                privileged_sids.add(m_sid)
+                queue.append(m_sid)
+
+    # Also build a name set for lookups after sid_map resolution
+    privileged_names = {sid_map[s].lower() for s in privileged_sids if s in sid_map}
+
+    return privileged_sids, privileged_names
+
+
+def _is_privileged(name, sid, privileged_sids, privileged_names):
+    if sid and sid in privileged_sids:
+        return True
+    # name may be an unresolved raw SID (resolution failed due to missing object)
+    if name and name in privileged_sids:
+        return True
+    if name and name.lower() in privileged_names:
+        return True
+    # Catch privileged group names even without SID data
+    short = (name or "").lower().split("@")[0].strip()
+    return short in PRIVILEGED_NAME_PREFIXES
+
+
+def filter_privileged(findings, all_objects, sid_map):
+    """Drop findings whose principal is privileged, and strip evidence entries
+    whose affected node is privileged.  Findings with no remaining evidence
+    are dropped entirely."""
+    privileged_sids, privileged_names = build_privileged_set(all_objects, sid_map)
+
+    # Build name → SID for reverse-lookup of grouped finding targets
+    name_to_sid = {}
+    for objects in all_objects.values():
+        for obj in objects:
+            n = _name(obj).lower()
+            s = _sid(obj)
+            if n and s:
+                name_to_sid[n] = s
+
+    filtered = []
+    for f in findings:
+        # f["target"] is the principal (the account holding the permission)
+        principal_name = f["target"]
+        principal_sid  = name_to_sid.get(principal_name.lower(), "")
+
+        if _is_privileged(principal_name, principal_sid, privileged_sids, privileged_names):
+            continue
+
+        # Strip evidence entries where the affected node is privileged
+        clean_ev = [
+            ev for ev in f["evidence"]
+            if not _is_privileged(
+                ev.get("node", ""),
+                name_to_sid.get(ev.get("node", "").lower(), ""),
+                privileged_sids, privileged_names,
+            )
+        ]
+        if not clean_ev:
+            continue
+
+        f["evidence"] = clean_ev
+        filtered.append(f)
+
+    return filtered
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -425,9 +560,10 @@ def parse_bloodhound(input_paths):
                         parse_relationship_list(obj, obj_name, obj_label, field, edge, sid_map)
                     )
 
-    # Inject DCSync synthetic findings, then group everything
+    # Inject DCSync synthetic findings, group, then suppress privileged noise
     flat     = detect_dcsync(flat) + flat
     findings = group_findings(flat)
+    findings = filter_privileged(findings, all_objects, sid_map)
 
     summary = {
         "total":         len(findings),
