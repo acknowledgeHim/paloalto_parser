@@ -380,13 +380,8 @@ def process_privileged(findings, all_objects, sid_map):
 
             # Check if the node is itself a privileged seed group OR a recursive member
             if _is_privileged(node_name, node_sid, privileged_sids, privileged_names):
-                # Node is already privileged — path is just itself reaching the seed
-                path = find_privilege_path(
-                    node_sid, node_name, member_to_groups,
-                    privileged_sids, privileged_names, sid_map,
-                ) or [node_name]
                 ev = dict(ev)
-                ev["privilege_path"] = path
+                ev["privilege_path"] = build_membership_tree(node_sid, member_to_groups, sid_map)
                 sev = "Critical"
             else:
                 # Not directly privileged — check upward for indirect membership
@@ -396,7 +391,7 @@ def process_privileged(findings, all_objects, sid_map):
                 )
                 if path:
                     ev = dict(ev)
-                    ev["privilege_path"] = path
+                    ev["privilege_path"] = build_membership_tree(node_sid, member_to_groups, sid_map)
                     sev = _ESCALATE.get(sev, sev)
 
             annotated_ev.append(ev)
