@@ -320,6 +320,22 @@ def find_privilege_path(start_sid, start_name, member_to_groups, privileged_sids
     return None
 
 
+def build_membership_tree(sid, member_to_groups, sid_map, visited=None):
+    """Recursively build a group membership tree for the given SID.
+    Returns a dict of {group_name: subtree} showing all upward group memberships.
+    Example: {'DEPT1': {'HELPDESK': {'DOMAIN ADMINS': {}}}, 'DEPT2': {}}"""
+    if visited is None:
+        visited = set()
+    visited = visited | {sid}
+    tree = {}
+    for g_sid in member_to_groups.get(sid, []):
+        if g_sid in visited:
+            continue
+        g_name = sid_map.get(g_sid, g_sid)
+        tree[g_name] = build_membership_tree(g_sid, member_to_groups, sid_map, visited)
+    return tree
+
+
 def _is_privileged(name, sid, privileged_sids, privileged_names):
     if sid and sid in privileged_sids:
         return True
@@ -352,6 +368,9 @@ def process_privileged(findings, all_objects, sid_map):
         principal_sid  = name_to_sid.get(principal_name.lower(), principal_name)
         if _is_privileged(principal_name, principal_sid, privileged_sids, privileged_names):
             continue
+
+        f = dict(f)
+        f["target_membership"] = build_membership_tree(principal_sid, member_to_groups, sid_map)
 
         sev = f["severity"]
         annotated_ev = []
