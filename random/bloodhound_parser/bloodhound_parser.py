@@ -406,7 +406,12 @@ def process_privileged(findings, all_objects, sid_map):
             continue
 
         f = dict(f)
-        f["target_membership"] = build_membership_tree(principal_sid, member_to_groups, sid_map)
+        # Restructure target from flat string into object with name/type/membership
+        f["target"] = {
+            "name":       principal_name,
+            "type":       f.pop("target_type", "Unknown"),
+            "membership": build_membership_tree(principal_sid, member_to_groups, sid_map),
+        }
 
         sev = f["severity"]
         annotated_ev = []
@@ -418,7 +423,6 @@ def process_privileged(findings, all_objects, sid_map):
             mem = build_membership_tree_privileged(
                 node_sid, member_to_groups, sid_map, privileged_sids, privileged_names
             )
-            # Escalate severity based on whether the tree reaches a privileged group
             if _tree_has_privilege(mem):
                 sev = "Critical" if _is_privileged(node_name, node_sid, privileged_sids, privileged_names) else _ESCALATE.get(sev, sev)
 
@@ -432,7 +436,7 @@ def process_privileged(findings, all_objects, sid_map):
         f["severity"] = sev
         out.append(f)
 
-    out.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 5), f["target"]))
+    out.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 5), f["target"]["name"]))
     return out
 
 
