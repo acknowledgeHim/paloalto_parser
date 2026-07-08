@@ -396,7 +396,13 @@ def process_privileged(findings, all_objects, sid_map):
     for f in findings:
         principal_name = f["target"]
         principal_sid  = name_to_sid.get(principal_name.lower(), principal_name)
+        # Suppress if principal is privileged via downward BFS (privileged_sids)
         if _is_privileged(principal_name, principal_sid, privileged_sids, privileged_names):
+            continue
+        # Also suppress via upward BFS through MemberOf fields — catches membership
+        # that is only recorded on the member object, not in the group's Members list
+        if find_privilege_path(principal_sid, principal_name, member_to_groups,
+                               privileged_sids, privileged_names, sid_map):
             continue
 
         f = dict(f)
