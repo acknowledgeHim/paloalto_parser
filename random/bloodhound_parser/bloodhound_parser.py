@@ -321,9 +321,7 @@ def find_privilege_path(start_sid, start_name, member_to_groups, privileged_sids
 
 
 def build_membership_tree(sid, member_to_groups, sid_map, visited=None):
-    """Recursively build a group membership tree for the given SID.
-    Returns a dict of {group_name: subtree} showing all upward group memberships.
-    Example: {'DEPT1': {'HELPDESK': {'DOMAIN ADMINS': {}}}, 'DEPT2': {}}"""
+    """Plain membership tree — no privilege marking. Used for target_membership."""
     if visited is None:
         visited = set()
     visited = visited | {sid}
@@ -334,6 +332,37 @@ def build_membership_tree(sid, member_to_groups, sid_map, visited=None):
         g_name = sid_map.get(g_sid, g_sid)
         tree[g_name] = build_membership_tree(g_sid, member_to_groups, sid_map, visited)
     return tree
+
+
+def build_membership_tree_privileged(sid, member_to_groups, sid_map,
+                                     privileged_sids, privileged_names, visited=None):
+    """Membership tree with _privileged:true on any privileged group node.
+    Used for evidence node membership so the reader can see which groups grant privilege."""
+    if visited is None:
+        visited = set()
+    visited = visited | {sid}
+    tree = {}
+    for g_sid in member_to_groups.get(sid, []):
+        if g_sid in visited:
+            continue
+        g_name = sid_map.get(g_sid, g_sid)
+        subtree = build_membership_tree_privileged(
+            g_sid, member_to_groups, sid_map, privileged_sids, privileged_names, visited
+        )
+        if _is_privileged_group(g_name, g_sid):
+            subtree["_privileged"] = True
+        tree[g_name] = subtree
+    return tree
+
+
+def _tree_has_privilege(tree):
+    """Return True if any group in the membership tree is marked _privileged."""
+    for key, val in tree.items():
+        if key == "_privileged" and val:
+            return True
+        if isinstance(val, dict) and _tree_has_privilege(val):
+            return True
+    return False
 
 
 def _is_privileged(name, sid, privileged_sids, privileged_names):
@@ -349,8 +378,9 @@ def _is_privileged(name, sid, privileged_sids, privileged_names):
 
 def process_privileged(findings, all_objects, sid_map):
     """Suppress findings whose PRINCIPAL is privileged.
-    For evidence nodes: keep all, but annotate with privilege_path when the node
-    is a recursive member of a privileged group, and escalate the finding severity."""
+    All evidence nodes get a membership tree; privileged groups within it are
+    marked _privileged:true and the finding severity is escalated accordingly.
+    target_membership shows the principal's groups without privilege marking."""
     privileged_sids, privileged_names = build_privileged_set(all_objects, sid_map)
     member_to_groups = build_member_to_groups(all_objects)
 
@@ -378,28 +408,20 @@ def process_privileged(findings, all_objects, sid_map):
             node_name = ev.get("node", "")
             node_sid  = name_to_sid.get(node_name.lower(), node_name)
 
-            # Check if the node is itself a privileged seed group OR a recursive member
-            if _is_privileged(node_name, node_sid, privileged_sids, privileged_names):
-                ev = dict(ev)
-                ev["privilege_path"] = build_membership_tree(node_sid, member_to_groups, sid_map)
-                sev = "Critical"
-            else:
-                # Not directly privileged — check upward for indirect membership
-                path = find_privilege_path(
-                    node_sid, node_name, member_to_groups,
-                    privileged_sids, privileged_names, sid_map,
-                )
-                if path:
-                    ev = dict(ev)
-                    ev["privilege_path"] = build_membership_tree(node_sid, member_to_groups, sid_map)
-                    sev = _ESCALATE.get(sev, sev)
+            ev = dict(ev)
+            mem = build_membership_tree_privileged(
+                node_sid, member_to_groups, sid_map, privileged_sids, privileged_names
+            )
+            # Escalate severity based on whether the tree reaches a privileged group
+            if _tree_has_privilege(mem):
+                sev = "Critical" if _is_privileged(node_name, node_sid, privileged_sids, privileged_names) else _ESCALATE.get(sev, sev)
 
+            ev["membership"] = mem
             annotated_ev.append(ev)
 
         if not annotated_ev:
             continue
 
-        f = dict(f)
         f["evidence"] = annotated_ev
         f["severity"] = sev
         out.append(f)
