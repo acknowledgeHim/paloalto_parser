@@ -2219,7 +2219,7 @@ class ExcelReporter:
             details = iss.get("details", "")
             output = f"{iss['description']}\n{details}" if details else iss["description"]
             vuln_id = CATEGORY_VULN_ID.get(iss["category"])
-            vuln = f"{vuln_id} - {self._vulns[vuln_id]}" if vuln_id and vuln_id in self._vulns else ""
+            vuln = self._vulns[vuln_id] if vuln_id and vuln_id in self._vulns else ""
 
             values = [idx, sev, iss["category"], rule_name,
                       line, iss.get("cis_controls", ""),
