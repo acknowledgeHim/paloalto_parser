@@ -1804,10 +1804,13 @@ class ExcelReporter:
         ws.sheet_view.showGridLines = False
         headers = ["#", "Severity", "Category", "Object / Interface",
                    "Config Line", "CIS v8 Controls", "PCI DSS",
-                   "Description", "Recommendation", "Details"]
+                   "Description", "Recommendation", "Details",
+                   "Validated", "Asset", "Target", "Vuln", "Output"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+
+        hostname = self.p.system.get("hostname", "") or ""
 
         sorted_issues = sorted(self.p.issues,
                                key=lambda x: self.SEV_ORDER.get(x["severity"], 9))
@@ -1817,10 +1820,17 @@ class ExcelReporter:
             fg, bg = self.SEV_COLORS[sev]
             rb = self._row_fill(row)
 
-            vals = [idx, sev, iss["category"], iss["object"],
-                    iss.get("line", ""), iss.get("cis_controls", ""),
+            obj = iss["object"]
+            line = iss.get("line", "")
+            target = f"{obj} ({line})" if line else obj
+            details = iss.get("details", "")
+            output = f"{iss['description']}\n{details}" if details else iss["description"]
+
+            vals = [idx, sev, iss["category"], obj,
+                    line, iss.get("cis_controls", ""),
                     iss.get("pci_dss", ""),
-                    iss["description"], iss["recommendation"], iss.get("details", "")]
+                    iss["description"], iss["recommendation"], details,
+                    "N", hostname, target, "", output]
             for col, val in enumerate(vals, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
@@ -1841,13 +1851,18 @@ class ExcelReporter:
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
+                elif col == 11:  # Validated
+                    c.font = _font(bold=True)
+                    c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
                 else:
                     c.font = _font(); c.alignment = _align()
                     if rb:
                         c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30])
+        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30, 12, 24, 44, 16, 70])
 
     # ── CIS v8 Mapping ────────────────────────────────────────────────────────
     def _sheet_cis_mapping(self):
