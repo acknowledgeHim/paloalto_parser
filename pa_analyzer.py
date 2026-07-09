@@ -269,6 +269,99 @@ def _pci_label(req_ids: list[str]) -> str:
     return " · ".join(f"PCI {r}" for r in req_ids)
 
 
+# ── Vuln reference mapping ────────────────────────────────────────────────────
+def _load_vulns(path: str) -> dict[int, str]:
+    """Parse vulns.txt (one description per line, line number = vuln ID)."""
+    vulns: dict[int, str] = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for vuln_id, line in enumerate(fh, 1):
+                text = line.strip()
+                if text:
+                    vulns[vuln_id] = text
+    except FileNotFoundError:
+        pass
+    return vulns
+
+
+# Maps each check category to its vuln ID in vulns.txt
+CATEGORY_VULN_ID: dict[str, int] = {
+    # ── Firewall rule checks ───────────────────────────────────────────────────
+    "Any/Any/Any Allow Rule":                        9,
+    "Missing Security Profiles":                     6,
+    "No Logging Configured":                         28,
+    "Allow Rule Not Logging Session End":            28,
+    "Unrestricted Source Address":                   9,
+    "Unrestricted Destination Address":              9,
+    "Exposed RDP from Any Source":                   9,
+    "Cleartext Telnet Allowed":                      4,
+    "SSH Exposed from Any Source":                   9,
+    "SMB Exposed from Any Source":                   9,
+    "VNC Exposed from Any Source":                   9,
+    "Disabled Rule":                                 2,
+    "Missing Rule Description":                      5,
+    "Negated Source Address":                        9,
+    "Negated Destination Address":                   9,
+    "Zone Missing Protection Profile":               6,
+    "Potential Shadow Rule":                         30,
+    "Application+Service Both Any":                  9,
+    "Inbound Allow Without Inspection":              6,
+    "Service=Any with Specific Application":         9,
+    # ── Crypto checks ─────────────────────────────────────────────────────────
+    "Weak IKE Encryption":                           29,
+    "Weak IKE Hash/PRF":                             29,
+    "Weak IKE DH Group":                             29,
+    "Weak IPSec Encryption":                         29,
+    "Weak IPSec Authentication":                     29,
+    "Weak IPSec DH Group (PFS)":                     29,
+    "IPSec PFS Disabled":                            31,
+    "Weak Minimum TLS Version":                      29,
+    "IKEv1 in Use":                                  29,
+    "IKE Pre-Shared Key Authentication":             27,
+    # ── Management / system checks ────────────────────────────────────────────
+    "HTTP Management Enabled":                       14,
+    "Telnet Management Enabled":                     4,
+    "No Management IP Restrictions":                 14,
+    "NTP Not Configured":                            18,
+    "No Login Banner":                               21,
+    "DNS Not Configured":                            17,
+    "Admin Without Authentication Profile":          27,
+    "Admin Account Has No Password":                 22,
+    "Excessive Superuser Accounts":                  3,
+    "SNMPv1 Enabled":                                15,
+    "SNMPv2c Enabled":                               15,
+    "Default/Weak SNMP Community String":            22,
+    "SNMP Enabled Without Source Restrictions":      14,
+    "No Syslog Servers Configured":                  28,
+    "Syslog Transmitted Over UDP":                   10,
+    # ── Password & session policy ─────────────────────────────────────────────
+    "Password Complexity Not Enforced":              27,
+    "Weak Password Minimum Length":                  27,
+    "No Account Lockout Policy":                     27,
+    "Long or No Management Session Timeout":         27,
+    "Password Expiry Not Configured":                3,
+    "Insufficient Password History":                 3,
+    # ── Content updates ───────────────────────────────────────────────────────
+    "AV/Threat Content Updates Not Automatic":       1,
+    "WildFire Updates Not Automatic":                1,
+    # ── Security profile quality ──────────────────────────────────────────────
+    "Vulnerability Profile Allows Critical/High Threats": 6,
+    "WildFire Profile Missing Rules":                6,
+    "WildFire Profile Incomplete Coverage":          6,
+    "File Blocking Not Applied":                     6,
+    # ── Zone / User-ID ────────────────────────────────────────────────────────
+    "User-ID Enabled on Untrusted Zone":             3,
+    # ── NTP ───────────────────────────────────────────────────────────────────
+    "Only One NTP Server":                           18,
+    "NTP Authentication Not Configured":             7,
+    # ── Insecure protocols / certificates ────────────────────────────────────
+    "Insecure Protocol Allowed in Rule":             4,
+    "TLS Profile Using Default Certificate":         29,
+    # ── Rule completeness ─────────────────────────────────────────────────────
+    "No Default Deny Rule":                          9,
+}
+
+
 # ── Colour palette ────────────────────────────────────────────────────────────
 C = {
     "hdr_bg":   "1F3864", "hdr_fg":   "FFFFFF",
@@ -1704,6 +1797,8 @@ class ExcelReporter:
         self.out = output_file
         self.wb = openpyxl.Workbook()
         self.wb.remove(self.wb.active)
+        _script_dir = os.path.dirname(os.path.abspath(__file__))
+        self._vulns = _load_vulns(os.path.join(_script_dir, "vulns.txt"))
 
     # ── Sheet helpers ─────────────────────────────────────────────────────────
     def _hdr(self, ws, headers: list[str], row: int = 1):
@@ -2109,12 +2204,14 @@ class ExcelReporter:
             target = f"{rule_name} ({line})" if line else rule_name
             details = iss.get("details", "")
             output = f"{iss['description']}\n{details}" if details else iss["description"]
+            vuln_id = CATEGORY_VULN_ID.get(iss["category"])
+            vuln = f"{vuln_id} - {self._vulns[vuln_id]}" if vuln_id and vuln_id in self._vulns else ""
 
             values = [idx, sev, iss["category"], rule_name,
                       line, iss.get("cis_controls", ""),
                       iss.get("pci_dss", ""),
                       iss["description"], iss["recommendation"], details,
-                      "N", hostname, target, "", output]
+                      "N", hostname, target, vuln, output]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
