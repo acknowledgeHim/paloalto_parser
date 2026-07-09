@@ -2086,10 +2086,13 @@ class ExcelReporter:
         ws.sheet_view.showGridLines = False
         headers = ["#", "Severity", "Category",
                    "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
-                   "Description", "Recommendation", "Details"]
+                   "Description", "Recommendation", "Details",
+                   "Validated", "Asset", "Target", "Vuln", "Output"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+
+        hostname = self.p.mgmt_settings.get("hostname", "") or ""
 
         sorted_issues = sorted(
             self.p.issues,
@@ -2101,10 +2104,17 @@ class ExcelReporter:
             fg, bg = self.SEV_COLORS[sev]
             row_bg = self._row_fill(row)
 
-            values = [idx, sev, iss["category"], iss["rule_name"],
-                      iss.get("line", ""), iss.get("cis_controls", ""),
+            rule_name = iss["rule_name"]
+            line = iss.get("line", "")
+            target = f"{rule_name} ({line})" if line else rule_name
+            details = iss.get("details", "")
+            output = f"{iss['description']}\n{details}" if details else iss["description"]
+
+            values = [idx, sev, iss["category"], rule_name,
+                      line, iss.get("cis_controls", ""),
                       iss.get("pci_dss", ""),
-                      iss["description"], iss["recommendation"], iss.get("details", "")]
+                      iss["description"], iss["recommendation"], details,
+                      "N", hostname, target, "", output]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
@@ -2127,6 +2137,11 @@ class ExcelReporter:
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
+                elif col == 11:  # Validated
+                    c.font = _font(bold=True)
+                    c.alignment = _align("center")
+                    if row_bg:
+                        c.fill = _fill(row_bg)
                 else:
                     c.font = _font()
                     c.alignment = _align()
@@ -2134,7 +2149,7 @@ class ExcelReporter:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 18, 60, 60, 36])
+        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 18, 60, 60, 36, 12, 24, 44, 16, 70])
 
     # ── Ticketing Export ──────────────────────────────────────────────────────
     def _sheet_export(self):
