@@ -279,9 +279,24 @@ def _load_vulns(path: str) -> dict[int, str]:
                 text = line.strip()
                 if text:
                     vulns[vuln_id] = text
+        return vulns
     except FileNotFoundError:
-        pass
-    return vulns
+        return vulns
+
+
+def _find_vulns_file() -> dict[int, str]:
+    """Try to load vulns.txt from the script directory, then CWD."""
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "vulns.txt"),
+        os.path.join(os.getcwd(), "vulns.txt"),
+    ]
+    for path in candidates:
+        vulns = _load_vulns(path)
+        if vulns:
+            return vulns
+    print("[!] Warning: vulns.txt not found — Vuln column will be empty. "
+          "Place vulns.txt alongside pa_analyzer.py.")
+    return {}
 
 
 # Maps each check category to its vuln ID in vulns.txt
@@ -1797,8 +1812,7 @@ class ExcelReporter:
         self.out = output_file
         self.wb = openpyxl.Workbook()
         self.wb.remove(self.wb.active)
-        _script_dir = os.path.dirname(os.path.abspath(__file__))
-        self._vulns = _load_vulns(os.path.join(_script_dir, "vulns.txt"))
+        self._vulns = _find_vulns_file()
 
     # ── Sheet helpers ─────────────────────────────────────────────────────────
     def _hdr(self, ws, headers: list[str], row: int = 1):

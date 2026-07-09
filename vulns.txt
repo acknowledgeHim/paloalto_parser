@@ -1,0 +1,39 @@
+Network device - AV/Threat Content Updates Not Automatic
+Network device - disabled rule
+Network device - insecure account settings
+Network device - insecure protocol use
+Network device - missing rule description / comment
+Network device - missing security profile
+Network device - NTP Authentication Not Configured
+Network device - post login banner not set
+Network device - rules allowing excessive traffic
+Network device - syslog transmitted over UDP
+Network device - high availability
+Network device - unencrypted log traffic
+Network device - non-default port usage
+Network device - WAN management access
+Network device - snmpv1 or snmpv2 enabled
+Network device - USB enabled
+Network device - DNS not configured
+Network device - NTP server not configured
+Network device - device timezone not set
+Network device - HA reserved management not configured
+Network device - pre login banner not set
+Network device - default credential
+Network device - latest firmware not installed
+Network device - hostname not set
+Network device - unused rule /policy enabled
+Network device - management using generic user
+Network device - weak authentication configuration
+Network device - insufficient logging and auditing
+Network device - weak cipher suite
+Network device - shadow firewall rule / ACL
+Network device - PFS is disabled
+Network device - ARP inspection not enabled
+Network device - Spanning Tree (STP) or Bridge Protocol Data Units (BPDUs) is missing
+Network device - active interface not shutdown
+Network device - native vlan is the management vlan
+Network device - interface missing description
+Network device - snmpv3 query per user
+Network device - invalid certificate used
+
