@@ -319,7 +319,7 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "IKEv1 in Use":                                  29,
     "IKE Pre-Shared Key Authentication":             27,
     # ── Management / system checks ────────────────────────────────────────────
-    "HTTP Management Enabled":                       14,
+    "HTTP Management Enabled":                       4,
     "Telnet Management Enabled":                     4,
     "No Management IP Restrictions":                 14,
     "NTP Not Configured":                            18,
@@ -356,7 +356,7 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "NTP Authentication Not Configured":             7,
     # ── Insecure protocols / certificates ────────────────────────────────────
     "Insecure Protocol Allowed in Rule":             4,
-    "TLS Profile Using Default Certificate":         29,
+    "TLS Profile Using Default Certificate":         38,
     # ── Rule completeness ─────────────────────────────────────────────────────
     "No Default Deny Rule":                          9,
 }
