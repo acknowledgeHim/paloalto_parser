@@ -9,6 +9,7 @@ Usage:
     python pa_analyzer.py running-config.xml -o audit.xlsx
 """
 
+import re
 import tarfile
 import xml.etree.ElementTree as ET
 import argparse
@@ -164,6 +165,8 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "Admin Interface Default Certificate":       ["3.10", "12.6"],
     "WMI Probing Enabled":                       ["4.8", "12.3"],
     "Zone Flood Protection Disabled":            ["13.3", "13.4"],
+    "Decryption Certificate Untrusted":          ["3.10", "12.6"],
+    "SNMPv3 Trap Not Configured":                ["8.2", "8.9"],
 }
 
 
@@ -271,6 +274,8 @@ PCI_DSS_MAP: dict[str, list[str]] = {
     "Admin Interface Default Certificate": ["2.2.7", "4.2.1"],
     "WMI Probing Enabled":                 ["2.2.4"],
     "Zone Flood Protection Disabled":      ["1.2.4", "1.3.1"],
+    "Decryption Certificate Untrusted":    ["4.2.1"],
+    "SNMPv3 Trap Not Configured":          ["10.2.1", "10.5.4"],
 }
 
 
@@ -387,6 +392,8 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "Admin Interface Default Certificate":           38,
     "WMI Probing Enabled":                           3,
     "Zone Flood Protection Disabled":                9,
+    "Decryption Certificate Untrusted":              38,
+    "SNMPv3 Trap Not Configured":                    28,
 }
 
 
@@ -408,6 +415,95 @@ def _find_audits_tar() -> str | None:
         if os.path.isfile(path):
             return path
     return None
+
+
+# ── XSLT-based audit execution helpers ───────────────────────────────────────
+
+# XPath substitutions: adapt Panorama/template paths to standalone device layout
+# (In a standalone config export, deviceconfig and network are top-level under
+#  <config>, not nested under devices/entry as Panorama templates assume.)
+_XSLT_PATH_SUBS: list[tuple[str, str]] = [
+    ('/response/result/config/devices/entry/deviceconfig/', '//deviceconfig/'),
+    ('/response/result/config/devices/entry/network/',      '//network/'),
+    ('//devices/entry/network/',                            '//network/'),
+]
+
+# Vague sub-check descriptions that belong to CIS 1.1.1.2 (SNMPv3 trap forwarding)
+_AUDIT_SUBCHECK_META: dict[str, tuple[str, str]] = {
+    "system":        ("SNMPv3 Trap Not Configured",
+                      "SNMP v3 traps are not configured to forward system log events. "
+                      "Security events in the system log will not reach the SNMP monitoring platform."),
+    "configuration": ("SNMPv3 Trap Not Configured",
+                      "SNMP v3 traps are not configured to forward configuration change log events."),
+    "user-id":       ("SNMPv3 Trap Not Configured",
+                      "SNMP v3 traps are not configured to forward User-ID log events."),
+    "hip match":     ("SNMPv3 Trap Not Configured",
+                      "SNMP v3 traps are not configured to forward HIP match log events."),
+    "ip-tag":        ("SNMPv3 Trap Not Configured",
+                      "SNMP v3 traps are not configured to forward IP tag log events."),
+}
+
+# CIS check number prefix → existing category name (drives CIS/PCI/Vuln column lookups)
+_CIS_NUM_TO_CATEGORY: dict[str, str] = {
+    "1.1.1.2": "SNMPv3 Trap Not Configured",
+    "1.2.5":   "Admin Interface Default Certificate",
+    "2.2":     "WMI Probing Enabled",
+    "6.16":    "Zone Flood Protection Disabled",
+    "8.3":     "Decryption Certificate Untrusted",
+}
+
+_FW_REF_RE = re.compile(
+    r'\b(?:CIS\s+[\d\.]+|PCI[\s\-]*DSS\s+[\d\.]+)',
+    re.IGNORECASE,
+)
+
+
+def _strip_fw_refs(text: str) -> str:
+    return re.sub(r'\s{2,}', ' ', _FW_REF_RE.sub('', text)).strip()
+
+
+def _first_para(text: str) -> str:
+    """Return the first substantive paragraph before any Rationale/Impact section."""
+    for marker in ("\nRationale:", "\n\nRationale:", "\nImpact:", "\n\nImpact:"):
+        if marker in text:
+            text = text[:text.index(marker)]
+    paras = [p.strip() for p in text.split('\n\n') if p.strip()]
+    return paras[0] if paras else text.strip()
+
+
+def _parse_audit_op_checks(content: str) -> list[dict]:
+    """Extract actionable op-type custom_item checks from a .audit file."""
+    blocks = re.findall(r'<custom_item>(.*?)</custom_item>', content, re.DOTALL)
+    checks = []
+    _SKIP_VARS  = ('@PLATFORM_VERSION@', '@SNMP_SERVER@', '@LOG_SERVER@')
+    _SKIP_DESCS = {'panorama model', 'panorama system-mode'}
+    for b in blocks:
+        if 'api_request_type : "op"' not in b or 'xsl_stmt' not in b:
+            continue
+        if any(v in b for v in _SKIP_VARS):
+            continue
+        desc_m = re.search(r'description\s*:\s*"([^"]*)"', b)
+        desc   = desc_m.group(1).strip() if desc_m else ""
+        if desc.lower() in _SKIP_DESCS:
+            continue
+        if re.search(r'(?:expect|not_expect)\s*:\s*"[^"]*Manual Review', b):
+            continue
+        info_m  = re.search(r'\binfo\s*:\s*"((?:[^"\\]|\\.)*)"',     b, re.DOTALL)
+        sol_m   = re.search(r'solution\s*:\s*"((?:[^"\\]|\\.)*)"',    b, re.DOTALL)
+        exp_m   = re.search(r'(?m)^\s*expect\s*:\s*"([^"]*)"',        b)
+        nexp_m  = re.search(r'not_expect\s*:\s*"([^"]*)"',            b)
+        sev_m   = re.search(r'severity\s*:\s*(\w+)',                   b)
+        stmts   = re.findall(r'xsl_stmt\s*:\s*"((?:[^"\\]|\\.)*)"',   b)
+        checks.append({
+            "description": desc,
+            "info":        info_m.group(1).replace('\\"', '"').strip() if info_m  else "",
+            "solution":    sol_m.group(1).replace('\\"', '"').strip()  if sol_m   else "",
+            "expect":      exp_m.group(1)                              if exp_m   else "",
+            "not_expect":  nexp_m.group(1)                            if nexp_m  else "",
+            "severity":    sev_m.group(1).upper()                     if sev_m   else "MEDIUM",
+            "xsl_stmts":   [s.replace('\\"', '"') for s in stmts],
+        })
+    return checks
 
 
 # ── Colour palette ────────────────────────────────────────────────────────────
@@ -1832,27 +1928,140 @@ class PaloAltoParser:
             return 0
 
     def _run_cis_l2_checks(self):
-        """Run CIS Benchmark L2 checks that are evaluatable against a static config file."""
-        major = self._panfw_major_version()
-        clamped = max(6, min(11, major)) if 6 <= major <= 11 else 11
+        """Run CIS Benchmark L2 checks via XSLT execution against the audit file."""
+        major     = self._panfw_major_version()
+        clamped   = max(6, min(11, major)) if 6 <= major <= 11 else 11
         audit_name = _CIS_L2_AUDIT_IN_TAR.get(clamped, _CIS_L2_AUDIT_IN_TAR[11])
-        tar_path = _find_audits_tar()
-        if tar_path:
-            try:
-                with tarfile.open(tar_path, "r:gz") as tf:
-                    found = audit_name in tf.getnames()
-                if found:
-                    print(f"[+] CIS L2 audit: {os.path.basename(audit_name)} "
-                          f"(PAN-OS {major if major else 'unknown'})")
-                else:
-                    print(f"[!] CIS L2 audit not found in {tar_path}: {audit_name}")
-            except Exception as exc:
-                print(f"[!] Warning: could not open {tar_path}: {exc}")
+        tar_path  = _find_audits_tar()
+
+        if not tar_path:
+            print("[!] audits.tar.gz not found — running built-in CIS L2 checks.")
+            self._chk_cis125_admin_cert()
+            self._chk_cis22_wmi_probing()
+            self._chk_cis616_zone_flood()
+            return
+
+        try:
+            with tarfile.open(tar_path, "r:gz") as tf:
+                if audit_name not in tf.getnames():
+                    print(f"[!] CIS L2 audit not found in tarball: {audit_name} — skipping XSLT checks.")
+                    self._chk_cis125_admin_cert()
+                    self._chk_cis22_wmi_probing()
+                    self._chk_cis616_zone_flood()
+                    return
+                audit_bytes = tf.extractfile(audit_name).read()  # type: ignore[union-attr]
+        except Exception as exc:
+            print(f"[!] Could not read audit file: {exc} — running built-in CIS L2 checks.")
+            self._chk_cis125_admin_cert()
+            self._chk_cis22_wmi_probing()
+            self._chk_cis616_zone_flood()
+            return
+
+        ver_str = major if major else "unknown"
+        print(f"[+] CIS L2 audit: {os.path.basename(audit_name)} (PAN-OS {ver_str})")
+
+        try:
+            from lxml import etree as _letree  # type: ignore[import]
+        except ImportError:
+            print("[!] lxml not installed — running built-in CIS L2 checks. pip install lxml")
+            self._chk_cis125_admin_cert()
+            self._chk_cis22_wmi_probing()
+            self._chk_cis616_zone_flood()
+            return
+
+        # Wrap config in the envelope the audit XSLTs expect
+        try:
+            config_xml = ET.tostring(self.root, encoding="unicode")
+            wrapped    = f"<response><result>{config_xml}</result></response>"
+            xml_doc    = _letree.fromstring(wrapped.encode("utf-8"))
+        except Exception as exc:
+            print(f"[!] Could not prepare XML for XSLT execution: {exc}")
+            return
+
+        content = audit_bytes.decode("utf-8", errors="replace")
+        checks  = _parse_audit_op_checks(content)
+        ran = found = 0
+        for chk in checks:
+            result = self._run_audit_xslt_check(chk, xml_doc, _letree)
+            if result is not None:
+                ran += 1
+                if result:
+                    found += 1
+        print(f"[+] CIS L2 XSLT: {ran} checks evaluated, {found} finding(s)")
+
+    def _run_audit_xslt_check(self, check: dict, xml_doc, etree) -> "bool | None":
+        """Execute one XSLT check. Returns True=issue found, False=passed, None=error/skip."""
+        xsl_body = "\n".join(check["xsl_stmts"])
+        for old, new in _XSLT_PATH_SUBS:
+            xsl_body = xsl_body.replace(old, new)
+        if "</xsl:template>" not in xsl_body:
+            xsl_body += "\n</xsl:template>"
+        xslt_src = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">'
+            '<xsl:output method="text"/>'
+            + xsl_body
+            + '</xsl:stylesheet>'
+        )
+        try:
+            xslt_doc  = etree.fromstring(xslt_src.encode("utf-8"))
+            transform = etree.XSLT(xslt_doc)
+            output    = str(transform(xml_doc)).strip()
+        except Exception:
+            return None
+
+        expect    = check["expect"]
+        not_exp   = check["not_expect"]
+        failed    = False
+        if expect and not re.search(expect, output, re.MULTILINE):
+            failed = True
+        if not_exp and re.search(not_exp, output, re.MULTILINE):
+            failed = True
+        if not expect and not not_exp:
+            return None  # no pass/fail criterion
+        if not failed:
+            return False
+
+        # ── Map to category ──────────────────────────────────────────────────
+        desc_raw = check["description"]
+        cis_m    = re.match(r'^(\d+\.\d+(?:\.\d+)?)\s+', desc_raw)
+        cis_num  = cis_m.group(1) if cis_m else ""
+
+        if cis_num in _CIS_NUM_TO_CATEGORY:
+            category = _CIS_NUM_TO_CATEGORY[cis_num]
+        elif desc_raw in _AUDIT_SUBCHECK_META:
+            category = _AUDIT_SUBCHECK_META[desc_raw][0]
         else:
-            print("[!] Warning: audits.tar.gz not found — CIS L2 checks still run using built-in rules.")
-        self._chk_cis125_admin_cert()
-        self._chk_cis22_wmi_probing()
-        self._chk_cis616_zone_flood()
+            category = desc_raw
+
+        # ── Build plain description (no framework refs) ───────────────────
+        if check["info"]:
+            description = _strip_fw_refs(_first_para(check["info"]))[:500]
+        elif desc_raw in _AUDIT_SUBCHECK_META:
+            description = _AUDIT_SUBCHECK_META[desc_raw][1]
+        else:
+            description = _strip_fw_refs(desc_raw)
+
+        # ── Recommendation ────────────────────────────────────────────────
+        sol = check["solution"]
+        recommendation = _first_para(sol)[:500] if sol else ""
+
+        # ── Severity ──────────────────────────────────────────────────────
+        severity = check["severity"] if check["severity"] in ("CRITICAL", "HIGH", "MEDIUM", "LOW") else "MEDIUM"
+
+        # ── Rule / object name ────────────────────────────────────────────
+        if desc_raw in _AUDIT_SUBCHECK_META:
+            rule_obj = f"log-settings/{desc_raw}"
+        elif cis_m:
+            rule_obj = desc_raw[cis_m.end():].strip()
+        else:
+            rule_obj = category
+
+        # ── Details (evidence) ────────────────────────────────────────────
+        details = f"Audit check: {desc_raw}\nXSLT output: {output[:500]}"
+
+        self._issue(severity, category, rule_obj, description, recommendation, details)
+        return True
 
     def _chk_cis125_admin_cert(self):
         """CIS 1.2.5: Ensure a valid certificate is set for the browser-based admin interface."""
