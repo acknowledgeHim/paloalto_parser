@@ -1,8 +1,13 @@
+import io
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas
 
 OUTPUT_FILE = "/home/portal/gitprojects/sample-graphs/PCI_Treemap.pdf"
 
@@ -131,68 +136,108 @@ def _treemap_rects(values, x0=0.0, y0=0.0, w=1.0, h=1.0):
 
     return rects
 
-# ── Plot ──────────────────────────────────────────────────────────────────────
+# ── Plot → in-memory PNG ────────────────────────────────────────────────────
 
-fig, ax = plt.subplots(figsize=(10, 7))
-fig.patch.set_facecolor(LIGHT_GREY)
+def render_treemap_png(dpi=150):
+    """Draw the treemap and return it as an in-memory PNG (BytesIO)."""
+    fig, ax = plt.subplots(figsize=(10, 7))
+    fig.patch.set_facecolor(LIGHT_GREY)
 
-fig.suptitle(
-    "PCI DSS Requirements — Vulnerability Count Treemap\n"
-    "(tile size ∝ vulnerability count  |  colour ∝ average CVSS score)",
-    fontsize=13, fontweight='bold', color=BRAND_BLUE, y=0.98,
-)
-
-ax.set_xlim(0, 1)
-ax.set_ylim(0, 1)
-ax.axis('off')
-
-# Colormap: yellow → orange → red, scaled to CVSS 5–10
-norm = plt.Normalize(vmin=5, vmax=10)
-cmap = plt.cm.YlOrRd
-
-# Sort largest tile first so the layout fills top-left with the biggest block
-sorted_items = sorted(zip(reqs, counts), key=lambda x: -x[1])
-rects = _treemap_rects([(r, c) for r, c in sorted_items if c > 0])
-
-for label, val, rx, ry, rw, rh in rects:
-    avg  = avg_cvss[reqs.index(label)]
-    color = cmap(norm(avg))
-
-    # Rounded rectangle tile
-    patch = mpatches.FancyBboxPatch(
-        (rx + 0.005, ry + 0.005), rw - 0.01, rh - 0.01,
-        boxstyle="round,pad=0.005",
-        facecolor=color, edgecolor='white', linewidth=1.5,
-    )
-    ax.add_patch(patch)
-
-    # Font size scales with tile width so text fits inside small tiles
-    fs         = max(6, min(11, rw * 55))
-    text_color = 'white' if avg > 7.5 else TEXT_DARK
-
-    # Requirement label (bold, top line)
-    ax.text(
-        rx + rw / 2, ry + rh / 2 + 0.02, label,
-        ha='center', va='center',
-        fontsize=fs, fontweight='bold', color=text_color,
-    )
-    # Stats line (vuln count + avg CVSS)
-    ax.text(
-        rx + rw / 2, ry + rh / 2 - 0.04,
-        f"{val} vulns\nCVSS {avg:.1f}",
-        ha='center', va='center',
-        fontsize=max(5, fs - 2), color=text_color, alpha=0.9,
+    fig.suptitle(
+        "PCI DSS Requirements — Vulnerability Count Treemap\n"
+        "(tile size ∝ vulnerability count  |  colour ∝ average CVSS score)",
+        fontsize=13, fontweight='bold', color=BRAND_BLUE, y=0.98,
     )
 
-# ── Colourbar ─────────────────────────────────────────────────────────────────
-sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-sm.set_array([])
-cbar = fig.colorbar(sm, ax=ax, shrink=0.5, pad=0.02,
-                    orientation='horizontal', location='bottom')
-cbar.set_label("Average CVSS Score", fontsize=9)
-cbar.ax.tick_params(labelsize=8)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
 
-plt.tight_layout(rect=[0, 0.05, 1, 0.95])
-plt.savefig(OUTPUT_FILE, bbox_inches='tight', dpi=150)
-plt.close()
-print(f"Saved → {OUTPUT_FILE}")
+    # Colormap: yellow → orange → red, scaled to CVSS 5–10
+    norm = plt.Normalize(vmin=5, vmax=10)
+    cmap = plt.cm.YlOrRd
+
+    # Sort largest tile first so the layout fills top-left with the biggest block
+    sorted_items = sorted(zip(reqs, counts), key=lambda x: -x[1])
+    rects = _treemap_rects([(r, c) for r, c in sorted_items if c > 0])
+
+    for label, val, rx, ry, rw, rh in rects:
+        avg  = avg_cvss[reqs.index(label)]
+        color = cmap(norm(avg))
+
+        # Rounded rectangle tile
+        patch = mpatches.FancyBboxPatch(
+            (rx + 0.005, ry + 0.005), rw - 0.01, rh - 0.01,
+            boxstyle="round,pad=0.005",
+            facecolor=color, edgecolor='white', linewidth=1.5,
+        )
+        ax.add_patch(patch)
+
+        # Font size scales with tile width so text fits inside small tiles
+        fs         = max(6, min(11, rw * 55))
+        text_color = 'white' if avg > 7.5 else TEXT_DARK
+
+        # Requirement label (bold, top line)
+        ax.text(
+            rx + rw / 2, ry + rh / 2 + 0.02, label,
+            ha='center', va='center',
+            fontsize=fs, fontweight='bold', color=text_color,
+        )
+        # Stats line (vuln count + avg CVSS)
+        ax.text(
+            rx + rw / 2, ry + rh / 2 - 0.04,
+            f"{val} vulns\nCVSS {avg:.1f}",
+            ha='center', va='center',
+            fontsize=max(5, fs - 2), color=text_color, alpha=0.9,
+        )
+
+    # ── Colourbar ─────────────────────────────────────────────────────────────
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, shrink=0.5, pad=0.02,
+                        orientation='horizontal', location='bottom')
+    cbar.set_label("Average CVSS Score", fontsize=9)
+    cbar.ax.tick_params(labelsize=8)
+
+    plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight', dpi=dpi)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+# ── PNG (in memory) → PDF via reportlab ──────────────────────────────────────
+
+def build_pdf(png_buf, output_file, pagesize=letter, margin=36):
+    """Place an in-memory PNG onto a reportlab PDF page, centred and scaled
+    to fit within the page margins while preserving aspect ratio."""
+    img = ImageReader(png_buf)
+    iw, ih = img.getSize()
+    aspect = ih / iw
+
+    page_w, page_h = pagesize
+    max_w = page_w - 2 * margin
+    max_h = page_h - 2 * margin
+
+    draw_w = max_w
+    draw_h = draw_w * aspect
+    if draw_h > max_h:
+        draw_h = max_h
+        draw_w = draw_h / aspect
+
+    x = (page_w - draw_w) / 2
+    y = (page_h - draw_h) / 2
+
+    c = canvas.Canvas(output_file, pagesize=pagesize)
+    c.drawImage(img, x, y, width=draw_w, height=draw_h,
+                preserveAspectRatio=True, mask='auto')
+    c.showPage()
+    c.save()
+
+
+if __name__ == "__main__":
+    png_buf = render_treemap_png()
+    build_pdf(png_buf, OUTPUT_FILE)
+    print(f"Saved → {OUTPUT_FILE}")
