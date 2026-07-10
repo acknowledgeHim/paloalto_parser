@@ -2193,10 +2193,10 @@ class ExcelReporter:
     def _sheet_issues(self):
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
-        headers = ["#", "Severity", "Category",
-                   "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
+        headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
                    "Description", "Recommendation", "Details",
-                   "Validated", "Asset", "Target", "Vuln", "Output", "Source"]
+                   "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
@@ -2222,34 +2222,35 @@ class ExcelReporter:
             vuln_id = CATEGORY_VULN_ID.get(iss["category"])
             vuln = self._vulns[vuln_id] if vuln_id and vuln_id in self._vulns else ""
 
-            values = [idx, sev, iss["category"], rule_name,
+            values = [idx, "Y", sev, "", "",
+                      iss["category"], rule_name,
                       line, iss.get("cis_controls", ""),
                       iss.get("pci_dss", ""),
                       iss["description"], iss["recommendation"], details,
-                      "N", hostname, target, vuln, output, source]
+                      hostname, target, vuln, output, source]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
-                if col == 2:
+                if col == 3:  # Severity
                     c.fill  = _fill(bg)
                     c.font  = _font(bold=True, color=fg)
                     c.alignment = _align("center")
-                elif col in (1, 5):
+                elif col in (1, 8):  # # and Config Line(s)
                     c.font = _font(bold=(col == 1))
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 6:  # CIS controls
+                elif col == 9:  # CIS controls
                     c.font = _font(bold=True, color="17375E", size=9)
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 7:  # PCI DSS
+                elif col == 10:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 11:  # Validated
+                elif col == 2:  # Validated
                     c.font = _font(bold=True)
                     c.alignment = _align("center")
                     if row_bg:
@@ -2261,7 +2262,7 @@ class ExcelReporter:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 18, 60, 60, 36, 12, 24, 44, 16, 70, 30])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── Ticketing Export ──────────────────────────────────────────────────────
     def _sheet_export(self):
