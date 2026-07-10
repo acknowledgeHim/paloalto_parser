@@ -1861,8 +1861,8 @@ class PaloAltoParser:
         if prof_el is None or not (prof_el.text and prof_el.text.strip()):
             self._issue(
                 "HIGH", "Admin Interface Default Certificate", "deviceconfig/system",
-                "CIS 1.2.5: No SSL/TLS service profile is assigned to the browser-based "
-                "management interface. The factory-default self-signed certificate is in use; "
+                "No SSL/TLS service profile is assigned to the browser-based management "
+                "interface. The factory-default self-signed certificate is in use; "
                 "administrators cannot detect a man-in-the-middle attack on their admin session.",
                 "Navigate to Device > Certificate Management > SSL/TLS Service Profile, configure "
                 "a profile using a CA-signed certificate, then assign it at "
@@ -1879,9 +1879,9 @@ class PaloAltoParser:
             if probe_el is not None and (probe_el.text or "").strip() == "yes":
                 self._issue(
                     "MEDIUM", "WMI Probing Enabled", f"vsys: {vsys_name}",
-                    "CIS 2.2: WMI probing is enabled. This exposes a domain administrator "
-                    "credential whose NTLM hash can be captured by a hostile host and cracked "
-                    "offline or used in relay attacks.",
+                    "WMI probing is enabled. This exposes a domain administrator credential "
+                    "whose NTLM hash can be captured by a hostile host and cracked offline "
+                    "or used in relay attacks.",
                     "Disable WMI probing unless explicitly required for User-ID: "
                     "Device > User Identification > User Mapping > Palo Alto Networks "
                     "User ID Agent Setup > uncheck Enable Probing.",
@@ -1905,13 +1905,13 @@ class PaloAltoParser:
                     self._issue(
                         "MEDIUM", "Zone Flood Protection Disabled",
                         f"Zone Profile: {prof_name}",
-                        f"CIS 6.16: Zone protection profile '{prof_name}' does not have "
-                        f"{label} flood protection enabled. Attackers can overwhelm network "
-                        "resources with targeted flood traffic through this profile.",
+                        f"{label} flood protection is not enabled on zone protection profile "
+                        f"'{prof_name}'. Attackers can overwhelm network resources with "
+                        "targeted flood traffic through this zone.",
                         "Enable all flood protection types (ICMP, ICMPv6, UDP, Other-IP) in "
                         "each Zone Protection Profile: Network > Network Profiles > "
                         "Zone Protection > Flood Protection.",
-                        f"flood/{xml_tag}/enable: (not set or 'no')",
+                        f"Profile: {prof_name}  |  flood/{xml_tag}/enable: (not set or 'no')",
                         line=self._lineno_str(prof))
 
 
