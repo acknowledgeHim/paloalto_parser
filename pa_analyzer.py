@@ -2196,12 +2196,13 @@ class ExcelReporter:
         headers = ["#", "Severity", "Category",
                    "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
                    "Description", "Recommendation", "Details",
-                   "Validated", "Asset", "Target", "Vuln", "Output"]
+                   "Validated", "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
         hostname = self.p.mgmt_settings.get("hostname", "") or ""
+        source = os.path.basename(self.p.config_file)
 
         sorted_issues = sorted(
             self.p.issues,
@@ -2225,7 +2226,7 @@ class ExcelReporter:
                       line, iss.get("cis_controls", ""),
                       iss.get("pci_dss", ""),
                       iss["description"], iss["recommendation"], details,
-                      "N", hostname, target, vuln, output]
+                      "N", hostname, target, vuln, output, source]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
@@ -2260,7 +2261,7 @@ class ExcelReporter:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 18, 60, 60, 36, 12, 24, 44, 16, 70])
+        self._set_widths(ws, [4, 12, 32, 36, 14, 20, 18, 60, 60, 36, 12, 24, 44, 16, 70, 30])
 
     # ── Ticketing Export ──────────────────────────────────────────────────────
     def _sheet_export(self):
