@@ -1303,12 +1303,11 @@ class ArubaCXParser:
         age = pp.get("password_age", 0)
         if age == 0:
             self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
-                "No password age limit is configured. Passwords never expire. "
-                "PCI DSS 8.3.9 requires passwords changed every 90 days.",
+                "No password age limit is configured. Passwords never expire.",
                 "Set 'password age 90' (days) or less.")
         elif age > 90:
             self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
-                f"Password expiry is {age} days (PCI DSS 8.3.9 requires ≤ 90 days).",
+                f"Password expiry is {age} days; passwords should be rotated every 90 days or fewer.",
                 "Reduce 'password age' to 90 days or fewer.",
                 line=pp.get("line_age") or "")
 
@@ -1317,7 +1316,7 @@ class ArubaCXParser:
         if self.system.get("ssh_vrfs") and not self.system.get("ssh_v1_disabled"):
             self._issue("HIGH", "SSH v1 Enabled", "SSH",
                 "SSH is enabled but SSHv1 has not been explicitly disabled. "
-                "SSHv1 has known vulnerabilities. PCI DSS 4.2.1 requires strong cryptography.",
+                "SSHv1 has known cryptographic weaknesses and should not be permitted.",
                 "Disable SSHv1: add 'no ssh server v1' or 'ssh server version 2'.",
                 line=self.system.get("ssh_line", ""))
 
@@ -1333,7 +1332,7 @@ class ArubaCXParser:
             if not (is_deny and is_any):
                 self._issue("MEDIUM", "ACL Missing Default Deny", f"ACL: {acl['name']}",
                     f"ACL '{acl['name']}' does not end with an explicit deny-all entry. "
-                    "PCI DSS 1.2.4 requires all traffic not explicitly permitted to be denied.",
+                    "Traffic not matched by any rule will be permitted by the implicit permit-any.",
                     "Add a final entry: '<seq> deny any any any' to explicitly block "
                     "all unmatched traffic.",
                     f"Last entry: seq {last['seq']} {last['action']} {last['match']}",
@@ -1345,8 +1344,7 @@ class ArubaCXParser:
             if not srv.get("tls"):
                 self._issue("MEDIUM", "Syslog Not Using TLS", f"Syslog: {srv['host']}",
                     f"Syslog server {srv['host']} does not use TLS transport. "
-                    "Log data transmitted in cleartext can be intercepted or tampered. "
-                    "PCI DSS 10.5.4 requires log files to be protected.",
+                    "Log data transmitted in cleartext can be intercepted or tampered with in transit.",
                     "Configure syslog with TLS: 'logging remote <ip> port 6514 tls'.",
                     line=srv["line"])
 
@@ -1802,15 +1800,16 @@ class ExcelReporter:
     def _sheet_issues(self):
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
-        headers = ["#", "Severity", "Category", "Object / Interface",
-                   "Config Line", "CIS v8 Controls", "PCI DSS",
+        headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
                    "Description", "Recommendation", "Details",
-                   "Validated", "Asset", "Target", "Vuln", "Output"]
+                   "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
         hostname = self.p.system.get("hostname", "") or ""
+        source = os.path.basename(self.p.config_file)
 
         sorted_issues = sorted(self.p.issues,
                                key=lambda x: self.SEV_ORDER.get(x["severity"], 9))
@@ -1826,32 +1825,32 @@ class ExcelReporter:
             details = iss.get("details", "")
             output = f"{iss['description']}\n{details}" if details else iss["description"]
 
-            vals = [idx, sev, iss["category"], obj,
-                    line, iss.get("cis_controls", ""),
-                    iss.get("pci_dss", ""),
+            vals = [idx, "Y", sev, "", "",
+                    iss["category"], obj, line,
+                    iss.get("cis_controls", ""), iss.get("pci_dss", ""),
                     iss["description"], iss["recommendation"], details,
-                    "N", hostname, target, "", output]
+                    hostname, target, "", output, source]
             for col, val in enumerate(vals, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
-                if col == 2:
+                if col == 3:  # Severity
                     c.fill = _fill(bg); c.font = _font(bold=True, color=fg)
                     c.alignment = _align("center")
-                elif col in (1, 5):
+                elif col in (1, 8):  # #, Config Line
                     c.font = _font(bold=(col == 1)); c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 6:  # CIS controls
+                elif col == 9:  # CIS v8 Controls
                     c.font = _font(bold=True, color="17375E", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 7:  # PCI DSS
+                elif col == 10:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 11:  # Validated
+                elif col == 2:  # Validated
                     c.font = _font(bold=True)
                     c.alignment = _align("center")
                     if rb:
@@ -1862,7 +1861,7 @@ class ExcelReporter:
                         c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 32, 30, 12, 22, 18, 60, 60, 30, 12, 24, 44, 16, 70])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── CIS v8 Mapping ────────────────────────────────────────────────────────
     def _sheet_cis_mapping(self):

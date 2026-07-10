@@ -1586,46 +1586,59 @@ class ExcelReporter:
 
     # ── Issues sheet ─────────────────────────────────────────────────────────
     def _sheet_issues(self):
-        ws = self.wb.create_sheet("Security Findings")
+        ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
 
-        headers = ["Severity", "Category", "Object", "Config Line",
-                   "Description", "Recommendation", "CIS Controls", "PCI DSS",
-                   "Validated", "Asset", "Target", "Vuln", "Output"]
+        headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
+                   "Description", "Recommendation", "Details",
+                   "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
         hostname = self.p.switch_info.get("name", "") or ""
+        source = os.path.basename(self.p.config_file)
 
         sorted_issues = sorted(
             self.p.issues,
             key=lambda x: self.SEV_ORDER.get(x["severity"], 9))
 
-        for i, iss in enumerate(sorted_issues, 2):
+        for idx, iss in enumerate(sorted_issues, 1):
+            row = idx + 1
             sev = iss["severity"]
             fg, bg = self.SEV_COLORS[sev]
-            rb = self._row_fill(i)
+            rb = self._row_fill(row)
             obj = iss["object"]
             line = iss.get("line", "")
             target = f"{obj} ({line})" if line else obj
-            vals = [sev, iss["category"], obj,
-                    line, iss["description"],
-                    iss["recommendation"],
+            output = iss["description"]
+            vals = [idx, "Y", sev, "", "",
+                    iss["category"], obj, line,
                     iss.get("cis_label", ""), iss.get("pci_label", ""),
-                    "N", hostname, target, "", iss["description"]]
+                    iss["description"], iss["recommendation"], "",
+                    hostname, target, "", output, source]
             for col, val in enumerate(vals, 1):
-                c = ws.cell(row=i, column=col, value=val)
+                c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
-                if col == 1:
+                if col == 3:  # Severity
                     c.fill = _fill(bg); c.font = _font(bold=True, color=fg)
                     c.alignment = _align("center")
-                elif col == 4:
-                    c.font = _font(color=C["info"], size=9)
+                elif col in (1, 8):  # #, Config Line
+                    c.font = _font(bold=(col == 1)); c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
+                elif col == 9:  # CIS v8 Controls
+                    c.font = _font(bold=True, color="17375E", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 9:  # Validated
+                elif col == 10:  # PCI DSS
+                    c.font = _font(bold=True, color="7B2D8B", size=9)
+                    c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
+                elif col == 2:  # Validated
                     c.font = _font(bold=True)
                     c.alignment = _align("center")
                     if rb:
@@ -1634,9 +1647,9 @@ class ExcelReporter:
                     c.font = _font(); c.alignment = _align()
                     if rb:
                         c.fill = _fill(rb)
-            ws.row_dimensions[i].height = 48
+            ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [12, 34, 28, 10, 62, 62, 28, 24, 12, 24, 44, 16, 70])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── CIS Controls mapping ──────────────────────────────────────────────────
     def _sheet_cis_mapping(self):
