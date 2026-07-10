@@ -9,6 +9,7 @@ Usage:
     python pa_analyzer.py running-config.xml -o audit.xlsx
 """
 
+import tarfile
 import xml.etree.ElementTree as ET
 import argparse
 import os
@@ -159,6 +160,10 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "Insufficient Password History":             ["5.2"],
     "No Default Deny Rule":                      ["12.2", "13.4"],
     "File Blocking Not Applied":                 ["10.1"],
+    # ── CIS L2 benchmark checks ───────────────────────────────────────────────
+    "Admin Interface Default Certificate":       ["3.10", "12.6"],
+    "WMI Probing Enabled":                       ["4.8", "12.3"],
+    "Zone Flood Protection Disabled":            ["13.3", "13.4"],
 }
 
 
@@ -262,6 +267,10 @@ PCI_DSS_MAP: dict[str, list[str]] = {
     # ── Zone / protocol ───────────────────────────────────────────────────────
     "User-ID Enabled on Untrusted Zone":   ["1.3.1"],
     "Insecure Protocol Allowed in Rule":   ["2.2.4", "4.2.1"],
+    # ── CIS L2 benchmark checks ───────────────────────────────────────────────
+    "Admin Interface Default Certificate": ["2.2.7", "4.2.1"],
+    "WMI Probing Enabled":                 ["2.2.4"],
+    "Zone Flood Protection Disabled":      ["1.2.4", "1.3.1"],
 }
 
 
@@ -374,7 +383,31 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "TLS Profile Using Default Certificate":         38,
     # ── Rule completeness ─────────────────────────────────────────────────────
     "No Default Deny Rule":                          9,
+    # ── CIS L2 benchmark checks ───────────────────────────────────────────────
+    "Admin Interface Default Certificate":           38,
+    "WMI Probing Enabled":                           3,
+    "Zone Flood Protection Disabled":                9,
 }
+
+
+# ── CIS L2 audit file registry ────────────────────────────────────────────────
+_CIS_L2_AUDIT_IN_TAR: dict[int, str] = {
+    6:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_6_Benchmark_L2_v1.0.0.audit",
+    7:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_7_Benchmark_L2_v1.0.0.audit",
+    8:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_8_Benchmark_L2_v1.0.0.audit",
+    9:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_9_Benchmark_v1.1.0_L2.audit",
+    10: "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_10_Benchmark_v1.3.0_L2.audit",
+    11: "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_11_Benchmark_v1.2.0_L2.audit",
+}
+
+
+def _find_audits_tar() -> str | None:
+    """Return path to audits.tar.gz if found alongside the script or in CWD."""
+    for base in [os.path.dirname(os.path.abspath(__file__)), os.getcwd()]:
+        path = os.path.join(base, "audits.tar.gz")
+        if os.path.isfile(path):
+            return path
+    return None
 
 
 # ── Colour palette ────────────────────────────────────────────────────────────
@@ -757,6 +790,8 @@ class PaloAltoParser:
         self._chk_security_profile_settings()
         self._chk_default_deny_rule()
         self._chk_file_blocking_inbound()
+        # CIS Benchmark L2 checks (config-evaluatable)
+        self._run_cis_l2_checks()
 
     def _active_allow(self):
         return [r for r in self.security_rules if r["disabled"] != "yes" and r["action"] == "allow"]
@@ -1786,6 +1821,98 @@ class PaloAltoParser:
                     "Block executable file types at minimum.",
                     f"Src zones: {r['src_zones']}  Apps: {r['applications']}",
                     line=r["line"])
+
+    # ── CIS L2 benchmark checks ───────────────────────────────────────────────
+    def _panfw_major_version(self) -> int:
+        """Return the major PAN-OS version from the config root version attribute."""
+        ver_str = (self.root.get("version", "") or "") if self.root is not None else ""
+        try:
+            return int(ver_str.split(".")[0])
+        except (ValueError, IndexError):
+            return 0
+
+    def _run_cis_l2_checks(self):
+        """Run CIS Benchmark L2 checks that are evaluatable against a static config file."""
+        major = self._panfw_major_version()
+        clamped = max(6, min(11, major)) if 6 <= major <= 11 else 11
+        audit_name = _CIS_L2_AUDIT_IN_TAR.get(clamped, _CIS_L2_AUDIT_IN_TAR[11])
+        tar_path = _find_audits_tar()
+        if tar_path:
+            try:
+                with tarfile.open(tar_path, "r:gz") as tf:
+                    found = audit_name in tf.getnames()
+                if found:
+                    print(f"[+] CIS L2 audit: {os.path.basename(audit_name)} "
+                          f"(PAN-OS {major if major else 'unknown'})")
+                else:
+                    print(f"[!] CIS L2 audit not found in {tar_path}: {audit_name}")
+            except Exception as exc:
+                print(f"[!] Warning: could not open {tar_path}: {exc}")
+        else:
+            print("[!] Warning: audits.tar.gz not found — CIS L2 checks still run using built-in rules.")
+        self._chk_cis125_admin_cert()
+        self._chk_cis22_wmi_probing()
+        self._chk_cis616_zone_flood()
+
+    def _chk_cis125_admin_cert(self):
+        """CIS 1.2.5: Ensure a valid certificate is set for the browser-based admin interface."""
+        sys_el = self.root.find("./deviceconfig/system") if self.root is not None else None
+        prof_el = sys_el.find("ssl-tls-service-profile") if sys_el is not None else None
+        if prof_el is None or not (prof_el.text and prof_el.text.strip()):
+            self._issue(
+                "HIGH", "Admin Interface Default Certificate", "deviceconfig/system",
+                "CIS 1.2.5: No SSL/TLS service profile is assigned to the browser-based "
+                "management interface. The factory-default self-signed certificate is in use; "
+                "administrators cannot detect a man-in-the-middle attack on their admin session.",
+                "Navigate to Device > Certificate Management > SSL/TLS Service Profile, configure "
+                "a profile using a CA-signed certificate, then assign it at "
+                "Device > Setup > Management > General Settings > SSL/TLS Service Profile.",
+                "deviceconfig/system/ssl-tls-service-profile: (not configured)")
+
+    def _chk_cis22_wmi_probing(self):
+        """CIS 2.2: Ensure WMI probing is disabled."""
+        if self.root is None:
+            return
+        for vsys_entry in self.root.findall(".//vsys/entry"):
+            vsys_name = vsys_entry.get("name", "vsys1")
+            probe_el = vsys_entry.find("user-id-collector/setting/enable-probing")
+            if probe_el is not None and (probe_el.text or "").strip() == "yes":
+                self._issue(
+                    "MEDIUM", "WMI Probing Enabled", f"vsys: {vsys_name}",
+                    "CIS 2.2: WMI probing is enabled. This exposes a domain administrator "
+                    "credential whose NTLM hash can be captured by a hostile host and cracked "
+                    "offline or used in relay attacks.",
+                    "Disable WMI probing unless explicitly required for User-ID: "
+                    "Device > User Identification > User Mapping > Palo Alto Networks "
+                    "User ID Agent Setup > uncheck Enable Probing.",
+                    f"user-id-collector/setting/enable-probing: yes  (vsys: {vsys_name})")
+
+    def _chk_cis616_zone_flood(self):
+        """CIS 6.16: Zone protection profiles must have all flood-protection types enabled."""
+        if self.root is None:
+            return
+        flood_types = [
+            ("icmp",     "ICMP"),
+            ("icmpv6",   "ICMPv6"),
+            ("udp",      "UDP"),
+            ("other-ip", "Other-IP"),
+        ]
+        for prof in self.root.findall(".//network/profiles/zone-protection-profile/entry"):
+            prof_name = prof.get("name", "")
+            for xml_tag, label in flood_types:
+                el = prof.find(f"flood/{xml_tag}/enable")
+                if el is None or (el.text or "").strip() != "yes":
+                    self._issue(
+                        "MEDIUM", "Zone Flood Protection Disabled",
+                        f"Zone Profile: {prof_name}",
+                        f"CIS 6.16: Zone protection profile '{prof_name}' does not have "
+                        f"{label} flood protection enabled. Attackers can overwhelm network "
+                        "resources with targeted flood traffic through this profile.",
+                        "Enable all flood protection types (ICMP, ICMPv6, UDP, Other-IP) in "
+                        "each Zone Protection Profile: Network > Network Profiles > "
+                        "Zone Protection > Flood Protection.",
+                        f"flood/{xml_tag}/enable: (not set or 'no')",
+                        line=self._lineno_str(prof))
 
 
 # ── Excel report writer ───────────────────────────────────────────────────────
