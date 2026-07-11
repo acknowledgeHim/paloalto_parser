@@ -1696,19 +1696,22 @@ class PaloAltoParser:
         if age == 0:
             self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
                 "Password expiry is not enforced (password-age-enforcement-period = 0). "
-                "Passwords never expire. PCI DSS 8.3.9 requires passwords changed every 90 days.",
+                "Accounts with non-expiring passwords increase the window of exposure "
+                "if credentials are compromised.",
                 "Set password-age-enforcement-period to 90 or fewer days.",
                 line=pp.get("line_pc", ""))
         elif age > 90:
             self._issue("MEDIUM", "Password Expiry Not Configured", "Password Policy",
-                f"Password expiry period is {age} days (PCI DSS 8.3.9 requires ≤ 90 days).",
+                f"Password expiry period is {age} days, which exceeds the recommended 90-day maximum. "
+                "Long-lived passwords remain valid longer after a compromise.",
                 "Reduce password-age-enforcement-period to 90 days or fewer.",
                 line=pp.get("line_pc", ""))
 
         history = pp.get("password_history", 0)
         if history < 4:
             self._issue("LOW", "Insufficient Password History", "Password Policy",
-                f"Password history count is {history} (PCI DSS 8.3.7 requires ≥ 4 prior passwords remembered).",
+                f"Password history count is {history}. Without a sufficient history, users can "
+                "immediately reuse old passwords, undermining password rotation policies.",
                 "Set password-history-count to at least 4.",
                 line=pp.get("line_pc", ""))
 
@@ -1884,8 +1887,9 @@ class PaloAltoParser:
             if last["action"] not in ("deny", "drop"):
                 self._issue("MEDIUM", "No Default Deny Rule", f"Rulebase: {rb_name}",
                     f"The last rule in rulebase '{rb_name}' is '{last['action']}' — "
-                    "not an explicit deny-all. PCI DSS 1.2.4 requires all traffic not "
-                    "explicitly permitted to be denied.",
+                    "not an explicit deny-all. Without a terminating deny rule, "
+                    "traffic that does not match any rule falls through on the implicit default, "
+                    "which may not be logged or may differ from the intended policy.",
                     "Add an explicit deny-all rule as the last rule in every rulebase "
                     "(action=deny, all zones, sources, destinations, applications).",
                     f"Last rule: '{last['name']}'",
@@ -1911,8 +1915,8 @@ class PaloAltoParser:
             if not has_fb:
                 self._issue("MEDIUM", "File Blocking Not Applied", r["name"],
                     f"Inbound allow rule '{r['name']}' from external zone(s) has no "
-                    "file-blocking profile. PCI DSS 5.3.1 requires anti-malware controls "
-                    "including file-type blocking on inbound traffic.",
+                    "file-blocking profile attached. Without it, malicious files "
+                    "(executables, scripts, documents with macros) can pass into the network unchecked.",
                     "Assign a file-blocking security profile (or profile group) to this rule. "
                     "Block executable file types at minimum.",
                     f"Src zones: {r['src_zones']}  Apps: {r['applications']}",
