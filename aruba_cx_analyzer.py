@@ -186,6 +186,67 @@ def _pci_label(req_ids: list[str]) -> str:
     return " · ".join(f"PCI {r}" for r in req_ids)
 
 
+# ── Secure Controls Framework (SCF) mapping ──────────────────────────────────
+SCF_MAP: dict[str, list[str]] = {
+    # ── Credentials ───────────────────────────────────────────────────────────
+    "Plaintext User Password":            ["IAC-06"],
+    "Account Without Password":           ["IAC-06"],
+    "Plaintext RADIUS Key":               ["CRY-03", "IAC-06"],
+    "Plaintext TACACS+ Key":              ["CRY-03", "IAC-06"],
+    "Default/Weak SNMP Community String": ["IAC-06"],
+    "Excessive Privileged Accounts":      ["IAC-07"],
+    # ── Authentication / access ───────────────────────────────────────────────
+    "No RADIUS or TACACS+ Configured":    ["IAC-01"],
+    "Local Auth Only on Console":         ["IAC-01"],
+    "No MFA / AAA for Management":        ["IAC-01"],
+    "SSH Not Enabled":                    ["CRY-03"],
+    "Telnet Enabled":                     ["CRY-03"],
+    "No Management Access Restriction":   ["NET-04", "IAC-10"],
+    # ── SNMP ──────────────────────────────────────────────────────────────────
+    "SNMPv1 Enabled":                     ["NET-06", "CRY-03"],
+    "SNMPv2c in Use":                     ["NET-06", "CRY-03"],
+    "SNMP Read-Write Community":          ["IAC-07"],
+    "SNMP Without ACL Restriction":       ["NET-04"],
+    # ── Layer 2 / switching security ─────────────────────────────────────────
+    "DHCP Snooping Not Enabled":          ["NET-04"],
+    "Dynamic ARP Inspection Not Enabled": ["NET-04"],
+    "BPDU Guard Not on Access Port":      ["NET-04"],
+    "STP Root Guard Not Configured":      ["NET-04"],
+    "IP Source Guard Not Enabled":        ["NET-04"],
+    "No Port Security / 802.1X":          ["NET-04"],
+    "VLAN 1 in Use on Access Port":       ["NET-04"],
+    "Trunk Native VLAN Is VLAN 1":        ["NET-04"],
+    "Spanning Tree Not Enabled":          ["NET-04"],
+    # ── Logging / time ────────────────────────────────────────────────────────
+    "No Syslog Servers Configured":       ["MON-06"],
+    "NTP Not Configured":                 ["OPS-01"],
+    "Only One NTP Server":                ["OPS-01"],
+    "NTP Authentication Not Configured":  ["OPS-01", "CRY-03"],
+    # ── Password & session policy ─────────────────────────────────────────────
+    "Password Complexity Not Enforced":   ["IAC-06"],
+    "Weak Password Minimum Length":       ["IAC-06"],
+    "No Account Lockout Policy":          ["IAC-06"],
+    "Management Session Timeout Not Set": ["IAC-09"],
+    # ── ACL protocol checks ───────────────────────────────────────────────────
+    "ACL Permits Insecure Protocol":      ["CRY-03"],
+    "ACL Missing Default Deny":           ["NET-04"],
+    "Password Expiry Not Configured":     ["IAC-06"],
+    "SSH v1 Enabled":                     ["CRY-03"],
+    "Syslog Not Using TLS":               ["MON-06", "CRY-03"],
+    # ── Configuration hygiene ─────────────────────────────────────────────────
+    "No Login/MOTD Banner":               ["IAC-09"],
+    "No System Location":                 ["OPS-01"],
+    "No System Contact":                  ["OPS-01"],
+    "Interface Missing Description":      ["OPS-01"],
+    "Active Interface Not Shut Down":     ["NET-04"],
+    "DNS Not Configured":                 ["OPS-01"],
+}
+
+
+def _scf_label(ctrl_ids: list[str]) -> str:
+    return " · ".join(ctrl_ids)
+
+
 # ── Colour palette ────────────────────────────────────────────────────────────
 C = {
     "hdr_bg":   "1B3A5C", "hdr_fg":   "FFFFFF",
@@ -342,6 +403,7 @@ class ArubaCXParser:
                details: str = "", line: int | str = ""):
         cis_ids = CIS_CONTROL_MAP.get(category, [])
         pci_ids = PCI_DSS_MAP.get(category, [])
+        scf_ids = SCF_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
@@ -354,6 +416,7 @@ class ArubaCXParser:
             "cis_ids":        cis_ids,
             "pci_dss":        _pci_label(pci_ids),
             "pci_ids":        pci_ids,
+            "scf":            _scf_label(scf_ids),
         })
 
     # ── System / global settings ──────────────────────────────────────────────
@@ -1801,7 +1864,7 @@ class ExcelReporter:
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
         headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
-                   "Category", "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "PCI DSS", "SCF",
                    "Description", "Recommendation", "Details",
                    "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
@@ -1827,7 +1890,7 @@ class ExcelReporter:
 
             vals = [idx, "Y", sev, "", "",
                     iss["category"], obj, line,
-                    iss.get("cis_controls", ""), iss.get("pci_dss", ""),
+                    iss.get("cis_controls", ""), iss.get("pci_dss", ""), iss.get("scf", ""),
                     iss["description"], iss["recommendation"], details,
                     hostname, target, "", output, source]
             for col, val in enumerate(vals, 1):
@@ -1840,13 +1903,18 @@ class ExcelReporter:
                     c.font = _font(bold=(col == 1)); c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 9:  # CIS v8 Controls
+                elif col == 9:  # CIS v8
                     c.font = _font(bold=True, color="17375E", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
                 elif col == 10:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
+                    c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
+                elif col == 11:  # SCF
+                    c.font = _font(bold=True, color="1A5C3A", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
@@ -1861,7 +1929,7 @@ class ExcelReporter:
                         c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 60, 60, 36, 24, 44, 16, 70, 30])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── CIS v8 Mapping ────────────────────────────────────────────────────────
     def _sheet_cis_mapping(self):

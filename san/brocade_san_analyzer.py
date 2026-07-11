@@ -161,6 +161,58 @@ def _pci_label(req_ids: list[str]) -> str:
     return " · ".join(f"PCI {r}" for r in req_ids)
 
 
+# ── Secure Controls Framework (SCF) mapping ──────────────────────────────────
+SCF_MAP: dict[str, list[str]] = {
+    # ── Credentials / accounts ────────────────────────────────────────────────
+    "Default Account Not Disabled":          ["IAC-21"],
+    "Default Admin Password Not Changed":    ["IAC-06"],
+    "Account Without Password":              ["IAC-06"],
+    "Excessive Admin Accounts":              ["IAC-07"],
+    # ── Authentication / access ───────────────────────────────────────────────
+    "No RADIUS or LDAP Configured":          ["IAC-01"],
+    "No Account Lockout Policy":             ["IAC-06"],
+    "Telnet Enabled":                        ["CRY-03"],
+    "HTTP Management Enabled":               ["CRY-03", "NET-06"],
+    "SSH Disabled":                          ["CRY-03"],
+    "No IP Filter Configured":               ["NET-04", "IAC-10"],
+    "rsh/rlogin Enabled":                    ["CRY-03"],
+    # ── SNMP ──────────────────────────────────────────────────────────────────
+    "SNMPv1 Enabled":                        ["NET-06", "CRY-03"],
+    "Default SNMP Community String":         ["IAC-06"],
+    "SNMP Write Community Configured":       ["IAC-07"],
+    "No SNMPv3 AuthPriv":                    ["CRY-03", "NET-06"],
+    # ── FC fabric security ────────────────────────────────────────────────────
+    "FC Authentication Policy Disabled":     ["IAC-01"],
+    # ── Fabric / zone security ────────────────────────────────────────────────
+    "Default Zone Allows All Access":        ["NET-04"],
+    "No Active Zone Configuration":          ["NET-04"],
+    "Orphaned Zone Members":                 ["NET-04"],
+    "Port-Based Zoning Used":               ["NET-04"],
+    "Zone With Single Member":               ["NET-04"],
+    "Orphaned Zone (Not in Active Config)":  ["NET-04"],
+    "Oversized Zone":                        ["NET-04"],
+    "No Fabric-Wide Consistency Policy":     ["NET-06"],
+    "NPIV Not Enabled":                      ["NET-04"],
+    # ── Logging / time ────────────────────────────────────────────────────────
+    "No Syslog Server Configured":           ["MON-06"],
+    "Audit Logging Disabled":                ["MON-06"],
+    "NTP Not Configured":                    ["OPS-01"],
+    "Multiple NTP Servers Not Configured":   ["OPS-01"],
+    # ── Password policy ───────────────────────────────────────────────────────
+    "Weak Minimum Password Length":          ["IAC-06"],
+    "No Password Complexity Requirements":   ["IAC-06"],
+    "Password Never Expires":                ["IAC-06"],
+    "No Password History":                   ["IAC-06"],
+    # ── Session / management ──────────────────────────────────────────────────
+    "No Login Banner Configured":            ["IAC-09"],
+    "Weak SSH Ciphers Permitted":            ["CRY-03"],
+}
+
+
+def _scf_label(ctrl_ids: list[str]) -> str:
+    return " · ".join(ctrl_ids)
+
+
 # ── Colour palette ────────────────────────────────────────────────────────────
 C = {
     "hdr_bg":   "1B3A5C", "hdr_fg":   "FFFFFF",
@@ -240,6 +292,7 @@ class BrocadeFOSParser:
                description: str, recommendation: str, line: int = 0):
         cis_ids = CIS_CONTROL_MAP.get(category, [])
         pci_ids = PCI_DSS_MAP.get(category, [])
+        scf_ids = SCF_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
@@ -251,6 +304,7 @@ class BrocadeFOSParser:
             "pci_ids":        pci_ids,
             "cis_label":      _cis_label(cis_ids),
             "pci_label":      _pci_label(pci_ids),
+            "scf":            _scf_label(scf_ids),
         })
 
     # ── Entry point ───────────────────────────────────────────────────────────
@@ -1590,7 +1644,7 @@ class ExcelReporter:
         ws.sheet_view.showGridLines = False
 
         headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
-                   "Category", "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "PCI DSS", "SCF",
                    "Description", "Recommendation", "Details",
                    "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
@@ -1615,7 +1669,7 @@ class ExcelReporter:
             output = iss["description"]
             vals = [idx, "Y", sev, "", "",
                     iss["category"], obj, line,
-                    iss.get("cis_label", ""), iss.get("pci_label", ""),
+                    iss.get("cis_label", ""), iss.get("pci_label", ""), iss.get("scf", ""),
                     iss["description"], iss["recommendation"], "",
                     hostname, target, "", output, source]
             for col, val in enumerate(vals, 1):
@@ -1628,13 +1682,18 @@ class ExcelReporter:
                     c.font = _font(bold=(col == 1)); c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 9:  # CIS v8 Controls
+                elif col == 9:  # CIS v8
                     c.font = _font(bold=True, color="17375E", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
                 elif col == 10:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
+                    c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
+                elif col == 11:  # SCF
+                    c.font = _font(bold=True, color="1A5C3A", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
@@ -1649,7 +1708,7 @@ class ExcelReporter:
                         c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 60, 60, 36, 24, 44, 16, 70, 30])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── CIS Controls mapping ──────────────────────────────────────────────────
     def _sheet_cis_mapping(self):

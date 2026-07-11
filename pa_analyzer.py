@@ -283,6 +283,94 @@ def _pci_label(req_ids: list[str]) -> str:
     return " · ".join(f"PCI {r}" for r in req_ids)
 
 
+# ── Secure Controls Framework (SCF) mapping ──────────────────────────────────
+SCF_MAP: dict[str, list[str]] = {
+    # ── Firewall rule checks ───────────────────────────────────────────────────
+    "Any/Any/Any Allow Rule":                        ["NET-04"],
+    "Missing Security Profiles":                     ["NET-14"],
+    "No Logging Configured":                         ["MON-06"],
+    "Allow Rule Not Logging Session End":            ["MON-06"],
+    "Unrestricted Source Address":                   ["NET-04"],
+    "Unrestricted Destination Address":              ["NET-04"],
+    "Exposed RDP from Any Source":                   ["NET-04", "IAC-10"],
+    "Cleartext Telnet Allowed":                      ["CRY-03"],
+    "SSH Exposed from Any Source":                   ["NET-04"],
+    "SMB Exposed from Any Source":                   ["NET-04"],
+    "VNC Exposed from Any Source":                   ["NET-04"],
+    "Disabled Rule":                                 ["NET-04"],
+    "Missing Rule Description":                      ["OPS-01"],
+    "Negated Source Address":                        ["NET-04"],
+    "Negated Destination Address":                   ["NET-04"],
+    "Zone Missing Protection Profile":               ["NET-04"],
+    "Potential Shadow Rule":                         ["NET-04"],
+    "Application+Service Both Any":                  ["NET-04"],
+    "Inbound Allow Without Inspection":              ["NET-14"],
+    "Service=Any with Specific Application":         ["NET-04"],
+    # ── Crypto checks ─────────────────────────────────────────────────────────
+    "Weak IKE Encryption":                           ["CRY-03"],
+    "Weak IKE Hash/PRF":                             ["CRY-03"],
+    "Weak IKE DH Group":                             ["CRY-03"],
+    "Weak IPSec Encryption":                         ["CRY-03"],
+    "Weak IPSec Authentication":                     ["CRY-03"],
+    "Weak IPSec DH Group (PFS)":                     ["CRY-03"],
+    "IPSec PFS Disabled":                            ["CRY-03"],
+    "Weak Minimum TLS Version":                      ["CRY-03"],
+    "IKEv1 in Use":                                  ["CRY-03"],
+    "IKE Pre-Shared Key Authentication":             ["CRY-01"],
+    # ── Management / system checks ────────────────────────────────────────────
+    "HTTP Management Enabled":                       ["CRY-03", "NET-06"],
+    "Telnet Management Enabled":                     ["CRY-03", "NET-06"],
+    "No Management IP Restrictions":                 ["NET-04", "IAC-10"],
+    "NTP Not Configured":                            ["OPS-01"],
+    "No Login Banner":                               ["IAC-09"],
+    "DNS Not Configured":                            ["OPS-01"],
+    "Admin Without Authentication Profile":          ["IAC-01"],
+    "Admin Account Has No Password":                 ["IAC-06"],
+    "Excessive Superuser Accounts":                  ["IAC-07"],
+    "SNMPv1 Enabled":                                ["NET-06", "CRY-03"],
+    "SNMPv2c Enabled":                               ["NET-06", "CRY-03"],
+    "Default/Weak SNMP Community String":            ["IAC-06"],
+    "SNMP Enabled Without Source Restrictions":      ["NET-04"],
+    "No Syslog Servers Configured":                  ["MON-06"],
+    "Syslog Transmitted Over UDP":                   ["MON-06", "CRY-03"],
+    # ── Password & session policy ─────────────────────────────────────────────
+    "Password Complexity Not Enforced":              ["IAC-06"],
+    "Weak Password Minimum Length":                  ["IAC-06"],
+    "No Account Lockout Policy":                     ["IAC-06"],
+    "Long or No Management Session Timeout":         ["IAC-09"],
+    "Password Expiry Not Configured":                ["IAC-06"],
+    "Insufficient Password History":                 ["IAC-06"],
+    # ── Content updates ───────────────────────────────────────────────────────
+    "AV/Threat Content Updates Not Automatic":       ["VPM-10", "TDA-02"],
+    "WildFire Updates Not Automatic":                ["VPM-10", "TDA-02"],
+    # ── Security profile quality ──────────────────────────────────────────────
+    "Vulnerability Profile Allows Critical/High Threats": ["VPM-01"],
+    "WildFire Profile Missing Rules":                ["TDA-02"],
+    "WildFire Profile Incomplete Coverage":          ["TDA-02"],
+    "File Blocking Not Applied":                     ["TDA-02"],
+    # ── Zone / User-ID ────────────────────────────────────────────────────────
+    "User-ID Enabled on Untrusted Zone":             ["IAC-01", "NET-04"],
+    # ── NTP ───────────────────────────────────────────────────────────────────
+    "Only One NTP Server":                           ["OPS-01"],
+    "NTP Authentication Not Configured":             ["OPS-01", "CRY-03"],
+    # ── Insecure protocols / certificates ────────────────────────────────────
+    "Insecure Protocol Allowed in Rule":             ["CRY-03"],
+    "TLS Profile Using Default Certificate":         ["CRY-03"],
+    # ── Rule completeness ─────────────────────────────────────────────────────
+    "No Default Deny Rule":                          ["NET-04"],
+    # ── CIS L2 benchmark checks ───────────────────────────────────────────────
+    "Admin Interface Default Certificate":           ["CRY-03", "IAC-10"],
+    "WMI Probing Enabled":                           ["IAC-01", "NET-04"],
+    "Zone Flood Protection Disabled":                ["NET-04"],
+    "Decryption Certificate Untrusted":              ["CRY-03"],
+    "SNMPv3 Trap Not Configured":                    ["MON-06"],
+}
+
+
+def _scf_label(ctrl_ids: list[str]) -> str:
+    return " · ".join(ctrl_ids)
+
+
 # ── Vuln reference mapping ────────────────────────────────────────────────────
 def _load_vulns(path: str) -> dict[int, str]:
     """Parse vulns.txt (one description per line, line number = vuln ID)."""
@@ -841,6 +929,7 @@ class PaloAltoParser:
                details="", line=""):
         cis_ids = CIS_CONTROL_MAP.get(category, [])
         pci_ids = PCI_DSS_MAP.get(category, [])
+        scf_ids = SCF_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
@@ -853,6 +942,7 @@ class PaloAltoParser:
             "cis_ids":        cis_ids,
             "pci_dss":        _pci_label(pci_ids),
             "pci_ids":        pci_ids,
+            "scf":            _scf_label(scf_ids),
         })
 
     def _run_checks(self):
@@ -2534,7 +2624,7 @@ class ExcelReporter:
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
         headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
-                   "Category", "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "PCI DSS", "SCF",
                    "Description", "Recommendation", "Details",
                    "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
@@ -2565,7 +2655,7 @@ class ExcelReporter:
             values = [idx, "Y", sev, "", "",
                       iss["category"], rule_name,
                       line, iss.get("cis_controls", ""),
-                      iss.get("pci_dss", ""),
+                      iss.get("pci_dss", ""), iss.get("scf", ""),
                       iss["description"], iss["recommendation"], details,
                       hostname, target, vuln, output, source]
             for col, val in enumerate(values, 1):
@@ -2580,13 +2670,18 @@ class ExcelReporter:
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 9:  # CIS controls
+                elif col == 9:  # CIS v8
                     c.font = _font(bold=True, color="17375E", size=9)
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
                 elif col == 10:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
+                    c.alignment = _align("center")
+                    if row_bg:
+                        c.fill = _fill(row_bg)
+                elif col == 11:  # SCF
+                    c.font = _font(bold=True, color="1A5C3A", size=9)
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
@@ -2602,7 +2697,7 @@ class ExcelReporter:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 60, 60, 36, 24, 44, 16, 70, 30])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── Ticketing Export ──────────────────────────────────────────────────────
     def _sheet_export(self):

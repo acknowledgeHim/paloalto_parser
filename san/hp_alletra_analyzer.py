@@ -170,6 +170,54 @@ def _pci_label(req_ids: list[str]) -> str:
     return " · ".join(f"PCI {r}" for r in req_ids)
 
 
+# ── Secure Controls Framework (SCF) mapping ──────────────────────────────────
+SCF_MAP: dict[str, list[str]] = {
+    # ── Credentials / accounts ────────────────────────────────────────────────
+    "Default Service Account Active":      ["IAC-21"],
+    "Excessive Super-Role Accounts":       ["IAC-07"],
+    "Account Without Password":            ["IAC-06"],
+    "No LDAP / AD Integration":            ["IAC-01"],
+    "No MFA for Administrative Access":    ["IAC-01"],
+    # ── Password policy ───────────────────────────────────────────────────────
+    "Weak Minimum Password Length":        ["IAC-06"],
+    "No Password Complexity Requirements": ["IAC-06"],
+    "Password Never Expires":              ["IAC-06"],
+    "No Password History":                 ["IAC-06"],
+    "No Account Lockout Policy":           ["IAC-06"],
+    # ── Management access ─────────────────────────────────────────────────────
+    "Telnet / HTTP Management Enabled":    ["CRY-03", "NET-06"],
+    "No Management IP Restriction":        ["NET-04", "IAC-10"],
+    "SSH Password Auth Enabled":           ["CRY-03"],
+    "No SSH Keys Configured":              ["CRY-03"],
+    # ── SNMP ──────────────────────────────────────────────────────────────────
+    "SNMPv1/v2 Enabled":                   ["NET-06", "CRY-03"],
+    "Default SNMP Community String":       ["IAC-06"],
+    "SNMP Write Community Configured":     ["IAC-07"],
+    "No SNMPv3 Configured":                ["CRY-03", "NET-06"],
+    # ── Logging / audit ───────────────────────────────────────────────────────
+    "Audit Logging Not Enabled":           ["MON-06"],
+    "No Syslog Server Configured":         ["MON-06"],
+    "NTP Not Configured":                  ["OPS-01"],
+    "Single NTP Server":                   ["OPS-01"],
+    # ── Storage access control ────────────────────────────────────────────────
+    "iSCSI Without CHAP Authentication":   ["IAC-01", "NET-04"],
+    "Host Without Host Set Membership":    ["NET-04"],
+    "Wildcard Volume Mapping":             ["NET-04"],
+    "No VMware Persona Configured":        ["NET-04"],
+    # ── Encryption ────────────────────────────────────────────────────────────
+    "Encryption at Rest Not Enabled":      ["CRY-03"],
+    "WSAPI Using HTTP (Not HTTPS)":        ["CRY-03", "NET-06"],
+    "Self-Signed Certificate in Use":      ["CRY-03"],
+    # ── Configuration hygiene ─────────────────────────────────────────────────
+    "No Snapshot Schedule Configured":     ["OPS-01"],
+    "No Management VLAN Separation":       ["NET-04"],
+}
+
+
+def _scf_label(ctrl_ids: list[str]) -> str:
+    return " · ".join(ctrl_ids)
+
+
 # ── Colour palette ────────────────────────────────────────────────────────────
 C = {
     "hdr_bg":   "0E5484", "hdr_fg":   "FFFFFF",   # HPE blue
@@ -243,6 +291,7 @@ class HPAlletraParser:
                description: str, recommendation: str, line: int = 0):
         cis_ids = CIS_CONTROL_MAP.get(category, [])
         pci_ids = PCI_DSS_MAP.get(category, [])
+        scf_ids = SCF_MAP.get(category, [])
         self.issues.append({
             "severity":       severity,
             "category":       category,
@@ -254,6 +303,7 @@ class HPAlletraParser:
             "pci_ids":        pci_ids,
             "cis_label":      _cis_label(cis_ids),
             "pci_label":      _pci_label(pci_ids),
+            "scf":            _scf_label(scf_ids),
         })
 
     # ── Entry point ───────────────────────────────────────────────────────────
@@ -1415,7 +1465,7 @@ class ExcelReporter:
         ws.sheet_view.showGridLines = False
 
         headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
-                   "Category", "Rule / Object", "Config Line(s)", "CIS v8 Controls", "PCI DSS",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "PCI DSS", "SCF",
                    "Description", "Recommendation", "Details",
                    "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
@@ -1440,7 +1490,7 @@ class ExcelReporter:
             output = iss["description"]
             vals = [idx, "Y", sev, "", "",
                     iss["category"], obj, line,
-                    iss.get("cis_label", ""), iss.get("pci_label", ""),
+                    iss.get("cis_label", ""), iss.get("pci_label", ""), iss.get("scf", ""),
                     iss["description"], iss["recommendation"], "",
                     hostname, target, "", output, source]
             for col, val in enumerate(vals, 1):
@@ -1453,13 +1503,18 @@ class ExcelReporter:
                     c.font = _font(bold=(col == 1)); c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 9:  # CIS v8 Controls
+                elif col == 9:  # CIS v8
                     c.font = _font(bold=True, color="17375E", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
                 elif col == 10:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
+                    c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
+                elif col == 11:  # SCF
+                    c.font = _font(bold=True, color="1A5C3A", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
@@ -1474,7 +1529,7 @@ class ExcelReporter:
                         c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 60, 60, 36, 24, 44, 16, 70, 30])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── CIS Controls mapping ──────────────────────────────────────────────────
     def _sheet_cis_mapping(self):
