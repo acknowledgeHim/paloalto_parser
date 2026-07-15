@@ -110,6 +110,13 @@ def _cis_label(ctrl_ids: list[str]) -> str:
     return " · ".join(f"CIS {c}" for c in ctrl_ids)
 
 
+CIS_BENCHMARK_MAP: dict[str, list[str]] = {}
+
+
+def _cis_benchmark_label(check_ids: list[str]) -> str:
+    return " · ".join(check_ids)
+
+
 # ── PCI DSS v4.0 mapping ─────────────────────────────────────────────────────
 PCI_DSS_DESC = {
     "1.2.4":  "All traffic between trusted/untrusted networks is explicitly controlled",
@@ -401,22 +408,24 @@ class ArubaCXParser:
     def _issue(self, severity: str, category: str, object_name: str,
                description: str, recommendation: str,
                details: str = "", line: int | str = ""):
-        cis_ids = CIS_CONTROL_MAP.get(category, [])
-        pci_ids = PCI_DSS_MAP.get(category, [])
-        scf_ids = SCF_MAP.get(category, [])
+        cis_ids   = CIS_CONTROL_MAP.get(category, [])
+        pci_ids   = PCI_DSS_MAP.get(category, [])
+        scf_ids   = SCF_MAP.get(category, [])
+        bench_ids = CIS_BENCHMARK_MAP.get(category, [])
         self.issues.append({
-            "severity":       severity,
-            "category":       category,
-            "object":         object_name,
-            "line":           str(line) if line else "",
-            "description":    description,
-            "recommendation": recommendation,
-            "details":        details,
-            "cis_controls":   _cis_label(cis_ids),
-            "cis_ids":        cis_ids,
-            "pci_dss":        _pci_label(pci_ids),
-            "pci_ids":        pci_ids,
-            "scf":            _scf_label(scf_ids),
+            "severity":        severity,
+            "category":        category,
+            "object":          object_name,
+            "line":            str(line) if line else "",
+            "description":     description,
+            "recommendation":  recommendation,
+            "details":         details,
+            "cis_controls":    _cis_label(cis_ids),
+            "cis_ids":         cis_ids,
+            "cis_benchmark":   _cis_benchmark_label(bench_ids),
+            "pci_dss":         _pci_label(pci_ids),
+            "pci_ids":         pci_ids,
+            "scf":             _scf_label(scf_ids),
         })
 
     # ── System / global settings ──────────────────────────────────────────────
@@ -1864,7 +1873,8 @@ class ExcelReporter:
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
         headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
-                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "PCI DSS", "SCF",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "CIS Benchmark",
+                   "PCI DSS", "SCF",
                    "Description", "Recommendation", "Details",
                    "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
@@ -1890,7 +1900,8 @@ class ExcelReporter:
 
             vals = [idx, "Y", sev, "", "",
                     iss["category"], obj, line,
-                    iss.get("cis_controls", ""), iss.get("pci_dss", ""), iss.get("scf", ""),
+                    iss.get("cis_controls", ""), iss.get("cis_benchmark", ""),
+                    iss.get("pci_dss", ""), iss.get("scf", ""),
                     iss["description"], iss["recommendation"], details,
                     hostname, target, "", output, source]
             for col, val in enumerate(vals, 1):
@@ -1908,12 +1919,17 @@ class ExcelReporter:
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 10:  # PCI DSS
+                elif col == 10:  # CIS Benchmark
+                    c.font = _font(bold=True, color="1F618D", size=9)
+                    c.alignment = _align("center")
+                    if rb:
+                        c.fill = _fill(rb)
+                elif col == 11:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if rb:
                         c.fill = _fill(rb)
-                elif col == 11:  # SCF
+                elif col == 12:  # SCF
                     c.font = _font(bold=True, color="1A5C3A", size=9)
                     c.alignment = _align("center")
                     if rb:
@@ -1929,7 +1945,7 @@ class ExcelReporter:
                         c.fill = _fill(rb)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── CIS v8 Mapping ────────────────────────────────────────────────────────
     def _sheet_cis_mapping(self):

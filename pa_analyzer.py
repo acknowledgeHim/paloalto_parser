@@ -146,7 +146,7 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "AV/Threat Content Updates Not Automatic":   ["10.1"],
     "WildFire Updates Not Automatic":            ["10.7"],
     # ── Security profile quality ──────────────────────────────────────────────
-    "Vulnerability Profile Allows Critical/High": ["13.3", "13.8"],
+    "Vulnerability Profile Allows Critical/High Threats": ["13.3", "13.8"],
     "WildFire Profile Missing Rules":            ["10.7"],
     "WildFire Profile Incomplete Coverage":      ["10.7"],
     # ── Zone / User-ID ────────────────────────────────────────────────────────
@@ -167,12 +167,105 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "Zone Flood Protection Disabled":            ["13.3", "13.4"],
     "Decryption Certificate Untrusted":          ["3.10", "12.6"],
     "SNMPv3 Trap Not Configured":                ["8.2", "8.9"],
+    # ── CIS L1 benchmark checks ───────────────────────────────────────────────
+    "High DP Load Logging Disabled":             ["8.2"],
+    "SNMPv3 Polling Not Configured":             ["8.2", "8.9"],
+    "Update Server Verification Disabled":       ["4.6", "12.6"],
+    "Password Profile Bypass Configured":        ["5.2", "6.5"],
+    "User-ID Not Configured":                    ["6.1"],
+    "User-ID Agent Traffic Unrestricted":        ["4.2", "12.3"],
+    "High Availability Not Configured":          ["12.2"],
+    "WildFire File Size Limits Not Maximized":   ["10.7"],
+    "WildFire Profile Not Applied":              ["10.7"],
+    "WildFire Decrypted Content Not Forwarded":  ["10.7"],
+    "WildFire Session Information Incomplete":   ["10.7"],
+    "WildFire Malicious File Alerts Disabled":   ["10.7"],
+    "WildFire Inline ML Not Enabled":            ["10.7"],
+    "Antivirus Profile Not Blocking":            ["10.1", "13.4"],
+    "Antivirus Profile Not Applied":             ["10.1", "13.4"],
+    "Anti-Spyware Profile Not Blocking":         ["10.1", "13.4"],
+    "Anti-Spyware Profile Not Applied":          ["10.1", "13.4"],
+    "Vulnerability Profile Not Applied":         ["13.3", "13.8"],
+    "URL Filtering Not Configured":              ["9.2", "13.4"],
+    "URL Category Action Not Blocking":          ["9.2", "13.4"],
+    "URL Filtering Not Logging":                 ["8.2", "9.2"],
+    "URL Filtering Profile Not Applied":         ["9.2", "13.4"],
+    "Data Filtering Not Applied":                ["3.13", "13.4"],
+    "Reconnaissance Protection Disabled":        ["13.3", "13.4"],
+    "Packet-Based Attack Protection Disabled":   ["13.3", "13.4"],
+    "User Credential Submission Uncontrolled":   ["13.4", "6.4"],
+    "Advanced Threat Prevention Not Enabled":    ["10.1", "13.4"],
+    "Threat Intelligence Blocking Not Configured": ["10.1", "13.4"],
+    "Default Policy Logging Disabled":           ["8.2"],
+    "Management Interface Not Restricted":       ["12.3", "6.7"],
+    "SSL Decryption Not Configured":             ["3.10", "13.4"],
 }
 
 
 def _cis_label(ctrl_ids: list[str]) -> str:
     """Return a compact string like 'CIS 12.2 · CIS 13.4'."""
     return " · ".join(f"CIS {c}" for c in ctrl_ids)
+
+
+# ── CIS PAN-OS Benchmark check number mapping (L1 + L2) ─────────────────────
+# Maps category → list of CIS PAN-OS Firewall Benchmark check IDs
+CIS_BENCHMARK_MAP: dict[str, list[str]] = {
+    # L1 checks
+    "No Login Banner":                         ["1.1.2"],
+    "High DP Load Logging Disabled":           ["1.1.3"],
+    "Management Interface Not Restricted":     ["1.2.1", "1.2.2"],
+    "HTTP Management Enabled":                 ["1.2.3"],
+    "Telnet Management Enabled":               ["1.2.3"],
+    "Password Complexity Not Enforced":        ["1.3.1", "1.3.3", "1.3.4", "1.3.5", "1.3.6"],
+    "Weak Password Minimum Length":            ["1.3.2"],
+    "Password Expiry Not Configured":          ["1.3.7"],
+    "Insufficient Password History":           ["1.3.8", "1.3.9"],
+    "Password Profile Bypass Configured":      ["1.3.10"],
+    "Long or No Management Session Timeout":   ["1.4.1"],
+    "No Account Lockout Policy":               ["1.4.1"],
+    "SNMPv3 Polling Not Configured":           ["1.5.1"],
+    "Update Server Verification Disabled":     ["1.6.1"],
+    "User-ID Not Configured":                  ["2.7"],
+    "User-ID Agent Traffic Unrestricted":      ["2.8"],
+    "High Availability Not Configured":        ["3.1"],
+    "AV/Threat Content Updates Not Automatic": ["4.1", "4.2"],
+    "WildFire File Size Limits Not Maximized": ["5.1"],
+    "WildFire Profile Not Applied":            ["5.2"],
+    "WildFire Decrypted Content Not Forwarded": ["5.3"],
+    "WildFire Session Information Incomplete": ["5.4"],
+    "WildFire Malicious File Alerts Disabled": ["5.5"],
+    "WildFire Updates Not Automatic":          ["5.6"],
+    "WildFire Inline ML Not Enabled":          ["5.8"],
+    "Antivirus Profile Not Blocking":          ["6.1", "6.20", "6.21"],
+    "Antivirus Profile Not Applied":           ["6.2"],
+    "Anti-Spyware Profile Not Blocking":       ["6.3", "6.24"],
+    "Anti-Spyware Profile Not Applied":        ["6.5"],
+    "Vulnerability Profile Allows Critical/High Threats": ["6.6"],
+    "Vulnerability Profile Not Applied":       ["6.7"],
+    "URL Filtering Not Configured":            ["6.8"],
+    "URL Category Action Not Blocking":        ["6.9"],
+    "URL Filtering Not Logging":               ["6.10"],
+    "URL Filtering Profile Not Applied":       ["6.12"],
+    "Data Filtering Not Applied":              ["6.14"],
+    "Zone Flood Protection Disabled":          ["6.15", "6.16"],
+    "Reconnaissance Protection Disabled":      ["6.17"],
+    "Packet-Based Attack Protection Disabled": ["6.18"],
+    "User Credential Submission Uncontrolled": ["6.19"],
+    "Advanced Threat Prevention Not Enabled":  ["6.22", "6.23"],
+    "Service=Any with Specific Application":   ["7.2"],
+    "Threat Intelligence Blocking Not Configured": ["7.3"],
+    "Default Policy Logging Disabled":         ["7.4"],
+    "SSL Decryption Not Configured":           ["7.4"],
+    # L2 checks
+    "SNMPv3 Trap Not Configured":              ["1.1.1.2"],
+    "Admin Interface Default Certificate":     ["1.2.5"],
+    "WMI Probing Enabled":                     ["2.2"],
+    "Decryption Certificate Untrusted":        ["8.3"],
+}
+
+
+def _cis_benchmark_label(check_ids: list[str]) -> str:
+    return " · ".join(check_ids)
 
 
 # ── PCI DSS v4.0 mapping ─────────────────────────────────────────────────────
@@ -264,7 +357,7 @@ PCI_DSS_MAP: dict[str, list[str]] = {
     # ── Content updates / profile quality ────────────────────────────────────
     "AV/Threat Content Updates Not Automatic": ["5.3.2"],
     "WildFire Updates Not Automatic":      ["5.3.2"],
-    "Vulnerability Profile Allows Critical/High": ["6.3.1"],
+    "Vulnerability Profile Allows Critical/High Threats": ["6.3.1"],
     "WildFire Profile Missing Rules":      ["5.3.2"],
     "WildFire Profile Incomplete Coverage": ["5.3.2"],
     # ── Zone / protocol ───────────────────────────────────────────────────────
@@ -276,6 +369,38 @@ PCI_DSS_MAP: dict[str, list[str]] = {
     "Zone Flood Protection Disabled":      ["1.2.4", "1.3.1"],
     "Decryption Certificate Untrusted":    ["4.2.1"],
     "SNMPv3 Trap Not Configured":          ["10.2.1", "10.5.4"],
+    # ── CIS L1 benchmark checks ───────────────────────────────────────────────
+    "High DP Load Logging Disabled":             ["10.2.1"],
+    "SNMPv3 Polling Not Configured":             ["2.2.4"],
+    "Update Server Verification Disabled":       ["6.3.1"],
+    "Password Profile Bypass Configured":        ["8.3.6"],
+    "User-ID Not Configured":                    [],
+    "User-ID Agent Traffic Unrestricted":        ["1.2.4"],
+    "High Availability Not Configured":          [],
+    "WildFire File Size Limits Not Maximized":   ["5.3.1"],
+    "WildFire Profile Not Applied":              ["5.3.1"],
+    "WildFire Decrypted Content Not Forwarded":  ["5.3.1"],
+    "WildFire Session Information Incomplete":   ["5.3.1"],
+    "WildFire Malicious File Alerts Disabled":   ["5.3.1"],
+    "WildFire Inline ML Not Enabled":            ["5.3.1"],
+    "Antivirus Profile Not Blocking":            ["5.3.1", "5.3.2"],
+    "Antivirus Profile Not Applied":             ["5.3.1"],
+    "Anti-Spyware Profile Not Blocking":         ["5.3.1", "6.3.1"],
+    "Anti-Spyware Profile Not Applied":          ["5.3.1"],
+    "Vulnerability Profile Not Applied":         ["6.3.1"],
+    "URL Filtering Not Configured":              ["1.2.4", "1.3.1"],
+    "URL Category Action Not Blocking":          ["1.2.4", "1.3.1"],
+    "URL Filtering Not Logging":                 ["10.2.1"],
+    "URL Filtering Profile Not Applied":         ["1.2.4", "1.3.1"],
+    "Data Filtering Not Applied":                ["1.3.2"],
+    "Reconnaissance Protection Disabled":        ["1.2.4", "1.3.1"],
+    "Packet-Based Attack Protection Disabled":   ["1.2.4", "1.3.1"],
+    "User Credential Submission Uncontrolled":   ["1.2.4"],
+    "Advanced Threat Prevention Not Enabled":    ["5.3.1", "6.3.1"],
+    "Threat Intelligence Blocking Not Configured": ["1.3.1"],
+    "Default Policy Logging Disabled":           ["10.2.1"],
+    "Management Interface Not Restricted":       ["1.2.4"],
+    "SSL Decryption Not Configured":             ["4.2.1"],
 }
 
 
@@ -364,6 +489,38 @@ SCF_MAP: dict[str, list[str]] = {
     "Zone Flood Protection Disabled":                ["NET-04"],
     "Decryption Certificate Untrusted":              ["CRY-03"],
     "SNMPv3 Trap Not Configured":                    ["MON-06"],
+    # ── CIS L1 benchmark checks ───────────────────────────────────────────────
+    "High DP Load Logging Disabled":                 ["MON-06"],
+    "SNMPv3 Polling Not Configured":                 ["MON-06", "CRY-03"],
+    "Update Server Verification Disabled":           ["VPM-10"],
+    "Password Profile Bypass Configured":            ["IAC-06"],
+    "User-ID Not Configured":                        ["IAC-01"],
+    "User-ID Agent Traffic Unrestricted":            ["IAC-01", "NET-04"],
+    "High Availability Not Configured":              ["OPS-04"],
+    "WildFire File Size Limits Not Maximized":       ["TDA-02"],
+    "WildFire Profile Not Applied":                  ["TDA-02"],
+    "WildFire Decrypted Content Not Forwarded":      ["TDA-02"],
+    "WildFire Session Information Incomplete":       ["TDA-02"],
+    "WildFire Malicious File Alerts Disabled":       ["TDA-02"],
+    "WildFire Inline ML Not Enabled":                ["TDA-02"],
+    "Antivirus Profile Not Blocking":                ["TDA-02", "VPM-01"],
+    "Antivirus Profile Not Applied":                 ["TDA-02"],
+    "Anti-Spyware Profile Not Blocking":             ["TDA-02", "NET-14"],
+    "Anti-Spyware Profile Not Applied":              ["TDA-02"],
+    "Vulnerability Profile Not Applied":             ["VPM-01"],
+    "URL Filtering Not Configured":                  ["NET-04"],
+    "URL Category Action Not Blocking":              ["NET-04"],
+    "URL Filtering Not Logging":                     ["MON-06"],
+    "URL Filtering Profile Not Applied":             ["NET-04"],
+    "Data Filtering Not Applied":                    ["DAM-01"],
+    "Reconnaissance Protection Disabled":            ["NET-04"],
+    "Packet-Based Attack Protection Disabled":       ["NET-04"],
+    "User Credential Submission Uncontrolled":       ["IAC-06", "NET-04"],
+    "Advanced Threat Prevention Not Enabled":        ["TDA-02", "NET-14"],
+    "Threat Intelligence Blocking Not Configured":   ["NET-04", "TDA-02"],
+    "Default Policy Logging Disabled":               ["MON-06"],
+    "Management Interface Not Restricted":           ["NET-04", "IAC-10"],
+    "SSL Decryption Not Configured":                 ["CRY-03", "NET-14"],
 }
 
 
@@ -482,10 +639,45 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "Zone Flood Protection Disabled":                9,
     "Decryption Certificate Untrusted":              38,
     "SNMPv3 Trap Not Configured":                    28,
+    # ── CIS L1 benchmark checks ───────────────────────────────────────────────
+    "High DP Load Logging Disabled":                 28,
+    "SNMPv3 Polling Not Configured":                 37,
+    "Password Profile Bypass Configured":            3,
+    "User-ID Agent Traffic Unrestricted":            9,
+    "High Availability Not Configured":              11,
+    "WildFire File Size Limits Not Maximized":       6,
+    "WildFire Profile Not Applied":                  6,
+    "WildFire Decrypted Content Not Forwarded":      6,
+    "WildFire Session Information Incomplete":       6,
+    "WildFire Malicious File Alerts Disabled":       6,
+    "WildFire Inline ML Not Enabled":                6,
+    "Antivirus Profile Not Blocking":                6,
+    "Antivirus Profile Not Applied":                 6,
+    "Anti-Spyware Profile Not Blocking":             6,
+    "Anti-Spyware Profile Not Applied":              6,
+    "Vulnerability Profile Not Applied":             6,
+    "URL Filtering Not Configured":                  6,
+    "URL Category Action Not Blocking":              6,
+    "URL Filtering Not Logging":                     28,
+    "URL Filtering Profile Not Applied":             6,
+    "Data Filtering Not Applied":                    6,
+    "User Credential Submission Uncontrolled":       6,
+    "Advanced Threat Prevention Not Enabled":        6,
+    "Default Policy Logging Disabled":               28,
+    "Management Interface Not Restricted":           14,
 }
 
 
-# ── CIS L2 audit file registry ────────────────────────────────────────────────
+# ── CIS audit file registries ────────────────────────────────────────────────
+_CIS_L1_AUDIT_IN_TAR: dict[int, str] = {
+    6:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_6_Benchmark_L1_v1.0.0.audit",
+    7:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_7_Benchmark_L1_v1.0.0.audit",
+    8:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_8_Benchmark_L1_v1.0.0.audit",
+    9:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_9_Benchmark_v1.1.0_L1.audit",
+    10: "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_10_Benchmark_v1.3.0_L1.audit",
+    11: "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_11_Benchmark_v1.2.0_L1.audit",
+}
+
 _CIS_L2_AUDIT_IN_TAR: dict[int, str] = {
     6:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_6_Benchmark_L2_v1.0.0.audit",
     7:  "portal_audits/palo_alto/CIS_Palo_Alto_Firewall_7_Benchmark_L2_v1.0.0.audit",
@@ -516,8 +708,14 @@ _XSLT_PATH_SUBS: list[tuple[str, str]] = [
     ('//devices/entry/network/',                            '//network/'),
 ]
 
-# Vague sub-check descriptions that belong to CIS 1.1.1.2 (SNMPv3 trap forwarding)
+# Maps vague sub-check descriptions to (category, description) tuples.
+# Keys are the raw check description strings from the audit file.
 _AUDIT_SUBCHECK_META: dict[str, tuple[str, str]] = {
+    # CIS 1.1.1.1 – syslog server
+    "host":          ("No Syslog Servers Configured",
+                      "No syslog server host is configured for log forwarding. Security events "
+                      "will not be forwarded to an external log aggregation platform."),
+    # CIS 1.1.1.2 – SNMP trap forwarding (L1 + L2)
     "system":        ("SNMPv3 Trap Not Configured",
                       "SNMP v3 traps are not configured to forward system log events. "
                       "Security events in the system log will not reach the SNMP monitoring platform."),
@@ -529,16 +727,190 @@ _AUDIT_SUBCHECK_META: dict[str, tuple[str, str]] = {
                       "SNMP v3 traps are not configured to forward HIP match log events."),
     "ip-tag":        ("SNMPv3 Trap Not Configured",
                       "SNMP v3 traps are not configured to forward IP tag log events."),
+    # CIS 1.2.x – management interface services
+    "SSH":           ("Management Interface Not Restricted",
+                      "SSH management access is not restricted to permitted source IP addresses. "
+                      "Unrestricted SSH access exposes the management plane to brute-force and lateral movement."),
+    "HTTPS":         ("Management Interface Not Restricted",
+                      "HTTPS management access is not restricted to permitted source IP addresses."),
+    "SNMP":          ("SNMPv3 Polling Not Configured",
+                      "SNMP management polling is not using SNMPv3. Earlier SNMP versions lack "
+                      "cryptographic authentication and privacy, exposing device metrics and MIB data."),
+    "HTTP":          ("HTTP Management Enabled",
+                      "HTTP is enabled on the management interface. Management credentials and "
+                      "session tokens are transmitted in cleartext over HTTP."),
+    "Telnet":        ("Telnet Management Enabled",
+                      "Telnet is enabled on the management interface. All management traffic, "
+                      "including credentials, is transmitted in cleartext."),
+    # CIS 1.4.1 – lockout settings
+    "Lockout Time":  ("No Account Lockout Policy",
+                      "Admin account lockout duration is not configured or is too short to deter "
+                      "brute-force login attempts."),
+    "Failed Attempts": ("No Account Lockout Policy",
+                        "Admin account lockout threshold (number of failed attempts before lockout) "
+                        "is not configured."),
+    # CIS 1.x – NTP sub-checks
+    "Ensure primary-ntp-server is configured": ("NTP Not Configured",
+                      "No primary NTP server is configured. Without accurate time synchronization, "
+                      "log timestamps cannot be trusted for incident correlation or audit purposes."),
+    "Ensure secondary-ntp-server is configured": ("Only One NTP Server",
+                      "No secondary NTP server is configured. A single NTP server is a single point "
+                      "of failure for time synchronization."),
+    # CIS 2.7 – User-ID
+    "Check that User ID is enabled on any profile": ("User-ID Not Configured",
+                      "User-ID is not enabled on any security profile. Traffic policies can only "
+                      "enforce access by IP address, not user identity."),
+    # CIS 3.1 – HA sub-checks
+    "Path Monitoring Failure Condition": ("High Availability Not Configured",
+                      "High availability path monitoring failure condition is not configured. "
+                      "Failover may not trigger when critical network paths fail."),
+    "Link Monitoring Failure Condition": ("High Availability Not Configured",
+                      "High availability link monitoring failure condition is not configured."),
+    "Passive Link State": ("High Availability Not Configured",
+                      "High availability passive link state is not set to shutdown on failover, "
+                      "which may cause traffic to be misrouted through the passive unit."),
+    "Election Setings": ("High Availability Not Configured",
+                      "High availability election settings are not properly configured."),
+    # CIS 6.3 / 6.24 – Anti-spyware DNS sub-checks
+    "Anti-Spyware Profile DNS Signature Source Sinkhole": ("Anti-Spyware Profile Not Blocking",
+                      "Anti-spyware profile is not configured with DNS sinkhole to redirect "
+                      "malicious DNS queries. Infected hosts can continue resolving C2 domains."),
+    "Anti-Spyware Profile DNS Security Policies": ("Anti-Spyware Profile Not Blocking",
+                      "Anti-spyware profile does not have DNS security policies configured to "
+                      "block known malicious domain categories."),
+    "Anti-Spyware Profile DNS Sinkhole": ("Anti-Spyware Profile Not Blocking",
+                      "Anti-spyware profile DNS sinkhole configuration is missing or incomplete."),
+    "Anti-Spyware Profile DNS Security Command and Control Domains": ("Anti-Spyware Profile Not Blocking",
+                      "Anti-spyware profile is not configured to block DNS queries to "
+                      "command-and-control domains."),
+    # CIS 6.10 – URL filtering HTTP header logging
+    "Log Container Page": ("URL Filtering Not Logging",
+                      "URL filtering profile is not logging container page requests, reducing "
+                      "visibility into nested web content and iframe-based threats."),
+    "User-Agent":    ("URL Filtering Not Logging",
+                      "URL filtering profile is not logging the HTTP User-Agent header. "
+                      "User-Agent data is essential for detecting malicious tools and bots."),
+    "Referer":       ("URL Filtering Not Logging",
+                      "URL filtering profile is not logging the HTTP Referer header."),
+    "X-Forwarded-For": ("URL Filtering Not Logging",
+                      "URL filtering profile is not logging the X-Forwarded-For header. "
+                      "Source IP attribution is impaired for proxied or NAT'd clients."),
+    # CIS 6.12/6.14 – data filtering sub-checks
+    "Data Object":   ("Data Filtering Not Applied",
+                      "No data objects are defined for data filtering. Sensitive content patterns "
+                      "such as credit card numbers or SSNs are not being matched."),
+    "Data Filtering Profile": ("Data Filtering Not Applied",
+                      "No data filtering profile is configured on the firewall."),
+    # CIS 7.4 – default policy logging sub-checks
+    "Policies":      ("SSL Decryption Not Configured",
+                      "No SSL Forward Proxy decryption policies are configured. Encrypted traffic "
+                      "from internal hosts is not being inspected, masking threats in HTTPS."),
+    "Invalid Categories": ("SSL Decryption Not Configured",
+                      "SSL decryption profile category configuration is invalid or incomplete."),
 }
 
-# CIS check number prefix → existing category name (drives CIS/PCI/Vuln column lookups)
+# CIS check number prefix → category name (drives CIS/PCI/SCF/Vuln column lookups)
 _CIS_NUM_TO_CATEGORY: dict[str, str] = {
+    # L2 checks
     "1.1.1.2": "SNMPv3 Trap Not Configured",
     "1.2.5":   "Admin Interface Default Certificate",
     "2.2":     "WMI Probing Enabled",
     "6.16":    "Zone Flood Protection Disabled",
     "8.3":     "Decryption Certificate Untrusted",
+    # L1 checks
+    "1.1.2":   "No Login Banner",
+    "1.1.3":   "High DP Load Logging Disabled",
+    "1.2.3":   "HTTP Management Enabled",
+    "1.3.1":   "Password Complexity Not Enforced",
+    "1.3.2":   "Weak Password Minimum Length",
+    "1.3.3":   "Password Complexity Not Enforced",
+    "1.3.4":   "Password Complexity Not Enforced",
+    "1.3.5":   "Password Complexity Not Enforced",
+    "1.3.6":   "Password Complexity Not Enforced",
+    "1.3.7":   "Password Expiry Not Configured",
+    "1.3.8":   "Insufficient Password History",
+    "1.3.9":   "Insufficient Password History",
+    "1.3.10":  "Password Profile Bypass Configured",
+    "1.4.1":   "Long or No Management Session Timeout",
+    "1.5.1":   "SNMPv3 Polling Not Configured",
+    "1.6.1":   "Update Server Verification Disabled",
+    "2.8":     "User-ID Agent Traffic Unrestricted",
+    "3.1":     "High Availability Not Configured",
+    "4.1":     "AV/Threat Content Updates Not Automatic",
+    "4.2":     "AV/Threat Content Updates Not Automatic",
+    "5.1":     "WildFire File Size Limits Not Maximized",
+    "5.2":     "WildFire Profile Not Applied",
+    "5.3":     "WildFire Decrypted Content Not Forwarded",
+    "5.4":     "WildFire Session Information Incomplete",
+    "5.5":     "WildFire Malicious File Alerts Disabled",
+    "5.6":     "WildFire Updates Not Automatic",
+    "5.8":     "WildFire Inline ML Not Enabled",
+    "6.1":     "Antivirus Profile Not Blocking",
+    "6.2":     "Antivirus Profile Not Applied",
+    "6.3":     "Anti-Spyware Profile Not Blocking",
+    "6.5":     "Anti-Spyware Profile Not Applied",
+    "6.6":     "Vulnerability Profile Allows Critical/High Threats",
+    "6.7":     "Vulnerability Profile Not Applied",
+    "6.8":     "URL Filtering Not Configured",
+    "6.9":     "URL Category Action Not Blocking",
+    "6.10":    "URL Filtering Not Logging",
+    "6.12":    "URL Filtering Profile Not Applied",
+    "6.14":    "Data Filtering Not Applied",
+    "6.15":    "Zone Flood Protection Disabled",
+    "6.17":    "Reconnaissance Protection Disabled",
+    "6.18":    "Packet-Based Attack Protection Disabled",
+    "6.19":    "User Credential Submission Uncontrolled",
+    "6.20":    "Antivirus Profile Not Blocking",
+    "6.21":    "Antivirus Profile Not Blocking",
+    "6.22":    "Advanced Threat Prevention Not Enabled",
+    "6.23":    "Advanced Threat Prevention Not Enabled",
+    "6.24":    "Anti-Spyware Profile Not Blocking",
+    "7.2":     "Service=Any with Specific Application",
+    "7.3":     "Threat Intelligence Blocking Not Configured",
+    "7.4":     "Default Policy Logging Disabled",
 }
+
+# Categories fully covered by the always-running Python checks.
+# XSLT findings in these categories are suppressed to prevent duplicates.
+_PYTHON_COVERED_CATEGORIES: frozenset[str] = frozenset({
+    "HTTP Management Enabled",
+    "Telnet Management Enabled",
+    "No Management IP Restrictions",
+    "Management Interface Not Restricted",
+    "NTP Not Configured",
+    "Only One NTP Server",
+    "NTP Authentication Not Configured",
+    "No Login Banner",
+    "DNS Not Configured",
+    "No Syslog Servers Configured",
+    "Syslog Transmitted Over UDP",
+    "SNMPv1 Enabled",
+    "SNMPv2c Enabled",
+    "Default/Weak SNMP Community String",
+    "SNMP Enabled Without Source Restrictions",
+    "Password Complexity Not Enforced",
+    "Weak Password Minimum Length",
+    "No Account Lockout Policy",
+    "Long or No Management Session Timeout",
+    "Password Expiry Not Configured",
+    "Insufficient Password History",
+    "Admin Without Authentication Profile",
+    "Admin Account Has No Password",
+    "Excessive Superuser Accounts",
+    "AV/Threat Content Updates Not Automatic",
+    "WildFire Updates Not Automatic",
+    "Vulnerability Profile Allows Critical/High Threats",
+    "WildFire Profile Missing Rules",
+    "WildFire Profile Incomplete Coverage",
+    "No Default Deny Rule",
+    "File Blocking Not Applied",
+    "Missing Security Profiles",
+    "No Logging Configured",
+    "Allow Rule Not Logging Session End",
+    "Service=Any with Specific Application",
+    "TLS Profile Using Default Certificate",
+    "Weak Minimum TLS Version",
+})
 
 _FW_REF_RE = re.compile(
     r'\b(?:CIS\s+[\d\.]+|PCI[\s\-]*DSS\s+[\d\.]+)',
@@ -639,6 +1011,7 @@ class PaloAltoParser:
         self.zones: list[dict] = []
         self.profile_groups: dict[str, dict] = {}
         self.issues: list[dict] = []
+        self._seen_issues: set[tuple[str, str]] = set()
 
         # Crypto / system data
         self.ike_crypto_profiles: list[dict] = []
@@ -927,22 +1300,28 @@ class PaloAltoParser:
     # ── Security checks ───────────────────────────────────────────────────────
     def _issue(self, severity, category, rule_name, description, recommendation,
                details="", line=""):
-        cis_ids = CIS_CONTROL_MAP.get(category, [])
-        pci_ids = PCI_DSS_MAP.get(category, [])
-        scf_ids = SCF_MAP.get(category, [])
+        key = (category, rule_name)
+        if key in self._seen_issues:
+            return
+        self._seen_issues.add(key)
+        cis_ids   = CIS_CONTROL_MAP.get(category, [])
+        pci_ids   = PCI_DSS_MAP.get(category, [])
+        scf_ids   = SCF_MAP.get(category, [])
+        bench_ids = CIS_BENCHMARK_MAP.get(category, [])
         self.issues.append({
-            "severity":       severity,
-            "category":       category,
-            "rule_name":      rule_name,
-            "line":           str(line) if line else "",
-            "description":    description,
-            "recommendation": recommendation,
-            "details":        details,
-            "cis_controls":   _cis_label(cis_ids),
-            "cis_ids":        cis_ids,
-            "pci_dss":        _pci_label(pci_ids),
-            "pci_ids":        pci_ids,
-            "scf":            _scf_label(scf_ids),
+            "severity":        severity,
+            "category":        category,
+            "rule_name":       rule_name,
+            "line":            str(line) if line else "",
+            "description":     description,
+            "recommendation":  recommendation,
+            "details":         details,
+            "cis_controls":    _cis_label(cis_ids),
+            "cis_ids":         cis_ids,
+            "cis_benchmark":   _cis_benchmark_label(bench_ids),
+            "pci_dss":         _pci_label(pci_ids),
+            "pci_ids":         pci_ids,
+            "scf":             _scf_label(scf_ids),
         })
 
     def _run_checks(self):
@@ -976,8 +1355,8 @@ class PaloAltoParser:
         self._chk_security_profile_settings()
         self._chk_default_deny_rule()
         self._chk_file_blocking_inbound()
-        # CIS Benchmark L2 checks (config-evaluatable)
-        self._run_cis_l2_checks()
+        # CIS Benchmark L1 + L2 checks (XSLT-based)
+        self._run_cis_checks()
 
     def _active_allow(self):
         return [r for r in self.security_rules if r["disabled"] != "yes" and r["action"] == "allow"]
@@ -2021,12 +2400,11 @@ class PaloAltoParser:
         except (ValueError, IndexError):
             return 0
 
-    def _run_cis_l2_checks(self):
-        """Run CIS Benchmark L2 checks via XSLT execution against the audit file."""
-        major     = self._panfw_major_version()
-        clamped   = max(6, min(11, major)) if 6 <= major <= 11 else 11
-        audit_name = _CIS_L2_AUDIT_IN_TAR.get(clamped, _CIS_L2_AUDIT_IN_TAR[11])
-        tar_path  = _find_audits_tar()
+    def _run_cis_checks(self):
+        """Run CIS Benchmark L1 and L2 checks via XSLT execution against the audit files."""
+        major   = self._panfw_major_version()
+        clamped = max(6, min(11, major)) if 6 <= major <= 11 else 11
+        tar_path = _find_audits_tar()
 
         if not tar_path:
             print("[!] audits.tar.gz not found — running built-in CIS L2 checks.")
@@ -2034,25 +2412,6 @@ class PaloAltoParser:
             self._chk_cis22_wmi_probing()
             self._chk_cis616_zone_flood()
             return
-
-        try:
-            with tarfile.open(tar_path, "r:gz") as tf:
-                if audit_name not in tf.getnames():
-                    print(f"[!] CIS L2 audit not found in tarball: {audit_name} — skipping XSLT checks.")
-                    self._chk_cis125_admin_cert()
-                    self._chk_cis22_wmi_probing()
-                    self._chk_cis616_zone_flood()
-                    return
-                audit_bytes = tf.extractfile(audit_name).read()  # type: ignore[union-attr]
-        except Exception as exc:
-            print(f"[!] Could not read audit file: {exc} — running built-in CIS L2 checks.")
-            self._chk_cis125_admin_cert()
-            self._chk_cis22_wmi_probing()
-            self._chk_cis616_zone_flood()
-            return
-
-        ver_str = major if major else "unknown"
-        print(f"[+] CIS L2 audit: {os.path.basename(audit_name)} (PAN-OS {ver_str})")
 
         try:
             from lxml import etree as _letree  # type: ignore[import]
@@ -2072,16 +2431,54 @@ class PaloAltoParser:
             print(f"[!] Could not prepare XML for XSLT execution: {exc}")
             return
 
-        content = audit_bytes.decode("utf-8", errors="replace")
-        checks  = _parse_audit_op_checks(content)
-        ran = found = 0
-        for chk in checks:
-            result = self._run_audit_xslt_check(chk, xml_doc, _letree)
-            if result is not None:
-                ran += 1
-                if result:
-                    found += 1
-        print(f"[+] CIS L2 XSLT: {ran} checks evaluated, {found} finding(s)")
+        ver_str = major if major else "unknown"
+
+        # Run L1 first (comprehensive baseline hardening)
+        l1_name = _CIS_L1_AUDIT_IN_TAR.get(clamped, _CIS_L1_AUDIT_IN_TAR[11])
+        try:
+            with tarfile.open(tar_path, "r:gz") as tf:
+                if l1_name in tf.getnames():
+                    l1_bytes = tf.extractfile(l1_name).read()  # type: ignore[union-attr]
+                    l1_content = l1_bytes.decode("utf-8", errors="replace")
+                    l1_checks  = _parse_audit_op_checks(l1_content)
+                    ran = found = 0
+                    for chk in l1_checks:
+                        result = self._run_audit_xslt_check(chk, xml_doc, _letree)
+                        if result is not None:
+                            ran += 1
+                            if result:
+                                found += 1
+                    print(f"[+] CIS L1 audit: {os.path.basename(l1_name)} "
+                          f"(PAN-OS {ver_str}): {ran} checks, {found} finding(s)")
+                else:
+                    print(f"[!] CIS L1 audit not found in tarball: {l1_name}")
+        except Exception as exc:
+            print(f"[!] Could not run L1 audit: {exc}")
+
+        # Run L2 next (additional hardening; deduplication via _seen_issues)
+        l2_name = _CIS_L2_AUDIT_IN_TAR.get(clamped, _CIS_L2_AUDIT_IN_TAR[11])
+        try:
+            with tarfile.open(tar_path, "r:gz") as tf:
+                if l2_name in tf.getnames():
+                    l2_bytes = tf.extractfile(l2_name).read()  # type: ignore[union-attr]
+                    l2_content = l2_bytes.decode("utf-8", errors="replace")
+                    l2_checks  = _parse_audit_op_checks(l2_content)
+                    ran = found = 0
+                    for chk in l2_checks:
+                        result = self._run_audit_xslt_check(chk, xml_doc, _letree)
+                        if result is not None:
+                            ran += 1
+                            if result:
+                                found += 1
+                    print(f"[+] CIS L2 audit: {os.path.basename(l2_name)} "
+                          f"(PAN-OS {ver_str}): {ran} checks, {found} finding(s)")
+                else:
+                    print(f"[!] CIS L2 audit not found in tarball: {l2_name}")
+                    self._chk_cis125_admin_cert()
+                    self._chk_cis22_wmi_probing()
+                    self._chk_cis616_zone_flood()
+        except Exception as exc:
+            print(f"[!] Could not run L2 audit: {exc}")
 
     def _run_audit_xslt_check(self, check: dict, xml_doc, etree) -> "bool | None":
         """Execute one XSLT check. Returns True=issue found, False=passed, None=error/skip."""
@@ -2106,6 +2503,9 @@ class PaloAltoParser:
 
         expect    = check["expect"]
         not_exp   = check["not_expect"]
+        # Contradictory criteria (expect == not_expect) can never be satisfied; skip.
+        if expect and not_exp and expect == not_exp:
+            return None
         failed    = False
         if expect and not re.search(expect, output, re.MULTILINE):
             failed = True
@@ -2118,7 +2518,7 @@ class PaloAltoParser:
 
         # ── Map to category ──────────────────────────────────────────────────
         desc_raw = check["description"]
-        cis_m    = re.match(r'^(\d+\.\d+(?:\.\d+)?)\s+', desc_raw)
+        cis_m    = re.match(r'^(\d+\.\d+(?:\.\d+)?(?:\.\d+)?)\s+', desc_raw)
         cis_num  = cis_m.group(1) if cis_m else ""
 
         if cis_num in _CIS_NUM_TO_CATEGORY:
@@ -2127,6 +2527,10 @@ class PaloAltoParser:
             category = _AUDIT_SUBCHECK_META[desc_raw][0]
         else:
             category = desc_raw
+
+        # Skip categories already covered by always-running Python checks
+        if category in _PYTHON_COVERED_CATEGORIES:
+            return False
 
         # ── Build plain description (no framework refs) ───────────────────
         if check["info"]:
@@ -2145,7 +2549,7 @@ class PaloAltoParser:
 
         # ── Rule / object name ────────────────────────────────────────────
         if desc_raw in _AUDIT_SUBCHECK_META:
-            rule_obj = f"log-settings/{desc_raw}"
+            rule_obj = desc_raw
         elif cis_m:
             rule_obj = desc_raw[cis_m.end():].strip()
         else:
@@ -2624,7 +3028,8 @@ class ExcelReporter:
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
         headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
-                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "PCI DSS", "SCF",
+                   "Category", "Rule / Object", "Config Line(s)", "CIS v8", "CIS Benchmark",
+                   "PCI DSS", "SCF",
                    "Description", "Recommendation", "Details",
                    "Asset", "Target", "Vuln", "Output", "Source"]
         self._hdr(ws, headers)
@@ -2654,7 +3059,7 @@ class ExcelReporter:
 
             values = [idx, "Y", sev, "", "",
                       iss["category"], rule_name,
-                      line, iss.get("cis_controls", ""),
+                      line, iss.get("cis_controls", ""), iss.get("cis_benchmark", ""),
                       iss.get("pci_dss", ""), iss.get("scf", ""),
                       iss["description"], iss["recommendation"], details,
                       hostname, target, vuln, output, source]
@@ -2675,12 +3080,17 @@ class ExcelReporter:
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 10:  # PCI DSS
+                elif col == 10:  # CIS Benchmark
+                    c.font = _font(bold=True, color="1F618D", size=9)
+                    c.alignment = _align("center")
+                    if row_bg:
+                        c.fill = _fill(row_bg)
+                elif col == 11:  # PCI DSS
                     c.font = _font(bold=True, color="7B2D8B", size=9)
                     c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 11:  # SCF
+                elif col == 12:  # SCF
                     c.font = _font(bold=True, color="1A5C3A", size=9)
                     c.alignment = _align("center")
                     if row_bg:
@@ -2697,7 +3107,7 @@ class ExcelReporter:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
 
-        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
+        self._set_widths(ws, [4, 12, 12, 18, 28, 32, 36, 14, 20, 20, 18, 18, 60, 60, 36, 24, 44, 16, 70, 30])
 
     # ── Ticketing Export ──────────────────────────────────────────────────────
     def _sheet_export(self):
