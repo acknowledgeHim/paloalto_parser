@@ -2019,8 +2019,8 @@ class PaloAltoParser:
         sys_el = self.root.find(".//deviceconfig/system")
         svc    = sys_el.find("service") if sys_el is not None else None
 
-        def _svc_path(tag: str) -> str:
-            return f"deviceconfig/system/service/disable-{tag}"
+        def _svc_rule(tag: str) -> str:
+            return f"service/disable-{tag}"
 
         def _svc_line(tag: str) -> str:
             # Only return a line when the element is explicitly present (bad value set);
@@ -2031,63 +2031,64 @@ class PaloAltoParser:
             return self._lineno_str(el) if el is not None else ""
 
         def _svc_details(tag: str) -> str:
-            path = _svc_path(tag)
+            xpath = f"deviceconfig/system/service/disable-{tag}"
             if svc is None:
-                return f"{path}: not set (no <service> block — defaults to enabled)"
+                return f"disable-{tag}: not set (no <service> block — defaults to enabled)\nxpath: {xpath}"
             el = svc.find(f"disable-{tag}")
             if el is None:
-                return f"{path}: not set (defaults to enabled)"
-            return f"{path}: {el.text or 'no'}"
+                return f"disable-{tag}: not set (defaults to enabled)\nxpath: {xpath}"
+            return f"disable-{tag}: {el.text or 'no'}\nxpath: {xpath}"
 
         if m.get("http_enabled"):
-            self._issue("HIGH", "HTTP Management Enabled", _svc_path("http"),
+            self._issue("HIGH", "HTTP Management Enabled", _svc_rule("http"),
                 "HTTP access to the management interface is enabled (cleartext).",
                 "Disable HTTP management: set service/disable-http to yes.",
                 _svc_details("http"),
                 line=_svc_line("http"))
 
         if m.get("telnet_enabled"):
-            self._issue("HIGH", "Telnet Management Enabled", _svc_path("telnet"),
+            self._issue("HIGH", "Telnet Management Enabled", _svc_rule("telnet"),
                 "Telnet access to the management interface is enabled (cleartext).",
                 "Disable Telnet management: set service/disable-telnet to yes. Use SSH instead.",
                 _svc_details("telnet"),
                 line=_svc_line("telnet"))
 
         if not m.get("permitted_ips"):
-            perm_path = "deviceconfig/system/permitted-ip"
-            self._issue("MEDIUM", "No Management IP Restrictions", perm_path,
+            self._issue("MEDIUM", "No Management IP Restrictions", "permitted-ip",
                 "No permitted-ip entries restrict which hosts can reach the management interface.",
                 "Add permitted-ip entries to restrict management access to known admin hosts/subnets.",
-                f"{perm_path}: not configured — any host can attempt to reach the management interface")
+                "permitted-ip: not configured — any host can attempt to reach the management interface\n"
+                "xpath: deviceconfig/system/permitted-ip")
 
-        ntp_path = "deviceconfig/system/ntp-servers"
         if not m.get("ntp_primary"):
-            self._issue("MEDIUM", "NTP Not Configured", ntp_path,
+            self._issue("MEDIUM", "NTP Not Configured", "ntp-servers",
                 "No primary NTP server is configured.",
                 "Configure at least two NTP servers for accurate timestamps in logs and certificates.",
-                f"{ntp_path}/primary-ntp-server/ntp-server-address: not set")
+                "ntp-servers/primary-ntp-server/ntp-server-address: not set\n"
+                "xpath: deviceconfig/system/ntp-servers")
         elif not m.get("ntp_secondary"):
             ntp_el   = sys_el.find("ntp-servers") if sys_el is not None else None
             ntp_line = self._lineno_str(ntp_el) if ntp_el is not None else ""
-            self._issue("LOW", "Only One NTP Server", ntp_path,
+            self._issue("LOW", "Only One NTP Server", "ntp-servers",
                 "Only one NTP server is configured. Loss of this server leaves the firewall without time sync.",
                 "Add a secondary NTP server for redundancy.",
-                f"{ntp_path}/primary-ntp-server: {m.get('ntp_primary')}\n"
-                f"{ntp_path}/secondary-ntp-server/ntp-server-address: not set",
+                f"primary-ntp-server: {m.get('ntp_primary')}\n"
+                "secondary-ntp-server/ntp-server-address: not set\n"
+                "xpath: deviceconfig/system/ntp-servers",
                 line=ntp_line)
 
         if not m.get("login_banner"):
-            self._issue("LOW", "No Login Banner", "deviceconfig/system/login-banner",
+            self._issue("LOW", "No Login Banner", "login-banner",
                 "No login banner is configured on the management interface.",
                 "Add a legal warning banner (login-banner) to satisfy compliance requirements and "
                 "establish notice of unauthorized access.",
-                "deviceconfig/system/login-banner: not set")
+                "login-banner: not set\nxpath: deviceconfig/system/login-banner")
 
         if not m.get("dns_primary"):
-            self._issue("LOW", "DNS Not Configured", "deviceconfig/system/dns-setting/servers",
+            self._issue("LOW", "DNS Not Configured", "dns-setting/servers",
                 "No primary DNS server is configured in device settings.",
                 "Configure DNS for FQDN resolution used by URL filtering, FQDN objects, and updates.",
-                "deviceconfig/system/dns-setting/servers/primary: not set")
+                "dns-setting/servers/primary: not set\nxpath: deviceconfig/system/dns-setting/servers")
 
     def _chk_admin_accounts(self):
         superusers = [a for a in self.admin_accounts if a["role"] == "superuser"]
@@ -2131,37 +2132,35 @@ class PaloAltoParser:
                    self._lineno_str(sys_el))
 
         if m.get("snmp_v1"):
-            v1_path = f"{snmp_base}/v1"
-            self._issue("HIGH", "SNMPv1 Enabled", v1_path,
+            self._issue("HIGH", "SNMPv1 Enabled", "snmp-setting/version/v1",
                 "SNMPv1 is enabled; it uses cleartext community strings and has no authentication.",
                 "Disable SNMPv1. Use SNMPv3 with authPriv (auth + encryption).",
-                f"{v1_path}: present",
+                f"snmp-setting/access-setting/version/v1: present\nxpath: {snmp_base}/v1",
                 line=_snmp_ver_line("v1"))
 
         if m.get("snmp_v2c"):
-            v2c_path = f"{snmp_base}/v2c"
-            self._issue("MEDIUM", "SNMPv2c Enabled", v2c_path,
+            self._issue("MEDIUM", "SNMPv2c Enabled", "snmp-setting/version/v2c",
                 "SNMPv2c is enabled; community strings are transmitted in cleartext.",
                 "Migrate to SNMPv3 with authPriv. If SNMPv2c is required, restrict source IPs.",
-                f"{v2c_path}: present",
+                f"snmp-setting/access-setting/version/v2c: present\nxpath: {snmp_base}/v2c",
                 line=_snmp_ver_line("v2c"))
 
         community = m.get("snmp_community", "").lower()
         if community in ("public", "private", "cisco", "community", "snmp"):
-            comm_path = f"{snmp_base}/v2c/snmp-community-string"
-            self._issue("CRITICAL", "Default/Weak SNMP Community String", comm_path,
+            self._issue("CRITICAL", "Default/Weak SNMP Community String",
+                "snmp-setting/version/v2c/community-string",
                 f"SNMP community string is set to the well-known default value '{community}'.",
                 "Change the community string to a long random value and restrict allowed SNMP hosts.",
-                f"{comm_path}: {community}",
+                f"snmp-community-string: {community}\nxpath: {snmp_base}/v2c/snmp-community-string",
                 line=_snmp_ver_line("v2c"))
 
         if m.get("snmp_v1") or m.get("snmp_v2c"):
             if not m.get("permitted_ips"):
-                self._issue("HIGH", "SNMP Enabled Without Source Restrictions",
-                    "deviceconfig/system/permitted-ip",
+                self._issue("HIGH", "SNMP Enabled Without Source Restrictions", "permitted-ip",
                     "SNMP is enabled and no management permitted-ip list is configured.",
                     "Restrict SNMP access to specific NMS hosts via permitted-ip or ACL.",
-                    "deviceconfig/system/permitted-ip: not configured — any host can poll SNMP")
+                    "permitted-ip: not configured — any host can poll SNMP\n"
+                    "xpath: deviceconfig/system/permitted-ip")
 
     def _chk_no_syslog(self):
         if not self.log_syslog_servers:
@@ -3117,7 +3116,7 @@ class ExcelReporter:
             vuln = self._vulns[vuln_id] if vuln_id and vuln_id in self._vulns else ""
 
             values = [idx, "Y", sev, "", "",
-                      iss["category"], rule_name,
+                      iss["category"], target,
                       line, iss.get("cis_controls", ""), iss.get("cis_benchmark", ""),
                       iss.get("pci_dss", ""), iss.get("scf", ""),
                       iss["description"], iss["recommendation"], details,
