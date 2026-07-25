@@ -173,6 +173,7 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "Update Server Verification Disabled":       ["4.6", "12.6"],
     "Password Profile Bypass Configured":        ["5.2", "6.5"],
     "User-ID Not Configured":                    ["6.1"],
+    "User-ID Network Exclusions Not Configured": ["4.2", "6.1"],
     "User-ID Agent Traffic Unrestricted":        ["4.2", "12.3"],
     "High Availability Not Configured":          ["12.2"],
     "WildFire File Size Limits Not Maximized":   ["10.7"],
@@ -226,6 +227,7 @@ CIS_BENCHMARK_MAP: dict[str, list[str]] = {
     "SNMPv3 Polling Not Configured":           ["1.5.1"],
     "Update Server Verification Disabled":     ["1.6.1"],
     "User-ID Not Configured":                  ["2.7"],
+    "User-ID Network Exclusions Not Configured": ["2.4"],
     "User-ID Agent Traffic Unrestricted":      ["2.8"],
     "High Availability Not Configured":        ["3.1"],
     "AV/Threat Content Updates Not Automatic": ["4.1", "4.2"],
@@ -375,6 +377,7 @@ PCI_DSS_MAP: dict[str, list[str]] = {
     "Update Server Verification Disabled":       ["6.3.1"],
     "Password Profile Bypass Configured":        ["8.3.6"],
     "User-ID Not Configured":                    [],
+    "User-ID Network Exclusions Not Configured": [],
     "User-ID Agent Traffic Unrestricted":        ["1.2.4"],
     "High Availability Not Configured":          [],
     "WildFire File Size Limits Not Maximized":   ["5.3.1"],
@@ -495,6 +498,7 @@ SCF_MAP: dict[str, list[str]] = {
     "Update Server Verification Disabled":           ["VPM-10"],
     "Password Profile Bypass Configured":            ["IAC-06"],
     "User-ID Not Configured":                        ["IAC-01"],
+    "User-ID Network Exclusions Not Configured":     ["IAC-01", "NET-04"],
     "User-ID Agent Traffic Unrestricted":            ["IAC-01", "NET-04"],
     "High Availability Not Configured":              ["OPS-04"],
     "WildFire File Size Limits Not Maximized":       ["TDA-02"],
@@ -643,6 +647,7 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "High DP Load Logging Disabled":                 28,
     "SNMPv3 Polling Not Configured":                 37,
     "Password Profile Bypass Configured":            3,
+    "User-ID Network Exclusions Not Configured":     3,
     "User-ID Agent Traffic Unrestricted":            9,
     "High Availability Not Configured":              11,
     "WildFire File Size Limits Not Maximized":       6,
@@ -820,6 +825,7 @@ _CIS_NUM_TO_CATEGORY: dict[str, str] = {
     # L1 checks
     "1.1.2":   "No Login Banner",
     "1.1.3":   "High DP Load Logging Disabled",
+    "1.2.1":   "Management Interface Not Restricted",    # PAN-OS 11+
     "1.2.3":   "HTTP Management Enabled",
     "1.3.1":   "Password Complexity Not Enforced",
     "1.3.2":   "Weak Password Minimum Length",
@@ -834,6 +840,8 @@ _CIS_NUM_TO_CATEGORY: dict[str, str] = {
     "1.4.1":   "Long or No Management Session Timeout",
     "1.5.1":   "SNMPv3 Polling Not Configured",
     "1.6.1":   "Update Server Verification Disabled",
+    "1.6.2":   "Only One NTP Server",                   # PAN-OS 11+
+    "2.4":     "User-ID Network Exclusions Not Configured",  # PAN-OS 11+
     "2.8":     "User-ID Agent Traffic Unrestricted",
     "3.1":     "High Availability Not Configured",
     "4.1":     "AV/Threat Content Updates Not Automatic",
