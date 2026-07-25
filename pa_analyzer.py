@@ -2031,13 +2031,12 @@ class PaloAltoParser:
             return self._lineno_str(el) if el is not None else ""
 
         def _svc_details(tag: str) -> str:
-            xpath = f"deviceconfig/system/service/disable-{tag}"
             if svc is None:
-                return f"disable-{tag}: not set (no <service> block — defaults to enabled)\nxpath: {xpath}"
+                return f"disable-{tag}: not set (no <service> block — defaults to enabled)"
             el = svc.find(f"disable-{tag}")
             if el is None:
-                return f"disable-{tag}: not set (defaults to enabled)\nxpath: {xpath}"
-            return f"disable-{tag}: {el.text or 'no'}\nxpath: {xpath}"
+                return f"disable-{tag}: not set (defaults to enabled)"
+            return f"disable-{tag}: {el.text or 'no'}"
 
         if m.get("http_enabled"):
             self._issue("HIGH", "HTTP Management Enabled", _svc_rule("http"),
@@ -2057,15 +2056,13 @@ class PaloAltoParser:
             self._issue("MEDIUM", "No Management IP Restrictions", "permitted-ip",
                 "No permitted-ip entries restrict which hosts can reach the management interface.",
                 "Add permitted-ip entries to restrict management access to known admin hosts/subnets.",
-                "permitted-ip: not configured — any host can attempt to reach the management interface\n"
-                "xpath: deviceconfig/system/permitted-ip")
+                "permitted-ip: not configured — any host can attempt to reach the management interface")
 
         if not m.get("ntp_primary"):
             self._issue("MEDIUM", "NTP Not Configured", "ntp-servers",
                 "No primary NTP server is configured.",
                 "Configure at least two NTP servers for accurate timestamps in logs and certificates.",
-                "ntp-servers/primary-ntp-server/ntp-server-address: not set\n"
-                "xpath: deviceconfig/system/ntp-servers")
+                "ntp-servers/primary-ntp-server/ntp-server-address: not set")
         elif not m.get("ntp_secondary"):
             ntp_el   = sys_el.find("ntp-servers") if sys_el is not None else None
             ntp_line = self._lineno_str(ntp_el) if ntp_el is not None else ""
@@ -2073,8 +2070,7 @@ class PaloAltoParser:
                 "Only one NTP server is configured. Loss of this server leaves the firewall without time sync.",
                 "Add a secondary NTP server for redundancy.",
                 f"primary-ntp-server: {m.get('ntp_primary')}\n"
-                "secondary-ntp-server/ntp-server-address: not set\n"
-                "xpath: deviceconfig/system/ntp-servers",
+                "secondary-ntp-server/ntp-server-address: not set",
                 line=ntp_line)
 
         if not m.get("login_banner"):
@@ -2082,13 +2078,13 @@ class PaloAltoParser:
                 "No login banner is configured on the management interface.",
                 "Add a legal warning banner (login-banner) to satisfy compliance requirements and "
                 "establish notice of unauthorized access.",
-                "login-banner: not set\nxpath: deviceconfig/system/login-banner")
+                "login-banner: not set")
 
         if not m.get("dns_primary"):
             self._issue("LOW", "DNS Not Configured", "dns-setting/servers",
                 "No primary DNS server is configured in device settings.",
                 "Configure DNS for FQDN resolution used by URL filtering, FQDN objects, and updates.",
-                "dns-setting/servers/primary: not set\nxpath: deviceconfig/system/dns-setting/servers")
+                "dns-setting/servers/primary: not set")
 
     def _chk_admin_accounts(self):
         superusers = [a for a in self.admin_accounts if a["role"] == "superuser"]
@@ -2135,14 +2131,14 @@ class PaloAltoParser:
             self._issue("HIGH", "SNMPv1 Enabled", "snmp-setting/version/v1",
                 "SNMPv1 is enabled; it uses cleartext community strings and has no authentication.",
                 "Disable SNMPv1. Use SNMPv3 with authPriv (auth + encryption).",
-                f"snmp-setting/access-setting/version/v1: present\nxpath: {snmp_base}/v1",
+                "snmp-setting/access-setting/version/v1: present",
                 line=_snmp_ver_line("v1"))
 
         if m.get("snmp_v2c"):
             self._issue("MEDIUM", "SNMPv2c Enabled", "snmp-setting/version/v2c",
                 "SNMPv2c is enabled; community strings are transmitted in cleartext.",
                 "Migrate to SNMPv3 with authPriv. If SNMPv2c is required, restrict source IPs.",
-                f"snmp-setting/access-setting/version/v2c: present\nxpath: {snmp_base}/v2c",
+                "snmp-setting/access-setting/version/v2c: present",
                 line=_snmp_ver_line("v2c"))
 
         community = m.get("snmp_community", "").lower()
@@ -2151,7 +2147,7 @@ class PaloAltoParser:
                 "snmp-setting/version/v2c/community-string",
                 f"SNMP community string is set to the well-known default value '{community}'.",
                 "Change the community string to a long random value and restrict allowed SNMP hosts.",
-                f"snmp-community-string: {community}\nxpath: {snmp_base}/v2c/snmp-community-string",
+                f"snmp-community-string: {community}",
                 line=_snmp_ver_line("v2c"))
 
         if m.get("snmp_v1") or m.get("snmp_v2c"):
@@ -2159,8 +2155,7 @@ class PaloAltoParser:
                 self._issue("HIGH", "SNMP Enabled Without Source Restrictions", "permitted-ip",
                     "SNMP is enabled and no management permitted-ip list is configured.",
                     "Restrict SNMP access to specific NMS hosts via permitted-ip or ACL.",
-                    "permitted-ip: not configured — any host can poll SNMP\n"
-                    "xpath: deviceconfig/system/permitted-ip")
+                    "permitted-ip: not configured — any host can poll SNMP")
 
     def _chk_no_syslog(self):
         if not self.log_syslog_servers:
@@ -2613,6 +2608,19 @@ class PaloAltoParser:
 
         # ── Details (evidence) ────────────────────────────────────────────
         details = f"Audit check: {desc_raw}\nXSLT output: {output[:500]}"
+
+        # Append full audit solution and extracted xpath to details so both
+        # surface in the Output column.
+        full_sol = check["solution"]
+        if full_sol:
+            details += f"\nAudit solution: {full_sol[:1000]}"
+        xpath_m = re.search(r'select="([^"]+)"', xsl_body)
+        if xpath_m:
+            raw_xp = xpath_m.group(1).strip()
+            # Unwrap single XSLT function wrapper e.g. string(...) or normalize-space(...)
+            fn_m   = re.match(r'^[\w-]+\((.*)\)$', raw_xp, re.DOTALL)
+            audit_xpath = fn_m.group(1).strip() if fn_m else raw_xp
+            details += f"\nxpath: {audit_xpath}"
 
         bench_override = [cis_num] if cis_num else None
         self._issue(severity, category, rule_obj, description, recommendation, details,
