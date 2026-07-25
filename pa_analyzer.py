@@ -1307,7 +1307,7 @@ class PaloAltoParser:
 
     # ── Security checks ───────────────────────────────────────────────────────
     def _issue(self, severity, category, rule_name, description, recommendation,
-               details="", line=""):
+               details="", line="", bench_override: "list[str] | None" = None):
         key = (category, rule_name)
         if key in self._seen_issues:
             return
@@ -1315,7 +1315,7 @@ class PaloAltoParser:
         cis_ids   = CIS_CONTROL_MAP.get(category, [])
         pci_ids   = PCI_DSS_MAP.get(category, [])
         scf_ids   = SCF_MAP.get(category, [])
-        bench_ids = CIS_BENCHMARK_MAP.get(category, [])
+        bench_ids = bench_override if bench_override is not None else CIS_BENCHMARK_MAP.get(category, [])
         self.issues.append({
             "severity":        severity,
             "category":        category,
@@ -2566,7 +2566,9 @@ class PaloAltoParser:
         # ── Details (evidence) ────────────────────────────────────────────
         details = f"Audit check: {desc_raw}\nXSLT output: {output[:500]}"
 
-        self._issue(severity, category, rule_obj, description, recommendation, details)
+        bench_override = [cis_num] if cis_num else None
+        self._issue(severity, category, rule_obj, description, recommendation, details,
+                    bench_override=bench_override)
         return True
 
     def _chk_cis125_admin_cert(self):
