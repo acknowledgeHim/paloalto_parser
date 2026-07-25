@@ -3124,7 +3124,7 @@ class ExcelReporter:
             vuln = self._vulns[vuln_id] if vuln_id and vuln_id in self._vulns else ""
 
             values = [idx, "Y", sev, "", "",
-                      iss["category"], target,
+                      iss["category"], rule_name,
                       line, iss.get("cis_controls", ""), iss.get("cis_benchmark", ""),
                       iss.get("pci_dss", ""), iss.get("scf", ""),
                       iss["description"], iss["recommendation"], details,
