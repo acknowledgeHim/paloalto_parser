@@ -2016,47 +2016,78 @@ class PaloAltoParser:
         if not m:
             return
 
+        sys_el = self.root.find(".//deviceconfig/system")
+        svc    = sys_el.find("service") if sys_el is not None else None
+
+        def _svc_path(tag: str) -> str:
+            return f"deviceconfig/system/service/disable-{tag}"
+
+        def _svc_line(tag: str) -> str:
+            # Only return a line when the element is explicitly present (bad value set);
+            # if absent, the issue is that nothing is there — no line to point to.
+            if svc is None:
+                return ""
+            el = svc.find(f"disable-{tag}")
+            return self._lineno_str(el) if el is not None else ""
+
+        def _svc_details(tag: str) -> str:
+            path = _svc_path(tag)
+            if svc is None:
+                return f"{path}: not set (no <service> block — defaults to enabled)"
+            el = svc.find(f"disable-{tag}")
+            if el is None:
+                return f"{path}: not set (defaults to enabled)"
+            return f"{path}: {el.text or 'no'}"
+
         if m.get("http_enabled"):
-            self._issue("HIGH", "HTTP Management Enabled", "Management",
+            self._issue("HIGH", "HTTP Management Enabled", _svc_path("http"),
                 "HTTP access to the management interface is enabled (cleartext).",
                 "Disable HTTP management: set service/disable-http to yes.",
-                "Management traffic including credentials sent in plaintext over HTTP.")
+                _svc_details("http"),
+                line=_svc_line("http"))
 
         if m.get("telnet_enabled"):
-            self._issue("HIGH", "Telnet Management Enabled", "Management",
+            self._issue("HIGH", "Telnet Management Enabled", _svc_path("telnet"),
                 "Telnet access to the management interface is enabled (cleartext).",
                 "Disable Telnet management: set service/disable-telnet to yes. Use SSH instead.",
-                "")
+                _svc_details("telnet"),
+                line=_svc_line("telnet"))
 
         if not m.get("permitted_ips"):
-            self._issue("MEDIUM", "No Management IP Restrictions", "Management",
+            perm_path = "deviceconfig/system/permitted-ip"
+            self._issue("MEDIUM", "No Management IP Restrictions", perm_path,
                 "No permitted-ip entries restrict which hosts can reach the management interface.",
                 "Add permitted-ip entries to restrict management access to known admin hosts/subnets.",
-                "Without restrictions, any host that can route to the mgmt interface can attempt login.")
+                f"{perm_path}: not configured — any host can attempt to reach the management interface")
 
+        ntp_path = "deviceconfig/system/ntp-servers"
         if not m.get("ntp_primary"):
-            self._issue("MEDIUM", "NTP Not Configured", "Management",
+            self._issue("MEDIUM", "NTP Not Configured", ntp_path,
                 "No primary NTP server is configured.",
                 "Configure at least two NTP servers for accurate timestamps in logs and certificates.",
-                "Inaccurate time breaks certificate validation, log correlation, and TOTP/MFA.")
+                f"{ntp_path}/primary-ntp-server/ntp-server-address: not set")
         elif not m.get("ntp_secondary"):
-            self._issue("LOW", "Only One NTP Server", "Management",
+            ntp_el   = sys_el.find("ntp-servers") if sys_el is not None else None
+            ntp_line = self._lineno_str(ntp_el) if ntp_el is not None else ""
+            self._issue("LOW", "Only One NTP Server", ntp_path,
                 "Only one NTP server is configured. Loss of this server leaves the firewall without time sync.",
                 "Add a secondary NTP server for redundancy.",
-                f"Primary: {m.get('ntp_primary')}")
+                f"{ntp_path}/primary-ntp-server: {m.get('ntp_primary')}\n"
+                f"{ntp_path}/secondary-ntp-server/ntp-server-address: not set",
+                line=ntp_line)
 
         if not m.get("login_banner"):
-            self._issue("LOW", "No Login Banner", "Management",
+            self._issue("LOW", "No Login Banner", "deviceconfig/system/login-banner",
                 "No login banner is configured on the management interface.",
                 "Add a legal warning banner (login-banner) to satisfy compliance requirements and "
                 "establish notice of unauthorized access.",
-                "")
+                "deviceconfig/system/login-banner: not set")
 
         if not m.get("dns_primary"):
-            self._issue("LOW", "DNS Not Configured", "Management",
+            self._issue("LOW", "DNS Not Configured", "deviceconfig/system/dns-setting/servers",
                 "No primary DNS server is configured in device settings.",
                 "Configure DNS for FQDN resolution used by URL filtering, FQDN objects, and updates.",
-                "")
+                "deviceconfig/system/dns-setting/servers/primary: not set")
 
     def _chk_admin_accounts(self):
         superusers = [a for a in self.admin_accounts if a["role"] == "superuser"]
@@ -2088,31 +2119,49 @@ class PaloAltoParser:
         if not m:
             return
 
+        sys_el    = self.root.find(".//deviceconfig/system")
+        snmp_base = "deviceconfig/system/snmp-setting/access-setting/version"
+
+        def _snmp_ver_line(ver: str) -> str:
+            if sys_el is None:
+                return ""
+            el = sys_el.find(f".//snmp-setting/access-setting/version/{ver}")
+            return self._lineno_str(el) if el is not None else (
+                   self._lineno_str(sys_el.find(".//snmp-setting")) or
+                   self._lineno_str(sys_el))
+
         if m.get("snmp_v1"):
-            self._issue("HIGH", "SNMPv1 Enabled", "SNMP",
+            v1_path = f"{snmp_base}/v1"
+            self._issue("HIGH", "SNMPv1 Enabled", v1_path,
                 "SNMPv1 is enabled; it uses cleartext community strings and has no authentication.",
                 "Disable SNMPv1. Use SNMPv3 with authPriv (auth + encryption).",
-                "")
+                f"{v1_path}: present",
+                line=_snmp_ver_line("v1"))
 
         if m.get("snmp_v2c"):
-            self._issue("MEDIUM", "SNMPv2c Enabled", "SNMP",
+            v2c_path = f"{snmp_base}/v2c"
+            self._issue("MEDIUM", "SNMPv2c Enabled", v2c_path,
                 "SNMPv2c is enabled; community strings are transmitted in cleartext.",
                 "Migrate to SNMPv3 with authPriv. If SNMPv2c is required, restrict source IPs.",
-                "")
+                f"{v2c_path}: present",
+                line=_snmp_ver_line("v2c"))
 
         community = m.get("snmp_community", "").lower()
         if community in ("public", "private", "cisco", "community", "snmp"):
-            self._issue("CRITICAL", "Default/Weak SNMP Community String", "SNMP",
+            comm_path = f"{snmp_base}/v2c/snmp-community-string"
+            self._issue("CRITICAL", "Default/Weak SNMP Community String", comm_path,
                 f"SNMP community string is set to the well-known default value '{community}'.",
                 "Change the community string to a long random value and restrict allowed SNMP hosts.",
-                "")
+                f"{comm_path}: {community}",
+                line=_snmp_ver_line("v2c"))
 
         if m.get("snmp_v1") or m.get("snmp_v2c"):
             if not m.get("permitted_ips"):
-                self._issue("HIGH", "SNMP Enabled Without Source Restrictions", "SNMP",
+                self._issue("HIGH", "SNMP Enabled Without Source Restrictions",
+                    "deviceconfig/system/permitted-ip",
                     "SNMP is enabled and no management permitted-ip list is configured.",
                     "Restrict SNMP access to specific NMS hosts via permitted-ip or ACL.",
-                    "")
+                    "deviceconfig/system/permitted-ip: not configured — any host can poll SNMP")
 
     def _chk_no_syslog(self):
         if not self.log_syslog_servers:
