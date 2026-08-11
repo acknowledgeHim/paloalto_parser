@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-enum4linux / enum4linux-ng User Parser
+enum4linux / enum4linux-ng User & Computer Parser
 
-Pulls every username out of enum4linux or enum4linux-ng output and writes
-one username per line to a .txt file (e.g. for password spraying, kerbrute,
-hydra userlists, etc.).
+Pulls every account out of enum4linux or enum4linux-ng output and splits it
+into two .txt files, one per line each:
+  - regular user accounts   -> <input>_users.txt
+  - machine/computer accounts (trailing '$') -> <input>_computers.txt
 
-Handles all the common places enum4linux prints usernames:
+Handles all the common places enum4linux prints accounts:
   - SID/RID cycling lines:
         S-1-5-21-...-500 SAMBA\\Administrator (Local User)
         500: TARGET\\Administrator (SidTypeUser)          [enum4linux-ng]
@@ -16,17 +17,20 @@ Handles all the common places enum4linux prints usernames:
         user:[bob] rid:[0x3e8]
   - enum4linux-ng JSON output (-oJ), any depth, any key layout.
 
-Group/alias/well-known-group entries are ignored — only records typed (or
-implied) as users are kept. Machine accounts (trailing '$') are included by
-default; use --exclude-machines to drop them.
+Group/alias/well-known-group entries are ignored. Accounts whose name ends
+in '$' are treated as machine/computer accounts and routed to the computers
+file (with the trailing '$' stripped, since that's the actual hostname);
+everything else goes to the users file.
 
 Usage:
     python enum4linux_parser.py enum4linux_output.txt
-    python enum4linux_parser.py scan.json -o users.txt --with-domain
-    cat scan.txt | python enum4linux_parser.py - -o users.txt
+        -> enum4linux_output_users.txt, enum4linux_output_computers.txt
+    python enum4linux_parser.py scan.json --with-domain
+    cat scan.txt | python enum4linux_parser.py - -o loot_users.txt -c loot_computers.txt
 """
 
 import re
+import os
 import sys
 import json
 import argparse
@@ -55,7 +59,9 @@ _GROUP_TYPE_RE = re.compile(r'group|alias|domain\b(?!\s*user)', re.I)
 
 
 def _is_user_type(type_str):
-    """True if the (Local User)/(SidTypeUser)/etc. tag denotes a user, not a group."""
+    """True if the (Local User)/(SidTypeUser)/etc. tag denotes a user, not a group.
+    Note: machine accounts also carry a 'user' type tag — they're split out later
+    by their trailing '$', same as real Windows/Samba convention."""
     if _GROUP_TYPE_RE.search(type_str) and not _USER_TYPE_RE.search(type_str):
         return False
     return bool(_USER_TYPE_RE.search(type_str))
@@ -125,54 +131,83 @@ def parse_enum4linux(raw_text):
     return parse_text(raw_text)
 
 
+def _dedup_sort(names, no_sort):
+    seen = set()
+    out = []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    if not no_sort:
+        out.sort(key=str.lower)
+    return out
+
+
+def _write(names, path):
+    with open(path, "w", encoding="utf-8") as fh:
+        for n in names:
+            fh.write(n + "\n")
+
+
 def main():
     ap = argparse.ArgumentParser(
-        description="Parse enum4linux / enum4linux-ng output and dump all usernames to a txt file"
+        description="Parse enum4linux / enum4linux-ng output and split accounts into users/computers txt files"
     )
     ap.add_argument("input", metavar="FILE",
                      help="enum4linux output file (text or -oJ JSON); use '-' for stdin")
-    ap.add_argument("-o", "--output", metavar="OUTPUT.txt", default="users.txt",
-                     help="Output file, one username per line (default: users.txt)")
+    ap.add_argument("-o", "--users-output", metavar="USERS.txt",
+                     help="Users output file (default: <input>_users.txt)")
+    ap.add_argument("-c", "--computers-output", metavar="COMPUTERS.txt",
+                     help="Computers output file (default: <input>_computers.txt)")
     ap.add_argument("--with-domain", action="store_true",
-                     help="Prefix each username with DOMAIN\\ when a domain was captured")
-    ap.add_argument("--exclude-machines", action="store_true",
-                     help="Drop machine accounts (usernames ending in '$')")
+                     help="Prefix each name with DOMAIN\\ when a domain was captured")
+    ap.add_argument("--keep-dollar-sign", action="store_true",
+                     help="Keep the trailing '$' on computer account names instead of stripping it")
+    ap.add_argument("--no-computers", action="store_true",
+                     help="Don't split out machine accounts — write everything to the users file")
     ap.add_argument("--no-sort", action="store_true",
                      help="Preserve discovery order instead of sorting alphabetically")
     args = ap.parse_args()
 
     if args.input == "-":
         raw_text = sys.stdin.read()
+        stem = "enum4linux"
     else:
         with open(args.input, "r", encoding="utf-8", errors="replace") as fh:
             raw_text = fh.read()
+        stem = os.path.splitext(args.input)[0]
+
+    users_output = args.users_output or f"{stem}_users.txt"
+    computers_output = args.computers_output or f"{stem}_computers.txt"
 
     records = parse_enum4linux(raw_text)
 
     if not records:
-        print("[warn] No users found in input.", file=sys.stderr)
+        print("[warn] No accounts found in input.", file=sys.stderr)
 
-    seen = set()
-    users = []
+    user_names = []
+    computer_names = []
     for domain, user in records:
         user = user.strip()
         if not user:
             continue
-        if args.exclude_machines and user.endswith('$'):
-            continue
+
+        is_machine = user.endswith('$') and not args.no_computers
+        if is_machine and not args.keep_dollar_sign:
+            user = user[:-1]
+
         name = f"{domain}\\{user}" if (args.with_domain and domain) else user
-        if name not in seen:
-            seen.add(name)
-            users.append(name)
+        (computer_names if is_machine else user_names).append(name)
 
-    if not args.no_sort:
-        users.sort(key=str.lower)
+    user_names = _dedup_sort(user_names, args.no_sort)
+    computer_names = _dedup_sort(computer_names, args.no_sort)
 
-    with open(args.output, "w", encoding="utf-8") as fh:
-        for u in users:
-            fh.write(u + "\n")
+    _write(user_names, users_output)
+    print(f"Wrote {len(user_names)} unique user(s) to {users_output}", file=sys.stderr)
 
-    print(f"Wrote {len(users)} unique username(s) to {args.output}", file=sys.stderr)
+    if not args.no_computers:
+        _write(computer_names, computers_output)
+        print(f"Wrote {len(computer_names)} unique computer(s) to {computers_output}", file=sys.stderr)
 
 
 if __name__ == "__main__":
