@@ -15,6 +15,9 @@ Handles all the common places enum4linux prints accounts:
         index: 0x1 RID: 0x1f4 acb: ... Account: bob    Name: ...    Desc: ...
   - rpcclient enumdomusers dump:
         user:[bob] rid:[0x3e8]
+  - domain group membership dump:
+        Group: 'Domain Computers' (RID: 515) has member: SIDMAP\\WIN-CLIENT$
+        Group: 'Domain Admins' (RID: 512) has member: SIDMAP\\Administrator
   - enum4linux-ng JSON output (-oJ), any depth, any key layout.
 
 Group/alias/well-known-group entries are ignored. Accounts whose name ends
@@ -53,6 +56,10 @@ _RE_ACCOUNT_LINE = re.compile(r'Account:\s*(?P<user>\S+)')
 # user:[bob] rid:[0x3e8]
 _RE_USER_RID_LINE = re.compile(r'user:\[(?P<user>[^\]]+)\]\s*rid:\[')
 
+# Group: 'Domain Computers' (RID: 515) has member: SIDMAP\WIN-CLIENT$
+# (also covers 'Domain Users', 'Domain Admins', etc. — whatever group enum4linux dumped members for)
+_RE_GROUP_MEMBER_LINE = re.compile(r'has member:\s*(?P<domain>[^\\\s]+)\\(?P<user>\S+)')
+
 # Types that indicate a *user* record (as opposed to a group/alias)
 _USER_TYPE_RE = re.compile(r'user', re.I)
 _GROUP_TYPE_RE = re.compile(r'group|alias|domain\b(?!\s*user)', re.I)
@@ -84,6 +91,11 @@ def parse_text(text):
         m = _RE_USER_RID_LINE.search(line)
         if m:
             found.append((None, m.group('user')))
+            continue
+
+        m = _RE_GROUP_MEMBER_LINE.search(line)
+        if m:
+            found.append((m.group('domain'), m.group('user')))
             continue
 
         m = _RE_ACCOUNT_LINE.search(line)
