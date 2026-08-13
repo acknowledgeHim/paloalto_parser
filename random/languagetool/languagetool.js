@@ -188,15 +188,15 @@
     });
   }
 
-  function updateBadge(badges, panel, matches, el) {
+  function updateBadge(badge, panel, matches, el) {
     if (matches === null) {
-      badges.forEach(function (b) { b.className = "lt-badge lt-badge-checking" + (b._bl ? " lt-badge-bl" : ""); b.textContent = "…"; }); return;
+      badge.className = "lt-badge lt-badge-checking"; badge.textContent = "…"; return;
     }
     if (matches.length === 0) {
-      badges.forEach(function (b) { b.className = "lt-badge lt-badge-ok" + (b._bl ? " lt-badge-bl" : ""); b.innerHTML = "&#10003;"; });
+      badge.className = "lt-badge lt-badge-ok"; badge.innerHTML = "&#10003;";
       panel.style.display = "none";
     } else {
-      badges.forEach(function (b) { b.className = "lt-badge lt-badge-err" + (b._bl ? " lt-badge-bl" : ""); b.textContent = matches.length; });
+      badge.className = "lt-badge lt-badge-err"; badge.textContent = matches.length;
       buildIssuesPanel(panel, matches, el);
     }
   }
@@ -223,16 +223,10 @@
     container.appendChild(overlay);
     mirrorStyles(el, overlay);
 
-    // Badge (top-right)
+    // Badge, sits just outside the box, below it
     var badge = document.createElement("div");
     badge.className = "lt-badge lt-badge-checking"; badge.textContent = "…";
     container.appendChild(badge);
-
-    // Badge (bottom-left)
-    var badge2 = document.createElement("div");
-    badge2.className = "lt-badge lt-badge-bl lt-badge-checking"; badge2.textContent = "…";
-    badge2._bl = true;
-    container.appendChild(badge2);
 
     // Issues panel
     var issuesPanel = document.createElement("div");
@@ -244,25 +238,21 @@
     inlinePopup.className = "lt-popup"; inlinePopup.style.display = "none";
     document.body.appendChild(inlinePopup);
 
-    // Badge click → toggle issues panel
-    function badgeClick(clickedBadge) {
-      return function (e) {
-        e.preventDefault(); e.stopPropagation();
-        if (issuesPanel.style.display === "none" && issuesPanel.children.length) {
-          positionNear(issuesPanel, clickedBadge, true);
-        } else {
-          issuesPanel.style.display = "none";
-        }
-      };
-    }
-    badge.addEventListener("mousedown", badgeClick(badge));
-    badge2.addEventListener("mousedown", badgeClick(badge2));
+    // Badge click → toggle issues panel (opens below the badge)
+    badge.addEventListener("mousedown", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      if (issuesPanel.style.display === "none" && issuesPanel.children.length) {
+        positionNear(issuesPanel, badge, false);
+      } else {
+        issuesPanel.style.display = "none";
+      }
+    });
 
     // Close floaters on outside click
     document.addEventListener("mousedown", function (e) {
       if (!inlinePopup.contains(e.target) && !overlay.contains(e.target))
         inlinePopup.style.display = "none";
-      if (!issuesPanel.contains(e.target) && e.target !== badge && e.target !== badge2)
+      if (!issuesPanel.contains(e.target) && e.target !== badge)
         issuesPanel.style.display = "none";
     }, true);
 
@@ -287,11 +277,11 @@
     function runCheck() {
       var text = getText(el);
       if (text === lastChecked) return;
-      updateBadge([badge, badge2], issuesPanel, null, el);
+      updateBadge(badge, issuesPanel, null, el);
       if (text.trim().length < MIN_LENGTH) {
         overlay.innerHTML = escapeHtml(text);
         lastChecked = text;
-        updateBadge([badge, badge2], issuesPanel, [], el);
+        updateBadge(badge, issuesPanel, [], el);
         return;
       }
       checkText(text)
@@ -299,7 +289,7 @@
           if (text !== getText(el)) return;
           overlay.innerHTML = buildOverlayHTML(text, data.matches);
           lastChecked = text;
-          updateBadge([badge, badge2], issuesPanel, data.matches, el);
+          updateBadge(badge, issuesPanel, data.matches, el);
         })
         .catch(function (err) { console.warn("LanguageTool:", err); });
     }
@@ -320,7 +310,7 @@
       mirrorStyles(el, overlay);
       overlay.innerHTML = escapeHtml(getText(el));
       if (getText(el).trim().length >= MIN_LENGTH) runCheck();
-      else updateBadge([badge, badge2], issuesPanel, [], el);
+      else updateBadge(badge, issuesPanel, [], el);
     }
 
     if (window.ResizeObserver) {
@@ -351,13 +341,12 @@
     "}" +
     ".lt-mark{pointer-events:all;cursor:pointer;}" +
     ".lt-badge{" +
-      "position:absolute;top:5px;right:6px;z-index:10;" +
+      "position:absolute;top:100%;left:0;margin-top:6px;z-index:10;" +
       "min-width:20px;height:20px;border-radius:10px;padding:0 6px;" +
       "font-size:11px;font-weight:700;line-height:20px;text-align:center;" +
       "cursor:pointer;user-select:none;" +
       "box-shadow:0 1px 4px rgba(0,0,0,.25);transition:background .2s;" +
     "}" +
-    ".lt-badge-bl{top:auto;bottom:5px;right:auto;left:6px;}" +
     ".lt-badge-checking{background:#90a4ae;color:#fff;}" +
     ".lt-badge-ok{background:#1565c0;color:#fff;}" +
     ".lt-badge-err{background:#e53935;color:#fff;}" +
