@@ -1,0 +1,11 @@
+# Auto-loaded by `docker-compose up` alongside docker-compose.yml — no flags
+# needed. Swaps the web service back to Django's autoreloading dev server so
+# local edits show up without a rebuild/restart; gunicorn (as configured in
+# docker-compose.yml) is what actually runs in a real deployment.
+#
+# To run the production-shaped stack (gunicorn, no autoreload) locally too,
+# ignore this file explicitly:
+#   docker-compose -f docker-compose.yml up --build
+services:
+  web:
+    command: python manage.py runserver 0.0.0.0:8000

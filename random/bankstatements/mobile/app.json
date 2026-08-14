@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Bank Statement Sync",
+    "slug": "bankstatements-mobile",
+    "scheme": "bankstatements",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "plugins": ["expo-router", "expo-secure-store"],
+    "ios": {
+      "bundleIdentifier": "com.yourcompany.bankstatements",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to photograph checks you upload manually.",
+        "NSPhotoLibraryUsageDescription": "Used to pick check images/PDFs to upload."
+      }
+    },
+    "android": {
+      "package": "com.yourcompany.bankstatements",
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
+    }
+  }
+}

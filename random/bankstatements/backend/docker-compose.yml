@@ -1,0 +1,90 @@
+services:
+  db:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-bankstatements}
+      MYSQL_USER: ${MYSQL_USER:-bankstatements}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-too}
+    volumes:
+      - mysqldata:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-change-me-too}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  # Django app server, via gunicorn. Migrations, collectstatic, and
+  # (optionally) superuser creation all happen automatically on boot via
+  # docker-entrypoint.sh — you never need Python or a virtualenv on the host.
+  # One-off management commands still work via
+  # `docker-compose exec web python manage.py <command>`.
+  web:
+    build: .
+    command: >
+      sh -c "gunicorn config.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers ${GUNICORN_WORKERS:-3}
+      --timeout ${GUNICORN_TIMEOUT:-120}
+      --access-logfile - --error-logfile -"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Runs the actual bank-statement sync jobs (banking/tasks.py): pulling
+  # statements from Plaid on Plaid's STATEMENTS webhook, and any task the
+  # beat schedule below queues.
+  celery-worker:
+    build: .
+    command: celery -A config worker -l info
+    volumes:
+      - .:/app
+    env_file: .env
+    environment:
+      RUN_MIGRATIONS: "false"  # web already runs migrate/collectstatic on boot
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      web:
+        condition: service_started
+
+  # Scheduler only — enqueues periodic tasks (e.g. banking.tasks.sync_all_items,
+  # configured via django-celery-beat in /admin/) for celery-worker to run.
+  # Kept as its own process rather than `celery worker --beat`: running beat
+  # embedded in a worker is a single-process convenience Celery documents as
+  # dev-only, since anything that restarts the worker (autoreload, a crash,
+  # scaling to multiple workers) restarts or duplicates the scheduler with it.
+  celery-beat:
+    build: .
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    env_file: .env
+    environment:
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      web:
+        condition: service_started
+
+volumes:
+  mysqldata:
