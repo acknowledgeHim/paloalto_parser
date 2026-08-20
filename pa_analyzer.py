@@ -693,12 +693,29 @@ _CIS_L2_AUDIT_IN_TAR: dict[int, str] = {
 }
 
 
+_TAR_SEARCH_SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".tox", "dist", "build"}
+
+
 def _find_audits_tar() -> str | None:
-    """Return path to audits.tar.gz if found alongside the script or in CWD."""
-    for base in [os.path.dirname(os.path.abspath(__file__)), os.getcwd()]:
-        path = os.path.join(base, "audits.tar.gz")
-        if os.path.isfile(path):
-            return path
+    """Return path to audits.tar.gz.
+
+    Checks alongside the script and in the CWD first (fast path, preserves prior
+    behavior/priority), then falls back to a recursive walk under both of those
+    directories so a bundle placed in a subfolder is still picked up. Common
+    noise directories (.git, __pycache__, venvs, node_modules, etc.) are skipped.
+    """
+    roots = list(dict.fromkeys([os.path.dirname(os.path.abspath(__file__)), os.getcwd()]))
+
+    for base in roots:
+        direct = os.path.join(base, "audits.tar.gz")
+        if os.path.isfile(direct):
+            return direct
+
+    for base in roots:
+        for root, dirs, files in os.walk(base):
+            dirs[:] = [d for d in dirs if d not in _TAR_SEARCH_SKIP_DIRS and not d.startswith(".")]
+            if "audits.tar.gz" in files:
+                return os.path.join(root, "audits.tar.gz")
     return None
 
 
@@ -1036,6 +1053,7 @@ class PaloAltoParser:
 
         # CIS benchmark / .audit selection (set by _run_cis_checks once parsed)
         self.panos_version_str: str = ""
+        self.audits_tar_path:   str = ""
         self.cis_l1_audit_used: str = ""
         self.cis_l2_audit_used: str = ""
 
@@ -2473,12 +2491,16 @@ class PaloAltoParser:
 
         if not tar_path:
             print("[!] audits.tar.gz not found — running built-in CIS L2 checks.")
+            self.audits_tar_path   = ""
             self.cis_l1_audit_used = self.cis_l2_audit_used = \
                 "audits.tar.gz not found — built-in checks only"
             self._chk_cis125_admin_cert()
             self._chk_cis22_wmi_probing()
             self._chk_cis616_zone_flood()
             return
+
+        self.audits_tar_path = tar_path
+        print(f"[+] audits.tar.gz found: {tar_path}")
 
         try:
             from lxml import etree as _letree  # type: ignore[import]
@@ -2812,6 +2834,7 @@ class ExcelReporter:
 
         section_header("CONFIGURATION OVERVIEW")
         kv("PAN-OS Version (detected)", p.panos_version_str or "unknown")
+        kv("audits.tar.gz used",       p.audits_tar_path or "not found")
         kv("CIS Benchmark — L1 .audit", p.cis_l1_audit_used or "n/a")
         kv("CIS Benchmark — L2 .audit", p.cis_l2_audit_used or "n/a")
         kv("Security Rules (total)",    len(p.security_rules))
