@@ -1034,6 +1034,11 @@ class PaloAltoParser:
         self.vuln_profiles:      dict[str, dict] = {}
         self.wildfire_profiles:  dict[str, dict] = {}
 
+        # CIS benchmark / .audit selection (set by _run_cis_checks once parsed)
+        self.panos_version_str: str = ""
+        self.cis_l1_audit_used: str = ""
+        self.cis_l2_audit_used: str = ""
+
     # ── Parse entry point ─────────────────────────────────────────────────────
     def parse(self):
         try:
@@ -2452,13 +2457,24 @@ class PaloAltoParser:
             return 0
 
     def _run_cis_checks(self):
-        """Run CIS Benchmark L1 and L2 checks via XSLT execution against the audit files."""
+        """Run CIS Benchmark L1 and L2 checks via XSLT execution against the audit files.
+
+        The benchmark/.audit pair is picked from the PAN-OS major version found in the
+        config's own <config version="..."> attribute (e.g. "11.1.13" -> major 11), so a
+        device on any 11.x train is automatically checked against the CIS Palo Alto
+        Firewall 11 Benchmark rather than a fixed/hardcoded version.
+        """
         major   = self._panfw_major_version()
         clamped = max(6, min(11, major)) if 6 <= major <= 11 else 11
         tar_path = _find_audits_tar()
 
+        self.panos_version_str = (self.root.get("version", "") or "unknown") \
+            if self.root is not None else "unknown"
+
         if not tar_path:
             print("[!] audits.tar.gz not found — running built-in CIS L2 checks.")
+            self.cis_l1_audit_used = self.cis_l2_audit_used = \
+                "audits.tar.gz not found — built-in checks only"
             self._chk_cis125_admin_cert()
             self._chk_cis22_wmi_probing()
             self._chk_cis616_zone_flood()
@@ -2468,6 +2484,8 @@ class PaloAltoParser:
             from lxml import etree as _letree  # type: ignore[import]
         except ImportError:
             print("[!] lxml not installed — running built-in CIS L2 checks. pip install lxml")
+            self.cis_l1_audit_used = self.cis_l2_audit_used = \
+                "lxml not installed — built-in checks only"
             self._chk_cis125_admin_cert()
             self._chk_cis22_wmi_probing()
             self._chk_cis616_zone_flood()
@@ -2501,8 +2519,10 @@ class PaloAltoParser:
                                 found += 1
                     print(f"[+] CIS L1 audit: {os.path.basename(l1_name)} "
                           f"(PAN-OS {ver_str}): {ran} checks, {found} finding(s)")
+                    self.cis_l1_audit_used = os.path.basename(l1_name)
                 else:
                     print(f"[!] CIS L1 audit not found in tarball: {l1_name}")
+                    self.cis_l1_audit_used = f"{os.path.basename(l1_name)} (missing from tarball)"
         except Exception as exc:
             print(f"[!] Could not run L1 audit: {exc}")
 
@@ -2523,8 +2543,10 @@ class PaloAltoParser:
                                 found += 1
                     print(f"[+] CIS L2 audit: {os.path.basename(l2_name)} "
                           f"(PAN-OS {ver_str}): {ran} checks, {found} finding(s)")
+                    self.cis_l2_audit_used = os.path.basename(l2_name)
                 else:
                     print(f"[!] CIS L2 audit not found in tarball: {l2_name}")
+                    self.cis_l2_audit_used = f"{os.path.basename(l2_name)} (missing from tarball)"
                     self._chk_cis125_admin_cert()
                     self._chk_cis22_wmi_probing()
                     self._chk_cis616_zone_flood()
@@ -2789,6 +2811,9 @@ class ExcelReporter:
             row += 1
 
         section_header("CONFIGURATION OVERVIEW")
+        kv("PAN-OS Version (detected)", p.panos_version_str or "unknown")
+        kv("CIS Benchmark — L1 .audit", p.cis_l1_audit_used or "n/a")
+        kv("CIS Benchmark — L2 .audit", p.cis_l2_audit_used or "n/a")
         kv("Security Rules (total)",    len(p.security_rules))
         kv("  Active",  sum(1 for r in p.security_rules if r["disabled"] != "yes"))
         kv("  Disabled", sum(1 for r in p.security_rules if r["disabled"] == "yes"))
