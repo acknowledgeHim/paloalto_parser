@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 Palo Alto Firewall Configuration Analyzer
-Parses PAN-OS XML configuration (device or Panorama), checks for security
-issues/misconfigurations, and exports findings + rule inventory to Excel.
+Parses a PAN-OS configuration — either an XML export (device or Panorama) or a
+'show config merged'/'show config running' CLI text capture — checks for
+security issues/misconfigurations (including CIS Benchmark L1/L2 checks run
+against Tenable Nessus .audit files), and exports findings + rule inventory
+to Excel. A Policy Optimizer / rulebase CSV export can supply the Security
+Rulebase (with rule-usage data) when a CLI capture's own rulebase is empty.
 
 Usage:
     python pa_analyzer.py running-config.xml
     python pa_analyzer.py running-config.xml -o audit.xlsx
+    python pa_analyzer.py "show merged combined.txt" --rules-csv rules.csv
 """
 
 import re
@@ -56,6 +61,325 @@ def _parse_xml_with_linenos(filename: str):
     with open(filename, "rb") as fh:
         ep.ParseFile(fh)
 
+    return builder.close(), linemap
+
+
+# ── "show config merged" (curly-brace CLI) parser ────────────────────────────
+# PAN-OS also renders its config as an indented curly-brace tree — the format
+# produced by `show config merged` / `show config running` on the CLI, typically
+# captured via a PuTTY/SecureCRT session log. This section converts that text
+# into the same ElementTree shape the XML API export produces, so every
+# downstream parser/check/CIS-audit routine below runs unmodified regardless of
+# which format was supplied.
+#
+# Grammar (per block): a statement is one of
+#   key { ... }        -> nested block
+#   key [ v1 v2 ... ];  -> member-list (always unambiguous)
+#   key value;          -> scalar (or a single-value member-list, see below)
+#   key;                -> "flag" — either a bare list value (permitted-ip-style
+#                          identity, zone/tag member) or a structural/boolean
+#                          leaf (e.g. "none;", "rules;" for an empty rulebase).
+#                          Disambiguated heuristically in _emit_curly_flag().
+#
+# The one genuine ambiguity the curly syntax can't resolve on its own is
+# whether a block's *named* children (`key { childname { ... } }`) are
+# individually-named objects (PAN-OS XML: <key><entry name="childname">) or a
+# fixed structural field reused verbatim across configs (PAN-OS XML:
+# <key><childname>). CURLY_ENTRY_LIST_TAGS is the curated (non-exhaustive)
+# answer for the tags this script actually inspects; anything not listed
+# defaults to the structural (direct-nest) interpretation, which matches the
+# majority of the PAN-OS schema.
+
+_ANSI_CSI_RE       = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]')
+_ANSI_MISC_RE      = re.compile(r'\x1b[=>]')
+_PAGER_ARTIFACT_RE = re.compile(r'(?m)^[ \t]*lines\s+\d+-\d+[ \t]*')
+_VALID_TAG_RE      = re.compile(r'^[A-Za-z_][A-Za-z0-9_.\-]*$')
+_CONFIG_BLOCK_RE   = re.compile(r'(?m)^\s*config\s*\{')
+
+# Tags whose children are individually-named objects -> <entry name="child">
+CURLY_ENTRY_LIST_TAGS: set[str] = {
+    "address", "address-group", "region", "external-list",
+    "application", "application-group", "application-filter",
+    "service", "service-group", "tag",
+    "rules",
+    "zone", "virtual-router", "virtual-wire", "vlan",
+    "ethernet", "aggregate-ethernet", "loopback", "tunnel", "units",
+    "static-route", "static-route-ipv6", "redistribution-profile",
+    "profile-group",
+    "virus", "spyware", "vulnerability", "url-filtering", "file-blocking",
+    "wildfire-analysis", "data-filtering", "dos-protection",
+    "zone-protection-profile", "decryption-profile", "certificate-profile",
+    "certificate", "ssl-tls-service-profile",
+    "ike-crypto-profiles", "ipsec-crypto-profiles",
+    "ike-gateways", "gateway", "ipsec",
+    "administrator", "users",
+    "server", "syslog", "email", "http", "snmptrap",
+    "permitted-ip",
+    "device-group", "vsys", "devices", "template", "template-stack",
+    "schedule", "match-list",
+    "custom-url-category", "log-forwarding", "authentication-profile",
+    "local-user-database", "user", "user-group",
+}
+
+# Tags whose bare children are plain values -> <member>value</member>
+CURLY_MEMBER_TAGS: set[str] = {
+    "from", "to", "source", "destination", "application", "service", "category",
+    "hip-profiles", "tag", "member", "os", "source-user",
+    "access-route", "exclude-access-route", "trusted-root-CA",
+    "send-syslog", "send-email", "send-http", "send-snmptrap",
+    "encryption", "authentication", "dh-group", "hash",
+    "interface", "static", "group",
+    "virus", "vulnerability", "spyware", "url-filtering", "file-blocking",
+    "wildfire-analysis", "data-filtering", "dos-protection",
+    "severity", "file-types", "applications",
+}
+
+# Tags whose bare children are identities, not plain values -> <entry name="value"/>
+CURLY_ENTRY_VALUE_TAGS: set[str] = {"permitted-ip"}
+
+# Bare "key;" flags that are boolean/choice leaves (become <key/>), not
+# container/identity data — checked only once CURLY_MEMBER_TAGS /
+# CURLY_ENTRY_VALUE_TAGS / tag-validity have ruled out the data cases.
+CURLY_BOOLEAN_FLAGS: set[str] = {
+    "none", "any", "enable", "disable", "yes", "no", "default", "all",
+    "drop", "reset-both", "reset-client", "reset-server", "block-ip",
+    "alert", "allow", "alarm", "block", "continue", "override", "deny", "reset",
+}
+
+# (enclosing tag, curly child key) -> renamed XML tag, for known CLI/API
+# naming divergences (PAN-OS's local-admin CLI tree is "mgt-config/users/*"
+# but the XML API schema calls the same list "administrator").
+CURLY_TAG_RENAME: dict[tuple[str, str], str] = {
+    ("mgt-config", "users"): "administrator",
+}
+
+
+def _looks_like_curly_config(text: str) -> bool:
+    """True if text looks like a 'show config merged/running' CLI capture."""
+    return _CONFIG_BLOCK_RE.search(text) is not None
+
+
+def _valid_tag_name(s: str) -> bool:
+    return bool(_VALID_TAG_RE.match(s))
+
+
+def _safe_tag(name: str) -> str:
+    """Coerce an arbitrary token into a valid XML tag name.
+
+    Almost every curly-format key is already schema-safe, but a handful of
+    config fields can hold free-form text (HTML templates, banners) with
+    unbalanced quotes that desync the tokenizer; a stray fragment of that text
+    can otherwise end up used as a tag (e.g. a trailing-colon CSS property
+    like "font-family:", which lxml rejects as an invalid QName and aborts
+    CIS/.audit XSLT execution for the whole config). Sanitizing every
+    dynamically-derived tag name keeps that kind of corruption local instead
+    of taking down the benchmark run.
+    """
+    if _valid_tag_name(name):
+        return name
+    s = re.sub(r"[^A-Za-z0-9_.\-]", "_", name) or "_"
+    if not re.match(r"^[A-Za-z_]", s):
+        s = "_" + s
+    return s
+
+
+def _tokenize_curly(text: str, start: int) -> list[tuple[str, str, int]]:
+    """Tokenize text[start:] into (kind, value, lineno) tuples.
+
+    kind is one of IDENT, LBRACE, RBRACE, LBRACKET, RBRACKET, SEMI, EOF.
+    Quoted strings (with backslash escapes, possibly spanning lines) become a
+    single IDENT token holding the unescaped contents.
+    """
+    tokens: list[tuple[str, str, int]] = []
+    i, n = start, len(text)
+    line = text.count("\n", 0, start) + 1
+    single = {"{": "LBRACE", "}": "RBRACE", "[": "LBRACKET", "]": "RBRACKET", ";": "SEMI"}
+    while i < n:
+        c = text[i]
+        if c == "\n":
+            line += 1
+            i += 1
+            continue
+        if c in " \t\r":
+            i += 1
+            continue
+        if c in single:
+            tokens.append((single[c], c, line))
+            i += 1
+            continue
+        if c == '"':
+            tok_line = line
+            j = i + 1
+            buf: list[str] = []
+            while j < n and text[j] != '"':
+                if text[j] == "\\" and j + 1 < n:
+                    buf.append(text[j + 1])
+                    if text[j + 1] == "\n":
+                        line += 1
+                    j += 2
+                    continue
+                if text[j] == "\n":
+                    line += 1
+                buf.append(text[j])
+                j += 1
+            tokens.append(("IDENT", "".join(buf), tok_line))
+            i = j + 1
+            continue
+        j = i
+        while j < n and text[j] not in ' \t\r\n{}[];"':
+            j += 1
+        if j == i:
+            i += 1  # stray unrecognized char — skip defensively
+            continue
+        tokens.append(("IDENT", text[i:j], line))
+        i = j
+    tokens.append(("EOF", "", line))
+    return tokens
+
+
+def _parse_curly_statements(tokens: list, pos: int, until_rbrace: bool):
+    """Parse statements from tokens[pos:] until a matching RBRACE or EOF.
+
+    Returns (list of (kind, key, payload, lineno) statements, new_pos).
+    kind is one of: 'block' (payload=child statements), 'list' (payload=[str]),
+    'scalar' (payload=str), 'flag' (payload=None).
+    """
+    stmts = []
+    while True:
+        kind, val, line = tokens[pos]
+        if kind == "EOF":
+            break
+        if until_rbrace and kind == "RBRACE":
+            break
+        if kind != "IDENT":
+            pos += 1  # unexpected token — skip defensively
+            continue
+        key, key_line = val, line
+        pos += 1
+        nkind, nval, _nline = tokens[pos]
+        if nkind == "LBRACE":
+            children, pos = _parse_curly_statements(tokens, pos + 1, True)
+            if tokens[pos][0] == "RBRACE":
+                pos += 1
+            stmts.append(("block", key, children, key_line))
+        elif nkind == "LBRACKET":
+            pos += 1
+            values = []
+            while tokens[pos][0] not in ("RBRACKET", "EOF"):
+                if tokens[pos][0] == "IDENT":
+                    values.append(tokens[pos][1])
+                pos += 1
+            if tokens[pos][0] == "RBRACKET":
+                pos += 1
+            if tokens[pos][0] == "SEMI":
+                pos += 1
+            stmts.append(("list", key, values, key_line))
+        elif nkind == "IDENT":
+            pos += 1
+            if tokens[pos][0] == "SEMI":
+                pos += 1
+            stmts.append(("scalar", key, nval, key_line))
+        elif nkind == "SEMI":
+            pos += 1
+            stmts.append(("flag", key, None, key_line))
+        else:
+            stmts.append(("flag", key, None, key_line))
+    return stmts, pos
+
+
+def _emit_curly_flag(builder: ET.TreeBuilder, container_tag: str, flag_val: str,
+                      line: int, linemap: dict):
+    """Emit one bare 'key;' statement found inside `container_tag`'s block."""
+    if container_tag in CURLY_MEMBER_TAGS:
+        m = builder.start("member", {}); linemap[id(m)] = line
+        builder.data(flag_val)
+        builder.end("member")
+        return
+    if container_tag in CURLY_ENTRY_VALUE_TAGS:
+        e = builder.start("entry", {"name": flag_val}); linemap[id(e)] = line
+        builder.end("entry")
+        return
+    if not _valid_tag_name(flag_val):
+        # Can't be a tag name, so it must be identity/value data (e.g. a bare
+        # CIDR under an unrecognized container) — emit both shapes so either
+        # XPath convention (<member> or <entry name=...>) matches downstream.
+        m = builder.start("member", {}); linemap[id(m)] = line
+        builder.data(flag_val)
+        builder.end("member")
+        e = builder.start("entry", {"name": flag_val}); linemap[id(e)] = line
+        builder.end("entry")
+        return
+    # Structural/boolean leaf, e.g. "none;", "rules;" (empty rulebase), "v1;".
+    e = builder.start(flag_val, {}); linemap[id(e)] = line
+    builder.end(flag_val)
+
+
+def _emit_curly_block(builder: ET.TreeBuilder, container_tag: str, stmts: list, linemap: dict):
+    """Populate the currently-open `container_tag` element with `stmts`."""
+    for kind, key, payload, line in stmts:
+        xml_key = CURLY_TAG_RENAME.get((container_tag, key), key)
+        safe_key = _safe_tag(xml_key)
+        if kind == "flag":
+            _emit_curly_flag(builder, container_tag, key, line, linemap)
+        elif kind == "scalar":
+            e = builder.start(safe_key, {}); linemap[id(e)] = line
+            if xml_key in CURLY_MEMBER_TAGS or key in CURLY_MEMBER_TAGS:
+                m = builder.start("member", {}); linemap[id(m)] = line
+                builder.data(payload)
+                builder.end("member")
+            else:
+                builder.data(payload)
+            builder.end(safe_key)
+        elif kind == "list":
+            e = builder.start(safe_key, {}); linemap[id(e)] = line
+            for v in payload:
+                m = builder.start("member", {}); linemap[id(m)] = line
+                builder.data(v)
+                builder.end("member")
+            builder.end(safe_key)
+        elif kind == "block":
+            if container_tag in CURLY_ENTRY_LIST_TAGS:
+                e = builder.start("entry", {"name": xml_key}); linemap[id(e)] = line
+                _emit_curly_block(builder, xml_key, payload, linemap)
+                builder.end("entry")
+            else:
+                e = builder.start(safe_key, {}); linemap[id(e)] = line
+                _emit_curly_block(builder, xml_key, payload, linemap)
+                builder.end(safe_key)
+
+
+def _load_curly_config(filename: str):
+    """Parse a 'show config merged/running' CLI capture into (root, linemap)."""
+    with open(filename, "r", encoding="utf-8", errors="replace") as fh:
+        raw = fh.read()
+
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
+    text = _ANSI_CSI_RE.sub("", text)
+    text = _ANSI_MISC_RE.sub("", text)
+    text = _PAGER_ARTIFACT_RE.sub("", text)  # PuTTY/pager "lines N-M" redraw artifacts
+    text = text.replace(" \x08", "")         # terminal soft-wrap space+backspace artifact
+    text = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", text)  # remaining control chars (invalid in XML)
+
+    m = _CONFIG_BLOCK_RE.search(text)
+    if not m:
+        raise ValueError("No 'config {' block found — not a recognized CLI config capture")
+
+    tokens = _tokenize_curly(text, m.start())
+    pos = 0
+    if tokens[pos][0] != "IDENT" or tokens[pos][1] != "config":
+        raise ValueError("Expected 'config' at start of matched block")
+    root_line = tokens[pos][2]
+    pos += 1
+    if tokens[pos][0] != "LBRACE":
+        raise ValueError("Expected '{' after 'config'")
+    children, _pos = _parse_curly_statements(tokens, pos + 1, True)
+
+    builder = ET.TreeBuilder()
+    linemap: dict[int, int] = {}
+    root = builder.start("config", {})
+    linemap[id(root)] = root_line
+    _emit_curly_block(builder, "config", children, linemap)
+    builder.end("config")
     return builder.close(), linemap
 
 
@@ -637,6 +961,8 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "TLS Profile Using Default Certificate":         38,
     # ── Rule completeness ─────────────────────────────────────────────────────
     "No Default Deny Rule":                          9,
+    # ── Policy Optimizer / rule-usage (CSV-sourced rules) ─────────────────────
+    "Unused Security Rule (Policy Optimizer)":       25,
     # ── CIS L2 benchmark checks ───────────────────────────────────────────────
     "Admin Interface Default Certificate":           38,
     "WMI Probing Enabled":                           3,
@@ -1023,8 +1349,12 @@ def _align(h="left", wrap=True) -> Alignment:
 
 # ── Config parser ─────────────────────────────────────────────────────────────
 class PaloAltoParser:
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, csv_rules_path: "str | None" = None,
+                 panos_version_override: "int | None" = None):
         self.config_file = config_file
+        self.csv_rules_path = csv_rules_path
+        self.panos_version_override = panos_version_override
+        self.config_format = "xml"  # set to "curly" in parse() when detected
         self.root: ET.Element | None = None
 
         self.security_rules: list[dict] = []
@@ -1060,11 +1390,26 @@ class PaloAltoParser:
     # ── Parse entry point ─────────────────────────────────────────────────────
     def parse(self):
         try:
-            self.root, self._linemap = _parse_xml_with_linenos(self.config_file)
-        except ET.ParseError as exc:
-            sys.exit(f"XML parse error: {exc}")
+            with open(self.config_file, "r", encoding="utf-8", errors="replace") as fh:
+                sniff = fh.read(65536)
         except FileNotFoundError:
             sys.exit(f"File not found: {self.config_file}")
+
+        if _looks_like_curly_config(sniff):
+            self.config_format = "curly"
+            try:
+                self.root, self._linemap = _load_curly_config(self.config_file)
+            except ValueError as exc:
+                sys.exit(f"Could not parse 'show config merged' capture: {exc}")
+            print(f"[+] Detected 'show config merged' CLI text format "
+                  f"({os.path.basename(self.config_file)})")
+            if self.panos_version_override:
+                self.root.set("version", str(self.panos_version_override))
+        else:
+            try:
+                self.root, self._linemap = _parse_xml_with_linenos(self.config_file)
+            except ET.ParseError as exc:
+                sys.exit(f"XML parse error: {exc}")
 
         self._parse_objects()
         self._parse_profile_groups()
@@ -1081,6 +1426,8 @@ class PaloAltoParser:
         self._parse_password_policy()
         self._parse_update_schedule()
         self._parse_security_profiles()
+        if self.csv_rules_path:
+            self._parse_security_rules_from_csv(self.csv_rules_path)
         self._run_checks()
 
     # ── Low-level helpers ─────────────────────────────────────────────────────
@@ -1257,6 +1604,101 @@ class PaloAltoParser:
                 })
                 rule_num += 1
 
+    # ── Security rules from a Policy Optimizer / rulebase CSV export ─────────
+    def _parse_security_rules_from_csv(self, csv_path: str):
+        """Load the Security Rulebase from a Palo Alto rule-usage CSV export
+        (columns: Name, Location, Tags, Type, Source/Destination Zone,
+        Source/Destination Address, Source User, Source/Destination Device,
+        Application, Service, Action, Profile, Options, Target, Rule Usage
+        Rule Usage, Rule Usage Apps Seen, Days With No New Apps, Modified,
+        Created).
+
+        This REPLACES any rules already parsed from the config file: the CSV is
+        the ground truth for rule content when supplied — a 'show config merged'
+        capture can have an empty rulebase when rules are pushed from Panorama
+        and weren't captured locally, which is exactly the case a CSV export
+        is meant to fill in. Fields the CSV doesn't carry (per-rule logging
+        flags, negate flags, URL categories, description) are left at PAN-OS
+        defaults rather than guessed.
+        """
+        import csv as _csv
+
+        try:
+            fh = open(csv_path, "r", encoding="utf-8-sig", newline="")
+        except FileNotFoundError:
+            sys.exit(f"Rules CSV not found: {csv_path}")
+
+        with fh:
+            reader = _csv.DictReader(fh)
+            if reader.fieldnames is None:
+                sys.exit(f"Rules CSV has no header row: {csv_path}")
+
+            loaded: list[dict] = []
+            for rule_num, raw_row in enumerate(reader, 1):
+                row = {(k or "").strip(): (v or "").strip() for k, v in raw_row.items()}
+                name = row.get("Name", "")
+                if not name:
+                    continue
+
+                profile_raw = row.get("Profile", "")
+                if profile_raw and profile_raw.lower() not in ("none", "n/a", "-", "disabled"):
+                    profile_type, profiles = "group", {"group": profile_raw}
+                else:
+                    profile_type, profiles = "", {}
+
+                options = row.get("Options", "")
+                log_setting_m = re.search(r'Log Forwarding:\s*([^\n;]+)', options)
+                schedule_m    = re.search(r'Schedule:\s*([^\n;]+)',        options)
+
+                action = (row.get("Action", "allow") or "allow").strip().lower()
+
+                loaded.append({
+                    "num": rule_num,
+                    "name": name,
+                    "line": f"CSV row {rule_num + 1}",
+                    "rulebase": "security",
+                    "disabled": "no",   # not present as a column in this export
+                    "src_zones":    row.get("Source Zone", ""),
+                    "dst_zones":    row.get("Destination Zone", ""),
+                    "sources":      row.get("Source Address", "") or "any",
+                    "destinations": row.get("Destination Address", "") or "any",
+                    "negate_src": "no",
+                    "negate_dst": "no",
+                    "applications": row.get("Application", "") or "any",
+                    "services":     row.get("Service", "") or "any",
+                    "categories": "",
+                    "action": action,
+                    "profile_type": profile_type,
+                    "profiles": profiles,
+                    "log_start": "no",
+                    "log_end":   "yes",   # PAN-OS default; not broken out as its own column
+                    "log_setting": log_setting_m.group(1).strip() if log_setting_m else "",
+                    "hip_profiles": "",
+                    "schedule": schedule_m.group(1).strip() if schedule_m else "",
+                    "tags": row.get("Tags", ""),
+                    "description": "",
+                    # Policy Optimizer / usage-report extras — consumed only by
+                    # the CSV-specific checks below; every other check ignores
+                    # unknown dict keys.
+                    "rule_type":        row.get("Type", ""),
+                    "source_user":      row.get("Source User", ""),
+                    "source_device":    row.get("Source Device", ""),
+                    "dest_device":      row.get("Destination Device", ""),
+                    "target":           row.get("Target", ""),
+                    "csv_location":     row.get("Location", ""),
+                    "usage_status":     row.get("Rule Usage Rule Usage", ""),
+                    "apps_seen":        row.get("Rule Usage Apps Seen", ""),
+                    "days_no_new_apps": row.get("Days With No New Apps", ""),
+                    "modified": row.get("Modified", ""),
+                    "created":  row.get("Created", ""),
+                })
+
+        if self.security_rules:
+            print(f"[!] Discarding {len(self.security_rules)} security rule(s) parsed from "
+                  f"{self.config_format} config — CSV rules take precedence.")
+        self.security_rules = loaded
+        print(f"[+] Loaded {len(loaded)} security rule(s) from CSV: {csv_path}")
+
     # ── NAT rules ─────────────────────────────────────────────────────────────
     def _parse_nat_rules(self):
         paths = [
@@ -1386,6 +1828,9 @@ class PaloAltoParser:
         self._chk_security_profile_settings()
         self._chk_default_deny_rule()
         self._chk_file_blocking_inbound()
+        # Policy Optimizer / rule-usage checks (only fire on CSV-sourced rules)
+        self._chk_policy_optimizer_unused()
+        self._chk_policy_optimizer_stale_apps()
         # CIS Benchmark L1 + L2 checks (XSLT-based)
         self._run_cis_checks()
 
@@ -2465,6 +2910,48 @@ class PaloAltoParser:
                     f"Src zones: {r['src_zones']}  Apps: {r['applications']}",
                     line=r["line"])
 
+    # ── Policy Optimizer / rule-usage checks (CSV-sourced rules only) ────────
+    def _chk_policy_optimizer_unused(self):
+        """Flag rules Policy Optimizer reports as unused (no matching traffic)."""
+        for r in self.security_rules:
+            status = r.get("usage_status", "")
+            if not status or "unused" not in status.lower():
+                continue
+            self._issue(
+                "MEDIUM", "Unused Security Rule (Policy Optimizer)", r["name"],
+                "Policy Optimizer reports this rule has not matched any traffic.",
+                "Confirm the rule is no longer needed and remove it, or investigate why "
+                "the traffic it was written for isn't hitting it.",
+                f"Usage: {status}  Created: {r.get('created', '')}  "
+                f"Modified: {r.get('modified', '')}",
+                line=r["line"],
+            )
+
+    def _chk_policy_optimizer_stale_apps(self):
+        """Flag rules still allowing Application=any despite long-standing app
+        visibility that could be used to narrow it (classic App-ID cleanup)."""
+        for r in self.security_rules:
+            days_raw = r.get("days_no_new_apps", "")
+            if not days_raw:
+                continue
+            digits = re.sub(r"[^\d]", "", days_raw)
+            if not digits or int(digits) < 90:
+                continue
+            apps_seen = r.get("apps_seen", "")
+            if not self._has_any(r["applications"]):
+                continue
+            if not apps_seen or apps_seen.strip().lower() in ("any", "unknown", "none", "n/a"):
+                continue
+            self._issue(
+                "MEDIUM", "Application Not Refined To Observed Traffic", r["name"],
+                f"Rule still allows Application=any after {digits} day(s) with no new "
+                "applications observed — enough visibility exists to narrow it to the "
+                "apps actually seen.",
+                f"Restrict Application to the observed set: {apps_seen}.",
+                f"Apps seen: {apps_seen}  Days with no new apps: {digits}",
+                line=r["line"],
+            )
+
     # ── CIS L2 benchmark checks ───────────────────────────────────────────────
     def _panfw_major_version(self) -> int:
         """Return the major PAN-OS version from the config root version attribute."""
@@ -2833,6 +3320,10 @@ class ExcelReporter:
             row += 1
 
         section_header("CONFIGURATION OVERVIEW")
+        kv("Config format",   "show config merged (CLI text)" if p.config_format == "curly"
+                               else "PAN-OS XML export")
+        if p.csv_rules_path:
+            kv("Rules CSV",   os.path.basename(p.csv_rules_path))
         kv("PAN-OS Version (detected)", p.panos_version_str or "unknown")
         kv("audits.tar.gz used",       p.audits_tar_path or "not found")
         kv("CIS Benchmark — L1 .audit", p.cis_l1_audit_used or "n/a")
@@ -3746,11 +4237,28 @@ Examples:
   python pa_analyzer.py running-config.xml
   python pa_analyzer.py running-config.xml -o audit-$(date +%%Y%%m%%d).xlsx
   python pa_analyzer.py panorama-export.xml -o panorama-audit.xlsx
+  python pa_analyzer.py "show merged combined.txt" --rules-csv rules.csv
 """,
     )
-    ap.add_argument("config", help="PAN-OS XML configuration file (exported from device or Panorama)")
+    ap.add_argument("config",
+                     help="PAN-OS configuration file: either an XML export (device or "
+                          "Panorama) or a 'show config merged'/'show config running' CLI "
+                          "text capture (e.g. a PuTTY session log) — format is auto-detected.")
     ap.add_argument("-o", "--output", default=None,
                     help="Output Excel file (default: <config-stem>_analysis.xlsx)")
+    ap.add_argument("--rules-csv", default=None,
+                    help="Security policy / Policy Optimizer CSV export (Name, Source/"
+                         "Destination Zone+Address, Application, Service, Action, Profile, "
+                         "Rule Usage, Rule Usage Apps Seen, Days With No New Apps, ...). "
+                         "Replaces any rulebase parsed from `config` and adds Policy "
+                         "Optimizer usage checks — use this when the CLI capture's "
+                         "rulebase is empty (rules pushed from Panorama, not captured "
+                         "locally).")
+    ap.add_argument("--panos-version", type=int, default=None,
+                    help="PAN-OS major version (e.g. 10, 11) to select the CIS Benchmark "
+                         "against. Only needed for a CLI text capture, which — unlike an "
+                         "XML export — doesn't embed its own version string; ignored for "
+                         "XML input.")
     args = ap.parse_args()
 
     if not args.output:
@@ -3758,7 +4266,8 @@ Examples:
         args.output = f"{stem}_analysis.xlsx"
 
     print(f"[*] Parsing:  {args.config}")
-    parser = PaloAltoParser(args.config)
+    parser = PaloAltoParser(args.config, csv_rules_path=args.rules_csv,
+                             panos_version_override=args.panos_version)
     parser.parse()
 
     sev_counts: dict[str, int] = defaultdict(int)
