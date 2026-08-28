@@ -1349,10 +1349,13 @@ def _align(h="left", wrap=True) -> Alignment:
 
 # ── Config parser ─────────────────────────────────────────────────────────────
 class PaloAltoParser:
-    def __init__(self, config_file: str, csv_rules_path: "str | None" = None,
+    def __init__(self, config_file: "str | None", csv_rules_path: "str | None" = None,
                  panos_version_override: "int | None" = None):
-        self.config_file = config_file
+        self.config_file = config_file  # None => rules-only mode (CSV, no device config)
         self.csv_rules_path = csv_rules_path
+        # Basename to show in reports — falls back to the CSV when there's no device config.
+        self.source_label = os.path.basename(config_file) if config_file else \
+            (os.path.basename(csv_rules_path) if csv_rules_path else "(none)")
         self.panos_version_override = panos_version_override
         self.config_format = "xml"  # set to "curly" in parse() when detected
         self.root: ET.Element | None = None
@@ -1389,27 +1392,39 @@ class PaloAltoParser:
 
     # ── Parse entry point ─────────────────────────────────────────────────────
     def parse(self):
-        try:
-            with open(self.config_file, "r", encoding="utf-8", errors="replace") as fh:
-                sniff = fh.read(65536)
-        except FileNotFoundError:
-            sys.exit(f"File not found: {self.config_file}")
-
-        if _looks_like_curly_config(sniff):
-            self.config_format = "curly"
-            try:
-                self.root, self._linemap = _load_curly_config(self.config_file)
-            except ValueError as exc:
-                sys.exit(f"Could not parse 'show config merged' capture: {exc}")
-            print(f"[+] Detected 'show config merged' CLI text format "
-                  f"({os.path.basename(self.config_file)})")
-            if self.panos_version_override:
-                self.root.set("version", str(self.panos_version_override))
+        if self.config_file is None:
+            # Rules-only mode: a CSV was given with no device config at all.
+            # Device/system checks and the CIS Benchmark need real config data
+            # to mean anything, so _run_checks() skips them for this format —
+            # an empty <config/> root just lets every _parse_* helper below
+            # find nothing, same as a config file with no such section.
+            self.config_format = "csv-only"
+            self.root = ET.Element("config")
+            self._linemap = {}
+            if not self.csv_rules_path:
+                sys.exit("No config file and no --rules-csv given — nothing to analyze.")
         else:
             try:
-                self.root, self._linemap = _parse_xml_with_linenos(self.config_file)
-            except ET.ParseError as exc:
-                sys.exit(f"XML parse error: {exc}")
+                with open(self.config_file, "r", encoding="utf-8", errors="replace") as fh:
+                    sniff = fh.read(65536)
+            except FileNotFoundError:
+                sys.exit(f"File not found: {self.config_file}")
+
+            if _looks_like_curly_config(sniff):
+                self.config_format = "curly"
+                try:
+                    self.root, self._linemap = _load_curly_config(self.config_file)
+                except ValueError as exc:
+                    sys.exit(f"Could not parse 'show config merged' capture: {exc}")
+                print(f"[+] Detected 'show config merged' CLI text format "
+                      f"({os.path.basename(self.config_file)})")
+                if self.panos_version_override:
+                    self.root.set("version", str(self.panos_version_override))
+            else:
+                try:
+                    self.root, self._linemap = _parse_xml_with_linenos(self.config_file)
+                except ET.ParseError as exc:
+                    sys.exit(f"XML parse error: {exc}")
 
         self._parse_objects()
         self._parse_profile_groups()
@@ -1857,7 +1872,19 @@ class PaloAltoParser:
         self._chk_inbound_no_inspection()
         self._chk_service_any_allow()
         self._chk_user_id_untrust()
-        # Crypto / system checks
+        self._chk_default_deny_rule()
+        self._chk_file_blocking_inbound()
+        # Policy Optimizer / rule-usage checks (only fire on CSV-sourced rules)
+        self._chk_policy_optimizer_unused()
+        self._chk_policy_optimizer_stale_apps()
+
+        if self.config_format == "csv-only":
+            # No device config was supplied — skip device/system checks and
+            # the CIS Benchmark entirely rather than report a wall of "not
+            # configured" findings for settings we simply have no data on.
+            return
+
+        # Crypto / system checks — need a real device config
         self._chk_weak_ike_crypto()
         self._chk_weak_ipsec_crypto()
         self._chk_weak_ssl_tls()
@@ -1870,11 +1897,6 @@ class PaloAltoParser:
         self._chk_password_policy()
         self._chk_update_schedule()
         self._chk_security_profile_settings()
-        self._chk_default_deny_rule()
-        self._chk_file_blocking_inbound()
-        # Policy Optimizer / rule-usage checks (only fire on CSV-sourced rules)
-        self._chk_policy_optimizer_unused()
-        self._chk_policy_optimizer_stale_apps()
         # CIS Benchmark L1 + L2 checks (XSLT-based)
         self._run_cis_checks()
 
@@ -3361,7 +3383,7 @@ class ExcelReporter:
         ws.merge_cells("A2:G2")
         c = ws["A2"]
         c.value = (f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}    "
-                   f"Source file: {os.path.basename(self.p.config_file)}")
+                   f"Source file: {self.p.source_label}")
         c.font  = _font(italic=True, color="595959", size=9)
         c.fill  = _fill("F2F2F2")
         c.alignment = _align("center", wrap=False)
@@ -3389,14 +3411,19 @@ class ExcelReporter:
             row += 1
 
         section_header("CONFIGURATION OVERVIEW")
-        kv("Config format",   "show config merged (CLI text)" if p.config_format == "curly"
-                               else "PAN-OS XML export")
+        fmt_label = {"curly": "show config merged (CLI text)",
+                     "xml": "PAN-OS XML export",
+                     "csv-only": "Rules CSV only (no device config)"}[p.config_format]
+        kv("Config format",   fmt_label)
         if p.csv_rules_path:
             kv("Rules CSV",   os.path.basename(p.csv_rules_path))
-        kv("PAN-OS Version (detected)", p.panos_version_str or "unknown")
-        kv("audits.tar.gz used",       p.audits_tar_path or "not found")
-        kv("CIS Benchmark — L1 .audit", p.cis_l1_audit_used or "n/a")
-        kv("CIS Benchmark — L2 .audit", p.cis_l2_audit_used or "n/a")
+        if p.config_format == "csv-only":
+            kv("Device/system checks", "skipped — no device config supplied")
+        else:
+            kv("PAN-OS Version (detected)", p.panos_version_str or "unknown")
+            kv("audits.tar.gz used",       p.audits_tar_path or "not found")
+            kv("CIS Benchmark — L1 .audit", p.cis_l1_audit_used or "n/a")
+            kv("CIS Benchmark — L2 .audit", p.cis_l2_audit_used or "n/a")
         kv("Security Rules (total)",    len(p.security_rules))
         kv("  Active",  sum(1 for r in p.security_rules if r["disabled"] != "yes"))
         kv("  Disabled", sum(1 for r in p.security_rules if r["disabled"] == "yes"))
@@ -3711,7 +3738,7 @@ class ExcelReporter:
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
         hostname = self.p.mgmt_settings.get("hostname", "") or ""
-        source = os.path.basename(self.p.config_file)
+        source = self.p.source_label
 
         sorted_issues = sorted(
             self.p.issues,
@@ -4307,12 +4334,16 @@ Examples:
   python pa_analyzer.py running-config.xml -o audit-$(date +%%Y%%m%%d).xlsx
   python pa_analyzer.py panorama-export.xml -o panorama-audit.xlsx
   python pa_analyzer.py "show merged combined.txt" --rules-csv rules.csv
+  python pa_analyzer.py rules.csv
 """,
     )
     ap.add_argument("config",
-                     help="PAN-OS configuration file: either an XML export (device or "
-                          "Panorama) or a 'show config merged'/'show config running' CLI "
-                          "text capture (e.g. a PuTTY session log) — format is auto-detected.")
+                     help="PAN-OS configuration file: an XML export (device or Panorama), a "
+                          "'show config merged'/'show config running' CLI text capture (e.g. "
+                          "a PuTTY session log), or — on its own, with no device config at "
+                          "all — a Policy Optimizer/rulebase CSV export (a '.csv' file is "
+                          "routed to --rules-csv automatically and runs rule-based checks "
+                          "only; device/system checks and the CIS Benchmark need a config).")
     ap.add_argument("-o", "--output", default=None,
                     help="Output Excel file (default: <config-stem>_analysis.xlsx)")
     ap.add_argument("--rules-csv", default=None,
@@ -4330,12 +4361,21 @@ Examples:
                          "XML input.")
     args = ap.parse_args()
 
+    # A bare CSV positional (no device config at all) is rules-only mode.
+    config_file = args.config
+    csv_rules_path = args.rules_csv
+    if config_file.lower().endswith(".csv"):
+        if csv_rules_path and os.path.abspath(csv_rules_path) != os.path.abspath(config_file):
+            sys.exit("Both a .csv positional and --rules-csv were given — pass the device "
+                      "config (XML or CLI text) as the positional and the CSV via --rules-csv.")
+        csv_rules_path, config_file = config_file, None
+
     if not args.output:
         stem = os.path.splitext(os.path.basename(args.config))[0]
         args.output = f"{stem}_analysis.xlsx"
 
     print(f"[*] Parsing:  {args.config}")
-    parser = PaloAltoParser(args.config, csv_rules_path=args.rules_csv,
+    parser = PaloAltoParser(config_file, csv_rules_path=csv_rules_path,
                              panos_version_override=args.panos_version)
     parser.parse()
 
