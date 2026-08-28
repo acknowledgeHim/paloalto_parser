@@ -1605,21 +1605,34 @@ class PaloAltoParser:
                 rule_num += 1
 
     # ── Security rules from a Policy Optimizer / rulebase CSV export ─────────
+    @staticmethod
+    def _csv_cell(v: str) -> str:
+        """Normalize a CSV cell: strip whitespace and PAN-OS UI placeholder
+        dashes ('-') for "not applicable" down to an empty string."""
+        v = (v or "").strip()
+        return "" if v in ("-", "--", "n/a", "N/A") else v
+
     def _parse_security_rules_from_csv(self, csv_path: str):
-        """Load the Security Rulebase from a Palo Alto rule-usage CSV export
-        (columns: Name, Location, Tags, Type, Source/Destination Zone,
-        Source/Destination Address, Source User, Source/Destination Device,
-        Application, Service, Action, Profile, Options, Target, Rule Usage
-        Rule Usage, Rule Usage Apps Seen, Days With No New Apps, Modified,
-        Created).
+        """Load the Security Rulebase from a Palo Alto rule-usage CSV export.
+
+        Two real export shapes are supported for the usage columns (the rest
+        of the header is identical between them):
+          - a single status column: "Rule Usage Rule Usage" (e.g. "Unused")
+            plus "Rule Usage Apps Seen" / "Days With No New Apps".
+          - separate "Rule Usage Hit Count" / "Rule Usage Last Hit" /
+            "Rule Usage First Hit" columns (a 0 hit count means unused);
+            "Location"/"Target" may also be absent in this shape.
+        Whichever is present is normalized into the same internal fields so
+        the Policy Optimizer checks below don't need to care which was used.
 
         This REPLACES any rules already parsed from the config file: the CSV is
         the ground truth for rule content when supplied — a 'show config merged'
         capture can have an empty rulebase when rules are pushed from Panorama
         and weren't captured locally, which is exactly the case a CSV export
-        is meant to fill in. Fields the CSV doesn't carry (per-rule logging
-        flags, negate flags, URL categories, description) are left at PAN-OS
-        defaults rather than guessed.
+        is meant to fill in. Fields the CSV doesn't carry (per-rule negate
+        flags, URL categories, description) are left at PAN-OS defaults
+        rather than guessed; per-rule logging IS inferred where possible from
+        the free-text "Options" column (see below).
         """
         import csv as _csv
 
@@ -1635,29 +1648,57 @@ class PaloAltoParser:
 
             loaded: list[dict] = []
             for rule_num, raw_row in enumerate(reader, 1):
-                row = {(k or "").strip(): (v or "").strip() for k, v in raw_row.items()}
+                row = {(k or "").strip(): self._csv_cell(v) for k, v in raw_row.items()}
                 name = row.get("Name", "")
                 if not name:
                     continue
 
+                # "Profile" is either a bare name, "none"/"disabled", or
+                # "Profile Group: <name>" — strip that prefix when present.
                 profile_raw = row.get("Profile", "")
-                if profile_raw and profile_raw.lower() not in ("none", "n/a", "-", "disabled"):
-                    profile_type, profiles = "group", {"group": profile_raw}
+                grp_m = re.match(r'^\s*Profile\s+Group\s*:\s*(.+)$', profile_raw, re.IGNORECASE)
+                profile_name = grp_m.group(1).strip() if grp_m else profile_raw
+                if profile_name and profile_name.lower() not in ("none", "disabled"):
+                    profile_type, profiles = "group", {"group": profile_name}
                 else:
                     profile_type, profiles = "", {}
 
+                # "Options" is a ';'-joined free-text list, e.g.:
+                #   "Traffic log sent at session start, and at session end;
+                #    Log Forwarding Profile setting: PRIMARY-FORWARDING"
+                # An explicit "Traffic log sent..." clause overrides the
+                # PAN-OS default (log-end only); its total absence from a
+                # non-empty Options value is read as logging being off.
                 options = row.get("Options", "")
-                log_setting_m = re.search(r'Log Forwarding:\s*([^\n;]+)', options)
-                schedule_m    = re.search(r'Schedule:\s*([^\n;]+)',        options)
+                traffic_log_m = re.search(r'Traffic log sent[^;]*', options, re.IGNORECASE)
+                if traffic_log_m:
+                    clause = traffic_log_m.group(0)
+                    log_start = "yes" if re.search(r'session start', clause, re.IGNORECASE) else "no"
+                    log_end   = "yes" if re.search(r'session end',   clause, re.IGNORECASE) else "no"
+                elif options:
+                    log_start, log_end = "no", "no"
+                else:
+                    log_start, log_end = "no", "yes"  # PAN-OS default, nothing to infer from
+                log_setting_m = re.search(r'Log Forwarding(?:\s+Profile\s+setting)?\s*:\s*([^;]+)',
+                                           options, re.IGNORECASE)
+                schedule_m = re.search(r'Schedule\s*:\s*([^;]+)', options, re.IGNORECASE)
 
                 action = (row.get("Action", "allow") or "allow").strip().lower()
+
+                # Usage-status normalization across the two export shapes.
+                usage_status = row.get("Rule Usage Rule Usage", "")
+                hit_count_raw = row.get("Rule Usage Hit Count", "")
+                if not usage_status and hit_count_raw:
+                    digits = re.sub(r"[^\d]", "", hit_count_raw)
+                    if digits:
+                        usage_status = "Unused" if int(digits) == 0 else f"Used ({digits} hits)"
 
                 loaded.append({
                     "num": rule_num,
                     "name": name,
                     "line": f"CSV row {rule_num + 1}",
                     "rulebase": "security",
-                    "disabled": "no",   # not present as a column in this export
+                    "disabled": "no",   # not present as a column in either export shape
                     "src_zones":    row.get("Source Zone", ""),
                     "dst_zones":    row.get("Destination Zone", ""),
                     "sources":      row.get("Source Address", "") or "any",
@@ -1670,8 +1711,8 @@ class PaloAltoParser:
                     "action": action,
                     "profile_type": profile_type,
                     "profiles": profiles,
-                    "log_start": "no",
-                    "log_end":   "yes",   # PAN-OS default; not broken out as its own column
+                    "log_start": log_start,
+                    "log_end":   log_end,
                     "log_setting": log_setting_m.group(1).strip() if log_setting_m else "",
                     "hip_profiles": "",
                     "schedule": schedule_m.group(1).strip() if schedule_m else "",
@@ -1686,7 +1727,10 @@ class PaloAltoParser:
                     "dest_device":      row.get("Destination Device", ""),
                     "target":           row.get("Target", ""),
                     "csv_location":     row.get("Location", ""),
-                    "usage_status":     row.get("Rule Usage Rule Usage", ""),
+                    "usage_status":     usage_status,
+                    "hit_count":        row.get("Rule Usage Hit Count", ""),
+                    "last_hit":         row.get("Rule Usage Last Hit", ""),
+                    "first_hit":        row.get("Rule Usage First Hit", ""),
                     "apps_seen":        row.get("Rule Usage Apps Seen", ""),
                     "days_no_new_apps": row.get("Days With No New Apps", ""),
                     "modified": row.get("Modified", ""),
@@ -2912,24 +2956,38 @@ class PaloAltoParser:
 
     # ── Policy Optimizer / rule-usage checks (CSV-sourced rules only) ────────
     def _chk_policy_optimizer_unused(self):
-        """Flag rules Policy Optimizer reports as unused (no matching traffic)."""
+        """Flag rules Policy Optimizer reports as unused (no matching traffic).
+
+        `usage_status` is already normalized in _parse_security_rules_from_csv
+        to "Unused" for both real export shapes: a "Rule Usage Rule Usage"
+        status column, or a "Rule Usage Hit Count" of 0.
+        """
         for r in self.security_rules:
             status = r.get("usage_status", "")
             if not status or "unused" not in status.lower():
                 continue
+            evidence = f"Usage: {status}"
+            if r.get("last_hit"):
+                evidence += f"  Last hit: {r['last_hit']}"
+            evidence += f"  Created: {r.get('created', '')}  Modified: {r.get('modified', '')}"
             self._issue(
                 "MEDIUM", "Unused Security Rule (Policy Optimizer)", r["name"],
                 "Policy Optimizer reports this rule has not matched any traffic.",
                 "Confirm the rule is no longer needed and remove it, or investigate why "
                 "the traffic it was written for isn't hitting it.",
-                f"Usage: {status}  Created: {r.get('created', '')}  "
-                f"Modified: {r.get('modified', '')}",
+                evidence,
                 line=r["line"],
             )
 
     def _chk_policy_optimizer_stale_apps(self):
         """Flag rules still allowing Application=any despite long-standing app
-        visibility that could be used to narrow it (classic App-ID cleanup)."""
+        visibility that could be used to narrow it (classic App-ID cleanup).
+
+        "Rule Usage Apps Seen" varies by export shape: sometimes a delimited
+        list of actual application names, sometimes just a count of distinct
+        apps observed — handle both, and phrase the recommendation to match
+        what's actually known.
+        """
         for r in self.security_rules:
             days_raw = r.get("days_no_new_apps", "")
             if not days_raw:
@@ -2937,17 +2995,28 @@ class PaloAltoParser:
             digits = re.sub(r"[^\d]", "", days_raw)
             if not digits or int(digits) < 90:
                 continue
-            apps_seen = r.get("apps_seen", "")
             if not self._has_any(r["applications"]):
                 continue
-            if not apps_seen or apps_seen.strip().lower() in ("any", "unknown", "none", "n/a"):
+            apps_seen = r.get("apps_seen", "")
+            if not apps_seen or apps_seen.strip().lower() in ("any", "unknown"):
                 continue
+            if apps_seen.strip().isdigit():
+                seen_count = int(apps_seen.strip())
+                if seen_count <= 0:
+                    continue  # nothing observed — that's an unused rule, not an unrefined one
+                recommendation = (
+                    f"Policy Optimizer has observed {seen_count} distinct application(s) on "
+                    "this rule — use Policy Optimizer's app-usage view to see which ones and "
+                    "restrict Application to that set."
+                )
+            else:
+                recommendation = f"Restrict Application to the observed set: {apps_seen}."
             self._issue(
                 "MEDIUM", "Application Not Refined To Observed Traffic", r["name"],
                 f"Rule still allows Application=any after {digits} day(s) with no new "
                 "applications observed — enough visibility exists to narrow it to the "
                 "apps actually seen.",
-                f"Restrict Application to the observed set: {apps_seen}.",
+                recommendation,
                 f"Apps seen: {apps_seen}  Days with no new apps: {digits}",
                 line=r["line"],
             )
