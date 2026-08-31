@@ -1916,6 +1916,15 @@ class PaloAltoParser:
     def _has_any(field: str) -> bool:
         return "any" in (x.strip().lower() for x in field.split(","))
 
+    @staticmethod
+    def _user_suffix(r: dict) -> str:
+        """'  Source User: X' for an excessive-traffic finding's Details, when
+        the rule has a Source User value at all (blank omits it entirely —
+        most XML-derived rules never had this field before Source User
+        support was added, so there's nothing to report either way)."""
+        su = (r.get("source_user", "") or "").strip()
+        return f"  Source User: {su}" if su else ""
+
     def _rule_has_security_profiles(self, rule: dict) -> bool:
         pt = rule["profile_type"]
         if pt == "group":
@@ -1933,7 +1942,7 @@ class PaloAltoParser:
                     "CRITICAL", "Any/Any/Any Allow Rule", r["name"],
                     "Rule allows ALL applications from ANY source to ANY destination.",
                     "Apply least-privilege: restrict source, destination, and application.",
-                    f"Zones: {r['src_zones']} → {r['dst_zones']}",
+                    f"Zones: {r['src_zones']} → {r['dst_zones']}{self._user_suffix(r)}",
                     line=r["line"],
                 )
 
@@ -1981,7 +1990,7 @@ class PaloAltoParser:
                     "HIGH", "Unrestricted Source Address", r["name"],
                     "Allow rule permits traffic from any source IP.",
                     "Restrict the source to specific trusted IP ranges.",
-                    f"Dest: {r['destinations']}  App: {r['applications']}",
+                    f"Dest: {r['destinations']}  App: {r['applications']}{self._user_suffix(r)}",
                     line=r["line"],
                 )
             if dst_any and not src_any:
@@ -1989,7 +1998,7 @@ class PaloAltoParser:
                     "HIGH", "Unrestricted Destination Address", r["name"],
                     "Allow rule permits traffic to any destination IP.",
                     "Restrict the destination to required hosts/subnets only.",
-                    f"Src: {r['sources']}  App: {r['applications']}",
+                    f"Src: {r['sources']}  App: {r['applications']}{self._user_suffix(r)}",
                     line=r["line"],
                 )
 
@@ -2019,7 +2028,8 @@ class PaloAltoParser:
             for keyword, (category, sev, desc, rec) in risky.items():
                 if keyword in apps_lower:
                     self._issue(sev, category, r["name"], desc, rec,
-                                f"Src zones: {r['src_zones']}", line=r["line"])
+                                f"Src zones: {r['src_zones']}{self._user_suffix(r)}",
+                                line=r["line"])
 
     # Check: risky/administrative apps allowed without a Source User restriction
     def _chk_risky_apps_no_user_restriction(self):
@@ -2142,7 +2152,7 @@ class PaloAltoParser:
                     "HIGH", "Application+Service Both Any", r["name"],
                     "Allow rule uses application=any AND service=any, completely bypassing App-ID.",
                     "Specify explicit applications; use service=application-default to enforce App-ID.",
-                    f"Src: {r['sources']}  Dst: {r['destinations']}",
+                    f"Src: {r['sources']}  Dst: {r['destinations']}{self._user_suffix(r)}",
                     line=r["line"],
                 )
 
@@ -2163,7 +2173,7 @@ class PaloAltoParser:
                     "HIGH", "Inbound Allow Without Inspection", r["name"],
                     "Inbound rule (external→internal) allows traffic with no AV/IPS/Spyware profiles.",
                     "Apply a security profile group with AV, Vulnerability, and Spyware to all inbound rules.",
-                    f"Zones: {r['src_zones']} → {r['dst_zones']}",
+                    f"Zones: {r['src_zones']} → {r['dst_zones']}{self._user_suffix(r)}",
                     line=r["line"],
                 )
 
@@ -2177,7 +2187,7 @@ class PaloAltoParser:
                     "MEDIUM", "Service=Any with Specific Application", r["name"],
                     "Rule uses service=any; application traffic is allowed on non-standard ports too.",
                     "Change service to 'application-default' to enforce standard port usage.",
-                    f"App: {r['applications']}",
+                    f"App: {r['applications']}{self._user_suffix(r)}",
                     line=r["line"],
                 )
 
