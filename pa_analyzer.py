@@ -425,6 +425,7 @@ CIS_CONTROL_MAP: dict[str, list[str]] = {
     "SSH Exposed from Any Source":               ["12.2", "12.3"],
     "SMB Exposed from Any Source":               ["12.2", "13.4"],
     "VNC Exposed from Any Source":               ["12.2", "12.6"],
+    "Risky Application Allowed Without User-ID Restriction": ["12.2", "4.2"],
     "Disabled Rule":                             ["4.2"],
     "Missing Rule Description":                  ["4.2"],
     "Negated Source Address":                    ["4.2",  "12.2"],
@@ -633,6 +634,7 @@ PCI_DSS_MAP: dict[str, list[str]] = {
     "SSH Exposed from Any Source":         ["1.3.1"],
     "SMB Exposed from Any Source":         ["1.3.1"],
     "VNC Exposed from Any Source":         ["1.3.1"],
+    "Risky Application Allowed Without User-ID Restriction": ["7.2.1", "8.2.1"],
     "Disabled Rule":                       ["1.2.4"],
     "Missing Rule Description":            ["1.2.4"],
     "Negated Source Address":              ["1.2.4"],
@@ -749,6 +751,7 @@ SCF_MAP: dict[str, list[str]] = {
     "SSH Exposed from Any Source":                   ["NET-04"],
     "SMB Exposed from Any Source":                   ["NET-04"],
     "VNC Exposed from Any Source":                   ["NET-04"],
+    "Risky Application Allowed Without User-ID Restriction": ["IAC-01", "IAC-10"],
     "Disabled Rule":                                 ["NET-04"],
     "Missing Rule Description":                      ["OPS-01"],
     "Negated Source Address":                        ["NET-04"],
@@ -900,6 +903,7 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "SSH Exposed from Any Source":                   9,
     "SMB Exposed from Any Source":                   9,
     "VNC Exposed from Any Source":                   9,
+    "Risky Application Allowed Without User-ID Restriction": 27,
     "Disabled Rule":                                 2,
     "Missing Rule Description":                      5,
     "Negated Source Address":                        9,
@@ -1616,6 +1620,7 @@ class PaloAltoParser:
                     "schedule":      self._text(rule, "schedule"),
                     "tags":          ", ".join(self._members(rule, "tag")),
                     "description":   self._text(rule, "description"),
+                    "source_user":   ", ".join(self._members(rule, "source-user")),
                 })
                 rule_num += 1
 
@@ -1862,6 +1867,7 @@ class PaloAltoParser:
         self._chk_logging()
         self._chk_overly_permissive()
         self._chk_risky_services_from_any()
+        self._chk_risky_apps_no_user_restriction()
         self._chk_insecure_cleartext_apps()
         self._chk_disabled_rules()
         self._chk_missing_descriptions()
@@ -2014,6 +2020,31 @@ class PaloAltoParser:
                 if keyword in apps_lower:
                     self._issue(sev, category, r["name"], desc, rec,
                                 f"Src zones: {r['src_zones']}", line=r["line"])
+
+    # Check: risky/administrative apps allowed without a Source User restriction
+    def _chk_risky_apps_no_user_restriction(self):
+        """User-ID note: allow rules for admin/high-risk protocols with no
+        Source User restriction lose an important compensating control —
+        anyone who can reach the rule's source/zone can use it, authenticated
+        or not."""
+        risky_apps = ("rdp", "ssh", "telnet", "vnc", "smb")
+        for r in self._active_allow():
+            apps_lower = r["applications"].lower()
+            if not any(app in apps_lower for app in risky_apps):
+                continue
+            src_user = (r.get("source_user", "") or "").strip()
+            if src_user and src_user.lower() != "any":
+                continue
+            self._issue(
+                "MEDIUM", "Risky Application Allowed Without User-ID Restriction", r["name"],
+                "Rule allows a high-risk administrative protocol (RDP/SSH/Telnet/VNC/SMB) "
+                "without restricting Source User to a specific user or group.",
+                "Add a Source User restriction (User-ID) so only authorized accounts can "
+                "use this access, as a compensating control alongside address/zone limits.",
+                f"Source User: {src_user or 'any'}  Apps: {r['applications']}  "
+                f"Src zones: {r['src_zones']}",
+                line=r["line"],
+            )
 
     # Check 6: disabled rules ─────────────────────────────────────────────────
     def _chk_disabled_rules(self):
