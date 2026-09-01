@@ -945,8 +945,8 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "Weak Password Minimum Length":                  27,
     "No Account Lockout Policy":                     27,
     "Long or No Management Session Timeout":         27,
-    "Password Expiry Not Configured":                3,
-    "Insufficient Password History":                 3,
+    "Password Expiry Not Configured":                27,
+    "Insufficient Password History":                 27,
     # ── Content updates ───────────────────────────────────────────────────────
     "AV/Threat Content Updates Not Automatic":       1,
     "WildFire Updates Not Automatic":                1,
@@ -976,7 +976,7 @@ CATEGORY_VULN_ID: dict[str, int] = {
     # ── CIS L1 benchmark checks ───────────────────────────────────────────────
     "High DP Load Logging Disabled":                 28,
     "SNMPv3 Polling Not Configured":                 37,
-    "Password Profile Bypass Configured":            3,
+    "Password Profile Bypass Configured":            27,
     "User-ID Network Exclusions Not Configured":     3,
     "User-ID Agent Traffic Unrestricted":            9,
     "High Availability Not Configured":              11,
