@@ -1716,7 +1716,7 @@ class PaloAltoParser:
                 loaded.append({
                     "num": rule_num,
                     "name": name,
-                    "line": f"CSV row {rule_num + 1}",
+                    "line": f"CSV row {rule_num}",
                     "rulebase": "security",
                     "disabled": "no",   # not present as a column in either export shape
                     "src_zones":    row.get("Source Zone", ""),
@@ -1925,6 +1925,17 @@ class PaloAltoParser:
         su = (r.get("source_user", "") or "").strip()
         return f"  Source User: {su}" if su else ""
 
+    @staticmethod
+    def _has_specific_user(r: dict) -> bool:
+        """True when Source User restricts the rule to a specific user/group
+        (not blank, not "any"). A specific user is a real compensating
+        control for address breadth, so the "excessive traffic" checks below
+        only still consider the rule excessive when it's wide open on BOTH
+        source and destination — a specific user with a restricted address on
+        either side is no longer "excessive", just identity-scoped access."""
+        su = (r.get("source_user", "") or "").strip().lower()
+        return bool(su) and su != "any"
+
     def _rule_has_security_profiles(self, rule: dict) -> bool:
         pt = rule["profile_type"]
         if pt == "group":
@@ -1985,6 +1996,12 @@ class PaloAltoParser:
             app_any = self._has_any(r["applications"])
             if src_any and dst_any and app_any:
                 continue
+            # Both branches below only fire on a *partial* any (exactly one
+            # side unrestricted) — never "both any" — so a specific Source
+            # User, which by definition doesn't cover the both-any case,
+            # fully suppresses this check per _has_specific_user's contract.
+            if self._has_specific_user(r):
+                continue
             if src_any and not dst_any:
                 self._issue(
                     "HIGH", "Unrestricted Source Address", r["name"],
@@ -2023,6 +2040,10 @@ class PaloAltoParser:
         }
         for r in self._active_allow():
             if not self._has_any(r["sources"]):
+                continue
+            # Source is any; a specific Source User is only *not* enough of a
+            # compensating control here when the destination is any too.
+            if self._has_specific_user(r) and not self._has_any(r["destinations"]):
                 continue
             apps_lower = r["applications"].lower()
             for keyword, (category, sev, desc, rec) in risky.items():
@@ -2147,7 +2168,9 @@ class PaloAltoParser:
             svc_any = self._has_any(r["services"])
             src_any = self._has_any(r["sources"])
             dst_any = self._has_any(r["destinations"])
-            if app_any and svc_any and not (src_any and dst_any):
+            # This branch only fires on a partial any (never "both any" — that's
+            # _chk_any_any_any's territory), so a specific Source User suppresses it.
+            if app_any and svc_any and not (src_any and dst_any) and not self._has_specific_user(r):
                 self._issue(
                     "HIGH", "Application+Service Both Any", r["name"],
                     "Allow rule uses application=any AND service=any, completely bypassing App-ID.",
