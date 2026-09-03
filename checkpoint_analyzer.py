@@ -456,6 +456,330 @@ def _is_drop(action: str) -> bool:
     return (action or "").strip().lower() in ("drop", "reject", "deny")
 
 
+# ── Dialect detection: enterprise Gaia vs. Quantum Spark (Gaia Embedded) ────
+# The CIS Check Point Firewall Benchmark's .audit checks (the generic
+# CONFIG_CHECK engine above) are written against enterprise Gaia's clish
+# 'show configuration' syntax (e.g. 'set password-controls ...',
+# 'set net-access telnet off'). Quantum Spark / SMB-series appliances (the
+# 1500/1600/1800/1900 line, running Gaia Embedded) export a materially
+# different command grammar for the same settings — e.g. password policy
+# lives in one 'set administrator session-settings ...' line with quoted
+# values, not 'set password-controls ...'. Running the enterprise regex
+# checks against a Spark capture produces false "not configured" findings
+# for settings that ARE configured, just under a different command name.
+_ENTERPRISE_SIGNATURE_RE = re.compile(
+    r'(?m)^(?:set password-controls|set net-access telnet|set message banner|'
+    r'set message motd|set hostname\s|set syslog (?:mgmtauditlogs|auditlog|cplogs))\b')
+_SPARK_SIGNATURE_RE = re.compile(
+    r'(?m)^(?:set device-details|set administrator session-settings|'
+    r'set message type "(?:banner|motd)"|set administrators (?:radius|tacacs)-auth)\b')
+
+
+def _detect_dialect(gaia_lines: list[tuple[int, str]]) -> str:
+    """Return 'spark' or 'enterprise'. Defaults to 'enterprise' (the original,
+    already-validated behavior) when the signal is weak or absent, so this
+    never changes behavior for a config that isn't clearly Quantum Spark."""
+    text = "\n".join(txt for _ln, txt in gaia_lines)
+    spark_hits = len(_SPARK_SIGNATURE_RE.findall(text))
+    enterprise_hits = len(_ENTERPRISE_SIGNATURE_RE.findall(text))
+    return "spark" if spark_hits > enterprise_hits else "enterprise"
+
+
+_SPARK_ATTR_RE = re.compile(r'([A-Za-z][A-Za-z0-9_.-]*)\s+"((?:[^"\\]|\\.)*)"')
+
+
+def _spark_attrs(line: str) -> dict[str, str]:
+    """Extract 'key "value"' pairs from a Quantum Spark config line, e.g.
+    'set administrator session-settings lockout-enable "on" ...' ->
+    {'lockout-enable': 'on', ...}. Positional (unlabeled) quoted values —
+    e.g. 'set message type "banner" "on" msgvalue "..."' — aren't captured
+    this way; those are pulled out with their own dedicated regex below."""
+    return {m.group(1): m.group(2).replace('\\"', '"') for m in _SPARK_ATTR_RE.finditer(line)}
+
+
+def _spark_has_msgvalue_text(line: str) -> bool:
+    """Whether a banner/MOTD line's msgvalue has real content. The message
+    text itself commonly embeds literal newlines in the source file (Spark
+    lets banners span many lines) — _load_gaia_config keeps only the first
+    physical line of such a statement, so the quote is often left
+    unterminated on it. Checking for *any* non-blank text after the opening
+    quote (closed or not) is what actually reflects whether a banner is set,
+    rather than requiring a closing quote that may be several lines away."""
+    m = re.search(r'msgvalue\s+"(.*)', line)
+    return bool(m and m.group(1).strip())
+
+
+def _parse_spark_facts(gaia_lines: list[tuple[int, str]]) -> dict[str, tuple]:
+    """Walk a Quantum Spark config once and pull out every setting the Spark
+    CIS-check evaluator below needs, as {fact_name: (value, line_no)}."""
+    facts: dict[str, tuple] = {}
+    admin_access: list[tuple[str, int]] = []
+
+    for ln, txt in gaia_lines:
+        if txt.startswith('set administrator session-settings'):
+            a = _spark_attrs(txt)
+            for key in ("lockout-enable", "max-lockout-attempts", "lock-period",
+                        "inactivity-timeout", "password-complexity-level",
+                        "password-history-mechanism", "password-expiration-timeout"):
+                if key in a:
+                    facts[key] = (a[key], ln)
+        elif txt.startswith('set dns primary'):
+            for part in ("primary", "secondary", "tertiary"):
+                m = re.search(rf'{part}\s+ipv4-address\s+"([^"]*)"', txt)
+                if m:
+                    facts[f"dns-{part}"] = (m.group(1), ln)
+        elif txt.startswith('set message type "banner"'):
+            m = re.search(r'"banner"\s+"(on|off)"', txt)
+            if m:
+                facts["banner-state"] = (m.group(1), ln)
+            facts["banner-has-text"] = (_spark_has_msgvalue_text(txt), ln)
+        elif txt.startswith('set message type "motd"'):
+            m = re.search(r'"motd"\s+"(on|off)"', txt)
+            if m:
+                facts["motd-state"] = (m.group(1), ln)
+            facts["motd-has-text"] = (_spark_has_msgvalue_text(txt), ln)
+        elif txt.startswith('set device-details'):
+            a = _spark_attrs(txt)
+            if "hostname" in a:
+                facts["hostname"] = (a["hostname"], ln)
+        elif txt.startswith('set snmp agent'):
+            a = _spark_attrs(txt)
+            if "agent" in a:
+                facts["snmp-agent"] = (a["agent"], ln)
+            if "agent-version" in a:
+                facts["snmp-agent-version"] = (a["agent-version"], ln)
+            facts["snmp-community"] = (a.get("community", ""), ln)
+        elif txt.startswith('set ntp local-time-zone'):
+            m = re.search(r'local-time-zone\s+"([^"]*)"', txt)
+            if m:
+                facts["timezone"] = (m.group(1), ln)
+        elif txt.startswith('set ntp active'):
+            m = re.search(r'active\s+"(on|off)"', txt)
+            if m:
+                facts["ntp-active"] = (m.group(1), ln)
+        elif txt.startswith('set ntp server'):
+            a = _spark_attrs(txt)
+            if "primary" in a:
+                facts["ntp-primary"] = (a["primary"], ln)
+            if "secondary" in a:
+                facts["ntp-secondary"] = (a["secondary"], ln)
+        elif txt.startswith('set administrators radius-auth'):
+            m = re.search(r'radius-auth\s+"(enable|disable)"', txt)
+            if m:
+                facts["radius-auth"] = (m.group(1), ln)
+        elif txt.startswith('set administrators tacacs-auth'):
+            m = re.search(r'tacacs-auth\s+"(enable|disable)"', txt)
+            if m:
+                facts["tacacs-auth"] = (m.group(1), ln)
+        elif txt.startswith('set logs-config'):
+            a = _spark_attrs(txt)
+            if "send-audit-on-db-change" in a:
+                facts["audit-on-change"] = (a["send-audit-on-db-change"], ln)
+            if "display-audit-logs" in a:
+                facts["display-audit-logs"] = (a["display-audit-logs"], ln)
+        elif txt == 'delete admin-access-ipv4-address-all' or txt.startswith('add admin-access-ipv4-address'):
+            admin_access.append((txt, ln))
+
+    if admin_access:
+        facts["admin-access-entries"] = admin_access
+    return facts
+
+
+# Every benchmark ID _eval_spark_check() below knows how to evaluate on
+# Quantum Spark — including 2.5.5, which the enterprise .audit itself marks
+# "Manual Review Required" (Spark's admin-access-ipv4-address list makes it
+# automatable there, unlike enterprise Gaia's 'allowed-client').
+SPARK_IMPLEMENTED_IDS: frozenset[str] = frozenset({
+    "1.3", "1.4", "1.5", "1.11", "1.12", "1.13",
+    "2.1.1", "2.1.2", "2.1.6", "2.1.8",
+    "2.2.1", "2.2.2",
+    "2.3.1", "2.3.2",
+    "2.5.1", "2.5.2", "2.5.4", "2.5.5",
+    "2.6.1", "2.6.3",
+})
+
+
+def _eval_spark_check(base_id: str, facts: dict) -> "dict | None":
+    """Evaluate one CIS Check Point Firewall Benchmark ID against Quantum
+    Spark facts. Returns {'status': 'PASS'|'FAIL', 'line': int, 'evidence': str},
+    or None when this platform has no equivalent setting to evaluate (the
+    caller reports that as 'Not Applicable — Quantum Spark', not a failure)."""
+
+    def get(key):
+        return facts.get(key, (None, 0))
+
+    if base_id == "1.3":
+        val, ln = get("password-complexity-level")
+        if val is None:
+            return None
+        ok = val.lower() in ("high", "strict")
+        return {"status": "PASS" if ok else "FAIL", "line": ln,
+                "evidence": f'password-complexity-level = "{val}"'}
+
+    if base_id == "1.4":
+        val, ln = get("password-history-mechanism")
+        if val is None:
+            return None
+        ok = val.lower() == "true"
+        return {"status": "PASS" if ok else "FAIL", "line": ln,
+                "evidence": f'password-history-mechanism = "{val}"'}
+
+    if base_id == "1.5":
+        val, ln = get("password-expiration-timeout")
+        if val is None:
+            return None
+        days = int(val) if val.isdigit() else None
+        ok = days is not None and 0 < days <= 90
+        return {"status": "PASS" if ok else "FAIL", "line": ln,
+                "evidence": f'password-expiration-timeout = "{val}" days'}
+
+    if base_id == "1.11":
+        val, ln = get("lockout-enable")
+        if val is None:
+            return None
+        ok = val.lower() == "on"
+        return {"status": "PASS" if ok else "FAIL", "line": ln,
+                "evidence": f'lockout-enable = "{val}"'}
+
+    if base_id == "1.12":
+        val, ln = get("max-lockout-attempts")
+        if val is None:
+            return None
+        n = int(val) if val.isdigit() else None
+        ok = n is not None and 1 <= n <= 5
+        return {"status": "PASS" if ok else "FAIL", "line": ln,
+                "evidence": f'max-lockout-attempts = "{val}"'}
+
+    if base_id == "1.13":
+        val, ln = get("lock-period")
+        if val is None:
+            return None
+        minutes = int(val) if val.isdigit() else None
+        ok = minutes is not None and minutes * 60 >= 300
+        return {"status": "PASS" if ok else "FAIL", "line": ln,
+                "evidence": f'lock-period = "{val}" (assumed minutes — the WebUI field is '
+                            f'"Block user for ... minutes"; verify units if this looks wrong)'}
+
+    if base_id == "2.1.1":
+        state, ln1 = get("banner-state")
+        has_text, ln2 = get("banner-has-text")
+        if state is None:
+            return None
+        ok = state.lower() == "on" and bool(has_text)
+        return {"status": "PASS" if ok else "FAIL", "line": ln1 or ln2,
+                "evidence": f'message type "banner" = "{state}", text configured = {bool(has_text)}'}
+
+    if base_id == "2.1.2":
+        state, ln1 = get("motd-state")
+        has_text, ln2 = get("motd-has-text")
+        if state is None:
+            return None
+        ok = state.lower() == "on" and bool(has_text)
+        return {"status": "PASS" if ok else "FAIL", "line": ln1 or ln2,
+                "evidence": f'message type "motd" = "{state}", text configured = {bool(has_text)}'}
+
+    if base_id == "2.1.6":
+        p, lnp = get("dns-primary")
+        s, lns = get("dns-secondary")
+        t, lnt = get("dns-tertiary")
+        if p is None and s is None and t is None:
+            return None
+        missing = [name for name, v in (("primary", p), ("secondary", s), ("tertiary", t)) if not v]
+        return {"status": "FAIL" if missing else "PASS", "line": lnp or lns or lnt,
+                "evidence": f'primary={p or "(none)"}, secondary={s or "(none)"}, tertiary={t or "(none)"}'}
+
+    if base_id == "2.1.8":
+        val, ln = get("hostname")
+        if val is None:
+            return None
+        ok = bool(val.strip())
+        return {"status": "PASS" if ok else "FAIL", "line": ln, "evidence": f'hostname = "{val}"'}
+
+    if base_id == "2.2.1":
+        val, ln = get("snmp-agent")
+        if val is None:
+            return None
+        ok = val.lower() == "off"
+        return {"status": "PASS" if ok else "FAIL", "line": ln, "evidence": f'snmp agent = "{val}"'}
+
+    if base_id == "2.2.2":
+        ver, ln = get("snmp-agent-version")
+        comm, _ = get("snmp-community")
+        if ver is None:
+            return None
+        ok = ver.lower() == "v3-only" and not (comm or "").strip()
+        evidence = f'agent-version = "{ver}"'
+        if comm:
+            evidence += f', but a community string ("{comm}") is also configured — undermines v3-only enforcement'
+        return {"status": "PASS" if ok else "FAIL", "line": ln, "evidence": evidence}
+
+    if base_id == "2.3.1":
+        active, ln1 = get("ntp-active")
+        p, ln2 = get("ntp-primary")
+        s, ln3 = get("ntp-secondary")
+        if active is None and p is None:
+            return None
+        ok = (active or "").lower() == "on" and bool(p) and bool(s)
+        return {"status": "PASS" if ok else "FAIL", "line": ln1 or ln2,
+                "evidence": f'active={active}, primary={p or "(none)"}, secondary={s or "(none)"}'}
+
+    if base_id == "2.3.2":
+        val, ln = get("timezone")
+        if val is None:
+            return None
+        ok = bool(val.strip()) and "NOT_SET" not in val.upper()
+        return {"status": "PASS" if ok else "FAIL", "line": ln, "evidence": f'local-time-zone = "{val}"'}
+
+    if base_id in ("2.5.1", "2.5.2"):
+        val, ln = get("inactivity-timeout")
+        if val is None:
+            return None
+        minutes = int(val) if val.isdigit() else None
+        ok = minutes is not None and 0 < minutes <= 10
+        which = "CLI" if base_id == "2.5.1" else "WebUI"
+        return {"status": "PASS" if ok else "FAIL", "line": ln,
+                "evidence": f'administrator inactivity-timeout = "{val}" min (Quantum Spark uses one '
+                            f'shared timeout for CLI and WebUI — evaluated here for {which})'}
+
+    if base_id == "2.5.4":
+        radius, ln1 = get("radius-auth")
+        tacacs, ln2 = get("tacacs-auth")
+        if radius is None and tacacs is None:
+            return None
+        ok = (radius or "").lower() == "enable" or (tacacs or "").lower() == "enable"
+        return {"status": "PASS" if ok else "FAIL", "line": ln2 or ln1,
+                "evidence": f'radius-auth={radius or "(unset)"}, tacacs-auth={tacacs or "(unset)"}'}
+
+    if base_id == "2.5.5":
+        entries = facts.get("admin-access-entries")
+        if not entries:
+            return None
+        add_entries = [e for e in entries if e[0].startswith("add ")]
+        any_open = any(re.search(r'"0\.0\.0\.0"', txt) for txt, _ln in add_entries)
+        ok = bool(add_entries) and not any_open
+        ln = add_entries[0][1] if add_entries else entries[0][1]
+        evidence = f'{len(add_entries)} admin-access-ipv4-address entr{"y" if len(add_entries) == 1 else "ies"} configured'
+        if any_open:
+            evidence += " (includes 0.0.0.0 — effectively unrestricted)"
+        return {"status": "PASS" if ok else "FAIL", "line": ln, "evidence": evidence}
+
+    if base_id == "2.6.1":
+        val, ln = get("audit-on-change")
+        if val is None:
+            return None
+        ok = val.lower() == "true"
+        return {"status": "PASS" if ok else "FAIL", "line": ln, "evidence": f'send-audit-on-db-change = "{val}"'}
+
+    if base_id == "2.6.3":
+        val, ln = get("display-audit-logs")
+        if val is None:
+            return None
+        ok = val.lower() == "true"
+        return {"status": "PASS" if ok else "FAIL", "line": ln, "evidence": f'display-audit-logs = "{val}"'}
+
+    return None
+
+
 # ══════════════════════════════════════════════════════════════════════════
 class CheckpointParser:
     def __init__(self, config_file: "str | None", rules_csv: "str | None" = None):
@@ -467,6 +791,8 @@ class CheckpointParser:
         self.gaia_lines: list[tuple[int, str]] = []
         self.security_rules: list[dict] = []
         self.system: dict[str, tuple[str, int]] = {}   # label -> (value, line#)
+        self.dialect = "enterprise"     # or "spark" — see _detect_dialect()
+        self.spark_facts: dict = {}
         self.issues: list[dict] = []
         self._seen_issues: set[tuple[str, str]] = set()
         self._native_ids: set[str] = set()   # benchmark IDs a native rulebase check already covered
@@ -480,8 +806,11 @@ class CheckpointParser:
     def parse(self):
         if self.config_file is not None:
             self.gaia_lines = _load_gaia_config(self.config_file)
+            self.dialect = _detect_dialect(self.gaia_lines)
             print(f"[+] Loaded {len(self.gaia_lines)} configuration statement(s) from "
-                  f"{os.path.basename(self.config_file)}")
+                  f"{os.path.basename(self.config_file)} (dialect: {self.dialect})")
+            if self.dialect == "spark":
+                self.spark_facts = _parse_spark_facts(self.gaia_lines)
             self._parse_system_settings()
         if self.rules_csv:
             self.security_rules = _parse_rulebase_csv(self.rules_csv)
@@ -502,6 +831,9 @@ class CheckpointParser:
                 self.system[label] = (m.group(group) if group else txt, ln)
 
     def _parse_system_settings(self):
+        if self.dialect == "spark":
+            self._parse_system_settings_spark()
+            return
         self._sys_set("Hostname",              r'^set hostname (\S+)', 1)
         self._sys_set("Timezone",               r'^set timezone (.+)$', 1)
         self._sys_set("IPv6 State",             r'^set ipv6-state (\S+)', 1)
@@ -522,6 +854,37 @@ class CheckpointParser:
         self._sys_set("Mgmt Audit Logs",        r'^set syslog mgmtauditlogs (\S+)', 1)
         self._sys_set("Audit Log Retention",    r'^set syslog auditlog (\S+)', 1)
         self._sys_set("RADIUS/TACACS+ State",   r'^set aaa tacacs-servers state (\S+)', 1)
+
+    def _parse_system_settings_spark(self):
+        """Same 'Gaia Configuration' sheet, populated from Quantum Spark's
+        own facts instead of the enterprise-Gaia regexes above (which don't
+        match Spark's command grammar at all)."""
+        f = self.spark_facts
+
+        def put(label, key):
+            if key in f:
+                val, ln = f[key]
+                self.system[label] = (str(val), ln)
+
+        put("Hostname", "hostname")
+        put("Timezone", "timezone")
+        put("DNS Primary", "dns-primary")
+        put("DNS Secondary", "dns-secondary")
+        put("NTP Active", "ntp-active")
+        put("SNMP Agent", "snmp-agent")
+        put("SNMP Version", "snmp-agent-version")
+        put("CLI Inactivity Timeout", "inactivity-timeout")
+        put("Web Session Timeout", "inactivity-timeout")
+        put("Login Banner", "banner-state")
+        put("MOTD Banner", "motd-state")
+        put("Password Complexity", "password-complexity-level")
+        put("Mgmt Audit Logs", "audit-on-change")
+        if "radius-auth" in f or "tacacs-auth" in f:
+            radius = f.get("radius-auth", ("", 0))
+            tacacs = f.get("tacacs-auth", ("", 0))
+            self.system["RADIUS/TACACS+ State"] = (
+                f"radius={radius[0] or '(unset)'}, tacacs={tacacs[0] or '(unset)'}",
+                tacacs[1] or radius[1])
 
     # ── Findings ──────────────────────────────────────────────────────────
     def _issue(self, severity, category, item_id, name, description, recommendation,
@@ -675,10 +1038,21 @@ class CheckpointParser:
                          if s["kind"] == "custom_item" and s["regex"]
                          and s["expect"] != "Manual Review Required"]
 
+            # Quantum Spark has its own evaluator for some IDs (SPARK_IMPLEMENTED_IDS)
+            # that's independent of whether the *enterprise* audit could automate
+            # them (2.5.5 is enterprise-manual but Spark-automatable, via
+            # admin-access-ipv4-address) — so this has to run before the
+            # "not automated -> manual review" short-circuit below, and it takes
+            # over entirely for those IDs regardless of the enterprise classification.
+            if self.dialect == "spark" and base_id in SPARK_IMPLEMENTED_IDS:
+                self._emit_spark_check(base_id, umbrella_title, level, info, solution,
+                                        severity, cis_ids, pci_ids)
+                continue
+
             if not automated:
                 # Manual-review / conditionally-evaluated item — the benchmark
                 # (or Nessus itself) can't determine this from a static config
-                # capture alone.
+                # capture alone, on either platform.
                 self._issue(severity,
                              f"CIS {base_id} — Manual Review Required", base_id,
                              f"[{level}] {umbrella_title}",
@@ -688,6 +1062,19 @@ class CheckpointParser:
                              "doesn't automate either).",
                              solution or "Review the Check Point CIS Benchmark control by hand in "
                              "SmartConsole.",
+                             cis_ids=cis_ids, pci_ids=pci_ids)
+                continue
+
+            if self.dialect == "spark":
+                # Enterprise-automatable, but no Spark equivalent implemented —
+                # the enterprise regex would just false-FAIL on Spark's syntax.
+                self._issue("INFO", f"CIS {base_id} — Not Applicable (Quantum Spark)", base_id,
+                             f"[{level}] {umbrella_title}",
+                             "This Check Point CIS Benchmark control has no equivalent setting "
+                             "implemented for Quantum Spark / SMB-series appliances (Gaia Embedded) "
+                             "in this analyzer — the benchmark is written for enterprise Gaia. "
+                             + (info or ""),
+                             solution or "Not applicable to this platform.",
                              cis_ids=cis_ids, pci_ids=pci_ids)
                 continue
 
@@ -728,6 +1115,29 @@ class CheckpointParser:
                              "No action needed if the value shown is correct.",
                              line=", ".join(str(l) for l in pass_lines),
                              cis_ids=cis_ids, pci_ids=pci_ids)
+
+    def _emit_spark_check(self, base_id, umbrella_title, level, info, solution,
+                           severity, cis_ids, pci_ids):
+        """Evaluate one benchmark ID against Quantum Spark facts instead of
+        the enterprise-Gaia regex engine, and emit the matching finding."""
+        result = _eval_spark_check(base_id, self.spark_facts)
+        if result is None:
+            self._issue("INFO", f"CIS {base_id} — Not Applicable (Quantum Spark)", base_id,
+                         f"[{level}] {umbrella_title}",
+                         "This Check Point CIS Benchmark control has no equivalent setting on a "
+                         "Quantum Spark / SMB-series appliance (Gaia Embedded) — the benchmark is "
+                         "written for enterprise Gaia. " + (info or ""),
+                         solution or "Not applicable to this platform.",
+                         cis_ids=cis_ids, pci_ids=pci_ids)
+            return
+        if result["status"] == "FAIL":
+            self._issue(severity, f"CIS {base_id} — {umbrella_title}", base_id,
+                         f"[{level}] {umbrella_title}",
+                         info or f"{umbrella_title} — not configured correctly on this Quantum Spark appliance.",
+                         solution or "See the CIS Check Point Firewall Benchmark for remediation steps "
+                         "(adapted here to this platform's own settings — see Details).",
+                         details=result["evidence"], line=str(result["line"]) if result["line"] else "",
+                         cis_ids=cis_ids, pci_ids=pci_ids)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -814,6 +1224,9 @@ class ExcelReporter:
         kv("Gaia config supplied", "yes" if p.config_file else "no")
         if p.config_file:
             kv("Gaia config statements parsed", len(p.gaia_lines))
+            dialect_label = {"enterprise": "Enterprise Gaia",
+                              "spark": "Quantum Spark / SMB (Gaia Embedded)"}[p.dialect]
+            kv("Detected config dialect", dialect_label)
             kv("audits.tar.gz used", p.audits_tar_path or "not found")
             kv("CIS Benchmark — L1 .audit", p.cis_l1_audit_used or "n/a")
             kv("CIS Benchmark — L2 .audit", p.cis_l2_audit_used or "n/a")
