@@ -1368,9 +1368,7 @@ class ExcelReporter:
 
         source = self.p.source_label
         asset = self.p.source_label                                # the config/CSV filename
-        # the firewall's hostname — falls back to Asset when there's no Gaia
-        # config to read it from (e.g. an orphaned rules-only CSV run)
-        target = self.p.system.get("Hostname", ("", 0))[0] or asset
+        hostname = self.p.system.get("Hostname", ("", 0))[0]       # the firewall's hostname
         sorted_issues = sorted(self.p.issues, key=lambda x: self.SEV_ORDER.get(x["severity"], 9))
         for idx, iss in enumerate(sorted_issues, 1):
             row = idx + 1
@@ -1381,6 +1379,15 @@ class ExcelReporter:
             vuln = self._vulns.get(vuln_id, "") if vuln_id else ""
             details = iss.get("details", "")
             validated = "N" if "Manual Review Required" in iss["category"] else "Y"
+            if hostname:
+                target = hostname
+            else:
+                # No Gaia config to read a hostname from (e.g. an orphaned
+                # rules-only CSV run) — fall back to the finding's own
+                # rule/object and config line, same shape as pa_analyzer.py's
+                # Target column.
+                line = iss.get("line", "")
+                target = f"{iss['rule_name']} ({line})" if line else iss["rule_name"]
 
             values = [idx, validated, sev, "", iss["category"],
                       iss["category"], iss["rule_name"], iss.get("line", ""),
