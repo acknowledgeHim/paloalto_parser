@@ -456,6 +456,29 @@ def _is_drop(action: str) -> bool:
     return (action or "").strip().lower() in ("drop", "reject", "deny")
 
 
+def _format_full_rule(r: dict) -> str:
+    """Render every field of one rulebase row, for appending to a per-rule
+    finding's Details so the reviewer isn't stuck reading just the one
+    offending field out of context."""
+    fields = [
+        ("Name",                     r.get("name", "")),
+        ("Source",                   r.get("source", "")),
+        ("Destination",              r.get("destination", "")),
+        ("VPN",                      r.get("vpn", "")),
+        ("Services & Applications",  r.get("services", "")),
+        ("Action",                   r.get("action", "")),
+        ("Track",                    r.get("track", "")),
+        ("Install On",               r.get("install_on", "")),
+        ("Time",                     r.get("time", "")),
+        ("Comments",                 r.get("comments", "")),
+    ]
+    return "\n".join(f"{label}: {val or '(none)'}" for label, val in fields)
+
+
+def _with_full_rule(evidence: str, r: dict) -> str:
+    return f"{evidence}\n\nFull Rule:\n{_format_full_rule(r)}"
+
+
 # ── Dialect detection: enterprise Gaia vs. Quantum Spark (Gaia Embedded) ────
 # The CIS Check Point Firewall Benchmark's .audit checks (the generic
 # CONFIG_CHECK engine above) are written against enterprise Gaia's clish
@@ -922,36 +945,36 @@ class CheckpointParser:
                              f"Rule '{r['name']}' is disabled but still present in the rulebase.",
                              "Remove rules that are no longer needed instead of leaving them "
                              "disabled indefinitely — disabled rules accumulate and obscure intent.",
-                             line=r["num"])
+                             details=_with_full_rule("Enabled: no", r), line=r["num"])
         for r in active:
             if not r["comments"].strip():
                 self._issue("LOW", "Missing Rule Comment", "", r["name"],
                              f"Rule '{r['name']}' has no comment describing its business purpose.",
                              "Add a comment to every rule explaining why it exists and who owns it.",
-                             line=r["num"])
+                             details=_with_full_rule("Comments: (blank)", r), line=r["num"])
 
         for r in allow_active:
             if _has_any(r["source"]):
                 self._issue("HIGH", "Rule Allows Any Source", "3.6", r["name"],
                              f"Allow rule '{r['name']}' permits traffic from Any source.",
                              "Restrict the source to the specific networks/hosts that require access.",
-                             details=f"Source: {r['source']}", line=r["num"])
+                             details=_with_full_rule(f"Source: {r['source']}", r), line=r["num"])
             if _has_any(r["destination"]):
                 self._issue("HIGH", "Rule Allows Any Destination", "3.5", r["name"],
                              f"Allow rule '{r['name']}' permits traffic to Any destination.",
                              "Restrict the destination to the specific networks/hosts/services required.",
-                             details=f"Destination: {r['destination']}", line=r["num"])
+                             details=_with_full_rule(f"Destination: {r['destination']}", r), line=r["num"])
             if _has_any(r["services"]):
                 self._issue("HIGH", "Rule Allows Any Service", "3.7", r["name"],
                              f"Allow rule '{r['name']}' permits Any service/application.",
                              "Restrict the rule to the specific services/applications required.",
-                             details=f"Services: {r['services']}", line=r["num"])
+                             details=_with_full_rule(f"Services: {r['services']}", r), line=r["num"])
             track = r["track"].strip().lower()
             if track in ("", "none", "log disabled", "no log"):
                 self._issue("MEDIUM", "Allow Rule Not Logging", "3.8", r["name"],
                              f"Allow rule '{r['name']}' does not have logging (Track) enabled.",
                              "Set Track to Log (or Detailed/Extended Log) on every allow rule.",
-                             details=f"Track: {r['track'] or '(blank)'}", line=r["num"])
+                             details=_with_full_rule(f"Track: {r['track'] or '(blank)'}", r), line=r["num"])
         self._native_ids |= {"3.5", "3.6", "3.7", "3.8"}
 
         # 3.2 — a default drop/cleanup rule should be the last rule in the base.
@@ -966,9 +989,8 @@ class CheckpointParser:
                              "traffic not matched by an earlier rule.",
                              sol or "Add an explicit Any/Any/Any Drop rule (with logging) as the "
                              "final rule in the rulebase.",
-                             details=f"Last rule: '{last['name']}' — action={last['action']}, "
-                             f"source={last['source']}, destination={last['destination']}, "
-                             f"services={last['services']}")
+                             details=_with_full_rule(f"Last rule is '{last['name']}', not a "
+                             "catch-all drop.", last))
         self._native_ids.add("3.2")
 
         # 3.4 — Hit Count column present and populated for at least one rule.
