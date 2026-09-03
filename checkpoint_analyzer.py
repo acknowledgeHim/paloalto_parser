@@ -1367,8 +1367,10 @@ class ExcelReporter:
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
         source = self.p.source_label
-        asset = self.p.source_label                              # the config/CSV filename
-        target = self.p.system.get("Hostname", ("", 0))[0]        # the firewall's hostname
+        asset = self.p.source_label                                # the config/CSV filename
+        # the firewall's hostname — falls back to Asset when there's no Gaia
+        # config to read it from (e.g. an orphaned rules-only CSV run)
+        target = self.p.system.get("Hostname", ("", 0))[0] or asset
         sorted_issues = sorted(self.p.issues, key=lambda x: self.SEV_ORDER.get(x["severity"], 9))
         for idx, iss in enumerate(sorted_issues, 1):
             row = idx + 1
