@@ -1701,13 +1701,14 @@ def _run_one(config_file: "str | None", rules_csv: "str | None", output_path: st
 def _run_batch(directory: str, output_dir: "str | None", recursive: bool,
                 shared_rules_csv: "str | None"):
     configs, csvs = _scan_directory(directory, recursive)
-    if not configs:
-        sys.exit(f"No Gaia 'show configuration' captures found under {directory}")
+    if not configs and not csvs:
+        sys.exit(f"No Gaia 'show configuration' captures or rulebase CSVs found under {directory}")
 
     print(f"[*] Found {len(configs)} config file(s) and {len(csvs)} CSV file(s) under {directory}"
           f"{' (recursive)' if recursive else ''}")
 
     results = []
+    used_csvs: set[str] = set()
     for config_file in configs:
         if shared_rules_csv:
             rules_csv = shared_rules_csv
@@ -1715,6 +1716,7 @@ def _run_batch(directory: str, output_dir: "str | None", recursive: bool,
             rules_csv = _pair_rules_csv(config_file, csvs)
             if rules_csv:
                 print(f"[+] Paired {os.path.basename(config_file)}  <->  {os.path.basename(rules_csv)}")
+                used_csvs.add(rules_csv)
 
         out_dir = output_dir or os.path.dirname(config_file) or "."
         os.makedirs(out_dir, exist_ok=True)
@@ -1724,6 +1726,23 @@ def _run_batch(directory: str, output_dir: "str | None", recursive: bool,
         parser = _run_one(config_file, rules_csv, output_path)
         results.append((config_file, parser))
         print()
+
+    # CSVs with no matching (or shared) config — e.g. a directory that's
+    # entirely rulebase exports, or one CSV nothing else paired with — run
+    # each standalone in rules-only mode, same as a bare .csv positional in
+    # single-file mode, rather than silently skipping them.
+    if not shared_rules_csv:
+        for csv_file in csvs:
+            if csv_file in used_csvs:
+                continue
+            out_dir = output_dir or os.path.dirname(csv_file) or "."
+            os.makedirs(out_dir, exist_ok=True)
+            stem = os.path.splitext(os.path.basename(csv_file))[0]
+            output_path = os.path.join(out_dir, f"{stem}_analysis.xlsx")
+
+            parser = _run_one(None, csv_file, output_path)
+            results.append((csv_file, parser))
+            print()
 
     ok = sum(1 for _, p in results if p is not None)
     print(f"[*] Batch complete: {ok}/{len(results)} report(s) written.")
@@ -1753,12 +1772,13 @@ Examples:
     ap.add_argument("config",
                      help="A Gaia 'show configuration' (or 'show configuration all') clish CLI "
                           "text capture — e.g. a PuTTY/SecureCRT session log from the gateway or "
-                          "management server — OR a directory containing multiple such captures, "
-                          "which runs every one of them and writes one Excel report per config "
-                          "('batch mode'). On its own, with no rulebase CSV, only the CIS Check "
-                          "Point Firewall Benchmark (Gaia OS-level) checks run — the access "
-                          "rulebase lives on the Management Server, not in Gaia's config. A "
-                          "single '.csv' file passed here (not a directory) is routed to "
+                          "management server — OR a directory containing multiple such captures "
+                          "and/or rulebase CSVs, which runs every one of them and writes one Excel "
+                          "report per config or per unpaired CSV ('batch mode'; a directory with "
+                          "only CSVs runs each in rules-only mode). On its own, with no rulebase "
+                          "CSV, only the CIS Check Point Firewall Benchmark (Gaia OS-level) checks "
+                          "run — the access rulebase lives on the Management Server, not in Gaia's "
+                          "config. A single '.csv' file passed here (not a directory) is routed to "
                           "--rules-csv automatically and runs rulebase checks only.")
     ap.add_argument("-o", "--output", default=None,
                      help="Output Excel file for a single config (default: "
