@@ -144,32 +144,113 @@ def _find_audits_tar() -> "str | None":
     return None
 
 
-# ── CIS Controls v7 descriptions ─────────────────────────────────────────────
-# The CIS Check Point Firewall Benchmark's .audit reference data cites CIS
-# Controls v7 (CSCv7), not v8 — this table only covers the sub-controls that
-# actually appear there.
+# ── CIS Controls v8 descriptions ─────────────────────────────────────────────
+# The CIS Check Point Firewall Benchmark's own .audit reference data cites CIS
+# Controls v7 (CSCv7), not v8 — so unlike PCI DSS below, v8 mapping here is a
+# hand-built table (CIS_V8_BY_BENCHMARK_ID), the same approach pa_analyzer.py
+# uses for PAN-OS, rather than pulled from the benchmark's reference field.
 CIS_CTRL_DESC: dict[str, str] = {
-    "5.1":  "Establish Secure Configurations",
-    "5.2":  "Maintain Secure Images",
-    "5.3":  "Securely Store Master Images",
-    "5.5":  "Implement Automated Configuration Monitoring Systems",
-    "6.2":  "Activate Audit Logging",
-    "6.4":  "Ensure Adequate Storage for Logs",
-    "6.7":  "Regularly Review Logs",
-    "9.2":  "Ensure Only Approved Ports, Protocols and Services Are Running",
-    "11.1": "Maintain Standard Security Configurations for Network Devices",
-    "11.2": "Document Traffic Configuration Rules",
-    "11.3": "Use Automated Tools to Verify Standard Device Configurations and Detect Changes",
-    "11.7": "Manage Network Infrastructure Through a Dedicated Network",
-    "12.1": "Maintain an Inventory of Network Boundaries",
-    "12.2": "Scan for Unauthorized Connections Across Trusted Network Boundaries",
-    "12.3": "Deny Communications with Known Malicious or Unused Internet IP Addresses",
-    "12.4": "Deny Communication over Unauthorized Ports",
+    "4.2":  "Establish and Maintain a Secure Configuration Process for Network Infrastructure",
+    "4.8":  "Uninstall or Disable Unnecessary Services on Enterprise Assets and Software",
+    "4.9":  "Configure Trusted DNS Servers on Enterprise Assets",
+    "5.2":  "Use Unique Passwords",
+    "5.3":  "Disable Dormant Accounts",
+    "6.5":  "Require MFA for Administrative Access",
+    "6.7":  "Centralize Access Control",
+    "8.2":  "Collect Audit Logs",
+    "8.4":  "Standardize Time Synchronization",
+    "8.5":  "Collect Detailed Audit Logs",
+    "8.9":  "Centralize Audit Logs",
+    "11.1": "Establish and Maintain a Data Recovery Process",
+    "11.2": "Perform Automated Backups",
+    "12.2": "Establish and Maintain a Secure Network Architecture",
+    "12.3": "Securely Manage Network Infrastructure",
+    "12.6": "Use of Secure Network Management and Communication Protocols",
+    "13.4": "Perform Traffic Filtering Between Network Segments",
 }
 
+# Maps each CIS Check Point Firewall Benchmark ID to its CIS Controls v8
+# safeguard(s). Covers every ID in SEVERITY_OVERRIDE below.
+CIS_V8_BY_BENCHMARK_ID: dict[str, list[str]] = {
+    # 1.x — password / account policy
+    "1.1": ["5.2"], "1.2": ["5.2"], "1.3": ["5.2"], "1.4": ["5.2"], "1.5": ["5.2"],
+    "1.6": ["5.2"], "1.7": ["5.3"], "1.8": ["5.3"], "1.9": ["5.3"], "1.10": ["5.2"],
+    "1.11": ["5.2"], "1.12": ["5.2"], "1.13": ["5.2"],
+    # 2.1.x — device/OS baseline
+    "2.1.1": ["4.2"], "2.1.2": ["4.2"], "2.1.3": ["4.2"], "2.1.4": ["4.2"],
+    "2.1.5": ["4.8"], "2.1.6": ["4.9"], "2.1.7": ["4.8"], "2.1.8": ["4.2"],
+    "2.1.9": ["4.8", "12.6"], "2.1.10": ["4.8"],
+    # 2.2.x — SNMP
+    "2.2.1": ["4.8", "12.3"], "2.2.2": ["12.3", "12.6"], "2.2.3": ["8.2"], "2.2.4": ["8.2", "8.9"],
+    # 2.3.x — NTP / timezone
+    "2.3.1": ["8.4"], "2.3.2": ["8.4"],
+    # 2.4.x — backups
+    "2.4.1": ["11.1"], "2.4.2": ["11.1"], "2.4.3": ["11.2"],
+    # 2.5.x — session / AAA / management access
+    "2.5.1": ["12.3"], "2.5.2": ["12.3"], "2.5.3": ["12.6"], "2.5.4": ["6.5", "6.7"],
+    "2.5.5": ["12.3", "6.7"],
+    # 2.6.x — audit logs
+    "2.6.1": ["8.2"], "2.6.2": ["8.5"], "2.6.3": ["8.2"],
+    # 3.x — rulebase / Global Properties
+    "3.1": ["12.2", "13.4"], "3.2": ["12.2", "13.4"], "3.3": ["4.2"], "3.4": ["8.2"],
+    "3.5": ["12.2", "13.4"], "3.6": ["12.2", "13.4"], "3.7": ["12.2", "13.4"],
+    "3.8": ["8.2", "8.5"], "3.9": ["4.2", "12.2"], "3.10": ["13.4"], "3.11": ["13.4"],
+    "3.12": ["13.4"], "3.13": ["8.2"], "3.14": ["4.8", "13.4"], "3.15": ["4.8", "13.4"],
+    "3.16": ["4.8", "13.4"], "3.17": ["4.8", "13.4"], "3.18": ["12.2"], "3.19": ["12.2"],
+    "3.20": ["8.2"],
+}
+
+# ── SCF (Secure Controls Framework) mapping ──────────────────────────────────
+# checkpoint_analyzer.py has no SCF description table (same as pa_analyzer.py —
+# SCF is a column, not a separate cross-reference sheet).
+SCF_BY_BENCHMARK_ID: dict[str, list[str]] = {
+    "1.1": ["IAC-06"], "1.2": ["IAC-06"], "1.3": ["IAC-06"], "1.4": ["IAC-06"], "1.5": ["IAC-06"],
+    "1.6": ["IAC-06"], "1.7": ["IAC-07"], "1.8": ["IAC-07"], "1.9": ["IAC-07"], "1.10": ["IAC-06"],
+    "1.11": ["IAC-06"], "1.12": ["IAC-06"], "1.13": ["IAC-06"],
+    "2.1.1": ["IAC-09"], "2.1.2": ["IAC-09"], "2.1.3": ["OPS-01"], "2.1.4": ["OPS-01"],
+    "2.1.5": ["NET-04"], "2.1.6": ["OPS-01"], "2.1.7": ["NET-04"], "2.1.8": ["OPS-01"],
+    "2.1.9": ["CRY-03"], "2.1.10": ["NET-04"],
+    "2.2.1": ["NET-06", "CRY-03"], "2.2.2": ["CRY-03"], "2.2.3": ["MON-06"], "2.2.4": ["MON-06"],
+    "2.3.1": ["OPS-01"], "2.3.2": ["OPS-01"],
+    "2.4.1": ["BCD-01"], "2.4.2": ["BCD-01"], "2.4.3": ["BCD-01"],
+    "2.5.1": ["IAC-09"], "2.5.2": ["IAC-09"], "2.5.3": ["CRY-03"], "2.5.4": ["IAC-01"],
+    "2.5.5": ["NET-04", "IAC-10"],
+    "2.6.1": ["MON-06"], "2.6.2": ["MON-06"], "2.6.3": ["MON-06"],
+    "3.1": ["NET-04"], "3.2": ["NET-04"], "3.3": ["OPS-01"], "3.4": ["MON-06"],
+    "3.5": ["NET-04"], "3.6": ["NET-04"], "3.7": ["NET-04"], "3.8": ["MON-06"],
+    "3.9": ["NET-04"], "3.10": ["NET-04"], "3.11": ["NET-04"], "3.12": ["NET-04"],
+    "3.13": ["MON-06"], "3.14": ["NET-04"], "3.15": ["NET-04"], "3.16": ["NET-04"],
+    "3.17": ["NET-04"], "3.18": ["NET-04"], "3.19": ["NET-04"], "3.20": ["MON-06"],
+}
+
+# Fallback for the couple of native rulebase categories that aren't tied to a
+# specific CIS Check Point Firewall Benchmark ID.
+CIS_V8_BY_CATEGORY: dict[str, list[str]] = {
+    "Disabled Rulebase Rule": ["4.2"],
+    "Missing Rule Comment":   ["4.2"],
+}
+SCF_BY_CATEGORY: dict[str, list[str]] = {
+    "Disabled Rulebase Rule": ["NET-04"],
+    "Missing Rule Comment":   ["OPS-01"],
+}
+
+
+def _cis_scf_for(item_id: str, category: str) -> tuple[list[str], list[str]]:
+    """CIS Controls v8 + SCF IDs for a finding, by benchmark ID first
+    (covers every CIS-catalog-driven and rulebase-shaped finding alike),
+    falling back to a category lookup for the couple of checks with no
+    benchmark ID at all."""
+    cis_ids = CIS_V8_BY_BENCHMARK_ID.get(item_id) or CIS_V8_BY_CATEGORY.get(category, [])
+    scf_ids = SCF_BY_BENCHMARK_ID.get(item_id) or SCF_BY_CATEGORY.get(category, [])
+    return cis_ids, scf_ids
+
+
 # ── PCI DSS v4.0 descriptions ────────────────────────────────────────────────
-# Same approach: only the requirement IDs that actually appear in the
-# benchmark's reference data.
+# Unlike CIS v8 above, PCI DSS v4.0 IS what the benchmark's own reference data
+# cites — so this stays sourced from each check's 'reference' field at parse
+# time (_pci_ids_from_reference), not a hand-built ID table. This table is
+# only the human-readable descriptions for the PCI DSS Mapping sheet, covering
+# the requirement IDs that actually appear in the benchmark's reference data.
 PCI_DSS_DESC: dict[str, str] = {
     "1.2.1":  "Configuration standards for NSC rulesets are defined, implemented, and maintained",
     "1.3.1":  "Inbound traffic to the CDE is restricted",
@@ -199,14 +280,14 @@ def _pci_label(ids: list[str]) -> str:
     return " · ".join(f"PCI DSS {c}" for c in ids)
 
 
-def _refs_from_reference(reference: str) -> tuple[list[str], list[str]]:
-    """Pull CIS Controls v7 (CSCv7|x.x) and PCI DSS v4.0 (PCI-DSSv4.0|x.x) IDs
-    out of a .audit 'reference' field."""
-    cis_ids = sorted(set(re.findall(r'CSCv7\|([\d.]+)', reference)),
-                      key=lambda s: [int(p) for p in s.split(".")])
-    pci_ids = sorted(set(re.findall(r'PCI-DSSv4\.0\|([\d.]+)', reference)),
-                      key=lambda s: [int(p) for p in s.split(".")])
-    return cis_ids, pci_ids
+def _scf_label(ids: list[str]) -> str:
+    return " · ".join(ids)
+
+
+def _pci_ids_from_reference(reference: str) -> list[str]:
+    """Pull PCI DSS v4.0 (PCI-DSSv4.0|x.x) IDs out of a .audit 'reference' field."""
+    return sorted(set(re.findall(r'PCI-DSSv4\.0\|([\d.]+)', reference)),
+                  key=lambda s: [int(p) for p in s.split(".")])
 
 
 # ── Gaia 'show configuration' (clish) text loading ───────────────────────────
@@ -841,9 +922,18 @@ class CheckpointParser:
             sys.exit("No Gaia config and no --rules-csv given — nothing to analyze.")
 
         if self.security_rules:
-            self._run_rulebase_checks()
+            # Fixed regardless of run order below — the rulebase-shaped CIS
+            # Benchmark IDs a definitive, evidence-based rulebase check covers,
+            # so _run_cis_checks() doesn't also emit a generic placeholder for
+            # them (this used to be set inside _run_rulebase_checks() itself,
+            # but is hoisted here so _run_cis_checks() can run *first*, which
+            # it now needs to for self.catalog to be populated when
+            # _run_rulebase_checks() looks up PCI DSS references for 3.x IDs).
+            self._native_ids = {"3.2", "3.4", "3.5", "3.6", "3.7", "3.8"}
         if self.gaia_lines:
             self._run_cis_checks()
+        if self.security_rules:
+            self._run_rulebase_checks()
 
     # ── System settings (for the Gaia Configuration sheet) ──────────────────
     def _sys_set(self, label: str, regex: str, group: int = 0):
@@ -911,29 +1001,33 @@ class CheckpointParser:
 
     # ── Findings ──────────────────────────────────────────────────────────
     def _issue(self, severity, category, item_id, name, description, recommendation,
-               details="", line="", cis_ids=None, pci_ids=None):
+               details="", line="", pci_ids=None):
         key = (category, name)
         if key in self._seen_issues:
             return
         self._seen_issues.add(key)
-        cis_ids = cis_ids or []
         pci_ids = pci_ids or []
+        cis_ids, scf_ids = _cis_scf_for(item_id, category)
         self.issues.append({
             "severity": severity, "category": category, "item_id": item_id, "rule_name": name,
             "line": str(line) if line else "", "description": description,
             "recommendation": recommendation, "details": details,
             "cis_controls": _cis_label(cis_ids), "cis_ids": cis_ids,
             "cis_benchmark": item_id, "pci_dss": _pci_label(pci_ids), "pci_ids": pci_ids,
+            "scf": _scf_label(scf_ids), "scf_ids": scf_ids,
         })
 
     # ── Native rulebase checks (need --rules-csv) ────────────────────────────
-    def _catalog_text(self, item_id: str) -> tuple[str, str]:
-        """(description, solution) for a benchmark ID, if the catalog has been
-        loaded yet — falls back to empty strings when checked before _run_cis_checks."""
+    def _catalog_refs(self, item_id: str) -> tuple[str, str, list[str]]:
+        """(info, solution, pci_ids) for a benchmark ID, sourced from the
+        loaded CIS Check Point Firewall Benchmark catalog — empty when
+        checked before _run_cis_checks() has populated self.catalog (e.g. a
+        rules-only run with no Gaia config), so every caller already treats
+        an empty result as "fall back to generic text"."""
         for it in self.catalog:
             if it["id"] == item_id:
-                return it["info"], it["solution"]
-        return "", ""
+                return it["info"], it["solution"], _pci_ids_from_reference(it["reference"])
+        return "", "", []
 
     def _run_rulebase_checks(self):
         active = [r for r in self.security_rules if r["enabled"]]
@@ -953,29 +1047,36 @@ class CheckpointParser:
                              "Add a comment to every rule explaining why it exists and who owns it.",
                              details=_with_full_rule("Comments: (blank)", r), line=r["num"])
 
+        _, _, src_pci = self._catalog_refs("3.6")
+        _, _, dst_pci = self._catalog_refs("3.5")
+        _, _, svc_pci = self._catalog_refs("3.7")
+        _, _, log_pci = self._catalog_refs("3.8")
         for r in allow_active:
             if _has_any(r["source"]):
                 self._issue("HIGH", "Rule Allows Any Source", "3.6", r["name"],
                              f"Allow rule '{r['name']}' permits traffic from Any source.",
                              "Restrict the source to the specific networks/hosts that require access.",
-                             details=_with_full_rule(f"Source: {r['source']}", r), line=r["num"])
+                             details=_with_full_rule(f"Source: {r['source']}", r), line=r["num"],
+                             pci_ids=src_pci)
             if _has_any(r["destination"]):
                 self._issue("HIGH", "Rule Allows Any Destination", "3.5", r["name"],
                              f"Allow rule '{r['name']}' permits traffic to Any destination.",
                              "Restrict the destination to the specific networks/hosts/services required.",
-                             details=_with_full_rule(f"Destination: {r['destination']}", r), line=r["num"])
+                             details=_with_full_rule(f"Destination: {r['destination']}", r), line=r["num"],
+                             pci_ids=dst_pci)
             if _has_any(r["services"]):
                 self._issue("HIGH", "Rule Allows Any Service", "3.7", r["name"],
                              f"Allow rule '{r['name']}' permits Any service/application.",
                              "Restrict the rule to the specific services/applications required.",
-                             details=_with_full_rule(f"Services: {r['services']}", r), line=r["num"])
+                             details=_with_full_rule(f"Services: {r['services']}", r), line=r["num"],
+                             pci_ids=svc_pci)
             track = r["track"].strip().lower()
             if track in ("", "none", "log disabled", "no log"):
                 self._issue("MEDIUM", "Allow Rule Not Logging", "3.8", r["name"],
                              f"Allow rule '{r['name']}' does not have logging (Track) enabled.",
                              "Set Track to Log (or Detailed/Extended Log) on every allow rule.",
-                             details=_with_full_rule(f"Track: {r['track'] or '(blank)'}", r), line=r["num"])
-        self._native_ids |= {"3.5", "3.6", "3.7", "3.8"}
+                             details=_with_full_rule(f"Track: {r['track'] or '(blank)'}", r), line=r["num"],
+                             pci_ids=log_pci)
 
         # 3.2 — a default drop/cleanup rule should be the last rule in the base.
         if active:
@@ -983,25 +1084,23 @@ class CheckpointParser:
             is_cleanup = (_is_drop(last["action"]) and _has_any(last["source"])
                           and _has_any(last["destination"]) and _has_any(last["services"]))
             if not is_cleanup:
-                desc, sol = self._catalog_text("3.2")
+                desc, sol, pci_ids = self._catalog_refs("3.2")
                 self._issue("HIGH", "No Default Drop/Cleanup Rule", "3.2", "(rulebase)",
                              desc or "The last rule in the rulebase does not explicitly drop all "
                              "traffic not matched by an earlier rule.",
                              sol or "Add an explicit Any/Any/Any Drop rule (with logging) as the "
                              "final rule in the rulebase.",
                              details=_with_full_rule(f"Last rule is '{last['name']}', not a "
-                             "catch-all drop.", last))
-        self._native_ids.add("3.2")
+                             "catch-all drop.", last), pci_ids=pci_ids)
 
         # 3.4 — Hit Count column present and populated for at least one rule.
         has_hits = any(r["hits"].strip() for r in active)
         if not has_hits:
-            desc, sol = self._catalog_text("3.4")
+            desc, sol, pci_ids = self._catalog_refs("3.4")
             self._issue("LOW", "No Hit Count Data", "3.4", "(rulebase)",
                          desc or "No rule in the exported rulebase shows Hit Count data.",
                          sol or "Enable Hit Count under SmartConsole > Global Properties, and "
-                         "review it periodically to find and remove unused rules.")
-        self._native_ids.add("3.4")
+                         "review it periodically to find and remove unused rules.", pci_ids=pci_ids)
 
     # ── CIS Check Point Firewall Benchmark checks (need the Gaia config) ────
     def _run_cis_checks(self):
@@ -1053,7 +1152,7 @@ class CheckpointParser:
             level = subitems[0]["level"]
             info = subitems[0]["info"]
             solution = subitems[0]["solution"]
-            cis_ids, pci_ids = _refs_from_reference(subitems[0]["reference"])
+            pci_ids = _pci_ids_from_reference(subitems[0]["reference"])
             severity = _severity_for(base_id)
 
             automated = [s for s in subitems
@@ -1068,7 +1167,7 @@ class CheckpointParser:
             # over entirely for those IDs regardless of the enterprise classification.
             if self.dialect == "spark" and base_id in SPARK_IMPLEMENTED_IDS:
                 self._emit_spark_check(base_id, umbrella_title, level, info, solution,
-                                        severity, cis_ids, pci_ids)
+                                        severity, pci_ids)
                 continue
 
             if not automated:
@@ -1084,7 +1183,7 @@ class CheckpointParser:
                              "doesn't automate either).",
                              solution or "Review the Check Point CIS Benchmark control by hand in "
                              "SmartConsole.",
-                             cis_ids=cis_ids, pci_ids=pci_ids)
+                             pci_ids=pci_ids)
                 continue
 
             if self.dialect == "spark":
@@ -1097,7 +1196,7 @@ class CheckpointParser:
                              "in this analyzer — the benchmark is written for enterprise Gaia. "
                              + (info or ""),
                              solution or "Not applicable to this platform.",
-                             cis_ids=cis_ids, pci_ids=pci_ids)
+                             pci_ids=pci_ids)
                 continue
 
             failures = []
@@ -1125,7 +1224,7 @@ class CheckpointParser:
                              f"[{level}] {umbrella_title}", desc,
                              solution or "See the CIS Check Point Firewall Benchmark for remediation steps.",
                              details=details, line=", ".join(str(l) for l in fail_lines),
-                             cis_ids=cis_ids, pci_ids=pci_ids)
+                             pci_ids=pci_ids)
             elif var_note:
                 # Passed, but the expected value was a site-specific variable —
                 # surface an informational note so it gets a human look.
@@ -1136,10 +1235,10 @@ class CheckpointParser:
                              "for your environment.",
                              "No action needed if the value shown is correct.",
                              line=", ".join(str(l) for l in pass_lines),
-                             cis_ids=cis_ids, pci_ids=pci_ids)
+                             pci_ids=pci_ids)
 
     def _emit_spark_check(self, base_id, umbrella_title, level, info, solution,
-                           severity, cis_ids, pci_ids):
+                           severity, pci_ids):
         """Evaluate one benchmark ID against Quantum Spark facts instead of
         the enterprise-Gaia regex engine, and emit the matching finding."""
         result = _eval_spark_check(base_id, self.spark_facts)
@@ -1150,7 +1249,7 @@ class CheckpointParser:
                          "Quantum Spark / SMB-series appliance (Gaia Embedded) — the benchmark is "
                          "written for enterprise Gaia. " + (info or ""),
                          solution or "Not applicable to this platform.",
-                         cis_ids=cis_ids, pci_ids=pci_ids)
+                         pci_ids=pci_ids)
             return
         if result["status"] == "FAIL":
             self._issue(severity, umbrella_title, base_id,
@@ -1159,7 +1258,7 @@ class CheckpointParser:
                          solution or "See the CIS Check Point Firewall Benchmark for remediation steps "
                          "(adapted here to this platform's own settings — see Details).",
                          details=result["evidence"], line=str(result["line"]) if result["line"] else "",
-                         cis_ids=cis_ids, pci_ids=pci_ids)
+                         pci_ids=pci_ids)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1381,7 +1480,7 @@ class ExcelReporter:
         ws.sheet_view.showGridLines = False
         headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
                    "Category", "Rule / Object", "Config Line(s)",
-                   "CIS Controls v7", "CIS Benchmark ID", "PCI DSS",
+                   "CIS v8", "CIS Benchmark", "PCI DSS", "SCF",
                    "Description", "Recommendation", "Details",
                    "Asset", "Target", "Vuln", "Source"]
         self._hdr(ws, headers)
@@ -1414,6 +1513,7 @@ class ExcelReporter:
             values = [idx, validated, sev, "", iss["category"],
                       iss["category"], iss["rule_name"], iss.get("line", ""),
                       iss.get("cis_controls", ""), iss.get("cis_benchmark", ""), iss.get("pci_dss", ""),
+                      iss.get("scf", ""),
                       iss["description"], iss["recommendation"], details,
                       asset, target, vuln, source]
             for col, val in enumerate(values, 1):
@@ -1433,6 +1533,10 @@ class ExcelReporter:
                     c.font = _font(bold=True, color="7B2D8B", size=9); c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
+                elif col == 12:
+                    c.font = _font(bold=True, color="1A5C3A", size=9); c.alignment = _align("center")
+                    if row_bg:
+                        c.fill = _fill(row_bg)
                 elif col == 2:
                     c.font = _font(bold=True); c.alignment = _align("center")
                     if row_bg:
@@ -1442,7 +1546,7 @@ class ExcelReporter:
                     if row_bg:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
-        self._set_widths(ws, [4, 10, 12, 14, 26, 40, 24, 12, 18, 16, 16, 55, 55, 50, 22, 18, 44, 26])
+        self._set_widths(ws, [4, 10, 12, 14, 26, 40, 24, 12, 18, 16, 16, 16, 55, 55, 50, 22, 18, 44, 26])
 
     # ── Ticketing Export ──────────────────────────────────────────────────────
     def _sheet_export(self):
@@ -1468,21 +1572,20 @@ class ExcelReporter:
             ws.row_dimensions[row].height = 60
         self._set_widths(ws, [24, 10, 10, 8, 80])
 
-    # ── CIS Controls v7 Mapping ──────────────────────────────────────────────
+    # ── CIS Controls v8 Mapping ──────────────────────────────────────────────
     def _sheet_cis_mapping(self):
         ws = self.wb.create_sheet("CIS Controls Mapping")
         ws.sheet_view.showGridLines = False
         ws.merge_cells("A1:F1")
         t = ws["A1"]
-        t.value = "CIS Controls v7 — Finding Cross-Reference"
+        t.value = "CIS Controls v8 — Finding Cross-Reference"
         t.font = Font(name="Calibri", bold=True, size=14, color="FFFFFF")
         t.fill = _fill(C["hdr_bg"])
         t.alignment = _align("center", wrap=False)
         ws.row_dimensions[1].height = 36
         ws.merge_cells("A2:F2")
         s = ws["A2"]
-        s.value = ("Each CIS Control lists all findings from this config that map to it "
-                   "(per the CIS Check Point Firewall Benchmark's own reference data).")
+        s.value = "Each CIS Control lists all findings from this config that map to it."
         s.font = _font(italic=True, color=C["info"], size=9)
         s.fill = _fill("F2F2F2")
         s.alignment = _align("center", wrap=False)
