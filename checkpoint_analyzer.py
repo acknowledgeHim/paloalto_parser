@@ -1134,51 +1134,104 @@ class ExcelReporter:
         self.wb.save(self.out)
 
 
-# ── CLI entry point ───────────────────────────────────────────────────────────
-def main():
-    ap = argparse.ArgumentParser(
-        description="Check Point Firewall Config Analyzer — outputs Excel report",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python checkpoint_analyzer.py "show configuration.txt"
-  python checkpoint_analyzer.py "show configuration.txt" --rules-csv rulebase.csv
-  python checkpoint_analyzer.py "show configuration.txt" -o audit-$(date +%%Y%%m%%d).xlsx
-  python checkpoint_analyzer.py rulebase.csv
-""",
-    )
-    ap.add_argument("config",
-                     help="Gaia 'show configuration' (or 'show configuration all') clish CLI "
-                          "text capture — e.g. a PuTTY/SecureCRT session log from the gateway "
-                          "or management server. On its own, with no rulebase CSV, only the "
-                          "CIS Check Point Firewall Benchmark (Gaia OS-level) checks run — the "
-                          "access rulebase lives on the Management Server, not in Gaia's config. "
-                          "A '.csv' file passed here is routed to --rules-csv automatically and "
-                          "runs rulebase checks only.")
-    ap.add_argument("-o", "--output", default=None,
-                     help="Output Excel file (default: <config-stem>_analysis.xlsx)")
-    ap.add_argument("--rules-csv", default=None,
-                     help="SmartConsole Rule Base 'Export to CSV' (No., Name, Source, "
-                          "Destination, VPN, Services & Applications, Action, Track, Install On, "
-                          "Time, Comments, ...). Populates the Security Rules sheet and the "
-                          "rulebase-shaped CIS Benchmark checks (3.2, 3.4–3.8).")
-    args = ap.parse_args()
+# ── Directory (batch) mode ───────────────────────────────────────────────────
+_BATCH_SKIP_EXT = {".xlsx", ".xls", ".pyc", ".zip", ".tar", ".gz"}
 
-    config_file = args.config
-    rules_csv = args.rules_csv
-    if config_file.lower().endswith(".csv"):
-        if rules_csv and os.path.abspath(rules_csv) != os.path.abspath(config_file):
-            sys.exit("Both a .csv positional and --rules-csv were given — pass the Gaia config "
-                      "as the positional and the CSV via --rules-csv.")
-        rules_csv, config_file = config_file, None
 
-    if not args.output:
-        stem = os.path.splitext(os.path.basename(args.config))[0]
-        args.output = f"{stem}_analysis.xlsx"
+def _looks_like_gaia_config(path: str) -> bool:
+    """Sniff a file's content (not just its extension) for Gaia clish
+    statements, so a directory scan doesn't have to guess from filenames
+    alone. Requires a few matches, not just one, to avoid false positives
+    on unrelated text files that happen to contain a stray 'set ...' line."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            sample = fh.read(200_000)
+    except (OSError, UnicodeDecodeError):
+        return False
+    sample = _ANSI_CSI_RE.sub("", sample)
+    return len(re.findall(r'(?m)^\s*(?:set|add|delete)\s+\S', sample)) >= 3
 
-    print(f"[*] Parsing: {args.config}")
-    parser = CheckpointParser(config_file, rules_csv=rules_csv)
-    parser.parse()
+
+# Descriptive tokens that commonly differ between a gateway's config capture
+# and its rulebase export even when they're clearly "the same gateway" —
+# e.g. 'gw01_show_configuration.txt' vs 'gw01_rules.csv'. Stripped out before
+# comparing filenames so what's left is (ideally) just the gateway identifier.
+_PAIR_NOISE_TOKENS = {
+    "show", "configuration", "config", "cfg", "running", "merged", "all",
+    "rules", "rulebase", "ruleset", "policy", "export", "csv", "smartconsole",
+    "gaia", "clish", "gw", "gateway", "fw", "firewall",
+}
+
+
+def _pair_sig(path: str) -> str:
+    """A filename 'signature' for pairing a config to its rulebase CSV:
+    lowercased, split on non-alnum, common descriptive tokens dropped."""
+    stem = os.path.splitext(os.path.basename(path))[0].lower()
+    tokens = [t for t in re.split(r'[^a-z0-9]+', stem) if t and t not in _PAIR_NOISE_TOKENS]
+    return "".join(tokens)
+
+
+def _scan_directory(directory: str, recursive: bool) -> tuple[list[str], list[str]]:
+    """Return (config_paths, csv_paths) found under directory."""
+    configs, csvs = [], []
+    if recursive:
+        walk = os.walk(directory)
+    else:
+        walk = [(directory, [], sorted(os.listdir(directory)))]
+    for root, _dirs, files in walk:
+        for fname in sorted(files):
+            if fname.startswith("."):
+                continue
+            path = os.path.join(root, fname)
+            if not os.path.isfile(path):
+                continue
+            ext = os.path.splitext(fname)[1].lower()
+            if ext in _BATCH_SKIP_EXT:
+                continue
+            if ext == ".csv":
+                csvs.append(path)
+            elif _looks_like_gaia_config(path):
+                configs.append(path)
+    return configs, csvs
+
+
+def _pair_rules_csv(config_path: str, csvs: list[str]) -> "str | None":
+    """Best-effort match of a config file to its rulebase CSV by filename
+    signature (e.g. 'gw01_show_configuration.txt' <-> 'gw01_rules.csv' both
+    reduce to 'gw01' once descriptive words are stripped — see _pair_sig).
+    Returns None when nothing lines up unambiguously — missing or ambiguous
+    pairings are left for the user to run by hand rather than guessed at."""
+    csig = _pair_sig(config_path)
+    if not csig:
+        return None
+    sig_pairs = [(c, _pair_sig(c)) for c in csvs]
+    sig_pairs = [(c, s) for c, s in sig_pairs if s]  # an empty signature (e.g. a bare
+    #                                                   'rules.csv') can't be tied to any one config
+
+    exact = [c for c, s in sig_pairs if s == csig]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return None  # more than one CSV reduces to the same signature — ambiguous
+
+    prefix = [c for c, s in sig_pairs if s.startswith(csig) or csig.startswith(s)]
+    if len(prefix) == 1:
+        return prefix[0]
+    return None
+
+
+def _run_one(config_file: "str | None", rules_csv: "str | None", output_path: str) -> "CheckpointParser | None":
+    """Parse one config (+ optional rulebase CSV) and write its Excel report.
+    Returns the parser on success, None on a handled per-file failure (so
+    batch mode can keep going instead of aborting the whole run)."""
+    label = config_file or rules_csv
+    print(f"[*] Parsing: {label}")
+    try:
+        parser = CheckpointParser(config_file, rules_csv=rules_csv)
+        parser.parse()
+    except SystemExit as exc:
+        print(f"[!] Skipped {label}: {exc}")
+        return None
 
     sev_counts: dict[str, int] = defaultdict(int)
     for iss in parser.issues:
@@ -1192,10 +1245,115 @@ Examples:
         if sev_counts[sev]:
             print(f"      {sev:<10}: {sev_counts[sev]}")
 
-    print("[*] Writing Excel report...")
-    reporter = ExcelReporter(parser, args.output)
+    reporter = ExcelReporter(parser, output_path)
     reporter.save()
-    print(f"[+] Saved: {args.output}")
+    print(f"[+] Saved: {output_path}")
+    return parser
+
+
+def _run_batch(directory: str, output_dir: "str | None", recursive: bool,
+                shared_rules_csv: "str | None"):
+    configs, csvs = _scan_directory(directory, recursive)
+    if not configs:
+        sys.exit(f"No Gaia 'show configuration' captures found under {directory}")
+
+    print(f"[*] Found {len(configs)} config file(s) and {len(csvs)} CSV file(s) under {directory}"
+          f"{' (recursive)' if recursive else ''}")
+
+    results = []
+    for config_file in configs:
+        if shared_rules_csv:
+            rules_csv = shared_rules_csv
+        else:
+            rules_csv = _pair_rules_csv(config_file, csvs)
+            if rules_csv:
+                print(f"[+] Paired {os.path.basename(config_file)}  <->  {os.path.basename(rules_csv)}")
+
+        out_dir = output_dir or os.path.dirname(config_file) or "."
+        os.makedirs(out_dir, exist_ok=True)
+        stem = os.path.splitext(os.path.basename(config_file))[0]
+        output_path = os.path.join(out_dir, f"{stem}_analysis.xlsx")
+
+        parser = _run_one(config_file, rules_csv, output_path)
+        results.append((config_file, parser))
+        print()
+
+    ok = sum(1 for _, p in results if p is not None)
+    print(f"[*] Batch complete: {ok}/{len(results)} report(s) written.")
+    failed = [c for c, p in results if p is None]
+    if failed:
+        print("[!] Failed:")
+        for c in failed:
+            print(f"      {c}")
+
+
+# ── CLI entry point ───────────────────────────────────────────────────────────
+def main():
+    ap = argparse.ArgumentParser(
+        description="Check Point Firewall Config Analyzer — outputs Excel report(s)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python checkpoint_analyzer.py "show configuration.txt"
+  python checkpoint_analyzer.py "show configuration.txt" --rules-csv rulebase.csv
+  python checkpoint_analyzer.py "show configuration.txt" -o audit-$(date +%%Y%%m%%d).xlsx
+  python checkpoint_analyzer.py rulebase.csv
+  python checkpoint_analyzer.py ./configs/                       # batch mode
+  python checkpoint_analyzer.py ./configs/ --output-dir ./audits/
+  python checkpoint_analyzer.py ./configs/ --recursive
+""",
+    )
+    ap.add_argument("config",
+                     help="A Gaia 'show configuration' (or 'show configuration all') clish CLI "
+                          "text capture — e.g. a PuTTY/SecureCRT session log from the gateway or "
+                          "management server — OR a directory containing multiple such captures, "
+                          "which runs every one of them and writes one Excel report per config "
+                          "('batch mode'). On its own, with no rulebase CSV, only the CIS Check "
+                          "Point Firewall Benchmark (Gaia OS-level) checks run — the access "
+                          "rulebase lives on the Management Server, not in Gaia's config. A "
+                          "single '.csv' file passed here (not a directory) is routed to "
+                          "--rules-csv automatically and runs rulebase checks only.")
+    ap.add_argument("-o", "--output", default=None,
+                     help="Output Excel file for a single config (default: "
+                          "<config-stem>_analysis.xlsx). Ignored in batch mode — use "
+                          "--output-dir instead.")
+    ap.add_argument("--rules-csv", default=None,
+                     help="SmartConsole Rule Base 'Export to CSV' (No., Name, Source, "
+                          "Destination, VPN, Services & Applications, Action, Track, Install On, "
+                          "Time, Comments, ...). Populates the Security Rules sheet and the "
+                          "rulebase-shaped CIS Benchmark checks (3.2, 3.4–3.8). In batch mode, "
+                          "if given, the SAME CSV is applied to every config found — omit it and "
+                          "each config is auto-paired with a same-named CSV in the directory "
+                          "instead (e.g. 'gw01.txt' <-> 'gw01.csv' / 'gw01_rules.csv'), when one "
+                          "exists unambiguously.")
+    ap.add_argument("--output-dir", default=None,
+                     help="Batch mode only: directory to write the *_analysis.xlsx reports into "
+                          "(default: next to each config file). Created if it doesn't exist.")
+    ap.add_argument("--recursive", action="store_true",
+                     help="Batch mode only: also scan subdirectories for config/CSV files.")
+    args = ap.parse_args()
+
+    if os.path.isdir(args.config):
+        if args.output:
+            sys.exit("--output isn't used in batch mode (one directory -> many reports) — "
+                      "use --output-dir instead.")
+        _run_batch(args.config, args.output_dir, args.recursive, args.rules_csv)
+        return
+
+    config_file = args.config
+    rules_csv = args.rules_csv
+    if config_file.lower().endswith(".csv"):
+        if rules_csv and os.path.abspath(rules_csv) != os.path.abspath(config_file):
+            sys.exit("Both a .csv positional and --rules-csv were given — pass the Gaia config "
+                      "as the positional and the CSV via --rules-csv.")
+        rules_csv, config_file = config_file, None
+
+    output_path = args.output
+    if not output_path:
+        stem = os.path.splitext(os.path.basename(args.config))[0]
+        output_path = f"{stem}_analysis.xlsx"
+
+    _run_one(config_file, rules_csv, output_path)
 
 
 if __name__ == "__main__":
