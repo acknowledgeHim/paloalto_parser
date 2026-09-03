@@ -1380,7 +1380,7 @@ class ExcelReporter:
             details = iss.get("details", "")
             validated = "N" if "Manual Review Required" in iss["category"] else "Y"
 
-            values = [idx, validated, sev, "", details,
+            values = [idx, validated, sev, "", iss["category"],
                       iss["category"], iss["rule_name"], iss.get("line", ""),
                       iss.get("cis_controls", ""), iss.get("cis_benchmark", ""), iss.get("pci_dss", ""),
                       iss["description"], iss["recommendation"], details,
