@@ -1379,14 +1379,14 @@ class ExcelReporter:
             vuln = self._vulns.get(vuln_id, "") if vuln_id else ""
             details = iss.get("details", "")
             validated = "N" if "Manual Review Required" in iss["category"] else "Y"
+            line = iss.get("line", "")
             if hostname:
-                target = hostname
+                target = f"{hostname} ({line})" if line else hostname
             else:
                 # No Gaia config to read a hostname from (e.g. an orphaned
                 # rules-only CSV run) — fall back to the finding's own
                 # rule/object and config line, same shape as pa_analyzer.py's
                 # Target column.
-                line = iss.get("line", "")
                 target = f"{iss['rule_name']} ({line})" if line else iss["rule_name"]
 
             values = [idx, validated, sev, "", iss["category"],
