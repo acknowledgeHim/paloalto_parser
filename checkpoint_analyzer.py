@@ -1054,7 +1054,7 @@ class CheckpointParser:
                 # (or Nessus itself) can't determine this from a static config
                 # capture alone, on either platform.
                 self._issue(severity,
-                             f"CIS {base_id} — Manual Review Required", base_id,
+                             f"{umbrella_title} — Manual Review Required", base_id,
                              f"[{level}] {umbrella_title}",
                              info or "This control requires manual review — it isn't derivable "
                              "from a static Gaia configuration capture (it lives in the SmartConsole "
@@ -1068,7 +1068,7 @@ class CheckpointParser:
             if self.dialect == "spark":
                 # Enterprise-automatable, but no Spark equivalent implemented —
                 # the enterprise regex would just false-FAIL on Spark's syntax.
-                self._issue("INFO", f"CIS {base_id} — Not Applicable (Quantum Spark)", base_id,
+                self._issue("INFO", f"{umbrella_title} — Not Applicable (Quantum Spark)", base_id,
                              f"[{level}] {umbrella_title}",
                              "This Check Point CIS Benchmark control has no equivalent setting "
                              "implemented for Quantum Spark / SMB-series appliances (Gaia Embedded) "
@@ -1099,7 +1099,7 @@ class CheckpointParser:
                 details = "; ".join(failures)
                 if var_note:
                     details += "  [expected value depends on your environment — verify against your DNS/NTP/AAA/SNMP/timezone/banner text]"
-                self._issue(severity, f"CIS {base_id} — {umbrella_title}", base_id,
+                self._issue(severity, umbrella_title, base_id,
                              f"[{level}] {umbrella_title}", desc,
                              solution or "See the CIS Check Point Firewall Benchmark for remediation steps.",
                              details=details, line=", ".join(str(l) for l in fail_lines),
@@ -1107,7 +1107,7 @@ class CheckpointParser:
             elif var_note:
                 # Passed, but the expected value was a site-specific variable —
                 # surface an informational note so it gets a human look.
-                self._issue("INFO", f"CIS {base_id} — Verify Environment-Specific Value", base_id,
+                self._issue("INFO", f"{umbrella_title} — Verify Environment-Specific Value", base_id,
                              f"[{level}] {umbrella_title}",
                              f"{umbrella_title} is configured — confirm the configured value "
                              "(DNS/NTP/AAA server, timezone, or banner text) is actually correct "
@@ -1122,7 +1122,7 @@ class CheckpointParser:
         the enterprise-Gaia regex engine, and emit the matching finding."""
         result = _eval_spark_check(base_id, self.spark_facts)
         if result is None:
-            self._issue("INFO", f"CIS {base_id} — Not Applicable (Quantum Spark)", base_id,
+            self._issue("INFO", f"{umbrella_title} — Not Applicable (Quantum Spark)", base_id,
                          f"[{level}] {umbrella_title}",
                          "This Check Point CIS Benchmark control has no equivalent setting on a "
                          "Quantum Spark / SMB-series appliance (Gaia Embedded) — the benchmark is "
@@ -1131,7 +1131,7 @@ class CheckpointParser:
                          cis_ids=cis_ids, pci_ids=pci_ids)
             return
         if result["status"] == "FAIL":
-            self._issue(severity, f"CIS {base_id} — {umbrella_title}", base_id,
+            self._issue(severity, umbrella_title, base_id,
                          f"[{level}] {umbrella_title}",
                          info or f"{umbrella_title} — not configured correctly on this Quantum Spark appliance.",
                          solution or "See the CIS Check Point Firewall Benchmark for remediation steps "
