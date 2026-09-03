@@ -1377,11 +1377,13 @@ class ExcelReporter:
             row_bg = self._row_fill(row)
             vuln_id = CATEGORY_VULN_ID.get(iss["category"]) or BENCHMARK_ID_VULN_ID.get(iss.get("item_id", ""))
             vuln = self._vulns.get(vuln_id, "") if vuln_id else ""
+            details = iss.get("details", "")
+            validated = "N" if "Manual Review Required" in iss["category"] else "Y"
 
-            values = [idx, "Y", sev, "", "",
+            values = [idx, validated, sev, "", details,
                       iss["category"], iss["rule_name"], iss.get("line", ""),
                       iss.get("cis_controls", ""), iss.get("cis_benchmark", ""), iss.get("pci_dss", ""),
-                      iss["description"], iss["recommendation"], iss.get("details", ""),
+                      iss["description"], iss["recommendation"], details,
                       asset, target, vuln, source]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
