@@ -104,6 +104,25 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "Rule Allows Any Service":             9,
     "Allow Rule Not Logging":              28,
     "No Hit Count Data":                   25,
+    "No Default Drop/Cleanup Rule":        9,
+}
+
+# Maps each CIS Check Point Firewall Benchmark ID to a vulns.txt line ID —
+# the fallback used for every benchmark-catalog-driven finding (the "CIS
+# x.x — ..." categories), since those category strings are built dynamically
+# per check and can't be enumerated in CATEGORY_VULN_ID above. IDs with no
+# reasonable fit in vulns.txt's fixed taxonomy are left unmapped (blank Vuln
+# column) rather than forced into a category that doesn't really describe them.
+BENCHMARK_ID_VULN_ID: dict[str, int] = {
+    "1.1": 27, "1.2": 27, "1.3": 27, "1.4": 27, "1.5": 27, "1.6": 27,
+    "1.7": 3, "1.8": 3, "1.9": 3, "1.10": 27, "1.11": 3, "1.12": 3, "1.13": 3,
+    "2.1.1": 21, "2.1.2": 8, "2.1.5": 34, "2.1.6": 17, "2.1.8": 24, "2.1.9": 4,
+    "2.2.1": 15, "2.2.2": 15, "2.2.3": 28, "2.2.4": 28,
+    "2.3.1": 18, "2.3.2": 19,
+    "2.5.1": 27, "2.5.2": 27, "2.5.3": 4, "2.5.4": 27, "2.5.5": 14,
+    "2.6.1": 28, "2.6.2": 28, "2.6.3": 28,
+    "3.1": 14, "3.2": 9, "3.4": 25, "3.5": 9, "3.6": 9, "3.7": 9, "3.8": 28, "3.9": 28,
+    "3.15": 17, "3.16": 17, "3.20": 28,
 }
 
 
@@ -673,6 +692,7 @@ class CheckpointParser:
                 continue
 
             failures = []
+            fail_lines, pass_lines = [], []
             var_note = False
             for s in automated:
                 result = _eval_config_check(s, self.gaia_lines)
@@ -682,6 +702,10 @@ class CheckpointParser:
                     sub_label = s["title"].split(" - ", 1)[-1] if " - " in s["title"] else ""
                     ev = f"'{result['text']}' (line {result['line']})" if result["text"] else "not configured"
                     failures.append(f"{sub_label + ': ' if sub_label else ''}{ev}")
+                    if result["line"]:
+                        fail_lines.append(result["line"])
+                elif result["line"]:
+                    pass_lines.append(result["line"])
 
             if failures:
                 desc = info or f"{umbrella_title} — one or more required settings are not configured correctly."
@@ -691,7 +715,8 @@ class CheckpointParser:
                 self._issue(severity, f"CIS {base_id} — {umbrella_title}", base_id,
                              f"[{level}] {umbrella_title}", desc,
                              solution or "See the CIS Check Point Firewall Benchmark for remediation steps.",
-                             details=details, cis_ids=cis_ids, pci_ids=pci_ids)
+                             details=details, line=", ".join(str(l) for l in fail_lines),
+                             cis_ids=cis_ids, pci_ids=pci_ids)
             elif var_note:
                 # Passed, but the expected value was a site-specific variable —
                 # surface an informational note so it gets a human look.
@@ -701,6 +726,7 @@ class CheckpointParser:
                              "(DNS/NTP/AAA server, timezone, or banner text) is actually correct "
                              "for your environment.",
                              "No action needed if the value shown is correct.",
+                             line=", ".join(str(l) for l in pass_lines),
                              cis_ids=cis_ids, pci_ids=pci_ids)
 
 
@@ -918,40 +944,46 @@ class ExcelReporter:
     def _sheet_issues(self):
         ws = self.wb.create_sheet("Security Issues")
         ws.sheet_view.showGridLines = False
-        headers = ["#", "Validated", "Severity", "Category", "Rule / Object", "Config Line(s)",
+        headers = ["#", "Validated", "Severity", "Residual Risk", "Residual Risk Note",
+                   "Category", "Rule / Object", "Config Line(s)",
                    "CIS Controls v7", "CIS Benchmark ID", "PCI DSS",
-                   "Description", "Recommendation", "Details", "Vuln", "Source"]
+                   "Description", "Recommendation", "Details",
+                   "Asset", "Target", "Vuln", "Source"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
 
         source = self.p.source_label
+        asset = self.p.source_label                              # the config/CSV filename
+        target = self.p.system.get("Hostname", ("", 0))[0]        # the firewall's hostname
         sorted_issues = sorted(self.p.issues, key=lambda x: self.SEV_ORDER.get(x["severity"], 9))
         for idx, iss in enumerate(sorted_issues, 1):
             row = idx + 1
             sev = iss["severity"]
             fg, bg = self.SEV_COLORS[sev]
             row_bg = self._row_fill(row)
-            vuln_id = CATEGORY_VULN_ID.get(iss["category"])
+            vuln_id = CATEGORY_VULN_ID.get(iss["category"]) or BENCHMARK_ID_VULN_ID.get(iss.get("item_id", ""))
             vuln = self._vulns.get(vuln_id, "") if vuln_id else ""
 
-            values = [idx, "Y", sev, iss["category"], iss["rule_name"], iss.get("line", ""),
+            values = [idx, "Y", sev, "", "",
+                      iss["category"], iss["rule_name"], iss.get("line", ""),
                       iss.get("cis_controls", ""), iss.get("cis_benchmark", ""), iss.get("pci_dss", ""),
-                      iss["description"], iss["recommendation"], iss.get("details", ""), vuln, source]
+                      iss["description"], iss["recommendation"], iss.get("details", ""),
+                      asset, target, vuln, source]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=row, column=col, value=val)
                 c.border = THIN
                 if col == 3:
                     c.fill = _fill(bg); c.font = _font(bold=True, color=fg); c.alignment = _align("center")
-                elif col in (1, 6, 8):
+                elif col in (1, 8):
                     c.font = _font(bold=(col == 1)); c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 7:
+                elif col == 9:
                     c.font = _font(bold=True, color="17375E", size=9); c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
-                elif col == 9:
+                elif col == 11:
                     c.font = _font(bold=True, color="7B2D8B", size=9); c.alignment = _align("center")
                     if row_bg:
                         c.fill = _fill(row_bg)
@@ -964,7 +996,7 @@ class ExcelReporter:
                     if row_bg:
                         c.fill = _fill(row_bg)
             ws.row_dimensions[row].height = 40
-        self._set_widths(ws, [4, 10, 12, 40, 24, 12, 18, 16, 16, 55, 55, 50, 44, 26])
+        self._set_widths(ws, [4, 10, 12, 14, 26, 40, 24, 12, 18, 16, 16, 55, 55, 50, 22, 18, 44, 26])
 
     # ── Ticketing Export ──────────────────────────────────────────────────────
     def _sheet_export(self):
