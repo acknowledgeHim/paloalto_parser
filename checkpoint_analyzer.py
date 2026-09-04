@@ -1499,6 +1499,7 @@ class ExcelReporter:
             vuln_id = CATEGORY_VULN_ID.get(iss["category"]) or BENCHMARK_ID_VULN_ID.get(iss.get("item_id", ""))
             vuln = self._vulns.get(vuln_id, "") if vuln_id else ""
             details = iss.get("details", "")
+            residual_risk_note = details or iss["category"]
             validated = "N" if "Manual Review Required" in iss["category"] else "Y"
             line = iss.get("line", "")
             if hostname:
@@ -1510,7 +1511,7 @@ class ExcelReporter:
                 # Target column.
                 target = f"{iss['rule_name']} ({line})" if line else iss["rule_name"]
 
-            values = [idx, validated, sev, "", iss["category"],
+            values = [idx, validated, sev, "", residual_risk_note,
                       iss["category"], iss["rule_name"], iss.get("line", ""),
                       iss.get("cis_controls", ""), iss.get("cis_benchmark", ""), iss.get("pci_dss", ""),
                       iss.get("scf", ""),
