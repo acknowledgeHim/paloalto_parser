@@ -269,7 +269,7 @@ PCI_DSS_DESC: dict[str, str] = {
 
 
 def _cis_label(ids: list[str]) -> str:
-    return " · ".join(f"CIS {c}" for c in ids)
+    return " · ".join(ids)
 
 
 def _cis_benchmark_label(ids: list[str]) -> str:
