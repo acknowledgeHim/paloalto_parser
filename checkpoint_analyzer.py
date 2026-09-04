@@ -277,7 +277,7 @@ def _cis_benchmark_label(ids: list[str]) -> str:
 
 
 def _pci_label(ids: list[str]) -> str:
-    return " · ".join(f"PCI DSS {c}" for c in ids)
+    return " · ".join(ids)
 
 
 def _scf_label(ids: list[str]) -> str:
