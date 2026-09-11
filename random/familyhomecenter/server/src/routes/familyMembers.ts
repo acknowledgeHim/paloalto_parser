@@ -1,16 +1,19 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 import type { FamilyMember } from '../types.js';
 
 export const familyMembersRouter = Router();
 
+// GET stays open: the profile switcher and every assignee dropdown (tasks, calendar, music) need
+// the roster for everyday use. Only adding/editing/removing a family member is "configuration".
 familyMembersRouter.get('/', (_req, res) => {
   const members = db.prepare('SELECT * FROM family_members ORDER BY created_at ASC').all();
   res.json(members);
 });
 
-familyMembersRouter.post('/', (req, res) => {
+familyMembersRouter.post('/', requireAdmin, (req, res) => {
   const { name, color, avatar, is_parent } = req.body as Partial<FamilyMember>;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'name is required' });
@@ -29,7 +32,7 @@ familyMembersRouter.post('/', (req, res) => {
   res.status(201).json(member);
 });
 
-familyMembersRouter.patch('/:id', (req, res) => {
+familyMembersRouter.patch('/:id', requireAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as
     | FamilyMember
     | undefined;
@@ -47,7 +50,7 @@ familyMembersRouter.patch('/:id', (req, res) => {
   res.json(updated);
 });
 
-familyMembersRouter.delete('/:id', (req, res) => {
+familyMembersRouter.delete('/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM family_members WHERE id = ?').run(req.params.id);
   res.status(204).end();
 });

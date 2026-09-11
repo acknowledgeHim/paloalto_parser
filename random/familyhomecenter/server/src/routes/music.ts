@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 import {
   getZones,
   renameZone,
@@ -145,7 +146,8 @@ musicRouter.post(
 musicRouter.get('/spotify/status', (_req, res) => {
   res.json({ configured: spotify.isSpotifyConfigured(), connected: spotify.isSpotifyConnected() });
 });
-musicRouter.get('/spotify/auth-url', (_req, res) => {
+// Gated: connecting a Spotify account is configuration, not everyday playback (which stays open below).
+musicRouter.get('/spotify/auth-url', requireAdmin, (_req, res) => {
   if (!spotify.isSpotifyConfigured()) return res.status(400).json({ error: 'Spotify client not configured in .env' });
   res.json({ url: spotify.getSpotifyAuthUrl() });
 });

@@ -329,6 +329,13 @@ input, select {
 .month-view__more { font-size: 0.7em; color: var(--text-muted); }
 
 /* ---- Settings ---- */
+.settings-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.settings-page__header h1 { margin: 0; }
 .settings-page__member-list, .settings-page__source-list { list-style: none; padding: 0; }
 .settings-page__member-list li, .settings-page__source-list li {
   display: flex;
@@ -549,3 +556,27 @@ input, select {
 }
 .photo-lightbox__nav--prev { left: 20px; }
 .photo-lightbox__nav--next { right: 20px; }
+
+/* ---- Settings login gate ---- */
+.settings-login {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 10vh;
+}
+.settings-login__form {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+.settings-login__form h1 { margin: 0; }
+.settings-login__error {
+  background: #fde8e8;
+  color: #9b1c1c;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.9em;
+}

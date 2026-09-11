@@ -81,11 +81,6 @@ export function MusicPage() {
     await api.post(`/music/zones/${targetZone}/queue`, { file });
   };
 
-  const connectSpotify = async () => {
-    const { url } = await api.get<{ url: string }>('/music/spotify/auth-url');
-    window.open(url, '_blank', 'noopener');
-  };
-
   return (
     <div className="music-page">
       <h1>Music</h1>
@@ -190,9 +185,7 @@ export function MusicPage() {
         </p>
         <p>
           In-dashboard Spotify control: {spotify.connected ? 'Connected ✅' : spotify.configured ? 'Not connected' : 'Not configured'}
-          {spotify.configured && !spotify.connected && (
-            <button className="link-button" onClick={connectSpotify}>Connect</button>
-          )}
+          {spotify.configured && !spotify.connected && <span className="hint"> — connect it from Settings</span>}
         </p>
         {!spotify.configured && <p className="hint">See docs/SPOTIFY_SETUP.md to enable in-dashboard playback control (requires Spotify Premium).</p>}
       </section>

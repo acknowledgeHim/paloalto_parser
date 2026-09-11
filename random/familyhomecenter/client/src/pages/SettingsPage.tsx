@@ -4,8 +4,53 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 const AVATAR_COLORS = ['#5b8def', '#e2685a', '#3fae66', '#c96fd6', '#e0a638', '#33a3a3'];
 
+interface AuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+}
+
+/** Password gate shown in place of the settings content when a login is configured and not yet passed. */
+function SettingsLogin({ onSuccess }: { onSuccess: () => void }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api.post('/auth/login', { password });
+      onSuccess();
+    } catch (err) {
+      setError((err as Error).message || 'Incorrect password');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="settings-login">
+      <form className="panel settings-login__form" onSubmit={submit}>
+        <h1>Settings</h1>
+        <p className="hint">Everything else in the dashboard is open to the family — just this page needs the settings password.</p>
+        <input
+          autoFocus
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {error && <div className="settings-login__error">{error}</div>}
+        <button type="submit" disabled={submitting}>Unlock</button>
+      </form>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { members, refresh } = useFamilyMembers();
+  const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [name, setName] = useState('');
   const [isParent, setIsParent] = useState(false);
   interface TimingSettings {
@@ -16,15 +61,28 @@ export function SettingsPage() {
     google?: { connected: boolean; configured: boolean };
     apple?: { configured: boolean };
   }
+  interface SpotifyStatus {
+    configured: boolean;
+    connected: boolean;
+  }
   const [settings, setSettings] = useState<TimingSettings>({});
   const [sources, setSources] = useState<CalendarSources>({});
+  const [spotify, setSpotify] = useState<SpotifyStatus>({ configured: false, connected: false });
   const [geoQuery, setGeoQuery] = useState('');
   const [geoResults, setGeoResults] = useState<Array<{ name: string; lat: number; lon: number; admin1?: string; country?: string }>>([]);
 
+  const loadAuth = () => api.get<AuthStatus>('/auth/status').then(setAuth).catch(console.error);
+
   useEffect(() => {
+    loadAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!auth?.authenticated) return;
     api.get<TimingSettings>('/settings').then(setSettings).catch(console.error);
     api.get<CalendarSources>('/calendar/sources').then(setSources).catch(console.error);
-  }, []);
+    api.get<SpotifyStatus>('/music/spotify/status').then(setSpotify).catch(console.error);
+  }, [auth?.authenticated]);
 
   const addMember = async (e: FormEvent) => {
     e.preventDefault();
@@ -50,6 +108,11 @@ export function SettingsPage() {
     window.open(url, '_blank', 'noopener');
   };
 
+  const connectSpotify = async () => {
+    const { url } = await api.get<{ url: string }>('/music/spotify/auth-url');
+    window.open(url, '_blank', 'noopener');
+  };
+
   const runGeocode = async (e: FormEvent) => {
     e.preventDefault();
     if (!geoQuery.trim()) return;
@@ -60,9 +123,22 @@ export function SettingsPage() {
     );
   };
 
+  const logout = async () => {
+    await api.post('/auth/logout');
+    loadAuth();
+  };
+
+  if (!auth) return null; // brief loading flash only
+  if (auth.configured && !auth.authenticated) {
+    return <SettingsLogin onSuccess={loadAuth} />;
+  }
+
   return (
     <div className="settings-page">
-      <h1>Settings</h1>
+      <div className="settings-page__header">
+        <h1>Settings</h1>
+        {auth.configured && <button className="secondary" onClick={logout}>Log out</button>}
+      </div>
 
       <section className="panel">
         <h2>Family members</h2>
@@ -104,6 +180,17 @@ export function SettingsPage() {
       </section>
 
       <section className="panel">
+        <h2>Spotify</h2>
+        <p>
+          In-dashboard playback control: {spotify.connected ? 'Connected ✅' : spotify.configured ? 'Not connected' : 'Not configured'}
+          {spotify.configured && !spotify.connected && (
+            <button className="link-button" onClick={connectSpotify}>Connect</button>
+          )}
+        </p>
+        {!spotify.configured && <p className="hint">See docs/SPOTIFY_SETUP.md — casting from a family member's own Spotify app needs no setup here at all.</p>}
+      </section>
+
+      <section className="panel">
         <h2>Screensaver / slideshow</h2>
         <label>
           Idle timeout before slideshow starts (seconds)
@@ -139,6 +226,10 @@ export function SettingsPage() {
           </div>
         ))}
       </section>
+
+      {!auth.configured && (
+        <p className="hint">Anyone can currently open Settings — set ADMIN_PASSWORD in .env to require a login here. See docs/SETTINGS_LOGIN.md.</p>
+      )}
     </div>
   );
 }

@@ -52,4 +52,11 @@ export const config = {
     alsaDevicePrefix: process.env.INTERCOM_ALSA_PREFIX ?? 'zone',
     duckVolumePercent: Number(process.env.INTERCOM_DUCK_VOLUME ?? 20),
   },
+
+  admin: {
+    // Gates the Settings page + configuration-changing endpoints (family member roster, calendar/
+    // Spotify connect, timing settings). Left unset, Settings stays open like everything else —
+    // see docs/SETTINGS_LOGIN.md.
+    password: process.env.ADMIN_PASSWORD ?? '',
+  },
 };
