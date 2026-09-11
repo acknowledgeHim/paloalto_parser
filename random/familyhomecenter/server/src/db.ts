@@ -50,6 +50,7 @@ db.exec(`
     all_day INTEGER NOT NULL DEFAULT 0,
     color TEXT NOT NULL DEFAULT '#5b8def',
     created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    for_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -119,6 +120,14 @@ db.exec(`
     expires_at TEXT NOT NULL
   );
 `);
+
+// Simple migration for databases created before for_member_id existed — SQLite has no
+// "ADD COLUMN IF NOT EXISTS", so just try it and ignore the "duplicate column" error.
+try {
+  db.exec('ALTER TABLE local_events ADD COLUMN for_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;

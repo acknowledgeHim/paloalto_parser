@@ -36,11 +36,13 @@ calendarRouter.post(
 
 // ---- Local events CRUD ----
 calendarRouter.post('/local', (req, res) => {
-  const { title, description, location, start_at, end_at, all_day, color, created_by_id } = req.body;
+  const { title, description, location, start_at, end_at, all_day, color, created_by_id, for_member_id } = req.body;
   if (!title || !start_at || !end_at) {
     return res.status(400).json({ error: 'title, start_at, end_at are required' });
   }
-  const event = createLocalEvent({ title, description, location, start_at, end_at, all_day, color, created_by_id });
+  const event = createLocalEvent({
+    title, description, location, start_at, end_at, all_day, color, created_by_id, for_member_id,
+  });
   res.status(201).json(event);
 });
 

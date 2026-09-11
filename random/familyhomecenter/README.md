@@ -5,10 +5,15 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
 - 📅 **Shared calendar** — merges a local calendar, Google Calendar, and
   Apple/iCloud Calendar into one view. Add local-only events with no cloud
   account needed, or connect Google/Apple to pull in the family calendars you
-  already use.
+  already use. A local event can be tagged "for" a specific family member, or
+  left as a whole-family event.
 - ✅ **Chores & to-dos** — parents can add recurring chores (daily, weekdays,
   weekends) and assign them; anyone can add a one-off to-do and assign it to
-  any family member (or leave it unassigned). Tap to check things off.
+  any family member, or leave it unassigned for anyone to **claim** with one
+  tap. The Chores & Tasks page groups everything into a column per person
+  (plus an Unassigned column); the **Family Board** page shows the same
+  chores/to-dos alongside each person's calendar side by side, for a
+  glance-and-go "what's everyone got going on" view.
 - 🌤️ **Weather** — current conditions + 5-day forecast via Open-Meteo (no API
   key required).
 - 🖼️ **Photo slideshow / screensaver** — after a configurable idle period, the
