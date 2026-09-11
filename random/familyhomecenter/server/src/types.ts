@@ -50,4 +50,8 @@ export interface CalendarEvent {
   end_at: string;
   all_day: boolean;
   color: string;
+  /** Who this event is for (local events only — Google/Apple events aren't attributed to a family member). */
+  for_member_id?: string | null;
+  /** Who added this event (local events only). */
+  created_by_id?: string | null;
 }

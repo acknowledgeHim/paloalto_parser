@@ -8,13 +8,14 @@ interface Props {
 }
 
 export function AddEventForm({ onCreated, onClose }: Props) {
-  const { activeProfile } = useFamilyMembers();
+  const { activeProfile, members } = useFamilyMembers();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState('');
+  const [forMemberId, setForMemberId] = useState('');
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -28,6 +29,7 @@ export function AddEventForm({ onCreated, onClose }: Props) {
       end_at,
       all_day: allDay,
       created_by_id: activeProfile?.id ?? null,
+      for_member_id: forMemberId || null,
     });
     onCreated();
     onClose();
@@ -37,6 +39,12 @@ export function AddEventForm({ onCreated, onClose }: Props) {
     <form className="event-form" onSubmit={submit}>
       <input autoFocus placeholder="Event title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <input placeholder="Location (optional)" value={location} onChange={(e) => setLocation(e.target.value)} />
+      <select value={forMemberId} onChange={(e) => setForMemberId(e.target.value)}>
+        <option value="">Whole family</option>
+        {members.map((m) => (
+          <option key={m.id} value={m.id}>For {m.name}</option>
+        ))}
+      </select>
       <div className="task-form__row">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <label className="checkbox">

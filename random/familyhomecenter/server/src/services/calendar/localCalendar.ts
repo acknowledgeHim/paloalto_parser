@@ -12,6 +12,7 @@ interface LocalEventRow {
   all_day: 0 | 1;
   color: string;
   created_by_id: string | null;
+  for_member_id: string | null;
   created_at: string;
 }
 
@@ -32,6 +33,8 @@ export function listLocalEvents(rangeStart: string, rangeEnd: string): CalendarE
     end_at: r.end_at,
     all_day: Boolean(r.all_day),
     color: r.color,
+    for_member_id: r.for_member_id,
+    created_by_id: r.created_by_id,
   }));
 }
 
@@ -44,6 +47,7 @@ export function createLocalEvent(input: {
   all_day?: boolean;
   color?: string;
   created_by_id?: string | null;
+  for_member_id?: string | null;
 }): LocalEventRow {
   const row: LocalEventRow = {
     id: uuidv4(),
@@ -55,11 +59,12 @@ export function createLocalEvent(input: {
     all_day: input.all_day ? 1 : 0,
     color: input.color ?? '#5b8def',
     created_by_id: input.created_by_id ?? null,
+    for_member_id: input.for_member_id ?? null,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO local_events (id, title, description, location, start_at, end_at, all_day, color, created_by_id, created_at)
-     VALUES (@id, @title, @description, @location, @start_at, @end_at, @all_day, @color, @created_by_id, @created_at)`
+    `INSERT INTO local_events (id, title, description, location, start_at, end_at, all_day, color, created_by_id, for_member_id, created_at)
+     VALUES (@id, @title, @description, @location, @start_at, @end_at, @all_day, @color, @created_by_id, @for_member_id, @created_at)`
   ).run(row);
   return row;
 }
@@ -70,7 +75,7 @@ export function updateLocalEvent(id: string, patch: Partial<LocalEventRow>): Loc
   const updated = { ...existing, ...patch, id };
   db.prepare(
     `UPDATE local_events SET title=@title, description=@description, location=@location, start_at=@start_at,
-     end_at=@end_at, all_day=@all_day, color=@color WHERE id=@id`
+     end_at=@end_at, all_day=@all_day, color=@color, for_member_id=@for_member_id WHERE id=@id`
   ).run(updated);
   return updated;
 }
