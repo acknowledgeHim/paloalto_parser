@@ -1,0 +1,58 @@
+# ALSA config for the HiFiBerry DAC8x: exposes the card's 8 output channels as 4 independent
+# stereo "zone" PCM devices (zone1..zone4), so 4 separate processes (MPD, librespot, the intercom's
+# aplay) can each write their own stereo stream and have it land on the right physical output pair.
+#
+# Install: sudo cp asound.conf.dac8x /etc/asound.conf
+# Then verify with: speaker-test -D zone1 -c 2   (repeat for zone2/3/4, one at a time)
+#
+# If `aplay -l` shows the DAC8x as something other than "hw:0,0" (e.g. onboard audio wasn't
+# disabled, so the DAC8x ended up as card 1), change CARD below to match — everything else stays.
+
+pcm.dac8x_dmix {
+  type dmix
+  ipc_key 1027
+  slave {
+    pcm "hw:0,0"     # <-- change "0,0" if `aplay -l` lists the DAC8x under a different card number
+    channels 8
+    rate 44100
+    format S16_LE
+    period_size 1024
+    buffer_size 8192
+  }
+}
+
+# Zone 1 = DAC8x output channels 1-2
+pcm.zone1 {
+  type plug
+  slave.pcm "dac8x_dmix"
+  slave.channels 8
+  ttable.0.0 1
+  ttable.1.1 1
+}
+
+# Zone 2 = DAC8x output channels 3-4
+pcm.zone2 {
+  type plug
+  slave.pcm "dac8x_dmix"
+  slave.channels 8
+  ttable.0.2 1
+  ttable.1.3 1
+}
+
+# Zone 3 = DAC8x output channels 5-6
+pcm.zone3 {
+  type plug
+  slave.pcm "dac8x_dmix"
+  slave.channels 8
+  ttable.0.4 1
+  ttable.1.5 1
+}
+
+# Zone 4 = DAC8x output channels 7-8
+pcm.zone4 {
+  type plug
+  slave.pcm "dac8x_dmix"
+  slave.channels 8
+  ttable.0.6 1
+  ttable.1.7 1
+}

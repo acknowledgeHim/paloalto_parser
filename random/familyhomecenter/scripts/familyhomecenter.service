@@ -1,0 +1,16 @@
+[Unit]
+Description=Family Home Center server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/paloalto_parser/random/familyhomecenter/server
+EnvironmentFile=/home/pi/paloalto_parser/random/familyhomecenter/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

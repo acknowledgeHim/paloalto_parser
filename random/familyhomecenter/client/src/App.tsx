@@ -1,0 +1,55 @@
+import { useEffect, useState } from 'react';
+import { HashRouter, Routes, Route } from 'react-router-dom';
+import { NavBar } from './components/NavBar.js';
+import { Slideshow } from './components/Slideshow.js';
+import { Dashboard } from './pages/Dashboard.js';
+import { CalendarPage } from './pages/CalendarPage.js';
+import { TasksPage } from './pages/TasksPage.js';
+import { MusicPage } from './pages/MusicPage.js';
+import { IntercomPage } from './pages/IntercomPage.js';
+import { SettingsPage } from './pages/SettingsPage.js';
+import { useIdle } from './hooks/useIdle.js';
+import { api } from './api/client.js';
+
+export function App() {
+  const [idleTimeoutMs, setIdleTimeoutMs] = useState(5 * 60 * 1000);
+  const [slideshowIntervalSec, setSlideshowIntervalSec] = useState(12);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ idle_timeout_seconds: string; slideshow_interval_seconds: string }>('/settings')
+      .then((s) => {
+        setIdleTimeoutMs(Number(s.idle_timeout_seconds) * 1000);
+        setSlideshowIntervalSec(Number(s.slideshow_interval_seconds));
+      })
+      .catch(() => {});
+  }, []);
+
+  const idle = useIdle(idleTimeoutMs);
+  const showSlideshow = idle && !dismissed;
+
+  useEffect(() => {
+    if (!idle) setDismissed(false);
+  }, [idle]);
+
+  if (showSlideshow) {
+    return <Slideshow intervalSeconds={slideshowIntervalSec} onExit={() => setDismissed(true)} />;
+  }
+
+  return (
+    <HashRouter>
+      <NavBar />
+      <main className="page-container">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/music" element={<MusicPage />} />
+          <Route path="/intercom" element={<IntercomPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
+      </main>
+    </HashRouter>
+  );
+}
