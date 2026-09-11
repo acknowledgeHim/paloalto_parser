@@ -110,6 +110,14 @@ db.exec(`
     refresh_token TEXT,
     expiry_date INTEGER
   );
+
+  -- Settings-page login sessions (see services/auth.ts). Everyday use (chores, calendar, music,
+  -- photos, intercom) never checks this — only configuration actions do.
+  CREATE TABLE IF NOT EXISTS admin_sessions (
+    token TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+  );
 `);
 
 export function getSetting(key: string, fallback = ''): string {

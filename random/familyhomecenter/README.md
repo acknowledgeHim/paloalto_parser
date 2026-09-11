@@ -18,8 +18,11 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   thumbnail grid, tap-to-view-fullscreen with prev/next, and a button to kick
   off the same fullscreen slideshow manually.
 - 👪 **No-login profile switcher** — family members pick their name from a
-  list to attribute what they add/complete. This is a home appliance, not a
-  bank — there are no passwords.
+  list to attribute what they add/complete. Everyday use (chores, calendar,
+  music, photos, intercom) never requires a login. An optional password
+  (`ADMIN_PASSWORD`) can gate just the **Settings** page and its
+  configuration actions (family roster, calendar/Spotify connect, timing) —
+  see docs/SETTINGS_LOGIN.md.
 - 🎵 **Multi-zone music** — a HiFiBerry DAC8x drives 4 independently
   hardwired stereo zones. Each zone plays your own local library (search,
   queue, play) or Spotify (cast from anyone's phone via Spotify Connect, or
@@ -72,6 +75,7 @@ Optional integrations, each with its own guide:
 - [docs/SPOTIFY_SETUP.md](docs/SPOTIFY_SETUP.md) (in-dashboard playback control, needs Premium)
 - [docs/INTERCOM_SETUP.md](docs/INTERCOM_SETUP.md) (HTTPS via Caddy — required for phone
   microphone access — and installing the dashboard as a phone app)
+- [docs/SETTINGS_LOGIN.md](docs/SETTINGS_LOGIN.md) (optional password on just the Settings page)
 
 ## Data & privacy
 

@@ -7,6 +7,7 @@ import { createLocalEvent, updateLocalEvent, deleteLocalEvent } from '../service
 import { getGoogleAuthUrl, handleGoogleCallback, isGoogleConfigured, isGoogleConnected } from '../services/calendar/googleCalendar.js';
 import { isAppleConfigured } from '../services/calendar/appleCalendar.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 
 export const calendarRouter = Router();
 
@@ -55,7 +56,9 @@ calendarRouter.delete('/local/:id', (req, res) => {
 });
 
 // ---- Google OAuth handshake ----
-calendarRouter.get('/google/auth-url', (_req, res) => {
+// Gated: starting this flow connects a specific Google account to the whole household's calendar,
+// which is a configuration action, not everyday use.
+calendarRouter.get('/google/auth-url', requireAdmin, (_req, res) => {
   if (!isGoogleConfigured()) return res.status(400).json({ error: 'Google client not configured in .env' });
   res.json({ url: getGoogleAuthUrl() });
 });

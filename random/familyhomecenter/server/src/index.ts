@@ -1,6 +1,7 @@
 import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import './db.js'; // ensures schema is created on boot
 import { config } from './config.js';
 import { familyMembersRouter } from './routes/familyMembers.js';
@@ -10,6 +11,7 @@ import { weatherRouter } from './routes/weather.js';
 import { photosRouter } from './routes/photos.js';
 import { settingsRouter } from './routes/settings.js';
 import { musicRouter } from './routes/music.js';
+import { authRouter } from './routes/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
@@ -17,7 +19,9 @@ import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
+app.use('/api/auth', authRouter);
 app.use('/api/family-members', familyMembersRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/calendar', calendarRouter);
