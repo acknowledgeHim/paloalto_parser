@@ -14,6 +14,9 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
 - 🖼️ **Photo slideshow / screensaver** — after a configurable idle period, the
   dashboard fades into a fullscreen slideshow of family photos from a local
   folder or an SMB network share. Tap anywhere to return to the dashboard.
+  There's also a **Photos** page for browsing the same library on demand — a
+  thumbnail grid, tap-to-view-fullscreen with prev/next, and a button to kick
+  off the same fullscreen slideshow manually.
 - 👪 **No-login profile switcher** — family members pick their name from a
   list to attribute what they add/complete. This is a home appliance, not a
   bank — there are no passwords.

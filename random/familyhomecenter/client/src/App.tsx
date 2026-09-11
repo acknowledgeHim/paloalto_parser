@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { TasksPage } from './pages/TasksPage.js';
 import { MusicPage } from './pages/MusicPage.js';
+import { PhotosPage } from './pages/PhotosPage.js';
 import { IntercomPage } from './pages/IntercomPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { useIdle } from './hooks/useIdle.js';
@@ -46,6 +47,7 @@ export function App() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/music" element={<MusicPage />} />
+          <Route path="/photos" element={<PhotosPage />} />
           <Route path="/intercom" element={<IntercomPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
