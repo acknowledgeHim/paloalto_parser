@@ -172,6 +172,8 @@ input, select {
 .badge--source-local { background: #e5e7eb; color: #374151; }
 .badge--source-google { background: #d9f2e3; color: #157347; }
 .badge--source-apple { background: #ece5fb; color: #6d3fc9; }
+.badge--source-spotify { background: #d2f5df; color: #1a7f4c; }
+.badge--source-none { background: var(--bg); color: var(--text-muted); }
 
 /* ---- Dashboard ---- */
 .dashboard__header {
@@ -377,4 +379,104 @@ input, select {
   color: white;
   font-size: 1.5em;
   opacity: 0.8;
+}
+
+/* ---- Music ---- */
+.music-page__zones {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.zone-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.zone-card__header h3 { margin: 0; cursor: text; }
+.zone-card__header input[type="checkbox"] { width: 22px; height: 22px; }
+.zone-card__now-playing {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.zone-card__title { font-weight: 700; }
+.zone-card__title--empty { color: var(--text-muted); font-weight: 400; font-style: italic; }
+.zone-card__artist { color: var(--text-muted); font-size: 0.9em; }
+.zone-card__transport {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.zone-card__transport button { flex: 1; font-size: 1.3em; }
+.zone-card__volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.zone-card__volume input[type="range"] { flex: 1; min-height: auto; }
+
+.music-page__group-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.library-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.library-row:last-child { border-bottom: none; }
+.library-row__title { font-weight: 600; }
+
+/* ---- Intercom ---- */
+.intercom-page__zones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0;
+}
+.intercom-zone-button {
+  background: var(--panel);
+  color: var(--text);
+  border: 2px solid var(--border);
+  min-width: 120px;
+}
+.intercom-zone-button--selected {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.intercom-page__error {
+  background: #fde8e8;
+  color: #9b1c1c;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.talk-button {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  margin: 32px auto 0;
+  min-height: 140px;
+  border-radius: 999px;
+  font-size: 1.4em;
+  background: var(--accent);
+  touch-action: none;
+  user-select: none;
+}
+.talk-button--active {
+  background: #e2685a;
+  animation: talk-pulse 1s ease-in-out infinite;
+}
+@keyframes talk-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
 }

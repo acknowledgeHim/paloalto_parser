@@ -5,6 +5,8 @@ import { Slideshow } from './components/Slideshow.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { TasksPage } from './pages/TasksPage.js';
+import { MusicPage } from './pages/MusicPage.js';
+import { IntercomPage } from './pages/IntercomPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
@@ -43,6 +45,8 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/music" element={<MusicPage />} />
+          <Route path="/intercom" element={<IntercomPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

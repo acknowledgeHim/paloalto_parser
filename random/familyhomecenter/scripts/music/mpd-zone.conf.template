@@ -1,0 +1,22 @@
+# Template for one zone's MPD instance. generate-mpd-configs.sh fills in {{ZONE}} and writes
+# /etc/mpd-zone{{ZONE}}.conf for zones 1..N. All zones share the same music_directory (one copy
+# of your files) but keep separate databases/state, since each is logically an independent player.
+
+music_directory    "{{MUSIC_DIR}}"
+db_file            "{{DATA_DIR}}/mpd-zone{{ZONE}}/db"
+log_file           "{{DATA_DIR}}/mpd-zone{{ZONE}}/log"
+pid_file           "{{DATA_DIR}}/mpd-zone{{ZONE}}/pid"
+state_file         "{{DATA_DIR}}/mpd-zone{{ZONE}}/state"
+sticker_file       "{{DATA_DIR}}/mpd-zone{{ZONE}}/sticker.sql"
+
+bind_to_address    "127.0.0.1"
+port               "660{{ZONE}}"
+
+audio_output {
+  type        "alsa"
+  name        "Zone {{ZONE}}"
+  device      "zone{{ZONE}}"   # matches asound.conf.dac8x
+  mixer_type  "software"       # gives this zone independent volume even though the ALSA device is shared
+}
+
+restore_paused "yes"

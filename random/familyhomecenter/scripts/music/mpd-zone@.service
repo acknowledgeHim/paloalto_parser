@@ -1,0 +1,14 @@
+# systemd template unit: one instance per zone, e.g. `systemctl enable --now mpd-zone@1.service`.
+# Install: sudo cp mpd-zone@.service /etc/systemd/system/
+[Unit]
+Description=MPD for zone %i
+After=sound.target network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/mpd --no-daemon /etc/mpd-zone%i.conf
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -19,6 +19,8 @@ export const api = {
     request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
@@ -67,4 +69,43 @@ export interface WeatherData {
   location: string;
   current: { temperature: number; humidity: number; windSpeed: number; code: number; description: string };
   daily: Array<{ date: string; code: number; description: string; high: number; low: number; precipChance: number | null }>;
+}
+
+// ---- Music ----
+
+export interface Zone {
+  id: number;
+  name: string;
+  groupId: string | null;
+}
+
+export interface ZoneGroup {
+  id: string;
+  name: string;
+  zoneIds: number[];
+}
+
+export interface ZoneStatus {
+  zoneId: number;
+  source: 'local' | 'spotify' | 'none';
+  state: 'play' | 'pause' | 'stop';
+  volume: number;
+  track: { title: string | null; artist: string | null; album: string | null } | null;
+  elapsedSeconds: number | null;
+  durationSeconds: number | null;
+}
+
+export interface Track {
+  file: string;
+  title: string;
+  artist: string | null;
+  album: string | null;
+  duration: number | null;
+}
+
+export interface SpotifyDevice {
+  id: string;
+  name: string;
+  is_active: boolean;
+  volume_percent: number | null;
 }

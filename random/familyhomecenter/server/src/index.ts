@@ -1,3 +1,4 @@
+import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
 import './db.js'; // ensures schema is created on boot
@@ -8,8 +9,10 @@ import { calendarRouter } from './routes/calendar.js';
 import { weatherRouter } from './routes/weather.js';
 import { photosRouter } from './routes/photos.js';
 import { settingsRouter } from './routes/settings.js';
+import { musicRouter } from './routes/music.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
+import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 
 const app = express();
 app.use(cors());
@@ -21,6 +24,7 @@ app.use('/api/calendar', calendarRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/photos', photosRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/music', musicRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -35,7 +39,10 @@ app.get('*', (req, res, next) => {
 
 app.use(errorHandler);
 
-app.listen(config.port, config.host, () => {
+const server = http.createServer(app);
+attachIntercomWebSocket(server);
+
+server.listen(config.port, config.host, () => {
   console.log(`Family Home Center server listening on http://${config.host}:${config.port}`);
   startCalendarSyncSchedule();
 });

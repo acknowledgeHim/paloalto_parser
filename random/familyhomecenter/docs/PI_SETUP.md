@@ -31,9 +31,12 @@ cp .env.example .env
 nano .env   # set WEATHER_LAT/LON, PHOTOS_DIR, and any calendar credentials
 ```
 
-See `GOOGLE_CALENDAR_SETUP.md`, `APPLE_CALENDAR_SETUP.md`, and `PHOTOS_SETUP.md`
-for the optional integrations. Everything works with just the local calendar and
-no photos configured too — you can add the rest later from the Settings page.
+See `GOOGLE_CALENDAR_SETUP.md`, `APPLE_CALENDAR_SETUP.md`, `PHOTOS_SETUP.md`,
+`MUSIC_SETUP.md` (HiFiBerry DAC8x + MPD + librespot), `SPOTIFY_SETUP.md`, and
+`INTERCOM_SETUP.md` (HTTPS via Caddy, required for the microphone) for the
+optional integrations. Everything works with just the local calendar, chores,
+weather, and slideshow with none of that configured — add the rest whenever
+you're ready.
 
 ## 4. Install dependencies and build
 

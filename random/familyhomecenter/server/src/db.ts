@@ -84,6 +84,32 @@ db.exec(`
 
   INSERT OR IGNORE INTO settings (key, value) VALUES ('idle_timeout_seconds', '300');
   INSERT OR IGNORE INTO settings (key, value) VALUES ('slideshow_interval_seconds', '12');
+
+  -- One row per physical DAC8x zone (1-4). Wiring/ALSA device is fixed by zone id;
+  -- only the friendly name is user-editable (see routes/music.ts).
+  CREATE TABLE IF NOT EXISTS zones (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO zones (id, name) VALUES (1, 'Zone 1');
+  INSERT OR IGNORE INTO zones (id, name) VALUES (2, 'Zone 2');
+  INSERT OR IGNORE INTO zones (id, name) VALUES (3, 'Zone 3');
+  INSERT OR IGNORE INTO zones (id, name) VALUES (4, 'Zone 4');
+
+  -- A group makes several zones share one queue/playback state (near-synced, see docs/MUSIC_SETUP.md).
+  CREATE TABLE IF NOT EXISTS zone_groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    zone_ids TEXT NOT NULL, -- JSON array of zone ids, e.g. "[1,2]"
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS spotify_tokens (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token TEXT,
+    refresh_token TEXT,
+    expiry_date INTEGER
+  );
 `);
 
 export function getSetting(key: string, fallback = ''): string {

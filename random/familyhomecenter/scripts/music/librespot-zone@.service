@@ -1,0 +1,26 @@
+# systemd template unit: one librespot (Spotify Connect receiver) per zone, e.g.
+# `systemctl enable --now librespot-zone@1.service`. Install: sudo cp librespot-zone@.service /etc/systemd/system/
+# Requires librespot to be installed (see docs/MUSIC_SETUP.md) and INTERNAL_API_TOKEN set in the
+# app's .env (must match the one below, or drop --onevent/the token check if you don't need
+# now-playing status for Spotify Connect on the dashboard).
+[Unit]
+Description=librespot (Spotify Connect) for zone %i
+After=sound.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=ZONE_NUMBER=%i
+Environment=INTERNAL_API_TOKEN=CHANGE_ME
+ExecStart=/usr/bin/librespot \
+  --name "Family Hub Zone %i" \
+  --device zone%i \
+  --backend alsa \
+  --bitrate 320 \
+  --initial-volume 100 \
+  --onevent /opt/familyhomecenter/scripts/music/librespot-event.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

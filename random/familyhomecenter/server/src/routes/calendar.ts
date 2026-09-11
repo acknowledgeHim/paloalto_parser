@@ -6,6 +6,7 @@ import {
 import { createLocalEvent, updateLocalEvent, deleteLocalEvent } from '../services/calendar/localCalendar.js';
 import { getGoogleAuthUrl, handleGoogleCallback, isGoogleConfigured, isGoogleConnected } from '../services/calendar/googleCalendar.js';
 import { isAppleConfigured } from '../services/calendar/appleCalendar.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
 export const calendarRouter = Router();
 
@@ -24,10 +25,13 @@ calendarRouter.get('/sources', (_req, res) => {
   });
 });
 
-calendarRouter.post('/sync', async (_req, res) => {
-  await syncExternalCalendars();
-  res.status(204).end();
-});
+calendarRouter.post(
+  '/sync',
+  asyncHandler(async (_req, res) => {
+    await syncExternalCalendars();
+    res.status(204).end();
+  })
+);
 
 // ---- Local events CRUD ----
 calendarRouter.post('/local', (req, res) => {
