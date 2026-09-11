@@ -109,3 +109,9 @@ export interface SpotifyDevice {
   is_active: boolean;
   volume_percent: number | null;
 }
+
+// ---- Photos ----
+
+export interface Photo {
+  id: string;
+}
