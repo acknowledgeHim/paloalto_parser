@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type WeatherData } from '../api/client.js';
+import { iconForWeatherCode } from '../utils/weatherIcons.js';
 
 export function WeatherWidget() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -27,6 +28,7 @@ export function WeatherWidget() {
   return (
     <div className="weather-widget">
       <div className="weather-widget__current">
+        <div className="weather-widget__icon" aria-hidden="true">{iconForWeatherCode(weather.current.code)}</div>
         <div className="weather-widget__temp">{Math.round(weather.current.temperature)}°</div>
         <div>
           <div className="weather-widget__desc">{weather.current.description}</div>
@@ -37,6 +39,7 @@ export function WeatherWidget() {
         {weather.daily.slice(0, 5).map((d) => (
           <div key={d.date} className="weather-widget__day">
             <div>{new Date(`${d.date}T00:00`).toLocaleDateString(undefined, { weekday: 'short' })}</div>
+            <div className="weather-widget__day-icon" aria-hidden="true">{iconForWeatherCode(d.code)}</div>
             <div className="weather-widget__day-temps">
               <strong>{Math.round(d.high)}°</strong> / {Math.round(d.low)}°
             </div>
