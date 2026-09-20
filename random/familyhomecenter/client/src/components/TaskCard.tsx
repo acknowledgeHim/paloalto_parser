@@ -6,9 +6,11 @@ interface Props {
   onChange: () => void;
   /** Suppress the assignee line — used in the per-person column view, where the column itself already says whose task it is. */
   hideAssignee?: boolean;
+  /** When provided, shows an edit icon that hands this task back to the caller (e.g. to open an edit modal). */
+  onEdit?: (task: Task) => void;
 }
 
-export function TaskCard({ task, onChange, hideAssignee }: Props) {
+export function TaskCard({ task, onChange, hideAssignee, onEdit }: Props) {
   const { members, activeProfile } = useFamilyMembers();
   const assignee = members.find((m) => m.id === task.assignee_id);
   const done = Boolean(task.completion);
@@ -38,6 +40,16 @@ export function TaskCard({ task, onChange, hideAssignee }: Props) {
         {task.notes && <div className="task-card__notes">{task.notes}</div>}
         <div className="task-card__meta">
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
+          {onEdit && (
+            <button
+              type="button"
+              className="task-card__edit"
+              aria-label="Edit"
+              onClick={() => onEdit(task)}
+            >
+              ✎
+            </button>
+          )}
           {!hideAssignee && assignee && (
             <span className="task-card__assignee">
               <span className="avatar-dot" style={{ background: assignee.color }} /> {assignee.name}
