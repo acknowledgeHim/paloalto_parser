@@ -18,7 +18,9 @@ import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Default 100kb is too small for a family member's avatar photo (sent as a base64 data URL) —
+// the client downsizes it first, but leave headroom.
+app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 
 app.use('/api/auth', authRouter);

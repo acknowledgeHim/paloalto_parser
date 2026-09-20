@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { MemberAvatar } from './MemberAvatar.js';
 
 /** Lets whoever is standing at the screen say "I'm Jamie" without any password — a home kiosk, not a bank. */
 export function ProfileSwitcher() {
@@ -9,7 +10,7 @@ export function ProfileSwitcher() {
   return (
     <div className="profile-switcher">
       <button className="profile-switcher__current" onClick={() => setOpen((o) => !o)}>
-        <span className="avatar-dot" style={{ background: activeProfile?.color ?? '#999' }} />
+        <MemberAvatar member={activeProfile} />
         {activeProfile ? activeProfile.name : "Who's this?"}
       </button>
       {open && (
@@ -22,7 +23,7 @@ export function ProfileSwitcher() {
                 setOpen(false);
               }}
             >
-              <span className="avatar-dot" style={{ background: m.color }} />
+              <MemberAvatar member={m} />
               {m.name}
             </button>
           ))}

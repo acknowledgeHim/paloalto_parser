@@ -3,6 +3,7 @@ import { api, type Task, type CalendarEvent } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
+import { MemberAvatar } from '../components/MemberAvatar.js';
 
 // Chores read before to-dos within a person's column.
 function sortForColumn(tasks: Task[]): Task[] {
@@ -47,7 +48,7 @@ export function FamilyBoardPage() {
           const memberEvents = events.filter((e) => e.for_member_id === member.id);
           return (
             <section key={member.id} className="panel person-column">
-              <h2><span className="avatar-dot" style={{ background: member.color }} /> {member.name}</h2>
+              <h2><MemberAvatar member={member} /> {member.name}</h2>
 
               <h3>Chores &amp; to-dos</h3>
               {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}

@@ -2,8 +2,12 @@ export interface FamilyMember {
   id: string;
   name: string;
   color: string;
+  /** An emoji (e.g. "🦄"), the literal string "image" (a custom photo — see routes/familyMembers.ts's
+   *  /:id/avatar-image), or null/empty for no avatar (falls back to a colored initial in the client). */
   avatar: string | null;
   is_parent: 0 | 1;
+  /** Sound id (client/src/utils/sounds.ts preset list) to play when this person completes a task. */
+  complete_sound: string | null;
   created_at: string;
 }
 

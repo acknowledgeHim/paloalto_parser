@@ -9,6 +9,7 @@ server/data/*.db-journal
 server/data/*.db-wal
 server/data/*.db-shm
 server/data/thumbs/
+server/data/avatars/
 client/dist/
 .DS_Store
 *.tsbuildinfo

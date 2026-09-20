@@ -28,7 +28,10 @@ export interface FamilyMember {
   id: string;
   name: string;
   color: string;
+  /** An emoji, the literal string "image" (custom uploaded photo), or null for no avatar. */
   avatar: string | null;
+  /** Sound id (see utils/sounds.ts) to play when this person completes a task; null = no sound. */
+  complete_sound: string | null;
   is_parent: 0 | 1;
 }
 

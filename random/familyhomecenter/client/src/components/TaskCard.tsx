@@ -1,5 +1,7 @@
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { playCompletionSound } from '../utils/sounds.js';
+import { MemberAvatar } from './MemberAvatar.js';
 
 interface Props {
   task: Task;
@@ -19,6 +21,8 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit }: Props) {
     if (done) {
       await api.post(`/tasks/${task.id}/uncomplete`, {});
     } else {
+      // Play immediately (before the await) so it stays tied to this click as a user gesture.
+      playCompletionSound(activeProfile?.complete_sound ?? assignee?.complete_sound);
       await api.post(`/tasks/${task.id}/complete`, { completed_by_id: activeProfile?.id ?? null });
     }
     onChange();
@@ -52,7 +56,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit }: Props) {
           )}
           {!hideAssignee && assignee && (
             <span className="task-card__assignee">
-              <span className="avatar-dot" style={{ background: assignee.color }} /> {assignee.name}
+              <MemberAvatar member={assignee} size={18} /> {assignee.name}
             </span>
           )}
           {!assignee && !done && activeProfile && (

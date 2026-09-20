@@ -129,6 +129,14 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Which sound (see client/src/utils/sounds.ts for the preset list) plays when this person
+// completes a task. NULL/empty means no sound.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN complete_sound TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

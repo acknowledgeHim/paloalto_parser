@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api } from '../api/client.js';
+import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
-
-const AVATAR_COLORS = ['#5b8def', '#e2685a', '#3fae66', '#c96fd6', '#e0a638', '#33a3a3'];
+import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
+import { MemberAvatar } from '../components/MemberAvatar.js';
 
 interface AuthStatus {
   configured: boolean;
@@ -51,8 +51,7 @@ function SettingsLogin({ onSuccess }: { onSuccess: () => void }) {
 export function SettingsPage() {
   const { members, refresh } = useFamilyMembers();
   const [auth, setAuth] = useState<AuthStatus | null>(null);
-  const [name, setName] = useState('');
-  const [isParent, setIsParent] = useState(false);
+  const [memberModal, setMemberModal] = useState<FamilyMember | 'new' | null>(null);
   interface TimingSettings {
     idle_timeout_seconds?: string;
     slideshow_interval_seconds?: string;
@@ -83,16 +82,6 @@ export function SettingsPage() {
     api.get<CalendarSources>('/calendar/sources').then(setSources).catch(console.error);
     api.get<SpotifyStatus>('/music/spotify/status').then(setSpotify).catch(console.error);
   }, [auth?.authenticated]);
-
-  const addMember = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    const color = AVATAR_COLORS[members.length % AVATAR_COLORS.length];
-    await api.post('/family-members', { name: name.trim(), color, is_parent: isParent });
-    setName('');
-    setIsParent(false);
-    refresh();
-  };
 
   const removeMember = async (id: string) => {
     await api.delete(`/family-members/${id}`);
@@ -145,21 +134,26 @@ export function SettingsPage() {
         <ul className="settings-page__member-list">
           {members.map((m) => (
             <li key={m.id}>
-              <span className="avatar-dot" style={{ background: m.color }} /> {m.name}
+              <MemberAvatar member={m} /> {m.name}
               {m.is_parent === 1 && <span className="badge">Parent</span>}
+              <button className="link-button" onClick={() => setMemberModal(m)}>Edit</button>
               <button className="link-button" onClick={() => removeMember(m.id)}>Remove</button>
             </li>
           ))}
         </ul>
-        <form className="task-form" onSubmit={addMember}>
-          <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <label className="checkbox">
-            <input type="checkbox" checked={isParent} onChange={(e) => setIsParent(e.target.checked)} />
-            Parent (can add recurring chores)
-          </label>
-          <button type="submit">Add family member</button>
-        </form>
+        <button type="button" onClick={() => setMemberModal('new')}>Add family member</button>
       </section>
+
+      {memberModal && (
+        <FamilyMemberFormModal
+          member={memberModal === 'new' ? null : memberModal}
+          onClose={() => setMemberModal(null)}
+          onSaved={() => {
+            setMemberModal(null);
+            refresh();
+          }}
+        />
+      )}
 
       <section className="panel">
         <h2>Calendar sources</h2>

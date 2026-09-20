@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
+import { deleteAvatarImage, findAvatarImage, saveAvatarImage } from '../services/avatars.js';
 import type { FamilyMember } from '../types.js';
 
 export const familyMembersRouter = Router();
@@ -14,7 +16,7 @@ familyMembersRouter.get('/', (_req, res) => {
 });
 
 familyMembersRouter.post('/', requireAdmin, (req, res) => {
-  const { name, color, avatar, is_parent } = req.body as Partial<FamilyMember>;
+  const { name, color, avatar, complete_sound, is_parent } = req.body as Partial<FamilyMember>;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'name is required' });
   }
@@ -23,11 +25,13 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     name: name.trim(),
     color: color || '#5b8def',
     avatar: avatar ?? null,
+    complete_sound: complete_sound ?? null,
     is_parent: is_parent ? 1 : 0,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    'INSERT INTO family_members (id, name, color, avatar, is_parent, created_at) VALUES (@id, @name, @color, @avatar, @is_parent, @created_at)'
+    `INSERT INTO family_members (id, name, color, avatar, complete_sound, is_parent, created_at)
+     VALUES (@id, @name, @color, @avatar, @complete_sound, @is_parent, @created_at)`
   ).run(member);
   res.status(201).json(member);
 });
@@ -45,12 +49,55 @@ familyMembersRouter.patch('/:id', requireAdmin, (req, res) => {
     is_parent: req.body.is_parent !== undefined ? (req.body.is_parent ? 1 : 0) : existing.is_parent,
   };
   db.prepare(
-    'UPDATE family_members SET name = @name, color = @color, avatar = @avatar, is_parent = @is_parent WHERE id = @id'
+    `UPDATE family_members SET name = @name, color = @color, avatar = @avatar,
+     complete_sound = @complete_sound, is_parent = @is_parent WHERE id = @id`
   ).run(updated);
   res.json(updated);
 });
 
 familyMembersRouter.delete('/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM family_members WHERE id = ?').run(req.params.id);
+  deleteAvatarImage(req.params.id).catch(() => {});
   res.status(204).end();
 });
+
+/** POST /:id/avatar { imageDataUrl } — uploads/replaces this member's custom photo avatar. */
+familyMembersRouter.post(
+  '/:id/avatar',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const existing = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as
+      | FamilyMember
+      | undefined;
+    if (!existing) return res.status(404).json({ error: 'not found' });
+    const { imageDataUrl } = req.body as { imageDataUrl?: string };
+    if (!imageDataUrl) return res.status(400).json({ error: 'imageDataUrl is required' });
+
+    await saveAvatarImage(req.params.id, imageDataUrl);
+    db.prepare('UPDATE family_members SET avatar = ? WHERE id = ?').run('image', req.params.id);
+    res.json({ ...existing, avatar: 'image' });
+  })
+);
+
+/** DELETE /:id/avatar — removes a custom photo avatar (falls back to emoji/initial). */
+familyMembersRouter.delete(
+  '/:id/avatar',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    await deleteAvatarImage(req.params.id);
+    db.prepare("UPDATE family_members SET avatar = NULL WHERE id = ?").run(req.params.id);
+    res.status(204).end();
+  })
+);
+
+// Public like GET / above — every avatar shows up in everyday UI (profile switcher, task cards),
+// not just Settings.
+familyMembersRouter.get(
+  '/:id/avatar-image',
+  asyncHandler(async (req, res) => {
+    const file = await findAvatarImage(req.params.id);
+    if (!file) return res.status(404).end();
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(file);
+  })
+);

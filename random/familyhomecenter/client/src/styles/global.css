@@ -123,14 +123,18 @@ textarea {
   border-bottom: 3px solid var(--accent);
 }
 
-.avatar-dot {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
+.member-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: middle;
+  flex-shrink: 0;
+  overflow: hidden;
+  line-height: 1;
 }
+.member-avatar--image { object-fit: cover; }
 
 .profile-switcher { position: relative; }
 .profile-switcher__current {
@@ -343,6 +347,38 @@ textarea {
 .task-form__row > * { flex: 1; }
 .task-form__weekdays { flex-wrap: wrap; }
 .task-form__weekdays label { display: flex; align-items: center; gap: 4px; flex: initial; }
+
+/* ---- Family member form (color/avatar/sound pickers) ---- */
+.member-form__preview { display: flex; justify-content: center; margin-bottom: 4px; }
+.member-form__label { display: block; font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px; }
+.member-form__swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.member-form__swatch {
+  width: 40px;
+  height: 40px;
+  min-height: auto;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+}
+.member-form__swatch--selected { border-color: var(--text); }
+.member-form__color-input {
+  width: 40px;
+  height: 40px;
+  min-height: auto;
+  padding: 2px;
+  border-radius: 50%;
+}
+.member-form__emoji {
+  width: 44px;
+  height: 44px;
+  min-height: auto;
+  padding: 0;
+  font-size: 1.3em;
+  background: var(--bg);
+  border: 2px solid transparent;
+}
+.member-form__emoji--selected { border-color: var(--accent); }
+.member-form__photo-row { margin-top: 8px; }
 .checkbox { display: flex; align-items: center; gap: 8px; min-height: var(--tap-min); }
 .checkbox input { min-height: auto; width: 22px; height: 22px; }
 
