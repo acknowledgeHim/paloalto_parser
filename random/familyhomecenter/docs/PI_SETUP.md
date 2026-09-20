@@ -4,6 +4,11 @@ This turns a Raspberry Pi 5 + touchscreen into a wall-mounted family dashboard:
 the Node server runs in the background and Chromium opens full-screen on top
 of it, with a photo-slideshow screensaver when nobody's using it.
 
+Don't have the touchscreen wired up yet, or need it far from the Pi? See
+[docs/TOUCHSCREEN_SETUP.md](TOUCHSCREEN_SETUP.md) first — picking a monitor
+that's actually touch-capable, and wiring it to the Pi directly or over
+Ethernet/Cat6.
+
 ## 1. Flash the OS
 
 Use **Raspberry Pi Imager** to flash the latest **Raspberry Pi OS (64-bit, with desktop)**

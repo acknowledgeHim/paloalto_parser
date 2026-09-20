@@ -3,14 +3,15 @@
 A Raspberry Pi 5 has two independent micro-HDMI outputs, so it can drive two
 separate touchscreens showing two different pages of the dashboard at once
 (e.g. a kitchen screen on **Family Board** and a hallway screen on **Meals**).
-This builds on [PI_SETUP.md](PI_SETUP.md) — do that first, then come back here
-for the second screen.
+This builds on [PI_SETUP.md](PI_SETUP.md) and
+[TOUCHSCREEN_SETUP.md](TOUCHSCREEN_SETUP.md) — do those first, then come back
+here for the second screen.
 
 If each screen is far from the Pi, each one gets its **own** HDMI+USB-over-Cat6
-extender kit (see the touchscreen wiring notes — one kit is point-to-point for
-one screen, so two screens need two kits and two Cat6 runs). You'll need a
-micro-HDMI-to-HDMI adapter/cable for each of the Pi's two outputs feeding into
-each extender's transmitter.
+extender kit (one kit is point-to-point for one screen — see
+TOUCHSCREEN_SETUP.md's Path B — so two screens need two kits and two Cat6
+runs). You'll need a micro-HDMI-to-HDMI adapter/cable for each of the Pi's two
+outputs feeding into each extender's transmitter.
 
 ## 1. Confirm both displays are detected
 
