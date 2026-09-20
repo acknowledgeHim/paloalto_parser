@@ -7,6 +7,9 @@ page and the configuration actions it exposes:
 - Adding, editing, or removing family members
 - Connecting a Google Calendar or Spotify account
 - Changing the idle-timeout / slideshow-interval
+- Setting Prize Bank rewards (how many stars/how much money a chore pays) and managing the
+  prize catalog — the chores themselves stay open to add/complete either way, just the payout
+  amounts are gated
 
 Everything else — checking off chores, adding to-dos, browsing/adding calendar events, controlling
 music playback and zone grouping, browsing photos, and paging on the intercom — stays open to

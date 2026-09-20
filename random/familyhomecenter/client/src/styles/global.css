@@ -192,6 +192,7 @@ textarea {
 .badge--chore { background: #fde8d0; color: #a45c14; }
 .badge--todo { background: #dbeafe; color: #1d4ed8; }
 .badge--time { background: var(--bg); color: var(--text-muted); }
+.badge--reward { background: #fef3c7; color: #92610a; font-weight: 700; }
 .badge--source-local { background: #e5e7eb; color: #374151; }
 .badge--source-google { background: #d9f2e3; color: #157347; }
 .badge--source-apple { background: #ece5fb; color: #6d3fc9; }
@@ -796,3 +797,33 @@ textarea {
   align-items: center;
   min-width: 100px;
 }
+
+/* ---- Prize Bank ---- */
+.prize-bank-page__balance { display: flex; gap: 32px; justify-content: center; text-align: center; }
+.prize-bank-page__balance-value { font-size: 2em; font-weight: 700; }
+.prize-bank-page__prizes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.prize-card { display: flex; flex-direction: column; gap: 8px; margin-bottom: 0; }
+.prize-card__title { font-weight: 700; font-size: 1.1em; }
+
+.progress-bar {
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.progress-bar__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.dashboard__progress { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.dashboard__progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
+
+.prize-settings__row { align-items: center; margin-bottom: 8px; }
+.prize-settings__task-title { flex: 2; font-weight: 600; }

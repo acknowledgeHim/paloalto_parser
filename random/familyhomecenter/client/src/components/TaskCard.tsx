@@ -51,6 +51,8 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit }: Props) {
         <div className="task-card__meta">
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
           {task.time_of_day && <span className="badge badge--time">{TIME_OF_DAY_LABEL[task.time_of_day]}</span>}
+          {task.reward_type === 'stars' && <span className="badge badge--reward">⭐ {task.reward_amount}</span>}
+          {task.reward_type === 'money' && <span className="badge badge--reward">${task.reward_amount?.toFixed(2)}</span>}
           {onEdit && (
             <button
               type="button"

@@ -3,6 +3,7 @@ import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { PrizeBankSettings } from '../components/PrizeBankSettings.js';
 
 interface AuthStatus {
   configured: boolean;
@@ -155,6 +156,8 @@ export function SettingsPage() {
         />
       )}
 
+      <PrizeBankSettings />
+
       <section className="panel">
         <h2>Calendar sources</h2>
         <ul className="settings-page__source-list">
@@ -222,7 +225,10 @@ export function SettingsPage() {
       </section>
 
       {!auth.configured && (
-        <p className="hint">Anyone can currently open Settings — set ADMIN_PASSWORD in .env to require a login here. See docs/SETTINGS_LOGIN.md.</p>
+        <p className="hint">
+          Anyone can currently open Settings — including the Prize Bank reward amounts above — set
+          ADMIN_PASSWORD in .env to require a login here. See docs/SETTINGS_LOGIN.md.
+        </p>
       )}
     </div>
   );

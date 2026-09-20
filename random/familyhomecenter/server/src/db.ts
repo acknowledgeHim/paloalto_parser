@@ -172,6 +172,25 @@ db.exec(`
     sort_order INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (meal_id, recipe_id)
   );
+
+  -- A prize a kid can redeem: either costs a number of banked stars, or unlocks once a specific
+  -- task has been completed a number of times (by that kid) — see routes/prizes.ts.
+  CREATE TABLE IF NOT EXISTS prizes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    cost_type TEXT NOT NULL CHECK (cost_type IN ('stars', 'task_count')),
+    star_cost INTEGER,
+    task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+    required_count INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS prize_redemptions (
+    id TEXT PRIMARY KEY,
+    prize_id TEXT NOT NULL REFERENCES prizes(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    redeemed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Simple migration for databases created before for_member_id existed — SQLite has no
@@ -193,6 +212,32 @@ try {
 // Optional part of the day ('morning'/'afternoon'/'evening') a chore belongs to; NULL = no particular time.
 try {
   db.exec('ALTER TABLE tasks ADD COLUMN time_of_day TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// Prize Bank: what completing this task pays out. NULL reward_type = no reward (an ordinary
+// chore/to-do). Setting these requires the Settings password — see routes/tasks.ts's PATCH /:id/reward.
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN reward_type TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN reward_amount REAL');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// Prize Bank running totals, credited on task completion (routes/tasks.ts) and spent on
+// star-cost prize redemption (routes/prizes.ts).
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN star_balance INTEGER NOT NULL DEFAULT 0');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN money_balance REAL NOT NULL DEFAULT 0');
 } catch (err) {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }

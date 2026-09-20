@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api, type CalendarEvent, type Task } from '../api/client.js';
+import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { WeatherWidget } from '../components/WeatherWidget.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { TaskCard } from '../components/TaskCard.js';
+import { MemberAvatar } from '../components/MemberAvatar.js';
 
 export function Dashboard() {
+  const { members } = useFamilyMembers();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
@@ -28,6 +31,7 @@ export function Dashboard() {
   }, []);
 
   const openTasks = tasks.filter((t) => !t.completion);
+  const rewardTasks = tasks.filter((t) => t.reward_type);
 
   return (
     <div className="dashboard">
@@ -35,6 +39,29 @@ export function Dashboard() {
         <h1>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
         <WeatherWidget />
       </header>
+
+      {rewardTasks.length > 0 && (
+        <section className="panel">
+          <h2>Prize Bank progress today</h2>
+          {members.map((m) => {
+            const memberRewardTasks = rewardTasks.filter((t) => t.assignee_id === m.id);
+            if (memberRewardTasks.length === 0) return null;
+            const done = memberRewardTasks.filter((t) => t.completion).length;
+            const pct = Math.round((done / memberRewardTasks.length) * 100);
+            return (
+              <div key={m.id} className="dashboard__progress">
+                <div className="dashboard__progress-label">
+                  <span><MemberAvatar member={m} size={18} /> {m.name}</span>
+                  <span>{done}/{memberRewardTasks.length} completed</span>
+                </div>
+                <div className="progress-bar">
+                  <div className="progress-bar__fill" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       <div className="dashboard__columns">
         <section className="panel">

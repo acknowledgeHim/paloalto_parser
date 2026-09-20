@@ -26,6 +26,8 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     color: color || '#5b8def',
     avatar: avatar ?? null,
     complete_sound: complete_sound ?? null,
+    star_balance: 0,
+    money_balance: 0,
     is_parent: is_parent ? 1 : 0,
     created_at: new Date().toISOString(),
   };

@@ -47,6 +47,17 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   serving count you can scale up/down (ingredient quantities recalculate).
   A **Converter** tab handles metric ⇄ US kitchen unit conversions (volume,
   weight, oven temperature).
+- 🏆 **Prize Bank** — any chore/to-do can optionally pay out stars or money on
+  completion; a kid can earn it by doing an assigned chore or claiming an
+  unassigned one. Prizes cost either a number of banked stars or doing a
+  specific task a set number of times, and are redeemed from the **Prize
+  Bank** page once eligible (checked server-side against the real balance —
+  not just a client-side gate). The Dashboard shows each person a
+  completed-today progress bar for their reward chores. Reward amounts and
+  the prize catalog live in **Settings** behind the same optional
+  `ADMIN_PASSWORD` gate as the rest of the app's configuration — see
+  docs/SETTINGS_LOGIN.md — so kids can't see or change payout rates once
+  it's set.
 
 ## Project layout
 

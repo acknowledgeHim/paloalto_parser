@@ -33,6 +33,9 @@ export interface FamilyMember {
   /** Sound id (see utils/sounds.ts) to play when this person completes a task; null = no sound. */
   complete_sound: string | null;
   is_parent: 0 | 1;
+  /** Prize Bank running totals. */
+  star_balance: number;
+  money_balance: number;
 }
 
 export interface TaskCompletion {
@@ -56,8 +59,33 @@ export interface Task {
   due_date: string | null;
   /** Optional part of the day this chore belongs to; null means no particular time. */
   time_of_day: TimeOfDay | null;
+  /** Prize Bank reward for completing this task; null reward_type means no reward. Only settable
+   *  via a Settings-password-gated endpoint — see Settings page's Prize Bank section. */
+  reward_type: 'stars' | 'money' | null;
+  reward_amount: number | null;
   active: 0 | 1;
   completion: TaskCompletion | null;
+}
+
+// ---- Prize Bank ----
+
+export interface PrizeProgress {
+  current: number;
+  needed: number;
+  available: number;
+}
+
+export interface Prize {
+  id: string;
+  title: string;
+  cost_type: 'stars' | 'task_count';
+  star_cost: number | null;
+  task_id: string | null;
+  required_count: number | null;
+  created_at: string;
+  /** Present only when fetched with ?family_member_id=. */
+  progress?: PrizeProgress;
+  eligible?: boolean;
 }
 
 export interface CalendarEvent {

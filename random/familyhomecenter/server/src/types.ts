@@ -8,6 +8,9 @@ export interface FamilyMember {
   is_parent: 0 | 1;
   /** Sound id (client/src/utils/sounds.ts preset list) to play when this person completes a task. */
   complete_sound: string | null;
+  /** Prize Bank running totals — credited on completing a reward task, spent on star-cost prizes. */
+  star_balance: number;
+  money_balance: number;
   created_at: string;
 }
 
@@ -36,6 +39,10 @@ export interface Task {
   due_date: string | null;
   /** Optional part of the day this chore belongs to; null means no particular time. */
   time_of_day: TimeOfDay | null;
+  /** Prize Bank reward for completing this task; null reward_type means no reward. Set only via
+   *  PATCH /:id/reward (requires the Settings password) — see routes/tasks.ts. */
+  reward_type: 'stars' | 'money' | null;
+  reward_amount: number | null;
   active: 0 | 1;
   created_at: string;
 }
@@ -80,6 +87,25 @@ export interface Meal {
   notes: string | null;
   created_by_id: string | null;
   created_at: string;
+}
+
+export interface Prize {
+  id: string;
+  title: string;
+  cost_type: 'stars' | 'task_count';
+  /** Set when cost_type is 'stars': how many banked stars this prize costs. */
+  star_cost: number | null;
+  /** Set when cost_type is 'task_count': which task, and how many times it must be completed. */
+  task_id: string | null;
+  required_count: number | null;
+  created_at: string;
+}
+
+export interface PrizeRedemption {
+  id: string;
+  prize_id: string;
+  family_member_id: string;
+  redeemed_at: string;
 }
 
 export interface CalendarEvent {
