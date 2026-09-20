@@ -95,6 +95,8 @@ Optional integrations, each with its own guide:
 - [docs/INTERCOM_SETUP.md](docs/INTERCOM_SETUP.md) (HTTPS via Caddy — required for phone
   microphone access — and installing the dashboard as a phone app)
 - [docs/SETTINGS_LOGIN.md](docs/SETTINGS_LOGIN.md) (optional password on just the Settings page)
+- [docs/DUAL_TOUCHSCREEN_SETUP.md](docs/DUAL_TOUCHSCREEN_SETUP.md) (drive two touchscreens with
+  different content from one Pi 5's two HDMI outputs)
 
 ## Data & privacy
 

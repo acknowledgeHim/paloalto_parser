@@ -112,6 +112,12 @@ Squeekboard auto-shows for text inputs on GTK apps; for Chromium specifically,
 enable Chromium's built-in virtual keyboard via `chrome://flags` →
 "Enable virtual keyboard" (set to Enabled), then relaunch kiosk mode.
 
+## Driving a second touchscreen with different content
+
+A Pi 5's two HDMI outputs can each drive their own touchscreen showing a
+different page of the dashboard (e.g. Family Board on one, Meals on another)
+— see [docs/DUAL_TOUCHSCREEN_SETUP.md](DUAL_TOUCHSCREEN_SETUP.md).
+
 ## Updating later
 
 ```bash
