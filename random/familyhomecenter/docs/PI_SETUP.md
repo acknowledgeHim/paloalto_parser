@@ -10,6 +10,15 @@ Use **Raspberry Pi Imager** to flash the latest **Raspberry Pi OS (64-bit, with 
 onto the SD card/SSD. In the imager's advanced options, set a hostname (e.g. `familyhub`),
 enable SSH, and set up Wi-Fi if needed — makes the rest of this much easier to do over SSH.
 
+Also in advanced options, set the **username to `pi`**. Modern Raspberry Pi OS no longer
+creates a `pi` user by default — you pick your own username at flash time — but
+`scripts/familyhomecenter.service` and the rest of this guide hardcode `pi` /
+`/home/pi/...`. If you use a different username, edit `User=` and `WorkingDirectory=`
+in `scripts/familyhomecenter.service` (step 5) to match before installing the service,
+or `systemctl start` will fail (commonly surfacing as
+`Result: resources` / `activating (auto-restart)` in a loop, since the `pi` user it's
+trying to run as doesn't exist).
+
 ## 2. Install prerequisites
 
 ```bash
