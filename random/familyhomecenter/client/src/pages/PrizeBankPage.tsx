@@ -50,11 +50,11 @@ export function PrizeBankPage() {
       {activeProfile && (
         <div className="panel prize-bank-page__balance">
           <div>
-            <div className="prize-bank-page__balance-value">⭐ {activeProfile.star_balance}</div>
+            <div className="prize-bank-page__balance-value">⭐ {activeProfile.star_balance ?? 0}</div>
             <div className="hint">stars</div>
           </div>
           <div>
-            <div className="prize-bank-page__balance-value">${activeProfile.money_balance.toFixed(2)}</div>
+            <div className="prize-bank-page__balance-value">${(activeProfile.money_balance ?? 0).toFixed(2)}</div>
             <div className="hint">earned</div>
           </div>
         </div>
