@@ -38,6 +38,15 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   dashboard installs as a home-screen app — see docs/INTERCOM_SETUP.md).
   One-way paging: the DAC8x's zones are output-only, so this is an
   announcement system, not a two-way call — see that doc for the scope note.
+- 🍽️ **Meals & recipes** — plan breakfast/lunch/dinner per day, optionally
+  assigned to a specific family member (or left as a whole-family meal).
+  A meal can be typed in freehand with its own ingredient list, built from
+  one or more recipes (which add their ingredients automatically), or both.
+  The **Recipes** tab holds your own recipe library and can search/import
+  from TheMealDB's free public API (no account needed); each recipe has a
+  serving count you can scale up/down (ingredient quantities recalculate).
+  A **Converter** tab handles metric ⇄ US kitchen unit conversions (volume,
+  weight, oven temperature).
 
 ## Project layout
 

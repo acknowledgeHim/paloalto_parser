@@ -12,6 +12,8 @@ import { photosRouter } from './routes/photos.js';
 import { settingsRouter } from './routes/settings.js';
 import { musicRouter } from './routes/music.js';
 import { authRouter } from './routes/auth.js';
+import { mealsRouter } from './routes/meals.js';
+import { recipesRouter } from './routes/recipes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
@@ -31,6 +33,8 @@ app.use('/api/weather', weatherRouter);
 app.use('/api/photos', photosRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/music', musicRouter);
+app.use('/api/meals', mealsRouter);
+app.use('/api/recipes', recipesRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

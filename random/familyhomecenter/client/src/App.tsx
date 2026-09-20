@@ -5,6 +5,7 @@ import { Slideshow } from './components/Slideshow.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { TasksPage } from './pages/TasksPage.js';
+import { MealsPage } from './pages/MealsPage.js';
 import { FamilyBoardPage } from './pages/FamilyBoardPage.js';
 import { MusicPage } from './pages/MusicPage.js';
 import { PhotosPage } from './pages/PhotosPage.js';
@@ -47,6 +48,7 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/meals" element={<MealsPage />} />
           <Route path="/board" element={<FamilyBoardPage />} />
           <Route path="/music" element={<MusicPage />} />
           <Route path="/photos" element={<PhotosPage />} />

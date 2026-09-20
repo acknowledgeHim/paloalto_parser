@@ -119,6 +119,59 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     expires_at TEXT NOT NULL
   );
+
+  -- A recipe is either typed in by hand ('local') or imported from TheMealDB's free public API
+  -- ('themealdb', source_id = their idMeal) — see routes/recipes.ts.
+  CREATE TABLE IF NOT EXISTS recipes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'local' CHECK (source IN ('local', 'themealdb')),
+    source_id TEXT,
+    instructions TEXT,
+    thumbnail_url TEXT,
+    -- Baseline serving count the ingredient quantities below are written for; the client scales
+    -- them proportionally when you ask to size the recipe for a different number of people.
+    servings INTEGER NOT NULL DEFAULT 4,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS recipe_ingredients (
+    id TEXT PRIMARY KEY,
+    recipe_id TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    quantity TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- One meal = one slot (breakfast/lunch/dinner) on one date, optionally for a specific person
+  -- (NULL assignee = whole family). Its ingredients are the union of every linked recipe's
+  -- ingredients plus its own manually-typed ones (meal_ingredients) — see routes/meals.ts.
+  CREATE TABLE IF NOT EXISTS meals (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL,
+    slot TEXT NOT NULL CHECK (slot IN ('breakfast', 'lunch', 'dinner')),
+    assignee_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    notes TEXT,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS meal_ingredients (
+    id TEXT PRIMARY KEY,
+    meal_id TEXT NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    quantity TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS meal_recipes (
+    meal_id TEXT NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+    recipe_id TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (meal_id, recipe_id)
+  );
 `);
 
 // Simple migration for databases created before for_member_id existed — SQLite has no

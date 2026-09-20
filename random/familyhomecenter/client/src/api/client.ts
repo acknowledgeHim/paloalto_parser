@@ -120,6 +120,53 @@ export interface SpotifyDevice {
   volume_percent: number | null;
 }
 
+// ---- Meals & recipes ----
+
+export interface Ingredient {
+  id: string;
+  name: string;
+  quantity: string | null;
+  sort_order: number;
+}
+
+export interface Recipe {
+  id: string;
+  title: string;
+  source: 'local' | 'themealdb';
+  source_id: string | null;
+  instructions: string | null;
+  thumbnail_url: string | null;
+  servings: number;
+  created_by_id: string | null;
+  created_at: string;
+  ingredients: Ingredient[];
+}
+
+/** A search-online result — not yet saved to the local recipe library. */
+export interface RecipeSearchResult {
+  source: 'themealdb';
+  source_id: string;
+  title: string;
+  instructions: string | null;
+  thumbnail_url: string | null;
+  ingredients: Array<{ name: string; quantity: string | null }>;
+}
+
+export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
+
+export interface Meal {
+  id: string;
+  date: string;
+  slot: MealSlot;
+  assignee_id: string | null;
+  title: string;
+  notes: string | null;
+  created_by_id: string | null;
+  created_at: string;
+  ingredients: Ingredient[];
+  recipes: Recipe[];
+}
+
 // ---- Photos ----
 
 export interface Photo {

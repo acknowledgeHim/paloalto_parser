@@ -48,6 +48,40 @@ export interface TaskCompletion {
   completed_at: string;
 }
 
+export interface Ingredient {
+  id: string;
+  name: string;
+  quantity: string | null;
+  sort_order: number;
+}
+
+export interface Recipe {
+  id: string;
+  title: string;
+  source: 'local' | 'themealdb';
+  source_id: string | null;
+  instructions: string | null;
+  thumbnail_url: string | null;
+  /** Baseline serving count the ingredient quantities are written for (client scales from this). */
+  servings: number;
+  created_by_id: string | null;
+  created_at: string;
+}
+
+export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
+
+export interface Meal {
+  id: string;
+  date: string;
+  slot: MealSlot;
+  /** Who this meal is for; null = the whole family. */
+  assignee_id: string | null;
+  title: string;
+  notes: string | null;
+  created_by_id: string | null;
+  created_at: string;
+}
+
 export interface CalendarEvent {
   id: string;
   source: 'local' | 'google' | 'apple';

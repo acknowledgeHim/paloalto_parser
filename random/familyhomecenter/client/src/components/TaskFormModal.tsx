@@ -136,7 +136,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
               </select>
             </div>
             {recurrence === 'weekly' && (
-              <div className="task-form__row task-form__weekdays">
+              <div className="task-form__row chip-list">
                 {DAYS.map((d) => (
                   <label key={d.code}>
                     <input
