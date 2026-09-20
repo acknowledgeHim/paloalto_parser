@@ -269,6 +269,8 @@ input, select {
 .task-form__row { display: flex; gap: 10px; }
 .task-form__row > * { flex: 1; }
 .task-form__open { align-self: flex-start; margin-bottom: 20px; }
+.task-form__weekdays { flex-wrap: wrap; }
+.task-form__weekdays label { display: flex; align-items: center; gap: 4px; flex: initial; }
 .checkbox { display: flex; align-items: center; gap: 8px; min-height: var(--tap-min); }
 .checkbox input { min-height: auto; width: 22px; height: 22px; }
 

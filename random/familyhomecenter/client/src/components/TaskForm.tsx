@@ -11,6 +11,17 @@ const RECURRENCE_OPTIONS = [
   { value: 'daily', label: 'Every day' },
   { value: 'weekdays', label: 'Weekdays' },
   { value: 'weekends', label: 'Weekends' },
+  { value: 'weekly', label: 'Weekly (choose days)' },
+];
+
+const DAYS = [
+  { code: 'SUN', label: 'Sun' },
+  { code: 'MON', label: 'Mon' },
+  { code: 'TUE', label: 'Tue' },
+  { code: 'WED', label: 'Wed' },
+  { code: 'THU', label: 'Thu' },
+  { code: 'FRI', label: 'Fri' },
+  { code: 'SAT', label: 'Sat' },
 ];
 
 export function TaskForm({ onCreated }: Props) {
@@ -20,6 +31,7 @@ export function TaskForm({ onCreated }: Props) {
   const [kind, setKind] = useState<'chore' | 'todo'>('todo');
   const [assigneeId, setAssigneeId] = useState('');
   const [recurrence, setRecurrence] = useState('once');
+  const [weeklyDays, setWeeklyDays] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState('');
 
   // Only parents get the "chore" option (recurring, assigned duties) — anyone can add a plain to-do.
@@ -30,19 +42,27 @@ export function TaskForm({ onCreated }: Props) {
     setKind('todo');
     setAssigneeId('');
     setRecurrence('once');
+    setWeeklyDays([]);
     setDueDate('');
     setOpen(false);
+  };
+
+  const toggleWeeklyDay = (code: string) => {
+    setWeeklyDays((days) => (days.includes(code) ? days.filter((d) => d !== code) : [...days, code]));
   };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (kind === 'chore' && recurrence === 'weekly' && weeklyDays.length === 0) return;
+    const finalRecurrence =
+      kind === 'chore' ? (recurrence === 'weekly' ? `weekly:${weeklyDays.join(',')}` : recurrence) : 'once';
     await api.post('/tasks', {
       title: title.trim(),
       kind,
       assignee_id: assigneeId || null,
       created_by_id: activeProfile?.id ?? null,
-      recurrence: kind === 'chore' ? recurrence : 'once',
+      recurrence: finalRecurrence,
       due_date: dueDate || null,
     });
     reset();
@@ -80,11 +100,27 @@ export function TaskForm({ onCreated }: Props) {
         </select>
       </div>
       {kind === 'chore' ? (
-        <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
-          {RECURRENCE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        <>
+          <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+            {RECURRENCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          {recurrence === 'weekly' && (
+            <div className="task-form__row task-form__weekdays">
+              {DAYS.map((d) => (
+                <label key={d.code}>
+                  <input
+                    type="checkbox"
+                    checked={weeklyDays.includes(d.code)}
+                    onChange={() => toggleWeeklyDay(d.code)}
+                  />
+                  {d.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
       )}
