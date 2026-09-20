@@ -54,6 +54,11 @@ familyhomecenter/
 
 ## Quick start (development, on any machine)
 
+Requires **Node.js 20 LTS** (npm comes bundled with it) — install from
+[nodejs.org](https://nodejs.org/) or via [nvm](https://github.com/nvm-sh/nvm);
+on Debian/Ubuntu you can also use NodeSource, as in
+[docs/PI_SETUP.md](docs/PI_SETUP.md#2-install-prerequisites).
+
 ```bash
 cp .env.example .env      # edit at least WEATHER_LAT/LON if you're not near Palo Alto
 cd server && npm install && npm run dev &     # http://localhost:3000 (API)
