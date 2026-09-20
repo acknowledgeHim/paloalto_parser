@@ -4,11 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
-
-// Chores read before to-dos within a person's column.
-function sortForColumn(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'chore' ? -1 : 1));
-}
+import { sortForColumn } from '../utils/tasks.js';
 
 /**
  * One glance per person: their chores, their to-dos, and what's on the calendar for them —

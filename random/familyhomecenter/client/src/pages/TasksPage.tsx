@@ -4,14 +4,9 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { sortForColumn } from '../utils/tasks.js';
 
 const UNASSIGNED = 'unassigned';
-
-// Chores (recurring, parent-assigned) read before to-dos within a person's column, otherwise keep
-// whatever order the API returned them in.
-function sortForColumn(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'chore' ? -1 : 1));
-}
 
 // How far the pointer has to move before a press counts as a drag rather than a tap — keeps
 // checkbox/claim taps on the card working normally.

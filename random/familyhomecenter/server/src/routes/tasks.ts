@@ -35,7 +35,8 @@ tasksRouter.get('/', (req, res) => {
 });
 
 tasksRouter.post('/', (req, res) => {
-  const { kind, title, notes, assignee_id, created_by_id, recurrence, due_date } = req.body as Partial<Task>;
+  const { kind, title, notes, assignee_id, created_by_id, recurrence, due_date, time_of_day } =
+    req.body as Partial<Task>;
   if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
   if (kind !== 'chore' && kind !== 'todo') return res.status(400).json({ error: 'kind must be chore or todo' });
 
@@ -48,12 +49,13 @@ tasksRouter.post('/', (req, res) => {
     created_by_id: created_by_id ?? null,
     recurrence: (recurrence as Task['recurrence']) ?? 'once',
     due_date: due_date ?? null,
+    time_of_day: time_of_day ?? null,
     active: 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, assignee_id, created_by_id, recurrence, due_date, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @assignee_id, @created_by_id, @recurrence, @due_date, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, assignee_id, created_by_id, recurrence, due_date, time_of_day, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @assignee_id, @created_by_id, @recurrence, @due_date, @time_of_day, @active, @created_at)`
   ).run(task);
   res.status(201).json(task);
 });
@@ -64,7 +66,7 @@ tasksRouter.patch('/:id', (req, res) => {
   const updated: Task = { ...existing, ...req.body, id: existing.id };
   db.prepare(
     `UPDATE tasks SET title=@title, notes=@notes, assignee_id=@assignee_id, recurrence=@recurrence,
-     due_date=@due_date, active=@active WHERE id=@id`
+     due_date=@due_date, time_of_day=@time_of_day, active=@active WHERE id=@id`
   ).run(updated);
   res.json(updated);
 });

@@ -10,6 +10,13 @@ const RECURRENCE_OPTIONS = [
   { value: 'weekly', label: 'Weekly (choose days)' },
 ];
 
+const TIME_OF_DAY_OPTIONS = [
+  { value: '', label: 'Any time' },
+  { value: 'morning', label: '🌅 Morning' },
+  { value: 'afternoon', label: '☀️ Afternoon' },
+  { value: 'evening', label: '🌙 Evening' },
+];
+
 const DAYS = [
   { code: 'SUN', label: 'Sun' },
   { code: 'MON', label: 'Mon' },
@@ -46,6 +53,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
   const [assigneeId, setAssigneeId] = useState(task?.assignee_id ?? defaultAssigneeId ?? '');
   const [recurrence, setRecurrence] = useState(initialRecurrence.base);
   const [weeklyDays, setWeeklyDays] = useState<string[]>(initialRecurrence.days);
+  const [timeOfDay, setTimeOfDay] = useState(task?.time_of_day ?? '');
   const [dueDate, setDueDate] = useState(task?.due_date ?? '');
 
   // Only parents get the "chore" option (recurring, assigned duties) — anyone can add a plain to-do.
@@ -67,6 +75,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
       kind,
       assignee_id: assigneeId || null,
       recurrence: finalRecurrence,
+      time_of_day: kind === 'chore' ? timeOfDay || null : null,
       due_date: dueDate || null,
     };
     if (task) {
@@ -114,11 +123,18 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
         </div>
         {kind === 'chore' ? (
           <>
-            <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
-              {RECURRENCE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            <div className="task-form__row">
+              <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+                {RECURRENCE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <select value={timeOfDay} onChange={(e) => setTimeOfDay(e.target.value)}>
+                {TIME_OF_DAY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
             {recurrence === 'weekly' && (
               <div className="task-form__row task-form__weekdays">
                 {DAYS.map((d) => (

@@ -43,6 +43,8 @@ export interface TaskCompletion {
   completed_at: string;
 }
 
+export type TimeOfDay = 'morning' | 'afternoon' | 'evening';
+
 export interface Task {
   id: string;
   kind: 'chore' | 'todo';
@@ -52,6 +54,8 @@ export interface Task {
   created_by_id: string | null;
   recurrence: string;
   due_date: string | null;
+  /** Optional part of the day this chore belongs to; null means no particular time. */
+  time_of_day: TimeOfDay | null;
   active: 0 | 1;
   completion: TaskCompletion | null;
 }

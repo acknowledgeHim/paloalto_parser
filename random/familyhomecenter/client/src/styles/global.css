@@ -191,6 +191,7 @@ textarea {
 }
 .badge--chore { background: #fde8d0; color: #a45c14; }
 .badge--todo { background: #dbeafe; color: #1d4ed8; }
+.badge--time { background: var(--bg); color: var(--text-muted); }
 .badge--source-local { background: #e5e7eb; color: #374151; }
 .badge--source-google { background: #d9f2e3; color: #157347; }
 .badge--source-apple { background: #ece5fb; color: #6d3fc9; }

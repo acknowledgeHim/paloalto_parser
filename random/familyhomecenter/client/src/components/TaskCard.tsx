@@ -3,6 +3,12 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { playCompletionSound } from '../utils/sounds.js';
 import { MemberAvatar } from './MemberAvatar.js';
 
+const TIME_OF_DAY_LABEL: Record<string, string> = {
+  morning: '🌅 Morning',
+  afternoon: '☀️ Afternoon',
+  evening: '🌙 Evening',
+};
+
 interface Props {
   task: Task;
   onChange: () => void;
@@ -44,6 +50,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit }: Props) {
         {task.notes && <div className="task-card__notes">{task.notes}</div>}
         <div className="task-card__meta">
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
+          {task.time_of_day && <span className="badge badge--time">{TIME_OF_DAY_LABEL[task.time_of_day]}</span>}
           {onEdit && (
             <button
               type="button"

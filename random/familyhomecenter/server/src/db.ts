@@ -137,6 +137,13 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Optional part of the day ('morning'/'afternoon'/'evening') a chore belongs to; NULL = no particular time.
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN time_of_day TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;
