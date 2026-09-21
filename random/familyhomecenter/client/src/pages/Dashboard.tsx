@@ -30,7 +30,7 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const openTasks = tasks.filter((t) => !t.completion);
+  const openTasks = tasks.filter((t) => t.completions.length === 0);
   const rewardTasks = tasks.filter((t) => t.reward_type);
 
   return (
@@ -44,9 +44,9 @@ export function Dashboard() {
         <section className="panel">
           <h2>Prize Bank progress today</h2>
           {members.map((m) => {
-            const memberRewardTasks = rewardTasks.filter((t) => t.assignee_id === m.id);
+            const memberRewardTasks = rewardTasks.filter((t) => t.assignee_ids.includes(m.id));
             if (memberRewardTasks.length === 0) return null;
-            const done = memberRewardTasks.filter((t) => t.completion).length;
+            const done = memberRewardTasks.filter((t) => t.completions.some((c) => c.completed_by_id === m.id)).length;
             const pct = Math.round((done / memberRewardTasks.length) * 100);
             return (
               <div key={m.id} className="dashboard__progress">

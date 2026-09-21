@@ -26,7 +26,7 @@ export function FamilyBoardPage() {
     api.get<CalendarEvent[]>(`/calendar/events?start=${start}&end=${end}`).then(setEvents).catch(console.error);
   }, []);
 
-  const unassignedTasks = sortForColumn(tasks.filter((t) => !t.assignee_id));
+  const unassignedTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.length === 0));
   const familyEvents = events.filter((e) => !e.for_member_id);
 
   return (
@@ -40,7 +40,7 @@ export function FamilyBoardPage() {
 
       <div className="family-board__columns">
         {members.map((member) => {
-          const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_id === member.id));
+          const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id)));
           const memberEvents = events.filter((e) => e.for_member_id === member.id);
           return (
             <section key={member.id} className="panel person-column">
@@ -48,7 +48,9 @@ export function FamilyBoardPage() {
 
               <h3>Chores &amp; to-dos</h3>
               {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}
-              {memberTasks.map((t) => <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee />)}
+              {memberTasks.map((t) => (
+                <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee viewerId={member.id} />
+              ))}
 
               <h3>Calendar</h3>
               {memberEvents.length === 0 && <div className="empty-state">Nothing on the calendar</div>}

@@ -51,7 +51,8 @@ export function PrizeBankSettings() {
   const [requiredCount, setRequiredCount] = useState(3);
 
   const load = () => {
-    api.get<Task[]>('/tasks?all=true').then((t) => setTasks(t.filter((x) => x.active)));
+    // Rewards apply to extra to-dos only — routine chores are expected, unpaid duties.
+    api.get<Task[]>('/tasks?all=true').then((t) => setTasks(t.filter((x) => x.active && x.kind === 'todo')));
     api.get<Prize[]>('/prizes').then(setPrizes);
   };
   useEffect(load, []);
@@ -81,12 +82,13 @@ export function PrizeBankSettings() {
   return (
     <>
       <section className="panel">
-        <h2>Prize Bank — task rewards</h2>
+        <h2>Prize Bank — extra to-do rewards</h2>
         <p className="hint">
-          Set what a chore or to-do pays out when completed. Everyday chore/to-do creation stays
-          open to the whole family — only reward amounts are protected here.
+          Set what an extra to-do pays out when completed — routine chores stay unpaid duties and
+          don't show up here. Everyday to-do creation stays open to the whole family — only reward
+          amounts are protected here.
         </p>
-        {tasks.length === 0 && <div className="empty-state">No chores/to-dos yet.</div>}
+        {tasks.length === 0 && <div className="empty-state">No extra to-dos yet — add one from the Chores &amp; To-dos page.</div>}
         {tasks.map((t) => (
           <RewardRow key={t.id} task={t} onSaved={load} />
         ))}
@@ -108,7 +110,7 @@ export function PrizeBankSettings() {
           <div className="task-form__row">
             <select value={costType} onChange={(e) => setCostType(e.target.value as 'stars' | 'task_count')}>
               <option value="stars">Costs stars</option>
-              <option value="task_count">Do a specific task N times</option>
+              <option value="task_count">Do a specific to-do N times</option>
             </select>
           </div>
           {costType === 'stars' ? (
@@ -119,7 +121,7 @@ export function PrizeBankSettings() {
           ) : (
             <div className="task-form__row">
               <select value={taskId} onChange={(e) => setTaskId(e.target.value)}>
-                <option value="">Pick a task…</option>
+                <option value="">Pick a to-do…</option>
                 {tasks.map((t) => (
                   <option key={t.id} value={t.id}>{t.title}</option>
                 ))}

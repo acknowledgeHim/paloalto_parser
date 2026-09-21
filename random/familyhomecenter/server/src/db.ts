@@ -31,13 +31,24 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- A task's assignee_id column (still present for legacy data) is no longer the source of
+  -- truth — a task can now be assigned to any number of people. See routes/tasks.ts.
+  CREATE TABLE IF NOT EXISTS task_assignees (
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    PRIMARY KEY (task_id, family_member_id)
+  );
+
+  -- UNIQUE is (task_id, completed_on, completed_by_id) — not just (task_id, completed_on) — so a
+  -- task assigned to multiple people lets each of them complete (and earn Prize Bank rewards for)
+  -- their own instance independently. See the migration below for databases created before this.
   CREATE TABLE IF NOT EXISTS task_completions (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     completed_on TEXT NOT NULL,
     completed_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
     completed_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(task_id, completed_on)
+    UNIQUE(task_id, completed_on, completed_by_id)
   );
 
   CREATE TABLE IF NOT EXISTS local_events (
@@ -257,6 +268,42 @@ try {
   db.exec('ALTER TABLE admin_sessions ADD COLUMN family_member_id TEXT REFERENCES family_members(id) ON DELETE CASCADE');
 } catch (err) {
   if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// One-time backfill: move any existing single assignee_id into the new task_assignees table.
+// assignee_id itself is left in place (harmless, just unused going forward) — SQLite can't cleanly
+// drop a column referenced the way this one was without a full table rebuild, and there's nothing
+// gained by doing that here.
+db.exec(`
+  INSERT OR IGNORE INTO task_assignees (task_id, family_member_id)
+  SELECT id, assignee_id FROM tasks WHERE assignee_id IS NOT NULL
+`);
+
+// Databases created before task_completions' UNIQUE constraint included completed_by_id (i.e.
+// before multi-assignee tasks) need the table rebuilt — SQLite has no ALTER TABLE for changing a
+// UNIQUE constraint. Detect the old shape via sqlite_master and migrate exactly once.
+const taskCompletionsSql = (
+  db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_completions'").get() as
+    | { sql: string }
+    | undefined
+)?.sql;
+if (taskCompletionsSql && !taskCompletionsSql.includes('completed_by_id)')) {
+  db.transaction(() => {
+    db.exec(`
+      CREATE TABLE task_completions_new (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        completed_on TEXT NOT NULL,
+        completed_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+        completed_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(task_id, completed_on, completed_by_id)
+      );
+      INSERT INTO task_completions_new (id, task_id, completed_on, completed_by_id, completed_at)
+        SELECT id, task_id, completed_on, completed_by_id, completed_at FROM task_completions;
+      DROP TABLE task_completions;
+      ALTER TABLE task_completions_new RENAME TO task_completions;
+    `);
+  })();
 }
 
 export function getSetting(key: string, fallback = ''): string {

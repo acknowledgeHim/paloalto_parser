@@ -4,7 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
-import { sortForColumn } from '../utils/tasks.js';
+import { canEditTask, sortForColumn } from '../utils/tasks.js';
 
 const UNASSIGNED = 'unassigned';
 
@@ -13,7 +13,7 @@ const UNASSIGNED = 'unassigned';
 const DRAG_THRESHOLD_PX = 10;
 
 export function TasksPage() {
-  const { members } = useFamilyMembers();
+  const { members, activeProfile } = useFamilyMembers();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [modalTask, setModalTask] = useState<Task | 'new' | null>(null);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
@@ -57,24 +57,30 @@ export function TasksPage() {
       if (!st?.moved) return; // a plain tap — let the card's own click handlers do their thing
       const columnId = findColumn(ev.clientX, ev.clientY);
       if (!columnId) return;
-      const assigneeId = columnId === UNASSIGNED ? null : columnId;
-      api.patch(`/tasks/${st.taskId}`, { assignee_id: assigneeId }).then(load).catch(console.error);
+      const assigneeIds = columnId === UNASSIGNED ? [] : [columnId];
+      api.patch(`/tasks/${st.taskId}`, { assignee_ids: assigneeIds }).then(load).catch(console.error);
     };
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   };
 
-  const unassigned = sortForColumn(tasks.filter((t) => !t.assignee_id));
+  const unassigned = sortForColumn(tasks.filter((t) => t.assignee_ids.length === 0));
   const draggedTask = dragTaskId ? tasks.find((t) => t.id === dragTaskId) : null;
 
-  const renderTask = (t: Task) => (
+  const renderTask = (t: Task, viewerId?: string) => (
     <div
       key={t.id}
       className={`draggable-task ${dragTaskId === t.id ? 'draggable-task--dragging' : ''}`}
       onPointerDown={(e) => startDrag(e, t.id)}
     >
-      <TaskCard task={t} onChange={load} hideAssignee onEdit={setModalTask} />
+      <TaskCard
+        task={t}
+        onChange={load}
+        hideAssignee
+        viewerId={viewerId}
+        onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+      />
     </div>
   );
 
@@ -94,7 +100,7 @@ export function TasksPage() {
 
       <div className="tasks-page__columns">
         {members.map((member) => {
-          const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_id === member.id));
+          const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id)));
           return (
             <section
               key={member.id}
@@ -106,7 +112,7 @@ export function TasksPage() {
                 <span className="person-column__count">{memberTasks.length}</span>
               </h2>
               {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}
-              {memberTasks.map(renderTask)}
+              {memberTasks.map((t) => renderTask(t, member.id))}
             </section>
           );
         })}
@@ -120,7 +126,7 @@ export function TasksPage() {
             <span className="person-column__count">{unassigned.length}</span>
           </h2>
           {unassigned.length === 0 && <div className="empty-state">Nothing unclaimed</div>}
-          {unassigned.map(renderTask)}
+          {unassigned.map((t) => renderTask(t))}
         </section>
       </div>
 

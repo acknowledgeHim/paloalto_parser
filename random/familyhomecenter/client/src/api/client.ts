@@ -55,7 +55,8 @@ export interface Task {
   kind: 'chore' | 'todo';
   title: string;
   notes: string | null;
-  assignee_id: string | null;
+  /** Who this is assigned to; empty = anyone can claim it. Each person completes their own copy independently. */
+  assignee_ids: string[];
   created_by_id: string | null;
   recurrence: string;
   due_date: string | null;
@@ -66,7 +67,8 @@ export interface Task {
   reward_type: 'stars' | 'money' | null;
   reward_amount: number | null;
   active: 0 | 1;
-  completion: TaskCompletion | null;
+  /** Every completion for the fetched date (or, for a "once" task, ever) — one per person who's done their copy. */
+  completions: TaskCompletion[];
 }
 
 // ---- Prize Bank ----

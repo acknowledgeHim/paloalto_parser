@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { taskAppliesOn, todayStr } from '../utils/recurrence.js';
-import type { Task, TaskCompletion } from '../types.js';
+import type { Task, TaskCompletion, TaskWithAssignment } from '../types.js';
 
 export const tasksRouter = Router();
 
@@ -15,10 +15,37 @@ function creditReward(memberId: string, rewardType: 'stars' | 'money', amount: n
   }
 }
 
+function assigneesFor(taskId: string): string[] {
+  return (
+    db.prepare('SELECT family_member_id FROM task_assignees WHERE task_id = ?').all(taskId) as Array<{
+      family_member_id: string;
+    }>
+  ).map((r) => r.family_member_id);
+}
+
+function setAssignees(taskId: string, memberIds: string[]) {
+  db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
+  const stmt = db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, family_member_id) VALUES (?, ?)');
+  memberIds.forEach((id) => stmt.run(taskId, id));
+}
+
+/** Finds this task's completion for a given date and (possibly null) person — NULL needs `IS`, not `=`. */
+function findCompletion(taskId: string, date: string, completedBy: string | null): TaskCompletion | undefined {
+  if (completedBy === null) {
+    return db
+      .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ? AND completed_by_id IS NULL')
+      .get(taskId, date) as TaskCompletion | undefined;
+  }
+  return db
+    .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ? AND completed_by_id = ?')
+    .get(taskId, date, completedBy) as TaskCompletion | undefined;
+}
+
 /**
  * GET /api/tasks?date=YYYY-MM-DD
- * Returns every active task that applies on `date` (defaults to today),
- * each annotated with whether it's completed for that date/instance.
+ * Returns every active task that applies on `date` (defaults to today), each with its assignees
+ * and every completion for that date/instance — a task assigned to several people can have one
+ * completion per person, each completed (and Prize-Bank-rewarded) independently.
  *
  * GET /api/tasks?all=true bypasses the date filter entirely — used by the Prize Bank reward
  * configuration in Settings, which needs to see every chore/to-do, not just today's.
@@ -28,27 +55,25 @@ tasksRouter.get('/', (req, res) => {
   const tasks = db.prepare('SELECT * FROM tasks WHERE active = 1').all() as Task[];
   const applicable = req.query.all === 'true' ? tasks : tasks.filter((t) => taskAppliesOn(t, date));
 
-  const completionStmt = db.prepare(
-    'SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?'
-  );
-  const anyCompletionStmt = db.prepare(
-    'SELECT * FROM task_completions WHERE task_id = ? ORDER BY completed_at DESC LIMIT 1'
-  );
-
-  const result = applicable.map((task) => {
-    const completion =
+  const result: TaskWithAssignment[] = applicable.map((task) => {
+    // "once" tasks have no meaningful recurring date — any historical completion (by anyone who's
+    // done their copy) counts, not just today's.
+    const completions =
       task.recurrence === 'once'
-        ? (anyCompletionStmt.get(task.id) as TaskCompletion | undefined)
-        : (completionStmt.get(task.id, date) as TaskCompletion | undefined);
-    return { ...task, completion: completion ?? null };
+        ? (db.prepare('SELECT * FROM task_completions WHERE task_id = ?').all(task.id) as TaskCompletion[])
+        : (db
+            .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
+            .all(task.id, date) as TaskCompletion[]);
+    return { ...task, assignee_ids: assigneesFor(task.id), completions };
   });
 
   res.json(result);
 });
 
 tasksRouter.post('/', (req, res) => {
-  const { kind, title, notes, assignee_id, created_by_id, recurrence, due_date, time_of_day } =
-    req.body as Partial<Task>;
+  const { kind, title, notes, assignee_ids, created_by_id, recurrence, due_date, time_of_day } = req.body as Partial<Task> & {
+    assignee_ids?: string[];
+  };
   if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
   if (kind !== 'chore' && kind !== 'todo') return res.status(400).json({ error: 'kind must be chore or todo' });
 
@@ -57,7 +82,6 @@ tasksRouter.post('/', (req, res) => {
     kind,
     title: title.trim(),
     notes: notes ?? null,
-    assignee_id: assignee_id ?? null,
     created_by_id: created_by_id ?? null,
     recurrence: (recurrence as Task['recurrence']) ?? 'once',
     due_date: due_date ?? null,
@@ -68,21 +92,25 @@ tasksRouter.post('/', (req, res) => {
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, assignee_id, created_by_id, recurrence, due_date, time_of_day, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @assignee_id, @created_by_id, @recurrence, @due_date, @time_of_day, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @active, @created_at)`
   ).run(task);
-  res.status(201).json(task);
+  setAssignees(task.id, assignee_ids ?? []);
+  res.status(201).json({ ...task, assignee_ids: assignee_ids ?? [], completions: [] });
 });
 
 tasksRouter.patch('/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   if (!existing) return res.status(404).json({ error: 'not found' });
-  const updated: Task = { ...existing, ...req.body, id: existing.id };
+
+  const { assignee_ids, ...fields } = req.body as Partial<Task> & { assignee_ids?: string[] };
+  const updated: Task = { ...existing, ...fields, id: existing.id };
   db.prepare(
-    `UPDATE tasks SET title=@title, notes=@notes, assignee_id=@assignee_id, recurrence=@recurrence,
+    `UPDATE tasks SET title=@title, notes=@notes, recurrence=@recurrence,
      due_date=@due_date, time_of_day=@time_of_day, active=@active WHERE id=@id`
   ).run(updated);
-  res.json(updated);
+  if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
+  res.json({ ...updated, assignee_ids: assignee_ids ?? assigneesFor(req.params.id) });
 });
 
 /**
@@ -104,7 +132,7 @@ tasksRouter.patch('/:id/reward', requireAdmin, (req, res) => {
     reward_amount: reward_type ? Number(reward_amount) || 0 : null,
   };
   db.prepare('UPDATE tasks SET reward_type=@reward_type, reward_amount=@reward_amount WHERE id=@id').run(updated);
-  res.json(updated);
+  res.json({ ...updated, assignee_ids: assigneesFor(req.params.id) });
 });
 
 tasksRouter.delete('/:id', (req, res) => {
@@ -112,51 +140,52 @@ tasksRouter.delete('/:id', (req, res) => {
   res.status(204).end();
 });
 
-/** POST /api/tasks/:id/complete  { completed_by_id, date? } */
+/** POST /api/tasks/:id/complete  { completed_by_id, date? } — completes *that person's* copy. */
 tasksRouter.post('/:id/complete', (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   if (!task) return res.status(404).json({ error: 'not found' });
 
   const date = (req.body.date as string) || todayStr();
-  const existing = db
-    .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
-    .get(task.id, date) as TaskCompletion | undefined;
+  const completedBy: string | null = req.body.completed_by_id ?? null;
+  const existing = findCompletion(task.id, date, completedBy);
 
   const completion: TaskCompletion = {
     id: existing?.id ?? uuidv4(),
     task_id: task.id,
     completed_on: date,
-    completed_by_id: req.body.completed_by_id ?? null,
+    completed_by_id: completedBy,
     completed_at: new Date().toISOString(),
   };
-  db.prepare(
-    `INSERT INTO task_completions (id, task_id, completed_on, completed_by_id, completed_at)
-     VALUES (@id, @task_id, @completed_on, @completed_by_id, @completed_at)
-     ON CONFLICT(task_id, completed_on) DO UPDATE SET
-       completed_by_id = excluded.completed_by_id, completed_at = excluded.completed_at`
-  ).run(completion);
+  if (existing) {
+    db.prepare('UPDATE task_completions SET completed_at = @completed_at WHERE id = @id').run(completion);
+  } else {
+    db.prepare(
+      `INSERT INTO task_completions (id, task_id, completed_on, completed_by_id, completed_at)
+       VALUES (@id, @task_id, @completed_on, @completed_by_id, @completed_at)`
+    ).run(completion);
+  }
 
-  // Only credit the first time this date's instance is completed — re-saving the same
+  // Only credit the first time this person's instance is completed — re-saving the same
   // completion (e.g. a retried request) must not pay out twice.
-  if (!existing && task.reward_type && task.reward_amount && completion.completed_by_id) {
-    creditReward(completion.completed_by_id, task.reward_type, task.reward_amount);
+  if (!existing && task.reward_type && task.reward_amount && completedBy) {
+    creditReward(completedBy, task.reward_type, task.reward_amount);
   }
 
   res.status(201).json(completion);
 });
 
-/** POST /api/tasks/:id/uncomplete  { date? }  — undo a checkmark (reverses any reward paid out) */
+/** POST /api/tasks/:id/uncomplete  { completed_by_id, date? } — undoes *that person's* checkmark. */
 tasksRouter.post('/:id/uncomplete', (req, res) => {
   const date = (req.body.date as string) || todayStr();
+  const completedBy: string | null = req.body.completed_by_id ?? null;
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
-  const existing = db
-    .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
-    .get(req.params.id, date) as TaskCompletion | undefined;
+  const existing = findCompletion(req.params.id, date, completedBy);
 
-  db.prepare('DELETE FROM task_completions WHERE task_id = ? AND completed_on = ?').run(req.params.id, date);
-
-  if (existing && task?.reward_type && task.reward_amount && existing.completed_by_id) {
-    creditReward(existing.completed_by_id, task.reward_type, -task.reward_amount);
+  if (existing) {
+    db.prepare('DELETE FROM task_completions WHERE id = ?').run(existing.id);
+    if (task?.reward_type && task.reward_amount && existing.completed_by_id) {
+      creditReward(existing.completed_by_id, task.reward_type, -task.reward_amount);
+    }
   }
   res.status(204).end();
 });

@@ -20,13 +20,22 @@ export type TaskKind = 'chore' | 'todo';
 
 /**
  * Recurrence rules, kept intentionally simple (no RRULE parser needed):
- *  - "once"                      one-off, done forever once completed
- *  - "daily"                     applies every day
- *  - "weekdays"                  Mon-Fri
- *  - "weekends"                  Sat-Sun
- *  - "weekly:MON,WED,FRI"        specific weekdays, 3-letter codes
+ *  - "once"                        one-off, done forever once completed
+ *  - "daily"                       applies every day
+ *  - "weekdays"                    Mon-Fri
+ *  - "weekends"                    Sat-Sun
+ *  - "weekly:MON,WED,FRI"          specific weekdays, every week, 3-letter codes
+ *  - "monthly:1:FRI"               nth weekday of the month (n = 1-4, or -1 for "last")
+ *  - "biweekly:2026-09-22:TUE"     that weekday, every other week counting from the anchor date
  */
-export type Recurrence = 'once' | 'daily' | 'weekdays' | 'weekends' | `weekly:${string}`;
+export type Recurrence =
+  | 'once'
+  | 'daily'
+  | 'weekdays'
+  | 'weekends'
+  | `weekly:${string}`
+  | `monthly:${string}`
+  | `biweekly:${string}`;
 
 export type TimeOfDay = 'morning' | 'afternoon' | 'evening';
 
@@ -35,7 +44,6 @@ export interface Task {
   kind: TaskKind;
   title: string;
   notes: string | null;
-  assignee_id: string | null;
   created_by_id: string | null;
   recurrence: Recurrence;
   due_date: string | null;
@@ -47,6 +55,13 @@ export interface Task {
   reward_amount: number | null;
   active: 0 | 1;
   created_at: string;
+}
+
+/** Task as returned by the API — assignee_ids/completions are computed from the join tables, not columns. */
+export interface TaskWithAssignment extends Task {
+  /** Who this is assigned to; empty = anyone can claim it. Each person completes their own copy independently. */
+  assignee_ids: string[];
+  completions: TaskCompletion[];
 }
 
 export interface TaskCompletion {

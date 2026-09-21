@@ -2,6 +2,10 @@ import type { Recurrence, Task } from '../types.js';
 
 const DAY_CODES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 
+function daysInMonth(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
 /** Does this task apply on the given date (YYYY-MM-DD, local time)? */
 export function taskAppliesOn(task: Pick<Task, 'recurrence' | 'due_date'>, dateStr: string): boolean {
   const recurrence = task.recurrence as Recurrence;
@@ -17,6 +21,24 @@ export function taskAppliesOn(task: Pick<Task, 'recurrence' | 'due_date'>, dateS
   if (recurrence.startsWith('weekly:')) {
     const days = recurrence.slice('weekly:'.length).split(',').map((d) => d.trim().toUpperCase());
     return days.includes(code);
+  }
+  // "monthly:<n>:<DAY>" — the nth occurrence of that weekday in the month (n = 1-4), or -1 for "last".
+  if (recurrence.startsWith('monthly:')) {
+    const [, nStr, day] = recurrence.split(':');
+    const n = Number(nStr);
+    if (code !== day) return false;
+    if (n === -1) return date.getDate() + 7 > daysInMonth(date);
+    return Math.ceil(date.getDate() / 7) === n;
+  }
+  // "biweekly:<anchorDate YYYY-MM-DD>:<DAY>" — that weekday, every other week counting from anchor.
+  if (recurrence.startsWith('biweekly:')) {
+    const [, anchorStr, day] = recurrence.split(':');
+    if (code !== day) return false;
+    const anchor = new Date(`${anchorStr}T00:00:00`);
+    const diffDays = Math.round((date.getTime() - anchor.getTime()) / 86_400_000);
+    const weeks = diffDays / 7;
+    if (!Number.isInteger(weeks)) return false; // shouldn't happen — anchor and date are the same weekday
+    return ((weeks % 2) + 2) % 2 === 0;
   }
   return false;
 }
