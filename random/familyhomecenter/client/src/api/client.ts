@@ -36,6 +36,8 @@ export interface FamilyMember {
   /** Prize Bank running totals. */
   star_balance: number;
   money_balance: number;
+  /** Whether this person has their own password set — never the password/hash itself. */
+  has_password: boolean;
 }
 
 export interface TaskCompletion {

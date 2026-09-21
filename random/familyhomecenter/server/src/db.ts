@@ -242,6 +242,23 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Per-person login (see services/auth.ts). NULL = no password set — open, same "optional, off by
+// default" pattern as everything else; that's the default for kids and is fine for parents until
+// they set one too.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN password_hash TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// A session now optionally belongs to a specific family member (they entered their own
+// password); NULL keeps working as the legacy single-household ADMIN_PASSWORD recovery login.
+try {
+  db.exec('ALTER TABLE admin_sessions ADD COLUMN family_member_id TEXT REFERENCES family_members(id) ON DELETE CASCADE');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

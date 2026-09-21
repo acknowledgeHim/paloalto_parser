@@ -10,6 +10,7 @@ server/data/*.db-wal
 server/data/*.db-shm
 server/data/thumbs/
 server/data/avatars/
+server/data/sounds/
 client/dist/
 .DS_Store
 *.tsbuildinfo

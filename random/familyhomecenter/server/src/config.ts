@@ -11,6 +11,7 @@ export const config = {
   dbPath: path.join(__dirname, '..', 'data', 'familyhomecenter.db'),
   thumbsDir: path.join(__dirname, '..', 'data', 'thumbs'),
   avatarsDir: path.join(__dirname, '..', 'data', 'avatars'),
+  soundsDir: path.join(__dirname, '..', 'data', 'sounds'),
   clientDistDir: path.join(__dirname, '..', '..', 'client', 'dist'),
 
   google: {

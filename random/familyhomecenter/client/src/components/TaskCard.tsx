@@ -28,7 +28,8 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit }: Props) {
       await api.post(`/tasks/${task.id}/uncomplete`, {});
     } else {
       // Play immediately (before the await) so it stays tied to this click as a user gesture.
-      playCompletionSound(activeProfile?.complete_sound ?? assignee?.complete_sound);
+      const soundOwner = activeProfile?.complete_sound ? activeProfile : assignee;
+      if (soundOwner) playCompletionSound(soundOwner.complete_sound, soundOwner.id);
       await api.post(`/tasks/${task.id}/complete`, { completed_by_id: activeProfile?.id ?? null });
     }
     onChange();

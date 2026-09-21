@@ -6,12 +6,14 @@ import { MemberAvatar } from '../components/MemberAvatar.js';
 import { PrizeBankSettings } from '../components/PrizeBankSettings.js';
 
 interface AuthStatus {
-  configured: boolean;
-  authenticated: boolean;
+  member_id: string | null;
+  is_admin: boolean;
+  admin_gate_active: boolean;
+  legacy_recovery_available: boolean;
 }
 
-/** Password gate shown in place of the settings content when a login is configured and not yet passed. */
-function SettingsLogin({ onSuccess }: { onSuccess: () => void }) {
+/** Shown in place of the settings content when a parent login is required and not yet passed. */
+function SettingsLogin({ onSuccess, legacyAvailable }: { onSuccess: () => void; legacyAvailable: boolean }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -21,7 +23,7 @@ function SettingsLogin({ onSuccess }: { onSuccess: () => void }) {
     setError(null);
     setSubmitting(true);
     try {
-      await api.post('/auth/login', { password });
+      await api.post('/auth/login', { password }); // legacy household recovery login
       onSuccess();
     } catch (err) {
       setError((err as Error).message || 'Incorrect password');
@@ -32,19 +34,26 @@ function SettingsLogin({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <div className="settings-login">
-      <form className="panel settings-login__form" onSubmit={submit}>
+      <div className="panel settings-login__form">
         <h1>Settings</h1>
-        <p className="hint">Everything else in the dashboard is open to the family — just this page needs the settings password.</p>
-        <input
-          autoFocus
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <div className="settings-login__error">{error}</div>}
-        <button type="submit" disabled={submitting}>Unlock</button>
-      </form>
+        <p className="hint">
+          This needs a parent login. Pick your name in the switcher up top and enter your password
+          there{legacyAvailable ? ', or use the household recovery password below' : ''}.
+        </p>
+        {legacyAvailable && (
+          <form onSubmit={submit}>
+            <input
+              autoFocus
+              type="password"
+              placeholder="Recovery password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {error && <div className="settings-login__error">{error}</div>}
+            <button type="submit" disabled={submitting}>Unlock</button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
@@ -78,11 +87,11 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (!auth?.authenticated) return;
+    if (!auth?.is_admin) return;
     api.get<TimingSettings>('/settings').then(setSettings).catch(console.error);
     api.get<CalendarSources>('/calendar/sources').then(setSources).catch(console.error);
     api.get<SpotifyStatus>('/music/spotify/status').then(setSpotify).catch(console.error);
-  }, [auth?.authenticated]);
+  }, [auth?.is_admin]);
 
   const removeMember = async (id: string) => {
     await api.delete(`/family-members/${id}`);
@@ -119,15 +128,15 @@ export function SettingsPage() {
   };
 
   if (!auth) return null; // brief loading flash only
-  if (auth.configured && !auth.authenticated) {
-    return <SettingsLogin onSuccess={loadAuth} />;
+  if (auth.admin_gate_active && !auth.is_admin) {
+    return <SettingsLogin onSuccess={loadAuth} legacyAvailable={auth.legacy_recovery_available} />;
   }
 
   return (
     <div className="settings-page">
       <div className="settings-page__header">
         <h1>Settings</h1>
-        {auth.configured && <button className="secondary" onClick={logout}>Log out</button>}
+        {auth.admin_gate_active && <button className="secondary" onClick={logout}>Log out</button>}
       </div>
 
       <section className="panel">
@@ -224,10 +233,11 @@ export function SettingsPage() {
         ))}
       </section>
 
-      {!auth.configured && (
+      {!auth.admin_gate_active && (
         <p className="hint">
-          Anyone can currently open Settings — including the Prize Bank reward amounts above — set
-          ADMIN_PASSWORD in .env to require a login here. See docs/SETTINGS_LOGIN.md.
+          Anyone can currently open Settings — including the Prize Bank reward amounts above.
+          Have a parent set their own password (🔑 icon in the name switcher up top) to require a
+          login here. See docs/SETTINGS_LOGIN.md.
         </p>
       )}
     </div>

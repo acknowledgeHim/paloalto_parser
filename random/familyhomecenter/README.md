@@ -22,12 +22,21 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   There's also a **Photos** page for browsing the same library on demand — a
   thumbnail grid, tap-to-view-fullscreen with prev/next, and a button to kick
   off the same fullscreen slideshow manually.
-- 👪 **No-login profile switcher** — family members pick their name from a
-  list to attribute what they add/complete. Everyday use (chores, calendar,
-  music, photos, intercom) never requires a login. An optional password
-  (`ADMIN_PASSWORD`) can gate just the **Settings** page and its
-  configuration actions (family roster, calendar/Spotify connect, timing) —
-  see docs/SETTINGS_LOGIN.md.
+- 👪 **Profile switcher with optional per-person logins** — family members
+  pick their name to attribute what they add/complete; no password needed
+  unless they've set one. Anyone can self-service set their own password
+  (🔑 icon next to their name); a parent's password additionally unlocks
+  **Settings** and its configuration actions (family roster, calendar/Spotify
+  connect, timing, Prize Bank rewards) for as long as they're logged in — a
+  kid's is fully optional and just protects switching into their own profile.
+  Everyday use (chores, calendar, music, photos, intercom) never requires a
+  login. Going idle (same trigger as the slideshow screensaver) clears the
+  picked profile and logs out automatically. See docs/SETTINGS_LOGIN.md.
+- 🎨 **Per-person avatar, color, and completion sound** — each family member (Settings → Family
+  members → Edit) picks a color, an avatar (an emoji from a large preset grid, or an uploaded
+  photo), and a sound that plays when they complete a task — a synthesized preset (Chime, Fanfare,
+  Laser, Robot, and more, no shipped audio files) or their own uploaded MP3 (only the first ~4
+  seconds play, with a quick fade-out, never the whole file).
 - 🎵 **Multi-zone music** — a HiFiBerry DAC8x drives 4 independently
   hardwired stereo zones. Each zone plays your own local library (search,
   queue, play) or Spotify (cast from anyone's phone via Spotify Connect, or

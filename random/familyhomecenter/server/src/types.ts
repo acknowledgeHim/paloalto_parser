@@ -11,6 +11,8 @@ export interface FamilyMember {
   /** Prize Bank running totals — credited on completing a reward task, spent on star-cost prizes. */
   star_balance: number;
   money_balance: number;
+  /** "<saltHex>:<hashHex>" (see services/auth.ts), or null for no login set. Never sent to the client. */
+  password_hash: string | null;
   created_at: string;
 }
 
