@@ -13,6 +13,8 @@ export interface FamilyMember {
   money_balance: number;
   /** "<saltHex>:<hashHex>" (see services/auth.ts), or null for no login set. Never sent to the client. */
   password_hash: string | null;
+  /** Visual style id (client/src/utils/progressStyles.ts) for this person's Family Board progress bars. */
+  progress_bar_style: string | null;
   created_at: string;
 }
 

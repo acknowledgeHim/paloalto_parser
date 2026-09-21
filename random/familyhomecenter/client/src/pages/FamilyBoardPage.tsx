@@ -1,10 +1,43 @@
 import { useEffect, useState } from 'react';
-import { api, type Task, type CalendarEvent } from '../api/client.js';
+import { api, type FamilyMember, type Task, type CalendarEvent } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { sortForColumn } from '../utils/tasks.js';
+import { progressFillFor } from '../utils/progressStyles.js';
+
+function countProgress(tasks: Task[], memberId: string, kind: 'chore' | 'todo') {
+  const relevant = tasks.filter((t) => t.kind === kind && t.assignee_ids.includes(memberId));
+  const done = relevant.filter((t) => t.completions.some((c) => c.completed_by_id === memberId)).length;
+  return { done, total: relevant.length };
+}
+
+function MemberProgressBars({ member, tasks }: { member: FamilyMember; tasks: Task[] }) {
+  const fill = progressFillFor(member.progress_bar_style, member.color);
+  const bars: Array<{ label: string; done: number; total: number }> = [
+    { label: 'Chores', ...countProgress(tasks, member.id, 'chore') },
+    { label: 'To-dos', ...countProgress(tasks, member.id, 'todo') },
+  ].filter((b) => b.total > 0);
+
+  if (bars.length === 0) return null;
+
+  return (
+    <div className="member-progress">
+      {bars.map((b) => (
+        <div key={b.label} className="dashboard__progress">
+          <div className="dashboard__progress-label">
+            <span>{b.label}</span>
+            <span>{b.done}/{b.total}</span>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-bar__fill" style={{ width: `${Math.round((b.done / b.total) * 100)}%`, background: fill }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * One glance per person: their chores, their to-dos, and what's on the calendar for them —
@@ -45,6 +78,8 @@ export function FamilyBoardPage() {
           return (
             <section key={member.id} className="panel person-column">
               <h2><MemberAvatar member={member} /> {member.name}</h2>
+
+              <MemberProgressBars member={member} tasks={tasks} />
 
               <h3>Chores &amp; to-dos</h3>
               {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}

@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { api, type FamilyMember } from '../api/client.js';
 import { downscaleImageToDataUrl } from '../utils/images.js';
 import { playAudioClip, playCompletionSound, SOUND_OPTIONS } from '../utils/sounds.js';
+import { PROGRESS_STYLES, progressFillFor } from '../utils/progressStyles.js';
 import { MemberAvatar } from './MemberAvatar.js';
 
 const COLOR_PRESETS = ['#5b8def', '#e2685a', '#3fae66', '#c96fd6', '#e0a638', '#33a3a3'];
@@ -37,6 +38,8 @@ export function FamilyMemberFormModal({ member, onClose, onSaved }: Props) {
   const [emoji, setEmoji] = useState(member && member.avatar !== 'image' ? member.avatar ?? '' : '');
   const [hasImage, setHasImage] = useState(member?.avatar === 'image');
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+
+  const [progressStyle, setProgressStyle] = useState(member?.progress_bar_style ?? 'solid');
 
   const [completeSound, setCompleteSound] = useState(member?.complete_sound ?? 'none');
   const [hasCustomSound, setHasCustomSound] = useState(member?.complete_sound === 'custom');
@@ -94,6 +97,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved }: Props) {
         name: name.trim(),
         color,
         is_parent: isParent,
+        progress_bar_style: progressStyle === 'solid' ? null : progressStyle,
         // "custom" is applied via the dedicated /sound endpoint below; any preset is stored directly.
         complete_sound: completeSound === 'none' ? null : completeSound,
         // Custom-image state is applied via the dedicated avatar endpoints below; otherwise this
@@ -248,6 +252,26 @@ export function FamilyMemberFormModal({ member, onClose, onSaved }: Props) {
               />
             </div>
           )}
+        </div>
+
+        <div>
+          <label className="member-form__label">Family Board progress bar style</label>
+          <div className="progress-style-picker">
+            {PROGRESS_STYLES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`progress-style-picker__option ${progressStyle === s.id ? 'progress-style-picker__option--selected' : ''}`}
+                onClick={() => setProgressStyle(s.id)}
+              >
+                <span
+                  className="progress-style-picker__swatch"
+                  style={{ background: progressFillFor(s.id, color) }}
+                />
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="task-form__row">

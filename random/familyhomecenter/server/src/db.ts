@@ -306,6 +306,14 @@ if (taskCompletionsSql && !taskCompletionsSql.includes('completed_by_id)')) {
   })();
 }
 
+// Which visual style (see client/src/utils/progressStyles.ts) this person's Family Board
+// progress bars use. NULL = the default plain style.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN progress_bar_style TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

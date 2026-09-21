@@ -32,6 +32,8 @@ export interface FamilyMember {
   avatar: string | null;
   /** Sound id (see utils/sounds.ts) to play when this person completes a task; null = no sound. */
   complete_sound: string | null;
+  /** Visual style id (see utils/progressStyles.ts) for this person's Family Board progress bars. */
+  progress_bar_style: string | null;
   is_parent: 0 | 1;
   /** Prize Bank running totals. */
   star_balance: number;

@@ -391,6 +391,22 @@ textarea {
 .member-form__emoji--selected { border-color: var(--accent); }
 .member-form__photo-row { margin-top: 8px; }
 .member-form__custom-sound { margin-top: 8px; }
+
+.progress-style-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.progress-style-picker__option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: auto;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 2px solid transparent;
+  font-size: 0.8em;
+}
+.progress-style-picker__option--selected { border-color: var(--accent); }
+.progress-style-picker__swatch { width: 60px; height: 12px; border-radius: 999px; }
 .checkbox { display: flex; align-items: center; gap: 8px; min-height: var(--tap-min); }
 .checkbox input { min-height: auto; width: 22px; height: 22px; }
 
@@ -831,6 +847,7 @@ textarea {
 }
 
 .dashboard__progress { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.member-progress { margin: 10px 0 4px; }
 .dashboard__progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
 
 .prize-settings__row { align-items: center; margin-bottom: 8px; }
