@@ -506,14 +506,13 @@ export function BankPage() {
                         })}{' '}
                         · {whoAdded(members, tx.created_by_id)}
                       </span>
-                      <button
-                        type="button"
+                      <ConfirmButton
+                        label="✕"
+                        ariaLabel="Delete transaction"
+                        confirmLabel={`Delete this ${money(Math.abs(tx.amount))} transaction?`}
+                        onConfirm={() => removeTransaction(tx.id)}
                         className="task-card__edit"
-                        aria-label="Delete transaction"
-                        onClick={() => removeTransaction(tx.id)}
-                      >
-                        ✕
-                      </button>
+                      />
                     </li>
                   ))}
                 </ul>
