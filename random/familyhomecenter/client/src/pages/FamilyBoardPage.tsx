@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type FamilyMember, type Task, type CalendarEvent } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
@@ -77,7 +78,11 @@ export function FamilyBoardPage() {
           const memberEvents = events.filter((e) => e.for_member_id === member.id);
           return (
             <section key={member.id} className="panel person-column">
-              <h2><MemberAvatar member={member} /> {member.name}</h2>
+              <h2>
+                <Link to={`/person/${member.id}`} className="person-column__link">
+                  <MemberAvatar member={member} /> {member.name}
+                </Link>
+              </h2>
 
               <MemberProgressBars member={member} tasks={tasks} />
 

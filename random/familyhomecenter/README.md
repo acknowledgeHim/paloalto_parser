@@ -67,6 +67,12 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   `ADMIN_PASSWORD` gate as the rest of the app's configuration — see
   docs/SETTINGS_LOGIN.md — so kids can't see or change payout rates once
   it's set.
+- 📊 **Per-person page** — click anyone's name (Family Board or Chores & To-dos)
+  to see their own page: a trend chart of completions over the last 14 days,
+  which recurring chores/to-dos they've been missing most, today's tasks
+  (checkable right there), and what's coming up over the next week. Every
+  completion is kept permanently (only an explicit uncheck removes it), so
+  this is real history, not a rolling snapshot.
 
 ## Project layout
 

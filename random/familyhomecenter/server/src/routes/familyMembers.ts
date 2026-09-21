@@ -6,7 +6,9 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { deleteAvatarImage, findAvatarImage, saveAvatarImage } from '../services/avatars.js';
 import { deleteCompletionSound, findCompletionSound, saveCompletionSound } from '../services/sounds.js';
 import { createSession, hashPassword, verifyMemberPassword, SESSION_COOKIE_NAME } from '../services/auth.js';
-import type { FamilyMember } from '../types.js';
+import { tasksForDate } from '../services/taskQueries.js';
+import { addDays, taskAppliesOn, todayStr } from '../utils/recurrence.js';
+import type { FamilyMember, Task, TaskWithAssignment } from '../types.js';
 
 export const familyMembersRouter = Router();
 
@@ -23,6 +25,77 @@ function toPublic(member: FamilyMember) {
 familyMembersRouter.get('/', (_req, res) => {
   const members = db.prepare('SELECT * FROM family_members ORDER BY created_at ASC').all() as FamilyMember[];
   res.json(members.map(toPublic));
+});
+
+/**
+ * GET /:id/detail?upcomingDays=7&statsDays=30 — everything the per-person page needs in one call:
+ * today's + upcoming days' assigned tasks, a daily completion count for the trend chart, and which
+ * recurring tasks this person has been missing most (expected occurrences vs. actually completed,
+ * over the stats window). Completions are never deleted except by an explicit "uncomplete", so this
+ * is a real historical record, not a rolling snapshot.
+ */
+familyMembersRouter.get('/:id/detail', (req, res) => {
+  const member = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as FamilyMember | undefined;
+  if (!member) return res.status(404).json({ error: 'not found' });
+
+  const today = todayStr();
+  const upcomingDays = Math.min(Math.max(Number(req.query.upcomingDays) || 7, 1), 31);
+  const statsDays = Math.min(Math.max(Number(req.query.statsDays) || 30, 1), 180);
+
+  const agenda: Array<{ date: string; tasks: TaskWithAssignment[] }> = [];
+  for (let i = 0; i < upcomingDays; i++) {
+    const date = addDays(today, i);
+    agenda.push({ date, tasks: tasksForDate(date).filter((t) => t.assignee_ids.includes(member.id)) });
+  }
+
+  const startDate = addDays(today, -(statsDays - 1));
+
+  const completionRows = db
+    .prepare(
+      `SELECT completed_on as date, COUNT(*) as count FROM task_completions
+       WHERE completed_by_id = ? AND completed_on >= ? AND completed_on <= ?
+       GROUP BY completed_on`
+    )
+    .all(member.id, startDate, today) as Array<{ date: string; count: number }>;
+  const countByDate = new Map(completionRows.map((r) => [r.date, r.count]));
+  const completionsByDay = Array.from({ length: statsDays }, (_, i) => {
+    const date = addDays(startDate, i);
+    return { date, count: countByDate.get(date) ?? 0 };
+  });
+
+  const assignedTaskIds = db
+    .prepare('SELECT task_id FROM task_assignees WHERE family_member_id = ?')
+    .all(member.id) as Array<{ task_id: string }>;
+
+  const strugglingTasks: Array<{ task_id: string; title: string; kind: string; expected: number; completed: number; missed: number }> = [];
+  for (const { task_id } of assignedTaskIds) {
+    const task = db.prepare('SELECT * FROM tasks WHERE id = ? AND active = 1').get(task_id) as Task | undefined;
+    if (!task || task.recurrence === 'once') continue; // "missed" isn't meaningful for a one-off
+
+    let expected = 0;
+    for (let i = 0; i < statsDays; i++) {
+      if (taskAppliesOn(task, addDays(startDate, i))) expected++;
+    }
+    if (expected === 0) continue;
+
+    const { n: completed } = db
+      .prepare(
+        `SELECT COUNT(DISTINCT completed_on) as n FROM task_completions
+         WHERE task_id = ? AND completed_by_id = ? AND completed_on >= ? AND completed_on <= ?`
+      )
+      .get(task_id, member.id, startDate, today) as { n: number };
+
+    const missed = expected - completed;
+    if (missed > 0) strugglingTasks.push({ task_id, title: task.title, kind: task.kind, expected, completed, missed });
+  }
+  strugglingTasks.sort((a, b) => b.missed - a.missed);
+
+  res.json({
+    member: toPublic(member),
+    today,
+    agenda,
+    stats: { statsDays, completionsByDay, strugglingTasks },
+  });
 });
 
 familyMembersRouter.post('/', requireAdmin, (req, res) => {

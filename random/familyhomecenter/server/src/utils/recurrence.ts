@@ -46,3 +46,10 @@ export function taskAppliesOn(task: Pick<Task, 'recurrence' | 'due_date'>, dateS
 export function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/** dateStr (YYYY-MM-DD) shifted by `n` days (negative goes backward). */
+export function addDays(dateStr: string, n: number): string {
+  const date = new Date(`${dateStr}T00:00:00`);
+  date.setDate(date.getDate() + n);
+  return date.toISOString().slice(0, 10);
+}

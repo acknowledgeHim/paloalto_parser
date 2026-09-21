@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
@@ -108,7 +109,9 @@ export function TasksPage() {
               className={`panel person-column ${dropTargetId === member.id ? 'person-column--drop-target' : ''}`}
             >
               <h2>
-                <MemberAvatar member={member} /> {member.name}
+                <Link to={`/person/${member.id}`} className="person-column__link">
+                  <MemberAvatar member={member} /> {member.name}
+                </Link>
                 <span className="person-column__count">{memberTasks.length}</span>
               </h2>
               {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}

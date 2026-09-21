@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { taskAppliesOn, todayStr } from '../utils/recurrence.js';
-import type { Task, TaskCompletion, TaskWithAssignment } from '../types.js';
+import { todayStr } from '../utils/recurrence.js';
+import { assigneesFor, tasksForDate, allActiveTasks } from '../services/taskQueries.js';
+import type { Task, TaskCompletion } from '../types.js';
 
 export const tasksRouter = Router();
 
@@ -13,14 +14,6 @@ function creditReward(memberId: string, rewardType: 'stars' | 'money', amount: n
   } else {
     db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(amount, memberId);
   }
-}
-
-function assigneesFor(taskId: string): string[] {
-  return (
-    db.prepare('SELECT family_member_id FROM task_assignees WHERE task_id = ?').all(taskId) as Array<{
-      family_member_id: string;
-    }>
-  ).map((r) => r.family_member_id);
 }
 
 function setAssignees(taskId: string, memberIds: string[]) {
@@ -51,23 +44,9 @@ function findCompletion(taskId: string, date: string, completedBy: string | null
  * configuration in Settings, which needs to see every chore/to-do, not just today's.
  */
 tasksRouter.get('/', (req, res) => {
+  if (req.query.all === 'true') return res.json(allActiveTasks());
   const date = (req.query.date as string) || todayStr();
-  const tasks = db.prepare('SELECT * FROM tasks WHERE active = 1').all() as Task[];
-  const applicable = req.query.all === 'true' ? tasks : tasks.filter((t) => taskAppliesOn(t, date));
-
-  const result: TaskWithAssignment[] = applicable.map((task) => {
-    // "once" tasks have no meaningful recurring date — any historical completion (by anyone who's
-    // done their copy) counts, not just today's.
-    const completions =
-      task.recurrence === 'once'
-        ? (db.prepare('SELECT * FROM task_completions WHERE task_id = ?').all(task.id) as TaskCompletion[])
-        : (db
-            .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
-            .all(task.id, date) as TaskCompletion[]);
-    return { ...task, assignee_ids: assigneesFor(task.id), completions };
-  });
-
-  res.json(result);
+  res.json(tasksForDate(date));
 });
 
 tasksRouter.post('/', (req, res) => {

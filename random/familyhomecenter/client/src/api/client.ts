@@ -73,6 +73,28 @@ export interface Task {
   completions: TaskCompletion[];
 }
 
+// ---- Person detail page ----
+
+export interface StrugglingTask {
+  task_id: string;
+  title: string;
+  kind: 'chore' | 'todo';
+  expected: number;
+  completed: number;
+  missed: number;
+}
+
+export interface PersonDetail {
+  member: FamilyMember;
+  today: string;
+  agenda: Array<{ date: string; tasks: Task[] }>;
+  stats: {
+    statsDays: number;
+    completionsByDay: Array<{ date: string; count: number }>;
+    strugglingTasks: StrugglingTask[];
+  };
+}
+
 // ---- Prize Bank ----
 
 export interface PrizeProgress {
