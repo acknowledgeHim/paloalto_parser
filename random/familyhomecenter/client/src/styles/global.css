@@ -823,7 +823,13 @@ textarea {
 .person-page__bank-link:hover { transform: scale(1.08); }
 
 /* ---- Bank page ---- */
-.bank-page__account { display: flex; flex-direction: column; gap: 10px; }
+.bank-page__accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.bank-page__account { display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; }
 .bank-page__account-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .bank-page__account-header h2 { margin: 0; }
 .bank-page__balance { font-size: 1.4em; font-weight: 800; color: var(--text-muted); }

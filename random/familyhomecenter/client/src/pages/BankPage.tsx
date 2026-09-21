@@ -454,6 +454,7 @@ export function BankPage() {
             <div className="empty-state">No accounts yet — add one below (e.g. Checking, Savings).</div>
           )}
 
+          <div className="bank-page__accounts-grid">
           {summary.accounts.map((account) => (
             <section key={account.id} className="panel bank-page__account">
               <div className="bank-page__account-header">
@@ -519,6 +520,7 @@ export function BankPage() {
               )}
             </section>
           ))}
+          </div>
 
           <NewAccountForm onAdd={addAccount} />
         </>
