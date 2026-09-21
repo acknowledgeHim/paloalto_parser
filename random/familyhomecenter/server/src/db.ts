@@ -206,6 +206,30 @@ db.exec(`
     family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
     redeemed_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- Bank: multiple named accounts per family member (checking, college savings, ...), each with
+  -- its own running-balance ledger. Entirely separate from the Prize Bank star_balance/money_balance
+  -- counters above — see routes/bank.ts's "transfer from Prize Bank earnings" endpoint for the one
+  -- deliberate bridge between the two (a parent/kid moves already-earned money_balance into a named
+  -- account, with a required comment + timestamp).
+  CREATE TABLE IF NOT EXISTS bank_accounts (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- amount is positive for a deposit, negative for a withdrawal/spend; an account's balance is the
+  -- sum of its transactions (no separate stored balance column, so it can never drift out of sync).
+  CREATE TABLE IF NOT EXISTS bank_transactions (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
+    amount REAL NOT NULL,
+    comment TEXT NOT NULL,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Simple migration for databases created before for_member_id existed — SQLite has no

@@ -15,6 +15,7 @@ import { authRouter } from './routes/auth.js';
 import { mealsRouter } from './routes/meals.js';
 import { recipesRouter } from './routes/recipes.js';
 import { prizesRouter } from './routes/prizes.js';
+import { bankRouter } from './routes/bank.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
@@ -39,6 +40,7 @@ app.use('/api/music', musicRouter);
 app.use('/api/meals', mealsRouter);
 app.use('/api/recipes', recipesRouter);
 app.use('/api/prizes', prizesRouter);
+app.use('/api/family-members/:memberId/bank', bankRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

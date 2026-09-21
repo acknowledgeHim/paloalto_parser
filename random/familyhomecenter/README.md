@@ -86,6 +86,18 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
 - On the **Family Board**, a completed chore/to-do drops off a person's list
   instead of lingering crossed-out — tap the 🗹 count next to their name to
   see what they finished today.
+- 🏦 **Bank** — a 🏦 icon on each person's page opens their own bank: any
+  number of named accounts (Checking, College savings, Long-term savings,
+  ...), each with a running balance and a full transaction ledger. Every
+  deposit or withdrawal requires a comment (why) and is timestamped
+  automatically; a parent or the kid themselves can add one, or transfer
+  already-earned Prize Bank money into an account (debits that balance,
+  credits the account, in one commented entry) — stars and the Prize Bank
+  money total stay entirely separate from what's actually banked. Unlike most
+  permissions in this app, this one is server-enforced once there's a
+  password to check: once that kid or any parent has set a login, only the
+  two of them can view or edit it; until then it's open like everything
+  else, same "optional, off by default" pattern as Settings.
 
 ## Project layout
 

@@ -58,6 +58,9 @@ export function PersonPage() {
             <span>${member.money_balance.toFixed(2)}</span>
           </div>
         </div>
+        <Link to={`/person/${member.id}/bank`} className="person-page__bank-link" aria-label={`${member.name}'s bank`}>
+          🏦
+        </Link>
       </header>
 
       <section className="panel">

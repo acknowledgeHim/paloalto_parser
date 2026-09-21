@@ -9,6 +9,7 @@ import { MealsPage } from './pages/MealsPage.js';
 import { PrizeBankPage } from './pages/PrizeBankPage.js';
 import { FamilyBoardPage } from './pages/FamilyBoardPage.js';
 import { PersonPage } from './pages/PersonPage.js';
+import { BankPage } from './pages/BankPage.js';
 import { MusicPage } from './pages/MusicPage.js';
 import { PhotosPage } from './pages/PhotosPage.js';
 import { IntercomPage } from './pages/IntercomPage.js';
@@ -65,6 +66,7 @@ export function App() {
           <Route path="/prizes" element={<PrizeBankPage />} />
           <Route path="/board" element={<FamilyBoardPage />} />
           <Route path="/person/:id" element={<PersonPage />} />
+          <Route path="/person/:id/bank" element={<BankPage />} />
           <Route path="/music" element={<MusicPage />} />
           <Route path="/photos" element={<PhotosPage />} />
           <Route path="/intercom" element={<IntercomPage />} />

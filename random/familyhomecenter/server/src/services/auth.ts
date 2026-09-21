@@ -110,6 +110,35 @@ export function isRequestAdmin(token: string | undefined): boolean {
   return member?.is_parent === 1;
 }
 
+// ---- Bank access (per-kid privacy) ----
+// Unlike most everyday permissions in this app (task edit/delete — see utils/tasks.ts's
+// canEditTask comment), bank data is explicitly supposed to be private to one kid + parents, so
+// this gets a real session-based check, same spirit as requireAdmin. It only activates once
+// there's actually a password to check against — either this specific member's own, or any
+// parent's — so a family that hasn't set up logins yet keeps the same open, household-trust
+// behavior as everything else, and a parent can always reach a passwordless kid's bank.
+function bankGateActiveFor(memberId: string): boolean {
+  if (isAdminPasswordConfigured()) return true;
+  const member = db.prepare('SELECT password_hash FROM family_members WHERE id = ?').get(memberId) as
+    | { password_hash: string | null }
+    | undefined;
+  if (member?.password_hash) return true;
+  return anyParentHasPassword();
+}
+
+/** Can this session view/edit memberId's bank? */
+export function canAccessBank(token: string | undefined, memberId: string): boolean {
+  if (!bankGateActiveFor(memberId)) return true;
+  const session = getValidSession(token);
+  if (!session) return false;
+  if (!session.family_member_id) return true; // legacy recovery login
+  if (session.family_member_id === memberId) return true;
+  const member = db.prepare('SELECT is_parent FROM family_members WHERE id = ?').get(session.family_member_id) as
+    | { is_parent: 0 | 1 }
+    | undefined;
+  return member?.is_parent === 1;
+}
+
 export function deleteSession(token: string | undefined): void {
   if (!token) return;
   db.prepare('DELETE FROM admin_sessions WHERE token = ?').run(token);

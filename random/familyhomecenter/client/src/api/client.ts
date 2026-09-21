@@ -99,6 +99,35 @@ export interface PersonDetail {
   };
 }
 
+// ---- Bank (private per-kid accounts, separate from Prize Bank stars/money) ----
+
+export interface BankTransaction {
+  id: string;
+  account_id: string;
+  /** Positive = deposit, negative = withdrawal/spend. */
+  amount: number;
+  /** Always set — why the money moved. */
+  comment: string;
+  created_by_id: string | null;
+  created_at: string;
+}
+
+export interface BankAccount {
+  id: string;
+  family_member_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  balance: number;
+  transactions: BankTransaction[];
+}
+
+export interface BankSummary {
+  accounts: BankAccount[];
+  /** Unallocated Prize Bank money reward earnings, still available to transfer into an account. */
+  prizeBankMoneyAvailable: number;
+}
+
 // ---- Prize Bank ----
 
 export interface PrizeProgress {

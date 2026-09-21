@@ -130,6 +130,25 @@ export interface PrizeRedemption {
   redeemed_at: string;
 }
 
+export interface BankAccount {
+  id: string;
+  family_member_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
+/** amount is positive for a deposit, negative for a withdrawal/spend; comment is always required
+ *  (why the money moved), created_by_id records who made the entry (parent or the kid themselves). */
+export interface BankTransaction {
+  id: string;
+  account_id: string;
+  amount: number;
+  comment: string;
+  created_by_id: string | null;
+  created_at: string;
+}
+
 export interface CalendarEvent {
   id: string;
   source: 'local' | 'google' | 'apple';
