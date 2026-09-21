@@ -329,8 +329,8 @@ if (!taskCompletionsColumns().has('time_of_day')) {
         time_of_day TEXT,
         UNIQUE(task_id, completed_on, completed_by_id, time_of_day)
       );
-      INSERT INTO task_completions_new2 (id, task_id, completed_on, completed_by_id, completed_at, time_of_day)
-        SELECT id, task_id, completed_on, completed_by_id, completed_at, time_of_day FROM task_completions;
+      INSERT INTO task_completions_new2 (id, task_id, completed_on, completed_by_id, completed_at)
+        SELECT id, task_id, completed_on, completed_by_id, completed_at FROM task_completions;
       DROP TABLE task_completions;
       ALTER TABLE task_completions_new2 RENAME TO task_completions;
     `);
