@@ -263,23 +263,29 @@ export function BankPage() {
   const [transferComment, setTransferComment] = useState('');
   const [transferError, setTransferError] = useState<string | null>(null);
 
+  // Household-trust-level rule, same spirit as PersonPage's canEditProfile — don't even ask the
+  // server for another kid's bank unless the picked profile is that person or a parent. Real
+  // enforcement is server-side (requireBankAccess) once a password protects it; this just keeps
+  // the client from offering the data/controls at all before that point.
+  const canView = Boolean(activeProfile && (activeProfile.id === id || activeProfile.is_parent === 1));
+
   const load = () => {
-    if (!id) return;
+    if (!id || !canView) return;
     setDenied(false);
     api
       .get<BankSummary>(`/family-members/${id}/bank`)
       .then(setSummary)
       .catch(() => setDenied(true));
   };
-  useEffect(load, [id]);
+  useEffect(load, [id, canView]);
   useEffect(() => {
     if (!id) return;
     api.get<FamilyMember[]>('/family-members').then((all) => setMember(all.find((m) => m.id === id) ?? null));
   }, [id, members]);
   useEffect(() => {
-    if (!id || denied) return;
+    if (!id || !canView || denied) return;
     api.get<SpendingSummary>(`/family-members/${id}/bank/spending?period=${spendPeriod}`).then(setSpending).catch(() => {});
-  }, [id, spendPeriod, denied, summary]);
+  }, [id, canView, spendPeriod, denied, summary]);
 
   if (!id || !member) return null;
 
@@ -375,13 +381,20 @@ export function BankPage() {
         </div>
       </header>
 
-      {denied && (
+      {!canView && (
+        <div className="empty-state">
+          This is private to {member.name} and parents — pick {member.name}'s profile, or a parent's, up top to see
+          it.
+        </div>
+      )}
+
+      {canView && denied && (
         <div className="empty-state">
           This is private — ask a parent, or log in as {member.name} (🔑 next to their name up top) to see it.
         </div>
       )}
 
-      {summary && (
+      {canView && summary && (
         <>
           {spending && (
             <section className="panel">
