@@ -1,13 +1,8 @@
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { playCompletionSound } from '../utils/sounds.js';
+import { parseTimeOfDaySlots, timeOfDayIcon, timeOfDayLabel, isSlotWindowPassed } from '../utils/timeOfDay.js';
 import { MemberAvatar } from './MemberAvatar.js';
-
-const TIME_OF_DAY_LABEL: Record<string, string> = {
-  morning: '🌅 Morning',
-  afternoon: '☀️ Afternoon',
-  evening: '🌙 Evening',
-};
 
 interface Props {
   task: Task;
@@ -25,20 +20,26 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
   const { members, activeProfile } = useFamilyMembers();
   const assignees = members.filter((m) => task.assignee_ids.includes(m.id));
   const effectiveViewerId = viewerId ?? activeProfile?.id;
-  const myCompletion = effectiveViewerId
-    ? task.completions.find((c) => c.completed_by_id === effectiveViewerId)
-    : task.completions[0];
-  const done = Boolean(myCompletion);
+  const slots = parseTimeOfDaySlots(task.time_of_day);
+  const multiSlot = slots.length > 1;
 
-  const toggle = async () => {
+  const isDone = (slot: string | null): boolean => {
+    if (effectiveViewerId) {
+      return task.completions.some((c) => c.completed_by_id === effectiveViewerId && c.time_of_day === slot);
+    }
+    return task.completions.some((c) => c.time_of_day === slot);
+  };
+
+  const toggle = async (slot: string | null) => {
+    const done = isDone(slot);
+    const body = { completed_by_id: effectiveViewerId ?? null, time_of_day: slot };
     if (done) {
-      await api.post(`/tasks/${task.id}/uncomplete`, { completed_by_id: effectiveViewerId ?? null });
+      await api.post(`/tasks/${task.id}/uncomplete`, body);
     } else {
       // Play immediately (before the await) so it stays tied to this click as a user gesture.
-      const soundOwnerId = effectiveViewerId ?? activeProfile?.id;
-      const soundOwner = members.find((m) => m.id === soundOwnerId);
+      const soundOwner = members.find((m) => m.id === effectiveViewerId);
       if (soundOwner) playCompletionSound(soundOwner.complete_sound, soundOwner.id);
-      await api.post(`/tasks/${task.id}/complete`, { completed_by_id: effectiveViewerId ?? null });
+      await api.post(`/tasks/${task.id}/complete`, body);
     }
     onChange();
   };
@@ -49,19 +50,22 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
     onChange();
   };
 
+  const allDone = multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
   const visibleAssignees = hideAssignee ? assignees.filter((m) => m.id !== effectiveViewerId) : assignees;
 
   return (
-    <div className={`task-card ${done ? 'task-card--done' : ''}`}>
-      <button className="task-card__check" onClick={toggle} aria-label={done ? 'Mark not done' : 'Mark done'}>
-        {done ? '✓' : ''}
-      </button>
+    <div className={`task-card ${allDone ? 'task-card--done' : ''}`}>
+      {!multiSlot && (
+        <button className="task-card__check" onClick={() => toggle(null)} aria-label={isDone(null) ? 'Mark not done' : 'Mark done'}>
+          {isDone(null) ? '✓' : ''}
+        </button>
+      )}
       <div className="task-card__body">
         <div className="task-card__title">{task.title}</div>
         {task.notes && <div className="task-card__notes">{task.notes}</div>}
         <div className="task-card__meta">
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
-          {task.time_of_day && <span className="badge badge--time">{TIME_OF_DAY_LABEL[task.time_of_day]}</span>}
+          {!multiSlot && slots[0] && <span className="badge badge--time">{timeOfDayIcon(slots[0])} {timeOfDayLabel(slots[0])}</span>}
           {task.reward_type === 'stars' && <span className="badge badge--reward">⭐ {task.reward_amount}</span>}
           {task.reward_type === 'money' && <span className="badge badge--reward">${task.reward_amount?.toFixed(2)}</span>}
           {onEdit && (
@@ -82,7 +86,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
               {hideAssignee ? `+ ${visibleAssignees.map((m) => m.name).join(', ')}` : visibleAssignees.map((m) => m.name).join(', ')}
             </span>
           )}
-          {assignees.length === 0 && !done && activeProfile && (
+          {assignees.length === 0 && !allDone && activeProfile && (
             <button className="link-button task-card__claim" onClick={claim}>
               Claim it — I'll do it
             </button>
@@ -93,6 +97,24 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
             </span>
           )}
         </div>
+        {multiSlot && (
+          <div className="task-card__slots">
+            {slots.map((slot) => {
+              const done = isDone(slot);
+              const passed = !done && isSlotWindowPassed(slot);
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  className={`task-card__slot ${done ? 'task-card__slot--done' : ''} ${passed ? 'task-card__slot--passed' : ''}`}
+                  onClick={() => toggle(slot)}
+                >
+                  {done ? '✓' : passed ? '⏰' : timeOfDayIcon(slot)} {timeOfDayLabel(slot)}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

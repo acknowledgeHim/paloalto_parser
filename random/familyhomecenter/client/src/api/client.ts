@@ -48,9 +48,9 @@ export interface TaskCompletion {
   completed_on: string;
   completed_by_id: string | null;
   completed_at: string;
+  /** Which slot this completes, for a task with more than one time-of-day slot; null otherwise. */
+  time_of_day: string | null;
 }
-
-export type TimeOfDay = 'morning' | 'afternoon' | 'evening';
 
 export interface Task {
   id: string;
@@ -62,8 +62,9 @@ export interface Task {
   created_by_id: string | null;
   recurrence: string;
   due_date: string | null;
-  /** Optional part of the day this chore belongs to; null means no particular time. */
-  time_of_day: TimeOfDay | null;
+  /** null (no particular time), one slot ("morning"), or several comma-separated ("morning,evening"),
+   *  each completable independently — see utils/timeOfDay.ts. */
+  time_of_day: string | null;
   /** Prize Bank reward for completing this task; null reward_type means no reward. Only settable
    *  via a Settings-password-gated endpoint — see Settings page's Prize Bank section. */
   reward_type: 'stars' | 'money' | null;

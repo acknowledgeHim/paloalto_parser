@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '../utils/timeOfDay.js';
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
@@ -10,13 +11,6 @@ const RECURRENCE_OPTIONS = [
   { value: 'weekly', label: 'Weekly (choose days)' },
   { value: 'biweekly', label: 'Every other week (choose a day)' },
   { value: 'monthly', label: 'Monthly (e.g. "1st Friday")' },
-];
-
-const TIME_OF_DAY_OPTIONS = [
-  { value: '', label: 'Any time' },
-  { value: 'morning', label: '🌅 Morning' },
-  { value: 'afternoon', label: '☀️ Afternoon' },
-  { value: 'evening', label: '🌙 Evening' },
 ];
 
 const DAYS = [
@@ -98,11 +92,15 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
   const [monthlyDay, setMonthlyDay] = useState(initialRecurrence.monthlyDay);
   const [biweeklyDay, setBiweeklyDay] = useState(initialRecurrence.biweeklyDay);
   const [biweeklyAnchor, setBiweeklyAnchor] = useState(initialRecurrence.biweeklyAnchor);
-  const [timeOfDay, setTimeOfDay] = useState(task?.time_of_day ?? '');
+  const [timeOfDaySlots, setTimeOfDaySlots] = useState<TimeOfDaySlot[]>(parseTimeOfDaySlots(task?.time_of_day));
   const [dueDate, setDueDate] = useState(task?.due_date ?? '');
 
   const toggleWeeklyDay = (code: string) => {
     setWeeklyDays((days) => (days.includes(code) ? days.filter((d) => d !== code) : [...days, code]));
+  };
+
+  const toggleTimeOfDay = (slot: TimeOfDaySlot) => {
+    setTimeOfDaySlots((slots) => (slots.includes(slot) ? slots.filter((s) => s !== slot) : [...slots, slot]));
   };
 
   const toggleAssignee = (id: string) => {
@@ -130,7 +128,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
       kind,
       assignee_ids: finalAssigneeIds,
       recurrence: finalRecurrence,
-      time_of_day: timeOfDay || null,
+      time_of_day: timeOfDaySlots.length > 0 ? timeOfDaySlots.join(',') : null,
       due_date: recurrence === 'once' ? dueDate || null : null,
     };
     if (task) {
@@ -195,11 +193,25 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <select value={timeOfDay} onChange={(e) => setTimeOfDay(e.target.value)}>
+        </div>
+
+        <div>
+          <label className="member-form__label">
+            Time of day (optional — pick more than one, e.g. morning + evening, for a chore/to-do
+            done multiple times a day, each completed independently)
+          </label>
+          <div className="task-form__row chip-list">
             {TIME_OF_DAY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <label key={o.value} className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={timeOfDaySlots.includes(o.value)}
+                  onChange={() => toggleTimeOfDay(o.value)}
+                />
+                {o.icon} {o.label}
+              </label>
             ))}
-          </select>
+          </div>
         </div>
 
         {recurrence === 'weekly' && (

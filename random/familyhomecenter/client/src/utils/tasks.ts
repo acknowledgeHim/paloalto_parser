@@ -1,14 +1,17 @@
 import type { FamilyMember, Task } from '../api/client.js';
+import { parseTimeOfDaySlots } from './timeOfDay.js';
 
 const TIME_OF_DAY_ORDER: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
 
-/** Chores read before to-dos, and within that, by time of day (morning/afternoon/evening, then
- *  unscheduled) — otherwise keep whatever order the API returned them in. */
+/** Chores read before to-dos, and within that, by (earliest) time of day, then unscheduled —
+ *  otherwise keep whatever order the API returned them in. */
 export function sortForColumn(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'chore' ? -1 : 1;
-    const aOrder = a.time_of_day ? TIME_OF_DAY_ORDER[a.time_of_day] : 3;
-    const bOrder = b.time_of_day ? TIME_OF_DAY_ORDER[b.time_of_day] : 3;
+    const aSlots = parseTimeOfDaySlots(a.time_of_day);
+    const bSlots = parseTimeOfDaySlots(b.time_of_day);
+    const aOrder = aSlots.length ? Math.min(...aSlots.map((s) => TIME_OF_DAY_ORDER[s])) : 3;
+    const bOrder = bSlots.length ? Math.min(...bSlots.map((s) => TIME_OF_DAY_ORDER[s])) : 3;
     return aOrder - bOrder;
   });
 }
@@ -24,4 +27,13 @@ export function canEditTask(task: Task, activeProfile: FamilyMember | null): boo
   if (!activeProfile) return false;
   if (activeProfile.is_parent === 1) return true;
   return activeProfile.id === task.created_by_id;
+}
+
+/** Fully done for this person — every slot completed if it has more than one, else the one checkbox. */
+export function isTaskDoneFor(task: Task, memberId: string): boolean {
+  const slots = parseTimeOfDaySlots(task.time_of_day);
+  if (slots.length > 1) {
+    return slots.every((slot) => task.completions.some((c) => c.completed_by_id === memberId && c.time_of_day === slot));
+  }
+  return task.completions.some((c) => c.completed_by_id === memberId);
 }

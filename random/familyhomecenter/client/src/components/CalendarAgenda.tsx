@@ -3,6 +3,8 @@ import type { CalendarEvent } from '../api/client.js';
 interface Props {
   events: CalendarEvent[];
   days?: number;
+  /** When set, events with no specific for_member_id (i.e. everyone) get this label shown next to them. */
+  wholeFamilyLabel?: string;
 }
 
 function fmtTime(iso: string, allDay: boolean): string {
@@ -11,7 +13,7 @@ function fmtTime(iso: string, allDay: boolean): string {
 }
 
 /** Simple "what's coming up" list, grouped by calendar day — used on the dashboard. */
-export function CalendarAgenda({ events, days = 5 }: Props) {
+export function CalendarAgenda({ events, days = 5, wholeFamilyLabel }: Props) {
   const byDay = new Map<string, CalendarEvent[]>();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -43,6 +45,7 @@ export function CalendarAgenda({ events, days = 5 }: Props) {
             <div key={ev.id} className="agenda__event" style={{ borderLeftColor: ev.color }}>
               <span className="agenda__event-time">{fmtTime(ev.start_at, ev.all_day)}</span>
               <span className="agenda__event-title">{ev.title}</span>
+              {wholeFamilyLabel && !ev.for_member_id && <span className="badge badge--time">{wholeFamilyLabel}</span>}
               <span className={`badge badge--source-${ev.source}`}>{ev.source}</span>
             </div>
           ))}

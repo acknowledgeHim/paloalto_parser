@@ -49,8 +49,9 @@ export interface Task {
   created_by_id: string | null;
   recurrence: Recurrence;
   due_date: string | null;
-  /** Optional part of the day this chore belongs to; null means no particular time. */
-  time_of_day: TimeOfDay | null;
+  /** Which part(s) of the day this applies to — null (no particular time), one slot ("morning"),
+   *  or several, comma-separated ("morning,evening"), each completable independently. */
+  time_of_day: string | null;
   /** Prize Bank reward for completing this task; null reward_type means no reward. Set only via
    *  PATCH /:id/reward (requires the Settings password) — see routes/tasks.ts. */
   reward_type: 'stars' | 'money' | null;
@@ -72,6 +73,8 @@ export interface TaskCompletion {
   completed_on: string;
   completed_by_id: string | null;
   completed_at: string;
+  /** Which slot this completes, for a task with more than one time-of-day slot; null otherwise. */
+  time_of_day: string | null;
 }
 
 export interface Ingredient {

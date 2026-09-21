@@ -1,4 +1,10 @@
-import type { Recurrence, Task } from '../types.js';
+import type { Recurrence, Task, TimeOfDay } from '../types.js';
+
+/** Splits a task's time_of_day column ("morning,evening" or null) into its slots. */
+export function timeOfDaySlots(raw: string | null): TimeOfDay[] {
+  if (!raw) return [];
+  return raw.split(',').map((s) => s.trim()).filter(Boolean) as TimeOfDay[];
+}
 
 const DAY_CODES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 

@@ -39,16 +39,20 @@ db.exec(`
     PRIMARY KEY (task_id, family_member_id)
   );
 
-  -- UNIQUE is (task_id, completed_on, completed_by_id) — not just (task_id, completed_on) — so a
-  -- task assigned to multiple people lets each of them complete (and earn Prize Bank rewards for)
-  -- their own instance independently. See the migration below for databases created before this.
+  -- UNIQUE is (task_id, completed_on, completed_by_id, time_of_day) — not just (task_id,
+  -- completed_on) — so a task assigned to multiple people lets each of them complete (and earn
+  -- Prize Bank rewards for) their own instance independently, and a task with more than one
+  -- time-of-day slot (e.g. "morning,evening") lets each slot be completed independently too.
+  -- time_of_day is NULL for a task with zero or one slot (unchanged single-checkbox behavior).
+  -- See the migrations below for databases created before each of these.
   CREATE TABLE IF NOT EXISTS task_completions (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     completed_on TEXT NOT NULL,
     completed_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
     completed_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(task_id, completed_on, completed_by_id)
+    time_of_day TEXT,
+    UNIQUE(task_id, completed_on, completed_by_id, time_of_day)
   );
 
   CREATE TABLE IF NOT EXISTS local_events (
@@ -302,6 +306,36 @@ if (taskCompletionsSql && !taskCompletionsSql.includes('completed_by_id)')) {
         SELECT id, task_id, completed_on, completed_by_id, completed_at FROM task_completions;
       DROP TABLE task_completions;
       ALTER TABLE task_completions_new RENAME TO task_completions;
+    `);
+  })();
+}
+
+// Same story, second time: the UNIQUE constraint needs time_of_day added too (a task with more
+// than one time-of-day slot, e.g. "morning,evening", needs each slot completable independently —
+// without this, completing "morning" would block completing "evening" the same day, since the
+// constraint couldn't tell the two apart). Re-check sqlite_master after the migration above, since
+// that one may have just created a fresh table without this column.
+const taskCompletionsSql2 = (
+  db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_completions'").get() as
+    | { sql: string }
+    | undefined
+)?.sql;
+if (taskCompletionsSql2 && !taskCompletionsSql2.includes('time_of_day')) {
+  db.transaction(() => {
+    db.exec(`
+      CREATE TABLE task_completions_new2 (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        completed_on TEXT NOT NULL,
+        completed_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+        completed_at TEXT NOT NULL DEFAULT (datetime('now')),
+        time_of_day TEXT,
+        UNIQUE(task_id, completed_on, completed_by_id, time_of_day)
+      );
+      INSERT INTO task_completions_new2 (id, task_id, completed_on, completed_by_id, completed_at)
+        SELECT id, task_id, completed_on, completed_by_id, completed_at FROM task_completions;
+      DROP TABLE task_completions;
+      ALTER TABLE task_completions_new2 RENAME TO task_completions;
     `);
   })();
 }

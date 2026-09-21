@@ -7,7 +7,7 @@ import { deleteAvatarImage, findAvatarImage, saveAvatarImage } from '../services
 import { deleteCompletionSound, findCompletionSound, saveCompletionSound } from '../services/sounds.js';
 import { createSession, hashPassword, verifyMemberPassword, SESSION_COOKIE_NAME } from '../services/auth.js';
 import { tasksForDate } from '../services/taskQueries.js';
-import { addDays, taskAppliesOn, todayStr } from '../utils/recurrence.js';
+import { addDays, taskAppliesOn, timeOfDaySlots, todayStr } from '../utils/recurrence.js';
 import type { FamilyMember, Task, TaskWithAssignment } from '../types.js';
 
 export const familyMembersRouter = Router();
@@ -72,15 +72,20 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
     const task = db.prepare('SELECT * FROM tasks WHERE id = ? AND active = 1').get(task_id) as Task | undefined;
     if (!task || task.recurrence === 'once') continue; // "missed" isn't meaningful for a one-off
 
+    // A task with multiple time-of-day slots (e.g. "morning,evening") expects — and can
+    // independently complete — one occurrence per slot per applicable day, not just one.
+    const slots = timeOfDaySlots(task.time_of_day);
+    const perDay = Math.max(1, slots.length);
+
     let expected = 0;
     for (let i = 0; i < statsDays; i++) {
-      if (taskAppliesOn(task, addDays(startDate, i))) expected++;
+      if (taskAppliesOn(task, addDays(startDate, i))) expected += perDay;
     }
     if (expected === 0) continue;
 
     const { n: completed } = db
       .prepare(
-        `SELECT COUNT(DISTINCT completed_on) as n FROM task_completions
+        `SELECT COUNT(DISTINCT completed_on || ':' || COALESCE(time_of_day, '')) as n FROM task_completions
          WHERE task_id = ? AND completed_by_id = ? AND completed_on >= ? AND completed_on <= ?`
       )
       .get(task_id, member.id, startDate, today) as { n: number };

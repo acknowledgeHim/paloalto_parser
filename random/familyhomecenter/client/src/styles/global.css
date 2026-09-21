@@ -344,6 +344,20 @@ textarea {
 .task-card__assignee--unassigned { color: var(--text-muted); font-style: italic; }
 .task-card__claim { margin-left: 10px; }
 
+.task-card__slots { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.task-card__slot {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.9em;
+}
+.task-card__slot--done { background: var(--accent); color: white; border-color: var(--accent); }
+.task-card__slot--passed { color: var(--text-muted); border-style: dashed; }
+
 .task-form, .event-form {
   display: flex;
   flex-direction: column;
@@ -757,6 +771,17 @@ textarea {
   text-decoration: none;
 }
 .person-column__link:hover { text-decoration: underline; }
+.person-column__log {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 700;
+}
 
 /* ---- Person page ---- */
 .person-page__header { display: flex; align-items: center; gap: 16px; margin: 16px 0 20px; }

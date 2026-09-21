@@ -1,31 +1,41 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, type PersonDetail, type Task } from '../api/client.js';
+import { api, type CalendarEvent, type PersonDetail, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
+import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { canEditTask, sortForColumn } from '../utils/tasks.js';
+import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
-const TIME_OF_DAY_LABEL: Record<string, string> = { morning: '🌅', afternoon: '☀️', evening: '🌙' };
 const TREND_DAYS = 14;
+const AGENDA_DAYS = 7;
 
 export function PersonPage() {
   const { id } = useParams<{ id: string }>();
   const { activeProfile } = useFamilyMembers();
   const [detail, setDetail] = useState<PersonDetail | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [modalTask, setModalTask] = useState<Task | null>(null);
 
   const load = () => {
     if (!id) return;
     api
-      .get<PersonDetail>(`/family-members/${id}/detail?statsDays=${TREND_DAYS}&upcomingDays=7`)
+      .get<PersonDetail>(`/family-members/${id}/detail?statsDays=${TREND_DAYS}&upcomingDays=${AGENDA_DAYS}`)
       .then(setDetail)
       .catch(() => setNotFound(true));
   };
   useEffect(load, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const start = new Date().toISOString();
+    const end = new Date(Date.now() + AGENDA_DAYS * 86400_000).toISOString();
+    api.get<CalendarEvent[]>(`/calendar/events?start=${start}&end=${end}`).then(setEvents).catch(console.error);
+  }, [id]);
 
   if (notFound) return <div className="empty-state">Family member not found.</div>;
   if (!detail) return null;
@@ -33,6 +43,7 @@ export function PersonPage() {
   const { member, agenda, stats } = detail;
   const [current, ...upcoming] = agenda;
   const currentTasks = sortForColumn(current?.tasks ?? []);
+  const personEvents = events.filter((e) => !e.for_member_id || e.for_member_id === member.id);
 
   return (
     <div className="person-page">
@@ -103,7 +114,9 @@ export function PersonPage() {
                   <div key={t.id} className="person-page__upcoming-task">
                     <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>
                     {t.title}
-                    {t.time_of_day && <span className="hint"> {TIME_OF_DAY_LABEL[t.time_of_day]}</span>}
+                    {parseTimeOfDaySlots(t.time_of_day).length > 0 && (
+                      <span className="hint"> {parseTimeOfDaySlots(t.time_of_day).map((s) => timeOfDayIcon(s)).join(' ')}</span>
+                    )}
                     {canEditTask(t, activeProfile) && (
                       <button
                         type="button"
@@ -119,6 +132,11 @@ export function PersonPage() {
               </div>
             )
         )}
+      </section>
+
+      <section className="panel">
+        <h2>Calendar — next {AGENDA_DAYS} days</h2>
+        <CalendarAgenda events={personEvents} days={AGENDA_DAYS} wholeFamilyLabel="Whole family" />
       </section>
 
       {modalTask && (

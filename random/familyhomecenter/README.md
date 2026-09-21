@@ -70,9 +70,20 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
 - 📊 **Per-person page** — click anyone's name (Family Board or Chores & To-dos)
   to see their own page: a trend chart of completions over the last 14 days,
   which recurring chores/to-dos they've been missing most, today's tasks
-  (checkable right there), and what's coming up over the next week. Every
-  completion is kept permanently (only an explicit uncheck removes it), so
-  this is real history, not a rolling snapshot.
+  (editable and checkable right there), what's coming up over the next week,
+  and their calendar for the next 7 days (their own events plus whole-family
+  ones, labeled which is which). Every completion is kept permanently (only
+  an explicit uncheck removes it), so this is real history, not a rolling
+  snapshot.
+- 🕐 **Multiple times a day** — a chore/to-do can have more than one
+  time-of-day slot (e.g. morning + evening for medication), each completed
+  and Prize-Bank-rewarded independently — doing the morning one doesn't
+  touch the evening one. An incomplete slot whose window has passed (morning
+  ends at noon, afternoon at 4pm) shows a ⏰ marker; it's still completable
+  late, just flagged.
+- On the **Family Board**, a completed chore/to-do drops off a person's list
+  instead of lingering crossed-out — tap the 🗹 count next to their name to
+  see what they finished today.
 
 ## Project layout
 

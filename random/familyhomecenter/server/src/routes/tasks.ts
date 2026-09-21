@@ -22,16 +22,20 @@ function setAssignees(taskId: string, memberIds: string[]) {
   memberIds.forEach((id) => stmt.run(taskId, id));
 }
 
-/** Finds this task's completion for a given date and (possibly null) person — NULL needs `IS`, not `=`. */
-function findCompletion(taskId: string, date: string, completedBy: string | null): TaskCompletion | undefined {
-  if (completedBy === null) {
-    return db
-      .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ? AND completed_by_id IS NULL')
-      .get(taskId, date) as TaskCompletion | undefined;
-  }
+/** Finds this task's completion for a given date, (possibly null) person, and (possibly null) time-of-day
+ *  slot — NULL columns need `IS`, not `=`, hence building the clause per column instead of one fixed query. */
+function findCompletion(
+  taskId: string,
+  date: string,
+  completedBy: string | null,
+  timeOfDay: string | null
+): TaskCompletion | undefined {
+  const byClause = completedBy === null ? 'completed_by_id IS NULL' : 'completed_by_id = ?';
+  const slotClause = timeOfDay === null ? 'time_of_day IS NULL' : 'time_of_day = ?';
+  const params = [taskId, date, ...(completedBy === null ? [] : [completedBy]), ...(timeOfDay === null ? [] : [timeOfDay])];
   return db
-    .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ? AND completed_by_id = ?')
-    .get(taskId, date, completedBy) as TaskCompletion | undefined;
+    .prepare(`SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ? AND ${byClause} AND ${slotClause}`)
+    .get(...params) as TaskCompletion | undefined;
 }
 
 /**
@@ -119,14 +123,16 @@ tasksRouter.delete('/:id', (req, res) => {
   res.status(204).end();
 });
 
-/** POST /api/tasks/:id/complete  { completed_by_id, date? } — completes *that person's* copy. */
+/** POST /api/tasks/:id/complete  { completed_by_id, date?, time_of_day? } — completes *that person's*
+ *  copy (and, for a task with more than one time-of-day slot, *that slot's* copy). */
 tasksRouter.post('/:id/complete', (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   if (!task) return res.status(404).json({ error: 'not found' });
 
   const date = (req.body.date as string) || todayStr();
   const completedBy: string | null = req.body.completed_by_id ?? null;
-  const existing = findCompletion(task.id, date, completedBy);
+  const timeOfDay: string | null = req.body.time_of_day ?? null;
+  const existing = findCompletion(task.id, date, completedBy, timeOfDay);
 
   const completion: TaskCompletion = {
     id: existing?.id ?? uuidv4(),
@@ -134,18 +140,19 @@ tasksRouter.post('/:id/complete', (req, res) => {
     completed_on: date,
     completed_by_id: completedBy,
     completed_at: new Date().toISOString(),
+    time_of_day: timeOfDay,
   };
   if (existing) {
     db.prepare('UPDATE task_completions SET completed_at = @completed_at WHERE id = @id').run(completion);
   } else {
     db.prepare(
-      `INSERT INTO task_completions (id, task_id, completed_on, completed_by_id, completed_at)
-       VALUES (@id, @task_id, @completed_on, @completed_by_id, @completed_at)`
+      `INSERT INTO task_completions (id, task_id, completed_on, completed_by_id, completed_at, time_of_day)
+       VALUES (@id, @task_id, @completed_on, @completed_by_id, @completed_at, @time_of_day)`
     ).run(completion);
   }
 
-  // Only credit the first time this person's instance is completed — re-saving the same
-  // completion (e.g. a retried request) must not pay out twice.
+  // Only credit the first time this person's instance (of this slot) is completed — re-saving the
+  // same completion (e.g. a retried request) must not pay out twice.
   if (!existing && task.reward_type && task.reward_amount && completedBy) {
     creditReward(completedBy, task.reward_type, task.reward_amount);
   }
@@ -153,12 +160,14 @@ tasksRouter.post('/:id/complete', (req, res) => {
   res.status(201).json(completion);
 });
 
-/** POST /api/tasks/:id/uncomplete  { completed_by_id, date? } — undoes *that person's* checkmark. */
+/** POST /api/tasks/:id/uncomplete  { completed_by_id, date?, time_of_day? } — undoes *that person's*
+ *  (and that slot's) checkmark. */
 tasksRouter.post('/:id/uncomplete', (req, res) => {
   const date = (req.body.date as string) || todayStr();
   const completedBy: string | null = req.body.completed_by_id ?? null;
+  const timeOfDay: string | null = req.body.time_of_day ?? null;
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
-  const existing = findCompletion(req.params.id, date, completedBy);
+  const existing = findCompletion(req.params.id, date, completedBy, timeOfDay);
 
   if (existing) {
     db.prepare('DELETE FROM task_completions WHERE id = ?').run(existing.id);
