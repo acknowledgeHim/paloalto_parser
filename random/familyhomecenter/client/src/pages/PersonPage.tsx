@@ -69,6 +69,17 @@ export function PersonPage() {
         )}
       </section>
 
+      {stats.lateByDay.some((d) => d.count > 0) && (
+        <section className="panel">
+          <h2>Late completions</h2>
+          <p className="hint">
+            A time-of-day slot finished after its window (morning: noon, afternoon: 4pm), or a
+            to-do finished after its due date.
+          </p>
+          <CompletionTrendChart data={stats.lateByDay} color="#f59e0b" />
+        </section>
+      )}
+
       {stats.strugglingTasks.length > 0 && (
         <section className="panel">
           <h2>Could use a reminder</h2>

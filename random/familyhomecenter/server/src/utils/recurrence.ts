@@ -6,6 +6,34 @@ export function timeOfDaySlots(raw: string | null): TimeOfDay[] {
   return raw.split(',').map((s) => s.trim()).filter(Boolean) as TimeOfDay[];
 }
 
+/** When a slot's window closes for the day, in local hours (24 = midnight, i.e. never "late" within
+ *  the same day — the date rolling over already gives it a fresh instance). Mirrors
+ *  client/src/utils/timeOfDay.ts's cutoffHour values — keep the two in sync if either changes. */
+const SLOT_CUTOFF_HOUR: Record<string, number> = { morning: 12, afternoon: 16, evening: 24 };
+
+/** Was this completion late? Either its time-of-day slot's window had already closed (by local
+ *  clock time), or — for a one-off task with a due date — it landed after that date. */
+export function isCompletionLate(params: {
+  completedAt: string;
+  completedOn: string;
+  timeOfDay: string | null;
+  recurrence: string;
+  dueDate: string | null;
+}): boolean {
+  const { completedAt, completedOn, timeOfDay, recurrence, dueDate } = params;
+  if (timeOfDay) {
+    const cutoff = SLOT_CUTOFF_HOUR[timeOfDay];
+    if (cutoff !== undefined && cutoff < 24) {
+      return new Date(completedAt).getHours() >= cutoff;
+    }
+    return false;
+  }
+  if (recurrence === 'once' && dueDate) {
+    return completedOn > dueDate;
+  }
+  return false;
+}
+
 const DAY_CODES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 
 function daysInMonth(date: Date): number {

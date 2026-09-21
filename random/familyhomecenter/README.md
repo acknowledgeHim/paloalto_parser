@@ -68,8 +68,10 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   docs/SETTINGS_LOGIN.md — so kids can't see or change payout rates once
   it's set.
 - 📊 **Per-person page** — click anyone's name (Family Board or Chores & To-dos)
-  to see their own page: a trend chart of completions over the last 14 days,
-  which recurring chores/to-dos they've been missing most, today's tasks
+  to see their own page: a trend chart of completions over the last 14 days, a
+  second trend of *late* completions (a time-of-day slot finished after its
+  window, or a to-do after its due date), which recurring chores/to-dos they've
+  been missing most, today's tasks
   (editable and checkable right there), what's coming up over the next week,
   and their calendar for the next 7 days (their own events plus whole-family
   ones, labeled which is which). Every completion is kept permanently (only

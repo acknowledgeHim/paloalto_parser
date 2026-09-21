@@ -92,6 +92,9 @@ export interface PersonDetail {
   stats: {
     statsDays: number;
     completionsByDay: Array<{ date: string; count: number }>;
+    /** Completions after a slot's window closed (morning: noon, afternoon: 4pm), or a one-off task
+     *  finished after its due date. */
+    lateByDay: Array<{ date: string; count: number }>;
     strugglingTasks: StrugglingTask[];
   };
 }

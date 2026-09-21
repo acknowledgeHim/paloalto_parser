@@ -7,7 +7,7 @@ import { deleteAvatarImage, findAvatarImage, saveAvatarImage } from '../services
 import { deleteCompletionSound, findCompletionSound, saveCompletionSound } from '../services/sounds.js';
 import { createSession, hashPassword, verifyMemberPassword, SESSION_COOKIE_NAME } from '../services/auth.js';
 import { tasksForDate } from '../services/taskQueries.js';
-import { addDays, taskAppliesOn, timeOfDaySlots, todayStr } from '../utils/recurrence.js';
+import { addDays, isCompletionLate, taskAppliesOn, timeOfDaySlots, todayStr } from '../utils/recurrence.js';
 import type { FamilyMember, Task, TaskWithAssignment } from '../types.js';
 
 export const familyMembersRouter = Router();
@@ -63,6 +63,43 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
     return { date, count: countByDate.get(date) ?? 0 };
   });
 
+  // "Late" = a time-of-day slot completed after its window closed, or a one-off task completed
+  // after its due date — see isCompletionLate. Needs each completion joined back to its task for
+  // recurrence/due_date, so this is a separate query from the plain per-day count above.
+  const lateRows = db
+    .prepare(
+      `SELECT tc.completed_on as completed_on, tc.completed_at as completed_at, tc.time_of_day as time_of_day,
+              t.recurrence as recurrence, t.due_date as due_date
+       FROM task_completions tc
+       JOIN tasks t ON t.id = tc.task_id
+       WHERE tc.completed_by_id = ? AND tc.completed_on >= ? AND tc.completed_on <= ?`
+    )
+    .all(member.id, startDate, today) as Array<{
+    completed_on: string;
+    completed_at: string;
+    time_of_day: string | null;
+    recurrence: string;
+    due_date: string | null;
+  }>;
+  const lateCountByDate = new Map<string, number>();
+  for (const row of lateRows) {
+    if (
+      isCompletionLate({
+        completedAt: row.completed_at,
+        completedOn: row.completed_on,
+        timeOfDay: row.time_of_day,
+        recurrence: row.recurrence,
+        dueDate: row.due_date,
+      })
+    ) {
+      lateCountByDate.set(row.completed_on, (lateCountByDate.get(row.completed_on) ?? 0) + 1);
+    }
+  }
+  const lateByDay = Array.from({ length: statsDays }, (_, i) => {
+    const date = addDays(startDate, i);
+    return { date, count: lateCountByDate.get(date) ?? 0 };
+  });
+
   const assignedTaskIds = db
     .prepare('SELECT task_id FROM task_assignees WHERE family_member_id = ?')
     .all(member.id) as Array<{ task_id: string }>;
@@ -99,7 +136,7 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
     member: toPublic(member),
     today,
     agenda,
-    stats: { statsDays, completionsByDay, strugglingTasks },
+    stats: { statsDays, completionsByDay, lateByDay, strugglingTasks },
   });
 });
 
