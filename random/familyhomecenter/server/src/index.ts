@@ -17,6 +17,7 @@ import { recipesRouter } from './routes/recipes.js';
 import { prizesRouter } from './routes/prizes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
+import { startThumbnailWarmSchedule } from './services/photos.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 
 const app = express();
@@ -58,4 +59,5 @@ attachIntercomWebSocket(server);
 server.listen(config.port, config.host, () => {
   console.log(`Family Home Center server listening on http://${config.host}:${config.port}`);
   startCalendarSyncSchedule();
+  startThumbnailWarmSchedule();
 });

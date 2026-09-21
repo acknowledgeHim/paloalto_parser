@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
+import cron from 'node-cron';
 import { config } from '../config.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -67,4 +68,46 @@ export function photoIdFor(absolutePath: string): string {
 export async function findPhotoById(id: string): Promise<string | null> {
   const files = await listPhotos();
   return files.find((f) => thumbIdFor(f) === id) ?? null;
+}
+
+// ---- Background thumbnail warming ----
+// The slow part of viewing a photo for the first time isn't the resize — it's sharp() reading the
+// full original file over the network (an SMB share especially). Generating thumbnails ahead of
+// time, in the background, means an actual viewer only ever hits the local cache. Sequential (not
+// parallel) on purpose: it's gentler on the Pi's memory/CPU and the SMB link while the family is
+// using everything else, and it's a one-time cost per photo either way (already-cached files are a
+// cheap fs.access check via getOrCreateThumbnail, not re-read).
+let warming = false;
+
+export async function warmThumbnailCache(): Promise<{ processed: number; failed: number }> {
+  if (warming) return { processed: 0, failed: 0 };
+  warming = true;
+  let processed = 0;
+  let failed = 0;
+  try {
+    const files = await listPhotos();
+    for (const file of files) {
+      try {
+        await getOrCreateThumbnail(file);
+        processed++;
+      } catch (err) {
+        failed++;
+        console.warn(`[photos] failed to warm thumbnail for "${file}":`, (err as Error).message);
+      }
+    }
+  } finally {
+    warming = false;
+  }
+  if (processed || failed) {
+    console.log(`[photos] thumbnail warm-up: ${processed} ok${failed ? `, ${failed} failed` : ''}`);
+  }
+  return { processed, failed };
+}
+
+/** Warms on boot, then re-checks periodically for newly added photos. */
+export function startThumbnailWarmSchedule(): void {
+  warmThumbnailCache().catch((e) => console.warn('[photos] initial thumbnail warm-up failed', e));
+  cron.schedule('*/30 * * * *', () => {
+    warmThumbnailCache().catch((e) => console.warn('[photos] scheduled thumbnail warm-up failed', e));
+  });
 }

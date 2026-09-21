@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, type PersonDetail } from '../api/client.js';
+import { api, type PersonDetail, type Task } from '../api/client.js';
+import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { TaskCard } from '../components/TaskCard.js';
+import { TaskFormModal } from '../components/TaskFormModal.js';
 import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
-import { sortForColumn } from '../utils/tasks.js';
+import { canEditTask, sortForColumn } from '../utils/tasks.js';
 
 const TIME_OF_DAY_LABEL: Record<string, string> = { morning: '🌅', afternoon: '☀️', evening: '🌙' };
 const TREND_DAYS = 14;
 
 export function PersonPage() {
   const { id } = useParams<{ id: string }>();
+  const { activeProfile } = useFamilyMembers();
   const [detail, setDetail] = useState<PersonDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [modalTask, setModalTask] = useState<Task | null>(null);
 
   const load = () => {
     if (!id) return;
@@ -74,7 +78,14 @@ export function PersonPage() {
         <h2>Today</h2>
         {currentTasks.length === 0 && <div className="empty-state">Nothing today</div>}
         {currentTasks.map((t) => (
-          <TaskCard key={t.id} task={t} onChange={load} hideAssignee viewerId={member.id} />
+          <TaskCard
+            key={t.id}
+            task={t}
+            onChange={load}
+            hideAssignee
+            viewerId={member.id}
+            onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+          />
         ))}
       </section>
 
@@ -93,12 +104,33 @@ export function PersonPage() {
                     <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>
                     {t.title}
                     {t.time_of_day && <span className="hint"> {TIME_OF_DAY_LABEL[t.time_of_day]}</span>}
+                    {canEditTask(t, activeProfile) && (
+                      <button
+                        type="button"
+                        className="task-card__edit"
+                        aria-label="Edit"
+                        onClick={() => setModalTask(t)}
+                      >
+                        ✎
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             )
         )}
       </section>
+
+      {modalTask && (
+        <TaskFormModal
+          task={modalTask}
+          onClose={() => setModalTask(null)}
+          onSaved={() => {
+            setModalTask(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }
