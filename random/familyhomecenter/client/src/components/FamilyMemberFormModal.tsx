@@ -29,9 +29,13 @@ interface Props {
   member: FamilyMember | null;
   onClose: () => void;
   onSaved: () => void;
+  /** Whether this editor may change the "Parent" flag — hidden entirely otherwise, so a kid
+   *  editing their own profile can't self-promote. Defaults to true (Settings' admin-only usage);
+   *  pass false when a non-parent is editing their own profile from their person page. */
+  canChangeRole?: boolean;
 }
 
-export function FamilyMemberFormModal({ member, onClose, onSaved }: Props) {
+export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole = true }: Props) {
   const [name, setName] = useState(member?.name ?? '');
   const [isParent, setIsParent] = useState(member?.is_parent === 1);
   const [color, setColor] = useState(member?.color ?? COLOR_PRESETS[0]);
@@ -93,10 +97,9 @@ export function FamilyMemberFormModal({ member, onClose, onSaved }: Props) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         name: name.trim(),
         color,
-        is_parent: isParent,
         progress_bar_style: progressStyle === 'solid' ? null : progressStyle,
         // "custom" is applied via the dedicated /sound endpoint below; any preset is stored directly.
         complete_sound: completeSound === 'none' ? null : completeSound,
@@ -104,6 +107,10 @@ export function FamilyMemberFormModal({ member, onClose, onSaved }: Props) {
         // is the emoji (or null for "no avatar").
         avatar: pendingImage || hasImage ? 'image' : emoji || null,
       };
+      // Omitted entirely (not just left unchecked) when this editor can't change roles, so a kid
+      // editing their own profile can never even attempt to self-promote — the server enforces
+      // this too, but there's no reason to send a field this form doesn't let you see.
+      if (canChangeRole) body.is_parent = isParent;
       const saved = member
         ? await api.patch<FamilyMember>(`/family-members/${member.id}`, body)
         : await api.post<FamilyMember>('/family-members', body);
@@ -136,10 +143,12 @@ export function FamilyMemberFormModal({ member, onClose, onSaved }: Props) {
 
         <input autoFocus placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
 
-        <label className="checkbox">
-          <input type="checkbox" checked={isParent} onChange={(e) => setIsParent(e.target.checked)} />
-          Parent (can add recurring chores)
-        </label>
+        {canChangeRole && (
+          <label className="checkbox">
+            <input type="checkbox" checked={isParent} onChange={(e) => setIsParent(e.target.checked)} />
+            Parent (can add recurring chores)
+          </label>
+        )}
 
         <div>
           <label className="member-form__label">Color</label>

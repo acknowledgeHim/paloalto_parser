@@ -813,14 +813,19 @@ textarea {
 .person-page__upcoming-date { font-weight: 700; color: var(--text-muted); font-size: 0.85em; margin-bottom: 4px; }
 .person-page__upcoming-task { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
 .person-page__upcoming-task .task-card__edit { margin-left: auto; }
-.person-page__bank-link {
-  margin-left: auto;
+.person-page__header-icons { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.person-page__icon-link {
   font-size: 2em;
   line-height: 1;
   text-decoration: none;
-  filter: grayscale(0);
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: auto;
+  color: inherit;
+  cursor: pointer;
 }
-.person-page__bank-link:hover { transform: scale(1.08); }
+.person-page__icon-link:hover { transform: scale(1.08); }
 
 /* ---- Bank page ---- */
 .bank-page__accounts-grid {

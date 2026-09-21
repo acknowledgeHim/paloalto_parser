@@ -60,7 +60,7 @@ function SettingsLogin({ onSuccess, legacyAvailable }: { onSuccess: () => void; 
 }
 
 export function SettingsPage() {
-  const { members, refresh } = useFamilyMembers();
+  const { members, activeProfile, refresh } = useFamilyMembers();
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [memberModal, setMemberModal] = useState<FamilyMember | 'new' | null>(null);
   interface TimingSettings {
@@ -87,12 +87,21 @@ export function SettingsPage() {
     loadAuth();
   }, []);
 
+  // True household-trust default: nobody's set a parent up yet, so there's no one to gate
+  // against — same "trusted starting point" bootstrap as first-time family roster setup elsewhere.
+  const noParentYet = members.every((m) => m.is_parent !== 1);
+  // Real admin login always counts; otherwise (no password protecting Settings yet) only let this
+  // render/act as a parent if the picked profile actually is one, or nobody's a parent yet.
+  const canManageSettings = Boolean(
+    auth?.is_admin || (auth && !auth.admin_gate_active && (noParentYet || activeProfile?.is_parent === 1))
+  );
+
   useEffect(() => {
-    if (!auth?.is_admin) return;
+    if (!canManageSettings) return;
     api.get<TimingSettings>('/settings').then(setSettings).catch(console.error);
     api.get<CalendarSources>('/calendar/sources').then(setSources).catch(console.error);
     api.get<SpotifyStatus>('/music/spotify/status').then(setSpotify).catch(console.error);
-  }, [auth?.is_admin]);
+  }, [canManageSettings]);
 
   const removeMember = async (id: string) => {
     await api.delete(`/family-members/${id}`);
@@ -131,6 +140,20 @@ export function SettingsPage() {
   if (!auth) return null; // brief loading flash only
   if (auth.admin_gate_active && !auth.is_admin) {
     return <SettingsLogin onSuccess={loadAuth} legacyAvailable={auth.legacy_recovery_available} />;
+  }
+  if (!canManageSettings) {
+    return (
+      <div className="settings-login">
+        <div className="panel settings-login__form">
+          <h1>Settings</h1>
+          <p className="hint">
+            Settings — family members, Prize Bank rewards, the screensaver/slideshow timing, and
+            calendar/weather setup — are for parents. Pick your parent profile in the switcher up
+            top{activeProfile ? '' : ' first'}.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

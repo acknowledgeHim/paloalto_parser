@@ -76,7 +76,16 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   and their calendar for the next 7 days (their own events plus whole-family
   ones, labeled which is which). Every completion is kept permanently (only
   an explicit uncheck removes it), so this is real history, not a rolling
-  snapshot.
+  snapshot. A ✎ icon (shown to that person or a parent) opens their own
+  profile — name, color, avatar, sound, progress bar style — self-service,
+  without needing a parent login; only a parent can change the "Parent" flag
+  itself, adding a new family member, or removing one (Settings' family
+  roster) — same real, session-based enforcement as Bank once a password
+  protects it. **Settings as a whole** — family roster, Prize Bank rewards,
+  screensaver/slideshow timing, calendar/weather setup — is parents-only
+  even before any password is set: it checks the picked profile's "Parent"
+  flag as a household-trust-level default, with the very first family
+  member still addable to bootstrap an empty roster.
 - 🕐 **Multiple times a day** — a chore/to-do can have more than one
   time-of-day slot (e.g. morning + evening for medication), each completed
   and Prize-Bank-rewarded independently — doing the morning one doesn't

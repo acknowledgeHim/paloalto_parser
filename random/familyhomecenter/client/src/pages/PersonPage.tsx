@@ -5,6 +5,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
+import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
 import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { canEditTask, sortForColumn } from '../utils/tasks.js';
@@ -15,11 +16,12 @@ const AGENDA_DAYS = 7;
 
 export function PersonPage() {
   const { id } = useParams<{ id: string }>();
-  const { activeProfile } = useFamilyMembers();
+  const { activeProfile, refresh } = useFamilyMembers();
   const [detail, setDetail] = useState<PersonDetail | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [modalTask, setModalTask] = useState<Task | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   const load = () => {
     if (!id) return;
@@ -44,6 +46,9 @@ export function PersonPage() {
   const [current, ...upcoming] = agenda;
   const currentTasks = sortForColumn(current?.tasks ?? []);
   const personEvents = events.filter((e) => !e.for_member_id || e.for_member_id === member.id);
+  // Household-trust-level rule (see utils/tasks.ts's canEditTask comment) — real enforcement is
+  // server-side once a password protects it (requireSelfOrAdmin), same as Bank.
+  const canEditProfile = Boolean(activeProfile && (activeProfile.id === member.id || activeProfile.is_parent === 1));
 
   return (
     <div className="person-page">
@@ -58,9 +63,21 @@ export function PersonPage() {
             <span>${member.money_balance.toFixed(2)}</span>
           </div>
         </div>
-        <Link to={`/person/${member.id}/bank`} className="person-page__bank-link" aria-label={`${member.name}'s bank`}>
-          🏦
-        </Link>
+        <div className="person-page__header-icons">
+          {canEditProfile && (
+            <button
+              type="button"
+              className="person-page__icon-link"
+              aria-label={`Edit ${member.name}'s profile`}
+              onClick={() => setEditingProfile(true)}
+            >
+              ✎
+            </button>
+          )}
+          <Link to={`/person/${member.id}/bank`} className="person-page__icon-link" aria-label={`${member.name}'s bank`}>
+            🏦
+          </Link>
+        </div>
       </header>
 
       <section className="panel">
@@ -160,6 +177,19 @@ export function PersonPage() {
           onSaved={() => {
             setModalTask(null);
             load();
+          }}
+        />
+      )}
+
+      {editingProfile && (
+        <FamilyMemberFormModal
+          member={member}
+          canChangeRole={activeProfile?.is_parent === 1}
+          onClose={() => setEditingProfile(false)}
+          onSaved={() => {
+            setEditingProfile(false);
+            load();
+            refresh();
           }}
         />
       )}

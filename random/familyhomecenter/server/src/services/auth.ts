@@ -110,14 +110,15 @@ export function isRequestAdmin(token: string | undefined): boolean {
   return member?.is_parent === 1;
 }
 
-// ---- Bank access (per-kid privacy) ----
+// ---- Self-or-parent access (per-kid privacy/self-service) ----
 // Unlike most everyday permissions in this app (task edit/delete — see utils/tasks.ts's
-// canEditTask comment), bank data is explicitly supposed to be private to one kid + parents, so
-// this gets a real session-based check, same spirit as requireAdmin. It only activates once
-// there's actually a password to check against — either this specific member's own, or any
-// parent's — so a family that hasn't set up logins yet keeps the same open, household-trust
-// behavior as everything else, and a parent can always reach a passwordless kid's bank.
-function bankGateActiveFor(memberId: string): boolean {
+// canEditTask comment), bank data and a member's own profile settings are explicitly supposed to
+// be reachable only by that person + parents, so these get a real session-based check, same spirit
+// as requireAdmin. It only activates once there's actually a password to check against — either
+// this specific member's own, or any parent's — so a family that hasn't set up logins yet keeps
+// the same open, household-trust behavior as everything else, and a parent can always reach a
+// passwordless kid's bank/profile.
+function memberGateActiveFor(memberId: string): boolean {
   if (isAdminPasswordConfigured()) return true;
   const member = db.prepare('SELECT password_hash FROM family_members WHERE id = ?').get(memberId) as
     | { password_hash: string | null }
@@ -126,9 +127,9 @@ function bankGateActiveFor(memberId: string): boolean {
   return anyParentHasPassword();
 }
 
-/** Can this session view/edit memberId's bank? */
-export function canAccessBank(token: string | undefined, memberId: string): boolean {
-  if (!bankGateActiveFor(memberId)) return true;
+/** Can this session view/edit memberId's own stuff (bank, profile settings)? Self-or-parent. */
+export function canManageMember(token: string | undefined, memberId: string): boolean {
+  if (!memberGateActiveFor(memberId)) return true;
   const session = getValidSession(token);
   if (!session) return false;
   if (!session.family_member_id) return true; // legacy recovery login
@@ -137,6 +138,11 @@ export function canAccessBank(token: string | undefined, memberId: string): bool
     | { is_parent: 0 | 1 }
     | undefined;
   return member?.is_parent === 1;
+}
+
+/** Bank access uses the exact same self-or-parent rule as profile editing. */
+export function canAccessBank(token: string | undefined, memberId: string): boolean {
+  return canManageMember(token, memberId);
 }
 
 export function deleteSession(token: string | undefined): void {

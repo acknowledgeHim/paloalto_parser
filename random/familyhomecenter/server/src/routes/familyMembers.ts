@@ -2,10 +2,18 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { requireSelfOrAdmin } from '../middleware/requireSelfOrAdmin.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { deleteAvatarImage, findAvatarImage, saveAvatarImage } from '../services/avatars.js';
 import { deleteCompletionSound, findCompletionSound, saveCompletionSound } from '../services/sounds.js';
-import { createSession, hashPassword, verifyMemberPassword, SESSION_COOKIE_NAME } from '../services/auth.js';
+import {
+  createSession,
+  hashPassword,
+  verifyMemberPassword,
+  isAdminGateActive,
+  isRequestAdmin,
+  SESSION_COOKIE_NAME,
+} from '../services/auth.js';
 import { tasksForDate } from '../services/taskQueries.js';
 import { addDays, isCompletionLate, taskAppliesOn, timeOfDaySlots, todayStr } from '../utils/recurrence.js';
 import type { FamilyMember, Task, TaskWithAssignment } from '../types.js';
@@ -165,17 +173,29 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
   res.status(201).json(toPublic(member));
 });
 
-familyMembersRouter.patch('/:id', requireAdmin, (req, res) => {
+/**
+ * PATCH /:id — self-service (that member) or a parent, per requireSelfOrAdmin, so a kid can edit
+ * their own avatar/color/sound/etc without needing a parent login. The "Parent" flag itself is a
+ * privilege escalation risk though, so it's excluded here unless the requester is verified as an
+ * actual admin (parent/legacy recovery) — a kid PATCHing their own record can't self-promote. Once
+ * the admin gate isn't active yet (no password configured anywhere), that check is moot and this
+ * matches the rest of the app's open, household-trust default.
+ */
+familyMembersRouter.patch('/:id', requireSelfOrAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as
     | FamilyMember
     | undefined;
   if (!existing) return res.status(404).json({ error: 'not found' });
 
+  const body = { ...req.body } as Partial<FamilyMember>;
+  const canChangeRole = !isAdminGateActive() || isRequestAdmin(req.cookies?.[SESSION_COOKIE_NAME]);
+  if (!canChangeRole) delete body.is_parent;
+
   const updated: FamilyMember = {
     ...existing,
-    ...req.body,
+    ...body,
     id: existing.id,
-    is_parent: req.body.is_parent !== undefined ? (req.body.is_parent ? 1 : 0) : existing.is_parent,
+    is_parent: body.is_parent !== undefined ? (body.is_parent ? 1 : 0) : existing.is_parent,
   };
   db.prepare(
     `UPDATE family_members SET name = @name, color = @color, avatar = @avatar,
@@ -225,7 +245,7 @@ familyMembersRouter.put(
 /** POST /:id/avatar { imageDataUrl } — uploads/replaces this member's custom photo avatar. */
 familyMembersRouter.post(
   '/:id/avatar',
-  requireAdmin,
+  requireSelfOrAdmin,
   asyncHandler(async (req, res) => {
     const existing = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as
       | FamilyMember
@@ -243,7 +263,7 @@ familyMembersRouter.post(
 /** DELETE /:id/avatar — removes a custom photo avatar (falls back to emoji/initial). */
 familyMembersRouter.delete(
   '/:id/avatar',
-  requireAdmin,
+  requireSelfOrAdmin,
   asyncHandler(async (req, res) => {
     await deleteAvatarImage(req.params.id);
     db.prepare("UPDATE family_members SET avatar = NULL WHERE id = ?").run(req.params.id);
@@ -266,7 +286,7 @@ familyMembersRouter.get(
 /** POST /:id/sound { audioDataUrl } — uploads a custom MP3 completion sound (client plays only the first few seconds). */
 familyMembersRouter.post(
   '/:id/sound',
-  requireAdmin,
+  requireSelfOrAdmin,
   asyncHandler(async (req, res) => {
     const existing = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as
       | FamilyMember
@@ -284,7 +304,7 @@ familyMembersRouter.post(
 /** DELETE /:id/sound — removes a custom MP3 (falls back to no sound / a preset if one is chosen instead). */
 familyMembersRouter.delete(
   '/:id/sound',
-  requireAdmin,
+  requireSelfOrAdmin,
   asyncHandler(async (req, res) => {
     await deleteCompletionSound(req.params.id);
     db.prepare("UPDATE family_members SET complete_sound = NULL WHERE id = ? AND complete_sound = 'custom'").run(
