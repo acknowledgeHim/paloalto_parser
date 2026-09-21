@@ -11,6 +11,7 @@ server/data/*.db-shm
 server/data/thumbs/
 server/data/avatars/
 server/data/sounds/
+server/data/backups/
 client/dist/
 .DS_Store
 *.tsbuildinfo

@@ -119,6 +119,8 @@ Optional integrations, each with its own guide:
   wiring it to the Pi — including over Ethernet/Cat6 if there's real distance between them)
 - [docs/DUAL_TOUCHSCREEN_SETUP.md](docs/DUAL_TOUCHSCREEN_SETUP.md) (drive two touchscreens with
   different content from one Pi 5's two HDMI outputs)
+- [docs/BACKUP.md](docs/BACKUP.md) (`npm run backup` in `server/` — safe to run while the server's
+  up; covers automating it with cron and restoring)
 
 ## Data & privacy
 
@@ -127,7 +129,8 @@ Pi itself — family members, tasks, local events, a synced-events cache, zone/
 group config, and (if connected) Google and Spotify OAuth tokens. Nothing is
 sent anywhere except the calendar/weather/Spotify APIs you explicitly
 configure, and Spotify's own servers for whatever a family member casts from
-their own phone.
+their own phone. Since it's all on one SD card, see
+[docs/BACKUP.md](docs/BACKUP.md) for a one-command backup (and how to automate it).
 
 ## Tech stack
 
