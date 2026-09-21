@@ -284,14 +284,21 @@ db.exec(`
 `);
 
 // Databases created before task_completions' UNIQUE constraint included completed_by_id (i.e.
-// before multi-assignee tasks) need the table rebuilt — SQLite has no ALTER TABLE for changing a
-// UNIQUE constraint. Detect the old shape via sqlite_master and migrate exactly once.
-const taskCompletionsSql = (
-  db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_completions'").get() as
-    | { sql: string }
-    | undefined
-)?.sql;
-if (taskCompletionsSql && !taskCompletionsSql.includes('completed_by_id)')) {
+// before multi-assignee tasks), and/or before it included time_of_day (i.e. before multiple
+// times-a-day slots), need the table rebuilt — SQLite has no ALTER TABLE for changing a UNIQUE
+// constraint. Detect the *actual columns present* via PRAGMA table_info — not by string-matching
+// the raw CREATE TABLE sql, which broke the first time a second migration changed that text (the
+// first migration's check no longer matched once the constraint grew a 4th column, so it kept
+// "detecting" itself as not-yet-run on every single boot and rebuilding back to the 3-column
+// shape — which throws if anyone has two completions for the same task/date/person differing only
+// by time_of_day, i.e. exactly what multi-slot tasks produce. Fixed here; PRAGMA table_info checks
+// actual schema state, so it can't drift out of sync with what any later migration's DDL says.
+function taskCompletionsColumns(): Set<string> {
+  const rows = db.prepare('PRAGMA table_info(task_completions)').all() as Array<{ name: string }>;
+  return new Set(rows.map((r) => r.name));
+}
+
+if (!taskCompletionsColumns().has('completed_by_id')) {
   db.transaction(() => {
     db.exec(`
       CREATE TABLE task_completions_new (
@@ -310,17 +317,7 @@ if (taskCompletionsSql && !taskCompletionsSql.includes('completed_by_id)')) {
   })();
 }
 
-// Same story, second time: the UNIQUE constraint needs time_of_day added too (a task with more
-// than one time-of-day slot, e.g. "morning,evening", needs each slot completable independently —
-// without this, completing "morning" would block completing "evening" the same day, since the
-// constraint couldn't tell the two apart). Re-check sqlite_master after the migration above, since
-// that one may have just created a fresh table without this column.
-const taskCompletionsSql2 = (
-  db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_completions'").get() as
-    | { sql: string }
-    | undefined
-)?.sql;
-if (taskCompletionsSql2 && !taskCompletionsSql2.includes('time_of_day')) {
+if (!taskCompletionsColumns().has('time_of_day')) {
   db.transaction(() => {
     db.exec(`
       CREATE TABLE task_completions_new2 (
@@ -332,8 +329,8 @@ if (taskCompletionsSql2 && !taskCompletionsSql2.includes('time_of_day')) {
         time_of_day TEXT,
         UNIQUE(task_id, completed_on, completed_by_id, time_of_day)
       );
-      INSERT INTO task_completions_new2 (id, task_id, completed_on, completed_by_id, completed_at)
-        SELECT id, task_id, completed_on, completed_by_id, completed_at FROM task_completions;
+      INSERT INTO task_completions_new2 (id, task_id, completed_on, completed_by_id, completed_at, time_of_day)
+        SELECT id, task_id, completed_on, completed_by_id, completed_at, time_of_day FROM task_completions;
       DROP TABLE task_completions;
       ALTER TABLE task_completions_new2 RENAME TO task_completions;
     `);
