@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
+import { ConfirmButton } from '../components/ConfirmButton.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { PrizeBankSettings } from '../components/PrizeBankSettings.js';
 
@@ -147,7 +148,11 @@ export function SettingsPage() {
               <MemberAvatar member={m} /> {m.name}
               {m.is_parent === 1 && <span className="badge">Parent</span>}
               <button className="link-button" onClick={() => setMemberModal(m)}>Edit</button>
-              <button className="link-button" onClick={() => removeMember(m.id)}>Remove</button>
+              <ConfirmButton
+                label="Remove"
+                confirmLabel={`Delete ${m.name} and all their history?`}
+                onConfirm={() => removeMember(m.id)}
+              />
             </li>
           ))}
         </ul>

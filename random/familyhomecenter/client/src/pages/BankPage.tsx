@@ -4,6 +4,7 @@ import { api, type BankAccount, type BankGoal, type BankSummary, type FamilyMemb
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { CategorySpendChart } from '../components/CategorySpendChart.js';
+import { ConfirmButton } from '../components/ConfirmButton.js';
 import { SPENDING_CATEGORIES } from '../utils/spendingCategories.js';
 
 const SPEND_PERIODS: Array<{ value: SpendingSummary['period']; label: string }> = [
@@ -460,9 +461,12 @@ export function BankPage() {
                   <h2>{account.name}</h2>
                   <div className="bank-page__balance">{money(account.balance)}</div>
                 </div>
-                <button type="button" className="secondary" onClick={() => removeAccount(account.id)}>
-                  Delete account
-                </button>
+                <ConfirmButton
+                  label="Delete account"
+                  confirmLabel={`Delete "${account.name}" and its ${account.transactions.length} transaction${account.transactions.length === 1 ? '' : 's'}?`}
+                  onConfirm={() => removeAccount(account.id)}
+                  className="secondary"
+                />
               </div>
 
               {goalsFor(account).length > 0 && (

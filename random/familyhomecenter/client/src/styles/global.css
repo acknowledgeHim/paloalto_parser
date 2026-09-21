@@ -63,6 +63,24 @@ button.link-button {
   font-size: 0.85em;
 }
 
+.confirm-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: #fde8e8;
+  border-radius: 12px;
+  padding: 6px 10px;
+}
+.confirm-button__prompt { color: #9b1c1c; font-weight: 600; font-size: 0.9em; }
+button.confirm-button__yes {
+  background: #dc2626;
+  color: white;
+  min-height: auto;
+  padding: 6px 14px;
+  font-size: 0.9em;
+}
+
 input, select, textarea {
   min-height: var(--tap-min);
   padding: 0 14px;
