@@ -98,6 +98,13 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   password to check: once that kid or any parent has set a login, only the
   two of them can view or edit it; until then it's open like everything
   else, same "optional, off by default" pattern as Settings.
+  Each account can also hold **savings goals** ("Lego set", $60) — a
+  progress bar tracks the account's balance against the target, and once
+  it's saved up, "Mark purchased" records the real withdrawal (tagged with
+  the goal's category) in one step. Every spend can be tagged with a
+  **category** (Food, Toys, Clothes, Entertainment, Books & Games, Gifts,
+  Savings, or a custom one), and a **spending-by-category** chart on the
+  Bank page totals it up over the last week, month, or year.
 
 ## Project layout
 

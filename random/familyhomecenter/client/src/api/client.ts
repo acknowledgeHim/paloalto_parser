@@ -108,6 +108,8 @@ export interface BankTransaction {
   amount: number;
   /** Always set — why the money moved. */
   comment: string;
+  /** Spending category (see utils/spendingCategories.ts); null groups into "Other" in the graphs. */
+  category: string | null;
   created_by_id: string | null;
   created_at: string;
 }
@@ -122,10 +124,32 @@ export interface BankAccount {
   transactions: BankTransaction[];
 }
 
+/** A savings goal ("Lego set", $60) tracked against one account's running balance. */
+export interface BankGoal {
+  id: string;
+  family_member_id: string;
+  account_id: string;
+  title: string;
+  target_amount: number;
+  category: string | null;
+  created_at: string;
+  achieved_at: string | null;
+  /** The linked account's current balance — the goal's progress. */
+  saved: number;
+}
+
 export interface BankSummary {
   accounts: BankAccount[];
+  goals: BankGoal[];
   /** Unallocated Prize Bank money reward earnings, still available to transfer into an account. */
   prizeBankMoneyAvailable: number;
+}
+
+export interface SpendingSummary {
+  period: 'week' | 'month' | 'year';
+  days: number;
+  byCategory: Array<{ category: string; total: number }>;
+  total: number;
 }
 
 // ---- Prize Bank ----

@@ -139,14 +139,30 @@ export interface BankAccount {
 }
 
 /** amount is positive for a deposit, negative for a withdrawal/spend; comment is always required
- *  (why the money moved), created_by_id records who made the entry (parent or the kid themselves). */
+ *  (why the money moved), created_by_id records who made the entry (parent or the kid themselves).
+ *  category (client/src/utils/spendingCategories.ts preset list) drives the spending-by-category
+ *  graphs; null groups into "Other" there. */
 export interface BankTransaction {
   id: string;
   account_id: string;
   amount: number;
   comment: string;
+  category: string | null;
   created_by_id: string | null;
   created_at: string;
+}
+
+/** A savings goal tracked against one account's running balance — see routes/bank.ts. */
+export interface BankGoal {
+  id: string;
+  family_member_id: string;
+  account_id: string;
+  title: string;
+  target_amount: number;
+  /** Category to tag the withdrawal transaction with once achieved. */
+  category: string | null;
+  created_at: string;
+  achieved_at: string | null;
 }
 
 export interface CalendarEvent {

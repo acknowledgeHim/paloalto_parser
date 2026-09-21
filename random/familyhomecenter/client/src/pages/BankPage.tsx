@@ -1,8 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, type BankSummary, type FamilyMember } from '../api/client.js';
+import { api, type BankAccount, type BankGoal, type BankSummary, type FamilyMember, type SpendingSummary } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { CategorySpendChart } from '../components/CategorySpendChart.js';
+import { SPENDING_CATEGORIES } from '../utils/spendingCategories.js';
+
+const SPEND_PERIODS: Array<{ value: SpendingSummary['period']; label: string }> = [
+  { value: 'week', label: 'Last 7 days' },
+  { value: 'month', label: 'Last 30 days' },
+  { value: 'year', label: 'Last year' },
+];
 
 function money(n: number): string {
   return `$${n.toFixed(2)}`;
@@ -11,6 +19,42 @@ function money(n: number): string {
 function whoAdded(members: FamilyMember[], id: string | null): string {
   if (!id) return 'someone';
   return members.find((m) => m.id === id)?.name ?? 'someone';
+}
+
+const PRESET_CATEGORIES = SPENDING_CATEGORIES.slice(0, -1); // all but the "Other" catch-all
+
+function CategoryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [mode, setMode] = useState<'none' | 'preset' | 'custom'>(
+    value === '' ? 'none' : PRESET_CATEGORIES.includes(value) ? 'preset' : 'custom'
+  );
+
+  const handleSelect = (v: string) => {
+    if (v === '') {
+      setMode('none');
+      onChange('');
+    } else if (v === 'Other') {
+      setMode('custom');
+      onChange('');
+    } else {
+      setMode('preset');
+      onChange(v);
+    }
+  };
+
+  return (
+    <div className="task-form__row">
+      <select value={mode === 'preset' ? value : mode === 'custom' ? 'Other' : ''} onChange={(e) => handleSelect(e.target.value)}>
+        <option value="">No category</option>
+        {PRESET_CATEGORIES.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+        <option value="Other">Other</option>
+      </select>
+      {mode === 'custom' && <input placeholder="Category name" value={value} onChange={(e) => onChange(e.target.value)} />}
+    </div>
+  );
 }
 
 function NewAccountForm({ onAdd }: { onAdd: (name: string) => Promise<void> }) {
@@ -46,11 +90,12 @@ function NewAccountForm({ onAdd }: { onAdd: (name: string) => Promise<void> }) {
   );
 }
 
-function TransactionForm({ onAdd }: { onAdd: (amount: number, comment: string) => Promise<void> }) {
+function TransactionForm({ onAdd }: { onAdd: (amount: number, comment: string, category: string | null) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<'deposit' | 'withdraw'>('deposit');
   const [amount, setAmount] = useState('');
   const [comment, setComment] = useState('');
+  const [category, setCategory] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: FormEvent) => {
@@ -65,9 +110,10 @@ function TransactionForm({ onAdd }: { onAdd: (amount: number, comment: string) =
       return;
     }
     setError(null);
-    await onAdd(kind === 'deposit' ? n : -n, comment.trim());
+    await onAdd(kind === 'deposit' ? n : -n, comment.trim(), kind === 'withdraw' ? category.trim() || null : null);
     setAmount('');
     setComment('');
+    setCategory('');
     setOpen(false);
   };
 
@@ -95,6 +141,12 @@ function TransactionForm({ onAdd }: { onAdd: (amount: number, comment: string) =
         />
       </div>
       <input placeholder="Why? (e.g. Birthday gift from Grandma)" value={comment} onChange={(e) => setComment(e.target.value)} />
+      {kind === 'withdraw' && (
+        <div>
+          <label className="member-form__label">Category (for the spending graphs)</label>
+          <CategoryPicker value={category} onChange={setCategory} />
+        </div>
+      )}
       {error && <div className="settings-login__error">{error}</div>}
       <div className="task-form__row">
         <button type="submit">Save</button>
@@ -106,11 +158,104 @@ function TransactionForm({ onAdd }: { onAdd: (amount: number, comment: string) =
   );
 }
 
+function NewGoalForm({ onAdd }: { onAdd: (title: string, targetAmount: number, category: string | null) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [category, setCategory] = useState('Toys');
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const amt = Number(targetAmount);
+    if (!title.trim()) {
+      setError('Give it a name, e.g. "Lego set"');
+      return;
+    }
+    if (!amt || amt <= 0) {
+      setError('Enter a cost greater than 0');
+      return;
+    }
+    setError(null);
+    await onAdd(title.trim(), amt, category.trim() || null);
+    setTitle('');
+    setTargetAmount('');
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button type="button" className="secondary" onClick={() => setOpen(true)}>
+        + New savings goal
+      </button>
+    );
+  }
+  return (
+    <form className="bank-page__tx-form" onSubmit={submit}>
+      <input autoFocus placeholder='What for? (e.g. "Lego set")' value={title} onChange={(e) => setTitle(e.target.value)} />
+      <input
+        type="number"
+        step="0.01"
+        min="0.01"
+        placeholder="Cost"
+        value={targetAmount}
+        onChange={(e) => setTargetAmount(e.target.value)}
+      />
+      <div>
+        <label className="member-form__label">Category (tagged on the purchase once you get it)</label>
+        <CategoryPicker value={category} onChange={setCategory} />
+      </div>
+      {error && <div className="settings-login__error">{error}</div>}
+      <div className="task-form__row">
+        <button type="submit">Add goal</button>
+        <button type="button" className="secondary" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function GoalRow({ goal, onAchieve, onDelete }: { goal: BankGoal; onAchieve: () => void; onDelete: () => void }) {
+  const pct = Math.min(100, Math.round((Math.max(0, goal.saved) / goal.target_amount) * 100));
+  const ready = goal.saved >= goal.target_amount;
+  return (
+    <div className="bank-page__goal">
+      <div className="bank-page__goal-header">
+        <span className="bank-page__goal-title">
+          {goal.achieved_at ? '✅ ' : '🎯 '}
+          {goal.title}
+        </span>
+        <span className="hint">
+          {money(Math.max(0, goal.saved))} / {money(goal.target_amount)}
+        </span>
+      </div>
+      {!goal.achieved_at && (
+        <>
+          <div className="progress-bar">
+            <div className="progress-bar__fill" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="task-form__row">
+            <button type="button" disabled={!ready} onClick={onAchieve}>
+              {ready ? 'Mark purchased' : `${pct}% saved`}
+            </button>
+            <button type="button" className="secondary" onClick={onDelete}>
+              Remove
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function BankPage() {
   const { id } = useParams<{ id: string }>();
   const { members, activeProfile } = useFamilyMembers();
   const [member, setMember] = useState<FamilyMember | null>(null);
   const [summary, setSummary] = useState<BankSummary | null>(null);
+  const [spending, setSpending] = useState<SpendingSummary | null>(null);
+  const [spendPeriod, setSpendPeriod] = useState<SpendingSummary['period']>('month');
   const [denied, setDenied] = useState(false);
   const [transferAccountId, setTransferAccountId] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
@@ -130,6 +275,10 @@ export function BankPage() {
     if (!id) return;
     api.get<FamilyMember[]>('/family-members').then((all) => setMember(all.find((m) => m.id === id) ?? null));
   }, [id, members]);
+  useEffect(() => {
+    if (!id || denied) return;
+    api.get<SpendingSummary>(`/family-members/${id}/bank/spending?period=${spendPeriod}`).then(setSpending).catch(() => {});
+  }, [id, spendPeriod, denied, summary]);
 
   if (!id || !member) return null;
 
@@ -143,10 +292,11 @@ export function BankPage() {
     load();
   };
 
-  const addTransaction = async (accountId: string, amount: number, comment: string) => {
+  const addTransaction = async (accountId: string, amount: number, comment: string, category: string | null) => {
     await api.post(`/family-members/${id}/bank/accounts/${accountId}/transactions`, {
       amount,
       comment,
+      category,
       created_by_id: activeProfile?.id ?? null,
     });
     load();
@@ -154,6 +304,26 @@ export function BankPage() {
 
   const removeTransaction = async (txId: string) => {
     await api.delete(`/family-members/${id}/bank/transactions/${txId}`);
+    load();
+  };
+
+  const addGoal = async (accountId: string, title: string, targetAmount: number, category: string | null) => {
+    await api.post(`/family-members/${id}/bank/goals`, {
+      account_id: accountId,
+      title,
+      target_amount: targetAmount,
+      category,
+    });
+    load();
+  };
+
+  const achieveGoal = async (goalId: string) => {
+    await api.post(`/family-members/${id}/bank/goals/${goalId}/achieve`, { created_by_id: activeProfile?.id ?? null });
+    load();
+  };
+
+  const removeGoal = async (goalId: string) => {
+    await api.delete(`/family-members/${id}/bank/goals/${goalId}`);
     load();
   };
 
@@ -188,6 +358,8 @@ export function BankPage() {
     }
   };
 
+  const goalsFor = (account: BankAccount) => (summary?.goals ?? []).filter((g) => g.account_id === account.id);
+
   return (
     <div className="bank-page">
       <Link to={`/person/${id}`} className="link-button">
@@ -210,6 +382,32 @@ export function BankPage() {
 
       {summary && (
         <>
+          {spending && (
+            <section className="panel">
+              <h2>Spending by category</h2>
+              <div className="task-form__row bank-page__period-toggle">
+                {SPEND_PERIODS.map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    className={p.value === spendPeriod ? '' : 'secondary'}
+                    onClick={() => setSpendPeriod(p.value)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {spending.byCategory.length === 0 ? (
+                <div className="empty-state">No spending recorded in this window.</div>
+              ) : (
+                <>
+                  <CategorySpendChart data={spending.byCategory} color={member.color} />
+                  <p className="hint">Total spent: {money(spending.total)}</p>
+                </>
+              )}
+            </section>
+          )}
+
           {summary.prizeBankMoneyAvailable > 0 && (
             <section className="panel">
               <h2>Transfer from Prize Bank earnings</h2>
@@ -267,7 +465,18 @@ export function BankPage() {
                 </button>
               </div>
 
-              <TransactionForm onAdd={(amount, comment) => addTransaction(account.id, amount, comment)} />
+              {goalsFor(account).length > 0 && (
+                <div className="bank-page__goals">
+                  {goalsFor(account).map((goal) => (
+                    <GoalRow key={goal.id} goal={goal} onAchieve={() => achieveGoal(goal.id)} onDelete={() => removeGoal(goal.id)} />
+                  ))}
+                </div>
+              )}
+
+              <div className="task-form__row">
+                <TransactionForm onAdd={(amount, comment, category) => addTransaction(account.id, amount, comment, category)} />
+                <NewGoalForm onAdd={(title, targetAmount, category) => addGoal(account.id, title, targetAmount, category)} />
+              </div>
 
               {account.transactions.length === 0 ? (
                 <div className="empty-state">No transactions yet.</div>
@@ -279,7 +488,10 @@ export function BankPage() {
                         {tx.amount >= 0 ? '+' : '−'}
                         {money(Math.abs(tx.amount))}
                       </span>
-                      <span className="bank-page__tx-comment">{tx.comment}</span>
+                      <span className="bank-page__tx-comment">
+                        {tx.comment}
+                        {tx.category && <span className="badge bank-page__tx-category">{tx.category}</span>}
+                      </span>
                       <span className="hint bank-page__tx-meta">
                         {new Date(tx.created_at).toLocaleString(undefined, {
                           month: 'short',

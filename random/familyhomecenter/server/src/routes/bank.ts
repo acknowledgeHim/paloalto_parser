@@ -2,13 +2,21 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireBankAccess } from '../middleware/requireBankAccess.js';
-import type { BankAccount, BankTransaction, FamilyMember } from '../types.js';
+import { addDays, todayStr } from '../utils/recurrence.js';
+import type { BankAccount, BankGoal, BankTransaction, FamilyMember } from '../types.js';
 
 // Mounted at /api/family-members/:memberId/bank — see index.ts. mergeParams so every route below
 // can read :memberId from the mount path (TS doesn't infer that across the mount boundary, hence
 // the `as { memberId: string }` casts below instead of relying on req.params' inferred type).
 export const bankRouter = Router({ mergeParams: true });
 bankRouter.use(requireBankAccess);
+
+function accountBalance(accountId: string): number {
+  const { total } = db
+    .prepare('SELECT COALESCE(SUM(amount), 0) as total FROM bank_transactions WHERE account_id = ?')
+    .get(accountId) as { total: number };
+  return total;
+}
 
 function accountsWithBalances(memberId: string) {
   const accounts = db
@@ -23,13 +31,24 @@ function accountsWithBalances(memberId: string) {
   });
 }
 
-/** GET / — every account (with running balance + full transaction history) for this member, plus
- *  how much unallocated Prize Bank money is still available to transfer in. */
+function goalsWithProgress(memberId: string) {
+  const goals = db
+    .prepare('SELECT * FROM bank_goals WHERE family_member_id = ? ORDER BY achieved_at IS NOT NULL ASC, created_at ASC')
+    .all(memberId) as BankGoal[];
+  return goals.map((goal) => ({ ...goal, saved: Math.max(0, accountBalance(goal.account_id)) }));
+}
+
+/** GET / — every account (with running balance + full transaction history) and savings goal for
+ *  this member, plus how much unallocated Prize Bank money is still available to transfer in. */
 bankRouter.get('/', (req, res) => {
   const { memberId } = req.params as { memberId: string };
   const member = db.prepare('SELECT * FROM family_members WHERE id = ?').get(memberId) as FamilyMember | undefined;
   if (!member) return res.status(404).json({ error: 'not found' });
-  res.json({ accounts: accountsWithBalances(member.id), prizeBankMoneyAvailable: member.money_balance });
+  res.json({
+    accounts: accountsWithBalances(member.id),
+    goals: goalsWithProgress(member.id),
+    prizeBankMoneyAvailable: member.money_balance,
+  });
 });
 
 bankRouter.post('/accounts', (req, res) => {
@@ -70,9 +89,10 @@ bankRouter.post('/accounts/:accountId/transactions', (req, res) => {
     .get(accountId, memberId) as BankAccount | undefined;
   if (!account) return res.status(404).json({ error: 'not found' });
 
-  const { amount, comment, created_by_id } = req.body as {
+  const { amount, comment, category, created_by_id } = req.body as {
     amount?: number;
     comment?: string;
+    category?: string | null;
     created_by_id?: string | null;
   };
   const amt = Number(amount);
@@ -84,12 +104,13 @@ bankRouter.post('/accounts/:accountId/transactions', (req, res) => {
     account_id: account.id,
     amount: amt,
     comment: comment.trim(),
+    category: category?.trim() || null,
     created_by_id: created_by_id ?? null,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO bank_transactions (id, account_id, amount, comment, created_by_id, created_at)
-     VALUES (@id, @account_id, @amount, @comment, @created_by_id, @created_at)`
+    `INSERT INTO bank_transactions (id, account_id, amount, comment, category, created_by_id, created_at)
+     VALUES (@id, @account_id, @amount, @comment, @category, @created_by_id, @created_at)`
   ).run(transaction);
   res.status(201).json(transaction);
 });
@@ -140,6 +161,7 @@ bankRouter.post('/transfer-from-rewards', (req, res) => {
     account_id: account.id,
     amount: amt,
     comment: comment.trim(),
+    category: 'Savings',
     created_by_id: created_by_id ?? null,
     created_at: new Date().toISOString(),
   };
@@ -147,10 +169,130 @@ bankRouter.post('/transfer-from-rewards', (req, res) => {
   db.transaction(() => {
     db.prepare('UPDATE family_members SET money_balance = money_balance - ? WHERE id = ?').run(amt, member.id);
     db.prepare(
-      `INSERT INTO bank_transactions (id, account_id, amount, comment, created_by_id, created_at)
-       VALUES (@id, @account_id, @amount, @comment, @created_by_id, @created_at)`
+      `INSERT INTO bank_transactions (id, account_id, amount, comment, category, created_by_id, created_at)
+       VALUES (@id, @account_id, @amount, @comment, @category, @created_by_id, @created_at)`
     ).run(transaction);
   })();
 
   res.status(201).json(transaction);
+});
+
+// ---- Savings goals ("save for a Lego set", $60) ----
+
+bankRouter.post('/goals', (req, res) => {
+  const { memberId } = req.params as { memberId: string };
+  const { account_id, title, target_amount, category } = req.body as {
+    account_id?: string;
+    title?: string;
+    target_amount?: number;
+    category?: string | null;
+  };
+  if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
+  const amt = Number(target_amount);
+  if (!amt || amt <= 0) return res.status(400).json({ error: 'target_amount must be a positive number' });
+  const account = db
+    .prepare('SELECT * FROM bank_accounts WHERE id = ? AND family_member_id = ?')
+    .get(account_id, memberId) as BankAccount | undefined;
+  if (!account) return res.status(404).json({ error: 'account not found' });
+
+  const goal: BankGoal = {
+    id: uuidv4(),
+    family_member_id: memberId,
+    account_id: account.id,
+    title: title.trim(),
+    target_amount: amt,
+    category: category?.trim() || null,
+    created_at: new Date().toISOString(),
+    achieved_at: null,
+  };
+  db.prepare(
+    `INSERT INTO bank_goals (id, family_member_id, account_id, title, target_amount, category, created_at, achieved_at)
+     VALUES (@id, @family_member_id, @account_id, @title, @target_amount, @category, @created_at, @achieved_at)`
+  ).run(goal);
+  res.status(201).json({ ...goal, saved: Math.max(0, accountBalance(account.id)) });
+});
+
+bankRouter.delete('/goals/:goalId', (req, res) => {
+  const { memberId, goalId } = req.params as { memberId: string; goalId: string };
+  db.prepare('DELETE FROM bank_goals WHERE id = ? AND family_member_id = ?').run(goalId, memberId);
+  res.status(204).end();
+});
+
+/**
+ * POST /goals/:goalId/achieve { created_by_id? } — marks a goal purchased: requires the linked
+ * account to actually hold the target amount, then withdraws it as a real transaction (comment =
+ * goal title, category = the goal's category) so the spend shows up in the category graphs, and
+ * stamps achieved_at. Atomic so a goal can never be marked achieved without the matching withdrawal.
+ */
+bankRouter.post('/goals/:goalId/achieve', (req, res) => {
+  const { memberId, goalId } = req.params as { memberId: string; goalId: string };
+  const goal = db.prepare('SELECT * FROM bank_goals WHERE id = ? AND family_member_id = ?').get(goalId, memberId) as
+    | BankGoal
+    | undefined;
+  if (!goal) return res.status(404).json({ error: 'not found' });
+  if (goal.achieved_at) return res.status(400).json({ error: 'already achieved' });
+
+  const balance = accountBalance(goal.account_id);
+  if (balance < goal.target_amount) {
+    return res.status(400).json({ error: 'Not saved up enough yet' });
+  }
+
+  const { created_by_id } = req.body as { created_by_id?: string | null };
+  const achievedAt = new Date().toISOString();
+  const transaction: BankTransaction = {
+    id: uuidv4(),
+    account_id: goal.account_id,
+    amount: -goal.target_amount,
+    comment: goal.title,
+    category: goal.category,
+    created_by_id: created_by_id ?? null,
+    created_at: achievedAt,
+  };
+
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO bank_transactions (id, account_id, amount, comment, category, created_by_id, created_at)
+       VALUES (@id, @account_id, @amount, @comment, @category, @created_by_id, @created_at)`
+    ).run(transaction);
+    db.prepare('UPDATE bank_goals SET achieved_at = ? WHERE id = ?').run(achievedAt, goal.id);
+  })();
+
+  res.status(201).json({ goal: { ...goal, achieved_at: achievedAt, saved: balance }, transaction });
+});
+
+// ---- Spending-by-category graphs ----
+
+const PERIOD_DAYS: Record<string, number> = { week: 7, month: 30, year: 365 };
+
+/**
+ * GET /spending?period=week|month|year — total spent (negative-amount transactions only, across
+ * every account) grouped by category, over a trailing window ending today. Deposits aren't
+ * included — this answers "what are they spending on", not net cash flow.
+ */
+bankRouter.get('/spending', (req, res) => {
+  const { memberId } = req.params as { memberId: string };
+  const period = (req.query.period as string) || 'month';
+  const days = PERIOD_DAYS[period] ?? PERIOD_DAYS.month;
+  const startDate = addDays(todayStr(), -(days - 1));
+
+  const rows = db
+    .prepare(
+      `SELECT bt.category as category, bt.amount as amount
+       FROM bank_transactions bt
+       JOIN bank_accounts ba ON ba.id = bt.account_id
+       WHERE ba.family_member_id = ? AND bt.amount < 0 AND date(bt.created_at) >= ?`
+    )
+    .all(memberId, startDate) as Array<{ category: string | null; amount: number }>;
+
+  const totalsByCategory = new Map<string, number>();
+  for (const row of rows) {
+    const key = row.category?.trim() || 'Other';
+    totalsByCategory.set(key, (totalsByCategory.get(key) ?? 0) + Math.abs(row.amount));
+  }
+  const byCategory = Array.from(totalsByCategory, ([category, total]) => ({ category, total })).sort(
+    (a, b) => b.total - a.total
+  );
+  const total = byCategory.reduce((sum, c) => sum + c.total, 0);
+
+  res.json({ period, days, byCategory, total });
 });

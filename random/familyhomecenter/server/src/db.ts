@@ -222,13 +222,31 @@ db.exec(`
 
   -- amount is positive for a deposit, negative for a withdrawal/spend; an account's balance is the
   -- sum of its transactions (no separate stored balance column, so it can never drift out of sync).
+  -- category (see client/src/utils/spendingCategories.ts for the preset list) is what the spending-
+  -- by-category graphs group by — only really meaningful for a spend, but not enforced either way.
   CREATE TABLE IF NOT EXISTS bank_transactions (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
     amount REAL NOT NULL,
     comment TEXT NOT NULL,
+    category TEXT,
     created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- A savings goal ("save for a Lego set", $60), tracked against one specific account's running
+  -- balance (no separate contribution tracking needed — the account balance IS the progress).
+  -- achieved_at is set when marked purchased, which also records a real withdrawal transaction
+  -- (see routes/bank.ts's /goals/:id/achieve) so the spend shows up in the category graphs too.
+  CREATE TABLE IF NOT EXISTS bank_goals (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    target_amount REAL NOT NULL,
+    category TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    achieved_at TEXT
   );
 `);
 
@@ -294,6 +312,14 @@ try {
 // password); NULL keeps working as the legacy single-household ADMIN_PASSWORD recovery login.
 try {
   db.exec('ALTER TABLE admin_sessions ADD COLUMN family_member_id TEXT REFERENCES family_members(id) ON DELETE CASCADE');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// Databases created before spending categories existed (bank_transactions predates bank_goals by
+// one release) need this added on — NULL/empty groups into "Other" in the spending graphs.
+try {
+  db.exec('ALTER TABLE bank_transactions ADD COLUMN category TEXT');
 } catch (err) {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }

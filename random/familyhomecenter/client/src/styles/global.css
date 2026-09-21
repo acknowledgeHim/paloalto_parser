@@ -824,7 +824,28 @@ textarea {
 .bank-page__tx-amount--pos { color: #16a34a; }
 .bank-page__tx-amount--neg { color: #dc2626; }
 .bank-page__tx-comment { min-width: 0; overflow-wrap: break-word; }
+.bank-page__tx-category { margin-left: 8px; }
 .bank-page__tx-meta { white-space: nowrap; }
+.bank-page__period-toggle { flex-wrap: wrap; }
+.bank-page__goals { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.bank-page__goal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.bank-page__goal-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bank-page__goal-title { font-weight: 700; }
+
+/* ---- Category spend chart ---- */
+.category-chart { display: flex; flex-direction: column; gap: 10px; }
+.category-chart__row { display: grid; grid-template-columns: 110px 1fr 70px; align-items: center; gap: 10px; }
+.category-chart__label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.category-chart__track { height: 14px; border-radius: 999px; background: var(--bg); overflow: hidden; }
+.category-chart__bar { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
+.category-chart__value { text-align: right; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
 
 /* ---- Family Board ---- */
 .family-board__columns {
