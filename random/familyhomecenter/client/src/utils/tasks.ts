@@ -19,14 +19,14 @@ export function sortForColumn(tasks: Task[]): Task[] {
 /**
  * Household-trust-level rule, not a security boundary (matches how the rest of this app treats
  * identity — see requireAdmin's comments for the one place that IS server-enforced, Prize Bank
- * amounts): a parent can edit/delete any task; a kid can only edit/delete one they created
- * themselves. Enforced client-side only — most kids have no password, so the server has no way to
- * verify who's actually asking.
+ * amounts): a parent can edit/delete any task; a kid can edit/delete one they created themselves,
+ * or one assigned to them (even if a parent created it). Enforced client-side only — most kids
+ * have no password, so the server has no way to verify who's actually asking.
  */
 export function canEditTask(task: Task, activeProfile: FamilyMember | null): boolean {
   if (!activeProfile) return false;
   if (activeProfile.is_parent === 1) return true;
-  return activeProfile.id === task.created_by_id;
+  return activeProfile.id === task.created_by_id || task.assignee_ids.includes(activeProfile.id);
 }
 
 /** Fully done for this person — every slot completed if it has more than one, else the one checkbox. */

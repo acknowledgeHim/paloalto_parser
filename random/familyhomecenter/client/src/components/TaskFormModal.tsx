@@ -160,14 +160,12 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
-        {isParent && (
-          <div className="task-form__row">
-            <select value={kind} onChange={(e) => setKind(e.target.value as 'chore' | 'todo')}>
-              <option value="todo">To-do</option>
-              <option value="chore">Chore</option>
-            </select>
-          </div>
-        )}
+        <div className="task-form__row">
+          <select value={kind} onChange={(e) => setKind(e.target.value as 'chore' | 'todo')}>
+            <option value="todo">To-do</option>
+            <option value="chore">Chore</option>
+          </select>
+        </div>
 
         {isParent ? (
           <div>
