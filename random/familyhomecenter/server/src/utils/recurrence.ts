@@ -43,13 +43,22 @@ export function taskAppliesOn(task: Pick<Task, 'recurrence' | 'due_date'>, dateS
   return false;
 }
 
+/** Formats a Date as YYYY-MM-DD in *local* time (per TZ in .env) — never use toISOString().slice(0, 10)
+ *  for this: that gives the UTC date, which is already "tomorrow" during evening hours in any
+ *  timezone behind UTC (true of every US timezone) — the cause of a real bug where a task completed
+ *  in the evening showed as still-completed the *next* local day too, since both landed on the same
+ *  (UTC-shifted) date string. en-CA locale formats as YYYY-MM-DD by convention. */
+function toLocalDateStr(date: Date): string {
+  return date.toLocaleDateString('en-CA');
+}
+
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalDateStr(new Date());
 }
 
 /** dateStr (YYYY-MM-DD) shifted by `n` days (negative goes backward). */
 export function addDays(dateStr: string, n: number): string {
   const date = new Date(`${dateStr}T00:00:00`);
   date.setDate(date.getDate() + n);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateStr(date);
 }

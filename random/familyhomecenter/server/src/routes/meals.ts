@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
+import { todayStr } from '../utils/recurrence.js';
 import type { Meal } from '../types.js';
 
 export const mealsRouter = Router();
@@ -51,7 +52,7 @@ function setRecipes(mealId: string, recipeIds: string[]) {
 
 /** GET /api/meals?start=YYYY-MM-DD&end=YYYY-MM-DD — defaults both to today. */
 mealsRouter.get('/', (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
   const start = (req.query.start as string) || today;
   const end = (req.query.end as string) || start;
   const meals = db
