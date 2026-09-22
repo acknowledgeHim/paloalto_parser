@@ -15,6 +15,9 @@ export interface FamilyMember {
   password_hash: string | null;
   /** Visual style id (client/src/utils/progressStyles.ts) for this person's Family Board progress bars. */
   progress_bar_style: string | null;
+  /** Where this person sorts in the profile switcher, Settings roster, and Family Board columns —
+   *  lower first. Defaults to arrival order; reorderable via POST /family-members/reorder. */
+  sort_order: number;
   created_at: string;
 }
 

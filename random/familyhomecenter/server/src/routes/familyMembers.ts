@@ -31,7 +31,23 @@ function toPublic(member: FamilyMember) {
 // GET stays open: the profile switcher and every assignee dropdown (tasks, calendar, music) need
 // the roster for everyday use. Only adding/editing/removing a family member is "configuration".
 familyMembersRouter.get('/', (_req, res) => {
-  const members = db.prepare('SELECT * FROM family_members ORDER BY created_at ASC').all() as FamilyMember[];
+  const members = db.prepare('SELECT * FROM family_members ORDER BY sort_order ASC, created_at ASC').all() as FamilyMember[];
+  res.json(members.map(toPublic));
+});
+
+/**
+ * POST /reorder { ids: string[] } — sets sort_order to each id's position in the given array
+ * (any member left out keeps its existing sort_order). Parent-only, same gate as adding/removing
+ * a family member — this is roster configuration, not everyday use.
+ */
+familyMembersRouter.post('/reorder', requireAdmin, (req, res) => {
+  const { ids } = req.body as { ids?: string[] };
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });
+  const setOrder = db.prepare('UPDATE family_members SET sort_order = ? WHERE id = ?');
+  db.transaction(() => {
+    ids.forEach((id, i) => setOrder.run(i, id));
+  })();
+  const members = db.prepare('SELECT * FROM family_members ORDER BY sort_order ASC, created_at ASC').all() as FamilyMember[];
   res.json(members.map(toPublic));
 });
 
@@ -153,6 +169,7 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'name is required' });
   }
+  const { max } = db.prepare('SELECT COALESCE(MAX(sort_order), -1) as max FROM family_members').get() as { max: number };
   const member: FamilyMember = {
     id: uuidv4(),
     name: name.trim(),
@@ -164,11 +181,12 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     money_balance: 0,
     password_hash: null,
     is_parent: is_parent ? 1 : 0,
+    sort_order: max + 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO family_members (id, name, color, avatar, complete_sound, progress_bar_style, is_parent, created_at)
-     VALUES (@id, @name, @color, @avatar, @complete_sound, @progress_bar_style, @is_parent, @created_at)`
+    `INSERT INTO family_members (id, name, color, avatar, complete_sound, progress_bar_style, is_parent, sort_order, created_at)
+     VALUES (@id, @name, @color, @avatar, @complete_sound, @progress_bar_style, @is_parent, @sort_order, @created_at)`
   ).run(member);
   res.status(201).json(toPublic(member));
 });

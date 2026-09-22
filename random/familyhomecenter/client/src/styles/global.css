@@ -521,6 +521,9 @@ textarea {
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
+.settings-page__member-order { display: flex; flex-direction: column; line-height: 1; }
+.settings-page__member-order button { font-size: 0.7em; padding: 0; }
+.settings-page__member-order button:disabled { opacity: 0.25; }
 .settings-page__geo-result { padding: 6px 0; color: var(--text-muted); }
 .settings-page label {
   display: flex;

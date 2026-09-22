@@ -108,6 +108,16 @@ export function SettingsPage() {
     refresh();
   };
 
+  const moveMember = async (id: string, direction: -1 | 1) => {
+    const ids = members.map((m) => m.id);
+    const i = ids.indexOf(id);
+    const j = i + direction;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    await api.post('/family-members/reorder', { ids });
+    refresh();
+  };
+
   const saveTiming = async (patch: Record<string, string>) => {
     setSettings(await api.patch<TimingSettings>('/settings', patch));
   };
@@ -166,8 +176,28 @@ export function SettingsPage() {
       <section className="panel">
         <h2>Family members</h2>
         <ul className="settings-page__member-list">
-          {members.map((m) => (
+          {members.map((m, i) => (
             <li key={m.id}>
+              <span className="settings-page__member-order">
+                <button
+                  type="button"
+                  className="link-button"
+                  aria-label={`Move ${m.name} up`}
+                  disabled={i === 0}
+                  onClick={() => moveMember(m.id, -1)}
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  className="link-button"
+                  aria-label={`Move ${m.name} down`}
+                  disabled={i === members.length - 1}
+                  onClick={() => moveMember(m.id, 1)}
+                >
+                  ▼
+                </button>
+              </span>
               <MemberAvatar member={m} /> {m.name}
               {m.is_parent === 1 && <span className="badge">Parent</span>}
               <button className="link-button" onClick={() => setMemberModal(m)}>Edit</button>

@@ -403,6 +403,22 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Lets a parent reorder the profile switcher / Settings roster / Family Board columns (see
+// routes/familyMembers.ts's POST /reorder) instead of being stuck with arrival order. Backfilled
+// from the existing created_at order so nothing visibly reshuffles the first time this runs.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+  db.exec(`
+    UPDATE family_members SET sort_order = (
+      SELECT COUNT(*) FROM family_members AS earlier
+      WHERE earlier.created_at < family_members.created_at
+         OR (earlier.created_at = family_members.created_at AND earlier.id < family_members.id)
+    )
+  `);
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;
