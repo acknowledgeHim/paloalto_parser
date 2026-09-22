@@ -70,7 +70,11 @@ export function ConverterTab() {
           <option value="temperature">Oven temperature</option>
         </select>
       </div>
-      {category === 'temperature' ? <TemperatureConverter /> : <VolumeOrWeightConverter category={category} />}
+      {category === 'temperature' ? (
+        <TemperatureConverter />
+      ) : (
+        <VolumeOrWeightConverter key={category} category={category} />
+      )}
     </div>
   );
 }
