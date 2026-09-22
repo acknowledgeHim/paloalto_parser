@@ -129,9 +129,12 @@ export function FamilyBoardPage() {
       <div className="family-board__columns">
         {members.map((member) => {
           const allMemberTasks = tasks.filter((t) => t.assignee_ids.includes(member.id));
-          // Done items drop off this at-a-glance list once complete — see the 🗹 log icon for what's
-          // been finished today instead of them lingering, crossed-out, in the "still to do" view.
-          const memberTasks = sortForColumn(allMemberTasks.filter((t) => !isTaskDoneFor(t, member.id)));
+          // Pending first (still actionable), done ones after — struck through via TaskCard's own
+          // "done" styling, same as the main Chores & To-dos page. Columns collapse by default now,
+          // so there's no more scroll cost to leaving completed chores visible at a glance.
+          const sortedMemberTasks = sortForColumn(allMemberTasks);
+          const pendingTasks = sortedMemberTasks.filter((t) => !isTaskDoneFor(t, member.id));
+          const doneMemberTasks = sortedMemberTasks.filter((t) => isTaskDoneFor(t, member.id));
           const memberEvents = events.filter((e) => e.for_member_id === member.id);
           const doneToday = completedToday(tasks, member.id).length;
           const expanded = expandedIds.has(member.id);
@@ -164,10 +167,14 @@ export function FamilyBoardPage() {
               {expanded && (
                 <>
                   <h3>Chores &amp; to-dos</h3>
-                  {memberTasks.length === 0 && (
-                    <div className="empty-state">{allMemberTasks.length === 0 ? 'Nothing assigned' : 'All done! 🎉'}</div>
+                  {allMemberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}
+                  {allMemberTasks.length > 0 && pendingTasks.length === 0 && (
+                    <div className="empty-state">All done! 🎉</div>
                   )}
-                  {memberTasks.map((t) => (
+                  {pendingTasks.map((t) => (
+                    <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee viewerId={member.id} />
+                  ))}
+                  {doneMemberTasks.map((t) => (
                     <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee viewerId={member.id} />
                   ))}
 
