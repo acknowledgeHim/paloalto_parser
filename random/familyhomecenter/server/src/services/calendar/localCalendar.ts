@@ -73,6 +73,10 @@ export function updateLocalEvent(id: string, patch: Partial<LocalEventRow>): Loc
   const existing = db.prepare('SELECT * FROM local_events WHERE id = ?').get(id) as LocalEventRow | undefined;
   if (!existing) return null;
   const updated = { ...existing, ...patch, id };
+  // patch comes straight from req.body, so all_day arrives as a real JS boolean (the client sends
+  // JSON true/false) — better-sqlite3 only binds numbers/strings/bigints/buffers/null and throws on
+  // a boolean, same reason createLocalEvent above coerces it. Normalize here too.
+  updated.all_day = updated.all_day ? 1 : 0;
   db.prepare(
     `UPDATE local_events SET title=@title, description=@description, location=@location, start_at=@start_at,
      end_at=@end_at, all_day=@all_day, color=@color, for_member_id=@for_member_id WHERE id=@id`

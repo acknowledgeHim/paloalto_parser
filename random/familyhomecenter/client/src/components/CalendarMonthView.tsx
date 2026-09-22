@@ -15,6 +15,22 @@ function startOfCalendarGrid(monthDate: Date): Date {
   return gridStart;
 }
 
+/** Every calendar day (as a toDateString() key) an event touches, start through end inclusive —
+ *  so a multi-day event (e.g. a trip, 9/22-9/28) shows up on each day of the grid, not just the
+ *  first. Capped at a year so a malformed/runaway range can't loop the render forever. */
+function dayKeysFor(event: CalendarEvent): string[] {
+  const start = new Date(event.start_at);
+  const end = new Date(event.end_at);
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const lastDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const keys: string[] = [];
+  for (let i = 0; cursor <= lastDay && i < 366; i++) {
+    keys.push(cursor.toDateString());
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+}
+
 export function CalendarMonthView({ monthDate, events, onSelectDay, onSelectEvent }: Props) {
   const gridStart = startOfCalendarGrid(monthDate);
   const cells = Array.from({ length: 42 }, (_, i) => {
@@ -25,9 +41,10 @@ export function CalendarMonthView({ monthDate, events, onSelectDay, onSelectEven
 
   const eventsByDay = new Map<string, CalendarEvent[]>();
   for (const ev of events) {
-    const key = new Date(ev.start_at).toDateString();
-    if (!eventsByDay.has(key)) eventsByDay.set(key, []);
-    eventsByDay.get(key)!.push(ev);
+    for (const key of dayKeysFor(ev)) {
+      if (!eventsByDay.has(key)) eventsByDay.set(key, []);
+      eventsByDay.get(key)!.push(ev);
+    }
   }
 
   const today = new Date().toDateString();
