@@ -94,6 +94,9 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
   const [biweeklyAnchor, setBiweeklyAnchor] = useState(initialRecurrence.biweeklyAnchor);
   const [timeOfDaySlots, setTimeOfDaySlots] = useState<TimeOfDaySlot[]>(parseTimeOfDaySlots(task?.time_of_day));
   const [dueDate, setDueDate] = useState(task?.due_date ?? '');
+  const [rewardEligible, setRewardEligible] = useState(Boolean(task?.reward_type));
+  const [rewardType, setRewardType] = useState<'stars' | 'money'>(task?.reward_type ?? 'stars');
+  const [rewardAmount, setRewardAmount] = useState(task?.reward_amount ?? 1);
 
   const toggleWeeklyDay = (code: string) => {
     setWeeklyDays((days) => (days.includes(code) ? days.filter((d) => d !== code) : [...days, code]));
@@ -131,10 +134,23 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
       time_of_day: timeOfDaySlots.length > 0 ? timeOfDaySlots.join(',') : null,
       due_date: recurrence === 'once' ? dueDate || null : null,
     };
+    let taskId: string;
     if (task) {
       await api.patch(`/tasks/${task.id}`, body);
+      taskId = task.id;
     } else {
-      await api.post('/tasks', { ...body, created_by_id: activeProfile?.id ?? null });
+      const created = await api.post<Task>('/tasks', { ...body, created_by_id: activeProfile?.id ?? null });
+      taskId = created.id;
+    }
+    // Only a parent can set/clear a reward (Prize Bank eligibility) — kids never see the checkbox,
+    // so this only fires for a parent's own add/edit, and PATCH /:id/reward is itself admin-gated
+    // server-side, same defense-in-depth as everywhere else Prize Bank rewards are set.
+    if (isParent) {
+      const effectiveType = kind === 'todo' && rewardEligible ? rewardType : null;
+      await api.patch(`/tasks/${taskId}/reward`, {
+        reward_type: effectiveType,
+        reward_amount: effectiveType ? rewardAmount : null,
+      });
     }
     onSaved();
   };
@@ -166,6 +182,30 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
             <option value="chore">Chore</option>
           </select>
         </div>
+
+        {isParent && kind === 'todo' && (
+          <div>
+            <label className="checkbox">
+              <input type="checkbox" checked={rewardEligible} onChange={(e) => setRewardEligible(e.target.checked)} />
+              Prize Bank eligible
+            </label>
+            {rewardEligible && (
+              <div className="task-form__row">
+                <select value={rewardType} onChange={(e) => setRewardType(e.target.value as 'stars' | 'money')}>
+                  <option value="stars">Stars</option>
+                  <option value="money">Money</option>
+                </select>
+                <input
+                  type="number"
+                  min={rewardType === 'stars' ? 1 : 0.01}
+                  step={rewardType === 'stars' ? 1 : 0.01}
+                  value={rewardAmount}
+                  onChange={(e) => setRewardAmount(Number(e.target.value) || 0)}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {isParent ? (
           <div>
