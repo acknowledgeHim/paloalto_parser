@@ -9,19 +9,30 @@ import { isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
 
-function todayLocalStr(): string {
-  return new Date().toLocaleDateString('en-CA');
-}
-
+// tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
+// recurring task the server only ever attaches completions where completed_on equals that date,
+// but for a "once" task (see taskQueries.ts's tasksForDate) it attaches every completion the task
+// has ever had, since a one-time task with no due date keeps applying indefinitely and its single
+// completion doesn't reset daily. Filtering here by completed_on === today additionally used to
+// drop that once-task's completion whenever it happened on an earlier day, undercounting this
+// log relative to the progress bars/task list (which just check "has any completion" — see
+// countProgress/isTaskDoneFor) even though the same task correctly shows as done everywhere else.
 function completedToday(tasks: Task[], memberId: string) {
-  const today = todayLocalStr();
   return tasks
     .filter((t) => t.assignee_ids.includes(memberId))
     .flatMap((t) =>
-      t.completions
-        .filter((c) => c.completed_by_id === memberId && c.completed_on === today)
-        .map((c) => ({ task: t, completion: c }))
+      t.completions.filter((c) => c.completed_by_id === memberId).map((c) => ({ task: t, completion: c }))
     );
+}
+
+// Usually today (recurring tasks always are), but a one-time task with no due date keeps
+// counting as done indefinitely once completed — show its actual date then, not just a time,
+// so an older completion showing up here under "completed today" isn't confusing.
+function fmtCompletedAt(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${time}`;
 }
 
 function CompletedTodayModal({ member, tasks, onClose }: { member: FamilyMember; tasks: Task[]; onClose: () => void }) {
@@ -37,9 +48,7 @@ function CompletedTodayModal({ member, tasks, onClose }: { member: FamilyMember;
               <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>{' '}
               {task.title}
               {completion.time_of_day && <span className="hint"> {timeOfDayIcon(completion.time_of_day)}</span>}
-              <span className="person-column__count">
-                {new Date(completion.completed_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-              </span>
+              <span className="person-column__count">{fmtCompletedAt(completion.completed_at)}</span>
             </li>
           ))}
         </ul>
