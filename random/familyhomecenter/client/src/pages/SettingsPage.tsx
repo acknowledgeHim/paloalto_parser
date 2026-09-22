@@ -103,9 +103,16 @@ export function SettingsPage() {
     api.get<SpotifyStatus>('/music/spotify/status').then(setSpotify).catch(console.error);
   }, [canManageSettings]);
 
+  const [memberError, setMemberError] = useState<string | null>(null);
+
   const removeMember = async (id: string) => {
-    await api.delete(`/family-members/${id}`);
-    refresh();
+    setMemberError(null);
+    try {
+      await api.delete(`/family-members/${id}`);
+      refresh();
+    } catch (err) {
+      setMemberError((err as Error).message || 'Could not remove that person');
+    }
   };
 
   const moveMember = async (id: string, direction: -1 | 1) => {
@@ -114,8 +121,13 @@ export function SettingsPage() {
     const j = i + direction;
     if (j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    await api.post('/family-members/reorder', { ids });
-    refresh();
+    setMemberError(null);
+    try {
+      await api.post('/family-members/reorder', { ids });
+      refresh();
+    } catch (err) {
+      setMemberError((err as Error).message || 'Could not reorder — try again');
+    }
   };
 
   const saveTiming = async (patch: Record<string, string>) => {
@@ -175,6 +187,7 @@ export function SettingsPage() {
 
       <section className="panel">
         <h2>Family members</h2>
+        {memberError && <div className="settings-login__error">{memberError}</div>}
         <ul className="settings-page__member-list">
           {members.map((m, i) => (
             <li key={m.id}>
