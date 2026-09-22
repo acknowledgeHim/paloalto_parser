@@ -2,6 +2,20 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Meal, type MealSlot, type Recipe } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { IngredientListEditor, type IngredientRow } from './IngredientListEditor.js';
+import { RECIPE_CATEGORIES } from '../utils/recipeCategories.js';
+
+/** Groups recipes by category for the picker below, in RECIPE_CATEGORIES order (uncategorized
+ *  recipes group under "Other", same as the spending/category graphs elsewhere in the app). */
+function groupByCategory(recipes: Recipe[]): Array<[string, Recipe[]]> {
+  const byCategory = new Map<string, Recipe[]>();
+  for (const r of recipes) {
+    const key = r.category?.trim() || 'Other';
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key)!.push(r);
+  }
+  const order = [...RECIPE_CATEGORIES, ...Array.from(byCategory.keys()).filter((c) => !RECIPE_CATEGORIES.includes(c))];
+  return order.filter((c) => byCategory.has(c)).map((c) => [c, byCategory.get(c)!]);
+}
 
 interface Props {
   /** null = creating a new meal. */
@@ -94,14 +108,19 @@ export function MealFormModal({ meal, defaultDate, defaultSlot, onClose, onSaved
         {recipes.length > 0 && (
           <div>
             <label className="member-form__label">Recipes (optional — adds their ingredients automatically)</label>
-            <div className="task-form__row chip-list">
-              {recipes.map((r) => (
-                <label key={r.id} className="checkbox">
-                  <input type="checkbox" checked={recipeIds.includes(r.id)} onChange={() => toggleRecipe(r.id)} />
-                  {r.title}
-                </label>
-              ))}
-            </div>
+            {groupByCategory(recipes).map(([category, group]) => (
+              <div key={category} className="meal-form__recipe-group">
+                <div className="meal-form__recipe-group-label">{category}</div>
+                <div className="task-form__row chip-list">
+                  {group.map((r) => (
+                    <label key={r.id} className="checkbox">
+                      <input type="checkbox" checked={recipeIds.includes(r.id)} onChange={() => toggleRecipe(r.id)} />
+                      {r.title}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

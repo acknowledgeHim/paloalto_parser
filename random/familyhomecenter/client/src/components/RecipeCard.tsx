@@ -19,6 +19,7 @@ export function RecipeCard({ recipe, onEdit }: Props) {
         <div className="recipe-card__title">
           {recipe.title}
           <span className="hint"> · serves {recipe.servings}</span>
+          {recipe.category && <span className="badge">{recipe.category}</span>}
         </div>
         <button
           type="button"

@@ -32,10 +32,11 @@ recipesRouter.get('/', (_req, res) => {
 });
 
 recipesRouter.post('/', (req, res) => {
-  const { title, instructions, servings, ingredients, created_by_id } = req.body as {
+  const { title, instructions, servings, category, ingredients, created_by_id } = req.body as {
     title?: string;
     instructions?: string;
     servings?: number;
+    category?: string | null;
     ingredients?: IngredientInput[];
     created_by_id?: string;
   };
@@ -49,12 +50,13 @@ recipesRouter.post('/', (req, res) => {
     instructions: instructions?.trim() || null,
     thumbnail_url: null,
     servings: Number(servings) > 0 ? Math.round(Number(servings)) : 4,
+    category: category?.trim() || null,
     created_by_id: created_by_id ?? null,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO recipes (id, title, source, source_id, instructions, thumbnail_url, servings, created_by_id, created_at)
-     VALUES (@id, @title, @source, @source_id, @instructions, @thumbnail_url, @servings, @created_by_id, @created_at)`
+    `INSERT INTO recipes (id, title, source, source_id, instructions, thumbnail_url, servings, category, created_by_id, created_at)
+     VALUES (@id, @title, @source, @source_id, @instructions, @thumbnail_url, @servings, @category, @created_by_id, @created_at)`
   ).run(recipe);
   setIngredients(recipe.id, ingredients ?? []);
   res.status(201).json({ ...recipe, ingredients: ingredientsFor(recipe.id) });
@@ -69,8 +71,9 @@ recipesRouter.patch('/:id', (req, res) => {
     title: (req.body.title as string | undefined)?.trim() || existing.title,
     instructions: (req.body.instructions as string | undefined)?.trim() || null,
     servings: Number(req.body.servings) > 0 ? Math.round(Number(req.body.servings)) : existing.servings,
+    category: (req.body.category as string | null | undefined)?.trim() || null,
   };
-  db.prepare('UPDATE recipes SET title=@title, instructions=@instructions, servings=@servings WHERE id=@id').run(updated);
+  db.prepare('UPDATE recipes SET title=@title, instructions=@instructions, servings=@servings, category=@category WHERE id=@id').run(updated);
   if (req.body.ingredients) setIngredients(req.params.id, req.body.ingredients as IngredientInput[]);
   res.json({ ...updated, ingredients: ingredientsFor(req.params.id) });
 });
@@ -103,6 +106,7 @@ function normalizeTheMealDb(meal: TheMealDbMeal) {
     title: meal.strMeal,
     instructions: meal.strInstructions,
     thumbnail_url: meal.strMealThumb,
+    category: meal.strCategory?.trim() || null,
     ingredients,
   };
 }
@@ -128,13 +132,14 @@ recipesRouter.get(
 
 /** POST /api/recipes/import — saves a search-online result (or any freeform recipe) into the local library. */
 recipesRouter.post('/import', (req, res) => {
-  const { title, instructions, thumbnail_url, source, source_id, servings, ingredients, created_by_id } = req.body as {
+  const { title, instructions, thumbnail_url, source, source_id, servings, category, ingredients, created_by_id } = req.body as {
     title?: string;
     instructions?: string | null;
     thumbnail_url?: string | null;
     source?: string;
     source_id?: string | null;
     servings?: number;
+    category?: string | null;
     ingredients?: IngredientInput[];
     created_by_id?: string;
   };
@@ -150,12 +155,13 @@ recipesRouter.post('/import', (req, res) => {
     // TheMealDB's free API doesn't reliably report a serving size — 4 is a reasonable default,
     // editable afterward like any local recipe.
     servings: Number(servings) > 0 ? Math.round(Number(servings)) : 4,
+    category: category?.trim() || null,
     created_by_id: created_by_id ?? null,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO recipes (id, title, source, source_id, instructions, thumbnail_url, servings, created_by_id, created_at)
-     VALUES (@id, @title, @source, @source_id, @instructions, @thumbnail_url, @servings, @created_by_id, @created_at)`
+    `INSERT INTO recipes (id, title, source, source_id, instructions, thumbnail_url, servings, category, created_by_id, created_at)
+     VALUES (@id, @title, @source, @source_id, @instructions, @thumbnail_url, @servings, @category, @created_by_id, @created_at)`
   ).run(recipe);
   setIngredients(recipe.id, ingredients ?? []);
   res.status(201).json({ ...recipe, ingredients: ingredientsFor(recipe.id) });

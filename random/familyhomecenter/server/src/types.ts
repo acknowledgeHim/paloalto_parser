@@ -93,6 +93,8 @@ export interface Recipe {
   thumbnail_url: string | null;
   /** Baseline serving count the ingredient quantities are written for (client scales from this). */
   servings: number;
+  /** Course category (see client/src/utils/recipeCategories.ts) — null groups into "Other" in the meal planner. */
+  category: string | null;
   created_by_id: string | null;
   created_at: string;
 }

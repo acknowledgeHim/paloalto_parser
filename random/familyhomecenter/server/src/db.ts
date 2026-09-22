@@ -395,6 +395,14 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Course category (see client/src/utils/recipeCategories.ts for the preset list) — lets the meal
+// planner group recipes by course when picking one for a meal. NULL/empty groups into "Other".
+try {
+  db.exec('ALTER TABLE recipes ADD COLUMN category TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

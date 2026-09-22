@@ -392,6 +392,8 @@ textarea {
 .task-form__row > * { flex: 1; }
 .chip-list { flex-wrap: wrap; }
 .chip-list label { display: flex; align-items: center; gap: 4px; flex: initial; }
+.meal-form__recipe-group { margin-bottom: 8px; }
+.meal-form__recipe-group-label { font-size: 0.8em; font-weight: 700; color: var(--text-muted); margin-bottom: 2px; }
 
 /* ---- Family member form (color/avatar/sound pickers) ---- */
 .member-form__preview { display: flex; justify-content: center; margin-bottom: 4px; }

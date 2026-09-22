@@ -68,6 +68,7 @@ export function RecipesTab() {
               <div className="recipe-card__title">
                 {r.title}
                 <span className="hint"> · {r.ingredients.length} ingredients</span>
+                {r.category && <span className="badge">{r.category}</span>}
               </div>
               <button type="button" className="secondary" disabled={importedIds.has(r.source_id)} onClick={() => importResult(r)}>
                 {importedIds.has(r.source_id) ? 'Added ✓' : 'Add to my recipes'}

@@ -34,6 +34,8 @@ export interface FamilyMember {
   complete_sound: string | null;
   /** Visual style id (see utils/progressStyles.ts) for this person's Family Board progress bars. */
   progress_bar_style: string | null;
+  /** Where this person sorts in the profile switcher, Settings roster, and Family Board columns. */
+  sort_order: number;
   is_parent: 0 | 1;
   /** Prize Bank running totals. */
   star_balance: number;
@@ -250,6 +252,8 @@ export interface Recipe {
   instructions: string | null;
   thumbnail_url: string | null;
   servings: number;
+  /** Course category (see utils/recipeCategories.ts) — null groups into "Other" in the meal planner. */
+  category: string | null;
   created_by_id: string | null;
   created_at: string;
   ingredients: Ingredient[];
@@ -262,6 +266,7 @@ export interface RecipeSearchResult {
   title: string;
   instructions: string | null;
   thumbnail_url: string | null;
+  category: string | null;
   ingredients: Array<{ name: string; quantity: string | null }>;
 }
 

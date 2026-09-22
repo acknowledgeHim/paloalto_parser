@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api, type Recipe } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { IngredientListEditor, type IngredientRow } from './IngredientListEditor.js';
+import { RECIPE_CATEGORIES } from '../utils/recipeCategories.js';
 
 interface Props {
   /** null = creating a new recipe. */
@@ -10,10 +11,45 @@ interface Props {
   onSaved: () => void;
 }
 
+const PRESET_CATEGORIES = RECIPE_CATEGORIES.slice(0, -1); // all but the "Other" catch-all
+
+function CategoryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [mode, setMode] = useState<'none' | 'preset' | 'custom'>(
+    value === '' ? 'none' : PRESET_CATEGORIES.includes(value) ? 'preset' : 'custom'
+  );
+
+  const handleSelect = (v: string) => {
+    if (v === '') {
+      setMode('none');
+      onChange('');
+    } else if (v === 'Other') {
+      setMode('custom');
+      onChange('');
+    } else {
+      setMode('preset');
+      onChange(v);
+    }
+  };
+
+  return (
+    <div className="task-form__row">
+      <select value={mode === 'preset' ? value : mode === 'custom' ? 'Other' : ''} onChange={(e) => handleSelect(e.target.value)}>
+        <option value="">No category</option>
+        {PRESET_CATEGORIES.map((c) => (
+          <option key={c} value={c}>{c}</option>
+        ))}
+        <option value="Other">Other</option>
+      </select>
+      {mode === 'custom' && <input placeholder="Category name" value={value} onChange={(e) => onChange(e.target.value)} />}
+    </div>
+  );
+}
+
 export function RecipeFormModal({ recipe, onClose, onSaved }: Props) {
   const { activeProfile } = useFamilyMembers();
   const [title, setTitle] = useState(recipe?.title ?? '');
   const [servings, setServings] = useState(recipe?.servings ?? 4);
+  const [category, setCategory] = useState(recipe?.category ?? '');
   const [instructions, setInstructions] = useState(recipe?.instructions ?? '');
   const [ingredients, setIngredients] = useState<IngredientRow[]>(
     recipe?.ingredients.map((i) => ({ name: i.name, quantity: i.quantity ?? '' })) ?? [{ name: '', quantity: '' }]
@@ -25,6 +61,7 @@ export function RecipeFormModal({ recipe, onClose, onSaved }: Props) {
     const body = {
       title: title.trim(),
       servings,
+      category: category.trim() || null,
       instructions: instructions.trim() || null,
       ingredients: ingredients.filter((i) => i.name.trim()),
     };
@@ -58,6 +95,8 @@ export function RecipeFormModal({ recipe, onClose, onSaved }: Props) {
             />
           </label>
         </div>
+        <label className="member-form__label">Category</label>
+        <CategoryPicker value={category} onChange={setCategory} />
         <label className="member-form__label">Ingredients</label>
         <IngredientListEditor ingredients={ingredients} onChange={setIngredients} />
         <textarea
