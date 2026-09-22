@@ -145,6 +145,18 @@ export function canAccessBank(token: string | undefined, memberId: string): bool
   return canManageMember(token, memberId);
 }
 
+/**
+ * Manual bank transactions (add/delete) are parent-only, even though viewing the bank and
+ * managing goals stays self-or-parent — a kid should be able to track savings goals but not credit
+ * or debit their own account by hand. Same activation rule as the rest of Bank (only once a
+ * password protects this specific member or a parent), so a family that hasn't set up logins yet
+ * keeps the same open, household-trust default as everything else.
+ */
+export function canManageBankTransactions(token: string | undefined, memberId: string): boolean {
+  if (!memberGateActiveFor(memberId)) return true;
+  return isRequestAdmin(token);
+}
+
 export function deleteSession(token: string | undefined): void {
   if (!token) return;
   db.prepare('DELETE FROM admin_sessions WHERE token = ?').run(token);

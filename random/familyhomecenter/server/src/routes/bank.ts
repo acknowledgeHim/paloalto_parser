@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
-import { requireBankAccess } from '../middleware/requireBankAccess.js';
+import { requireBankAccess, requireBankTransactionAccess } from '../middleware/requireBankAccess.js';
 import { addDays, todayStr } from '../utils/recurrence.js';
 import type { BankAccount, BankGoal, BankTransaction, FamilyMember } from '../types.js';
 
@@ -82,7 +82,7 @@ bankRouter.delete('/accounts/:accountId', (req, res) => {
 /** POST /accounts/:accountId/transactions { amount, comment, created_by_id? } — a manual entry:
  *  positive amount = deposit, negative = withdrawal/spend. comment is required so the ledger is
  *  always self-explaining ("why getting the money"). */
-bankRouter.post('/accounts/:accountId/transactions', (req, res) => {
+bankRouter.post('/accounts/:accountId/transactions', requireBankTransactionAccess, (req, res) => {
   const { memberId, accountId } = req.params as { memberId: string; accountId: string };
   const account = db
     .prepare('SELECT * FROM bank_accounts WHERE id = ? AND family_member_id = ?')
@@ -115,7 +115,7 @@ bankRouter.post('/accounts/:accountId/transactions', (req, res) => {
   res.status(201).json(transaction);
 });
 
-bankRouter.delete('/transactions/:txId', (req, res) => {
+bankRouter.delete('/transactions/:txId', requireBankTransactionAccess, (req, res) => {
   const { memberId, txId } = req.params as { memberId: string; txId: string };
   const tx = db
     .prepare(

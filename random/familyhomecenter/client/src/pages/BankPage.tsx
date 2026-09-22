@@ -268,6 +268,11 @@ export function BankPage() {
   // enforcement is server-side (requireBankAccess) once a password protects it; this just keeps
   // the client from offering the data/controls at all before that point.
   const canView = Boolean(activeProfile && (activeProfile.id === id || activeProfile.is_parent === 1));
+  // Manual transactions (add/delete) are parent-only — a kid can still track goals and transfer
+  // their own earned Prize Bank money, but shouldn't be able to hand-credit/debit their account.
+  // Same household-trust-level client check as Settings; real enforcement is server-side
+  // (requireBankTransactionAccess) once a password protects this.
+  const canManageTransactions = Boolean(activeProfile?.is_parent === 1);
 
   const load = () => {
     if (!id || !canView) return;
@@ -492,7 +497,9 @@ export function BankPage() {
               )}
 
               <div className="task-form__row">
-                <TransactionForm onAdd={(amount, comment, category) => addTransaction(account.id, amount, comment, category)} />
+                {canManageTransactions && (
+                  <TransactionForm onAdd={(amount, comment, category) => addTransaction(account.id, amount, comment, category)} />
+                )}
                 <NewGoalForm onAdd={(title, targetAmount, category) => addGoal(account.id, title, targetAmount, category)} />
               </div>
 
@@ -519,13 +526,15 @@ export function BankPage() {
                         })}{' '}
                         · {whoAdded(members, tx.created_by_id)}
                       </span>
-                      <ConfirmButton
-                        label="✕"
-                        ariaLabel="Delete transaction"
-                        confirmLabel={`Delete this ${money(Math.abs(tx.amount))} transaction?`}
-                        onConfirm={() => removeTransaction(tx.id)}
-                        className="task-card__edit"
-                      />
+                      {canManageTransactions && (
+                        <ConfirmButton
+                          label="✕"
+                          ariaLabel="Delete transaction"
+                          confirmLabel={`Delete this ${money(Math.abs(tx.amount))} transaction?`}
+                          onConfirm={() => removeTransaction(tx.id)}
+                          className="task-card__edit"
+                        />
+                      )}
                     </li>
                   ))}
                 </ul>
