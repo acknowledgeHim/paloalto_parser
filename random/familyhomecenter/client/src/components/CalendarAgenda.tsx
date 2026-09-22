@@ -5,6 +5,8 @@ interface Props {
   days?: number;
   /** When set, events with no specific for_member_id (i.e. everyone) get this label shown next to them. */
   wholeFamilyLabel?: string;
+  /** Called when a local event is clicked, to edit it — external (Google/Apple) events aren't editable here. */
+  onSelectEvent?: (event: CalendarEvent) => void;
 }
 
 function fmtTime(iso: string, allDay: boolean): string {
@@ -13,7 +15,7 @@ function fmtTime(iso: string, allDay: boolean): string {
 }
 
 /** Simple "what's coming up" list, grouped by calendar day — used on the dashboard. */
-export function CalendarAgenda({ events, days = 5, wholeFamilyLabel }: Props) {
+export function CalendarAgenda({ events, days = 5, wholeFamilyLabel, onSelectEvent }: Props) {
   const byDay = new Map<string, CalendarEvent[]>();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -42,7 +44,14 @@ export function CalendarAgenda({ events, days = 5, wholeFamilyLabel }: Props) {
               : new Date(dayKey).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
           </div>
           {byDay.get(dayKey)!.map((ev) => (
-            <div key={ev.id} className="agenda__event" style={{ borderLeftColor: ev.color }}>
+            <div
+              key={ev.id}
+              className={['agenda__event', ev.source === 'local' && onSelectEvent ? 'agenda__event--editable' : ''].join(' ')}
+              style={{ borderLeftColor: ev.color }}
+              onClick={() => {
+                if (ev.source === 'local' && onSelectEvent) onSelectEvent(ev);
+              }}
+            >
               <span className="agenda__event-time">{fmtTime(ev.start_at, ev.all_day)}</span>
               <span className="agenda__event-title">{ev.title}</span>
               {wholeFamilyLabel && !ev.for_member_id && <span className="badge badge--time">{wholeFamilyLabel}</span>}

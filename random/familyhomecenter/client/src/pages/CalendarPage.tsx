@@ -8,6 +8,7 @@ export function CalendarPage() {
   const [monthDate, setMonthDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   interface CalendarSources {
     google?: { connected: boolean; configured: boolean };
     apple?: { configured: boolean };
@@ -47,13 +48,26 @@ export function CalendarPage() {
         <button onClick={() => setShowForm(true)}>+ Add event</button>
       </div>
 
-      {showForm && <AddEventForm onCreated={load} onClose={() => setShowForm(false)} />}
+      {(showForm || editingEvent) && (
+        <AddEventForm
+          event={editingEvent}
+          onCreated={load}
+          onClose={() => {
+            setShowForm(false);
+            setEditingEvent(null);
+          }}
+        />
+      )}
 
       <div className="calendar-page__body">
-        <CalendarMonthView monthDate={monthDate} events={events} />
+        <CalendarMonthView monthDate={monthDate} events={events} onSelectEvent={setEditingEvent} />
         <aside className="panel calendar-page__agenda">
           <h2>Next up</h2>
-          <CalendarAgenda events={events.filter((e) => new Date(e.end_at) >= new Date())} days={7} />
+          <CalendarAgenda
+            events={events.filter((e) => new Date(e.end_at) >= new Date())}
+            days={7}
+            onSelectEvent={setEditingEvent}
+          />
         </aside>
       </div>
     </div>

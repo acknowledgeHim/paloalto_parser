@@ -276,6 +276,8 @@ textarea {
   margin-bottom: 6px;
 }
 .agenda__event-time { color: var(--text-muted); font-size: 0.85em; min-width: 80px; }
+.agenda__event--editable { cursor: pointer; }
+.agenda__event--editable:hover { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
 .agenda__event-title { flex: 1; font-weight: 600; }
 
 /* ---- Task cards & forms ---- */
@@ -498,6 +500,8 @@ textarea {
   text-overflow: ellipsis;
 }
 .month-view__more { font-size: 0.7em; color: var(--text-muted); }
+.month-view__event--editable { cursor: pointer; }
+.month-view__event--editable:hover { filter: brightness(1.15); }
 
 /* ---- Settings ---- */
 .settings-page__header {
