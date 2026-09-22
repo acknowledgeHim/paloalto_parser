@@ -809,6 +809,17 @@ textarea {
   font-size: 0.8em;
   font-weight: 700;
 }
+.person-column__expand {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75em;
+}
+.person-column--collapsed { padding-bottom: 12px; }
 
 /* ---- Person page ---- */
 .person-page__header { display: flex; align-items: center; gap: 16px; margin: 16px 0 20px; }

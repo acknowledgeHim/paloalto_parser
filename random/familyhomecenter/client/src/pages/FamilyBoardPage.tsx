@@ -92,6 +92,18 @@ export function FamilyBoardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [logMemberId, setLogMemberId] = useState<string | null>(null);
+  // Collapsed by default — with several people, everyone's full chore/calendar lists push the
+  // next row of columns far down the page. Collapsed shows just the avatar + progress bars;
+  // clicking expands that one person's column to the full detail.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((ids) => {
+      const next = new Set(ids);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const loadTasks = () => api.get<Task[]>('/tasks').then(setTasks).catch(console.error);
 
@@ -122,8 +134,9 @@ export function FamilyBoardPage() {
           const memberTasks = sortForColumn(allMemberTasks.filter((t) => !isTaskDoneFor(t, member.id)));
           const memberEvents = events.filter((e) => e.for_member_id === member.id);
           const doneToday = completedToday(tasks, member.id).length;
+          const expanded = expandedIds.has(member.id);
           return (
-            <section key={member.id} className="panel person-column">
+            <section key={member.id} className={`panel person-column ${expanded ? '' : 'person-column--collapsed'}`}>
               <h2>
                 <Link to={`/person/${member.id}`} className="person-column__link">
                   <MemberAvatar member={member} /> {member.name}
@@ -136,21 +149,33 @@ export function FamilyBoardPage() {
                 >
                   🗹 {doneToday}
                 </button>
+                <button
+                  type="button"
+                  className="person-column__expand"
+                  aria-label={expanded ? `Collapse ${member.name}'s column` : `Expand ${member.name}'s column`}
+                  onClick={() => toggleExpanded(member.id)}
+                >
+                  {expanded ? '▲' : '▼'}
+                </button>
               </h2>
 
               <MemberProgressBars member={member} tasks={tasks} />
 
-              <h3>Chores &amp; to-dos</h3>
-              {memberTasks.length === 0 && (
-                <div className="empty-state">{allMemberTasks.length === 0 ? 'Nothing assigned' : 'All done! 🎉'}</div>
-              )}
-              {memberTasks.map((t) => (
-                <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee viewerId={member.id} />
-              ))}
+              {expanded && (
+                <>
+                  <h3>Chores &amp; to-dos</h3>
+                  {memberTasks.length === 0 && (
+                    <div className="empty-state">{allMemberTasks.length === 0 ? 'Nothing assigned' : 'All done! 🎉'}</div>
+                  )}
+                  {memberTasks.map((t) => (
+                    <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee viewerId={member.id} />
+                  ))}
 
-              <h3>Calendar</h3>
-              {memberEvents.length === 0 && <div className="empty-state">Nothing on the calendar</div>}
-              <CalendarAgenda events={memberEvents} days={7} />
+                  <h3>Calendar</h3>
+                  {memberEvents.length === 0 && <div className="empty-state">Nothing on the calendar</div>}
+                  <CalendarAgenda events={memberEvents} days={7} />
+                </>
+              )}
             </section>
           );
         })}
