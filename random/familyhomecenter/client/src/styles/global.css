@@ -1033,7 +1033,15 @@ textarea {
   align-items: flex-end;
   justify-content: center;
 }
-.trend-chart__bar { width: 70%; min-height: 3px; border-radius: 4px 4px 0 0; }
+.trend-chart__stack {
+  width: 70%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+}
+.trend-chart__bar { min-height: 3px; }
+.trend-chart__bar--pending { background: var(--text-muted); opacity: 0.35; }
 .trend-chart__date { font-size: 0.65em; color: var(--text-muted); margin-top: 4px; }
 
 .day-detail__list { list-style: none; padding: 0; margin: 0; }

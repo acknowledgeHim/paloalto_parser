@@ -93,7 +93,9 @@ export interface PersonDetail {
   agenda: Array<{ date: string; tasks: Task[] }>;
   stats: {
     statsDays: number;
-    completionsByDay: Array<{ date: string; count: number }>;
+    /** count = tasks completed that day, notCompleted = tasks assigned that day but not done —
+     *  same "was it assigned that day" source as the day drill-down, so the two stay consistent. */
+    completionsByDay: Array<{ date: string; count: number; notCompleted: number }>;
     /** Completions after a slot's window closed (morning: noon, afternoon: 4pm), or a one-off task
      *  finished after its due date. */
     lateByDay: Array<{ date: string; count: number }>;

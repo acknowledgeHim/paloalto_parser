@@ -22,6 +22,16 @@ export const familyMembersRouter = Router();
 
 const COOKIE_OPTIONS = { httpOnly: true, sameSite: 'lax' as const, maxAge: 30 * 24 * 60 * 60 * 1000 };
 
+/** Server-side twin of client/src/utils/tasks.ts's isTaskDoneFor — keep the two in sync. Fully
+ *  done for this person: every slot completed if it has more than one, else the one checkbox. */
+function isTaskDoneForMember(task: TaskWithAssignment, memberId: string): boolean {
+  const slots = timeOfDaySlots(task.time_of_day);
+  if (slots.length > 1) {
+    return slots.every((slot) => task.completions.some((c) => c.completed_by_id === memberId && c.time_of_day === slot));
+  }
+  return task.completions.some((c) => c.completed_by_id === memberId);
+}
+
 /** Never send password_hash to the client — expose only whether one is set. */
 function toPublic(member: FamilyMember) {
   const { password_hash, ...rest } = member;
@@ -74,17 +84,20 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
 
   const startDate = addDays(today, -(statsDays - 1));
 
-  const completionRows = db
-    .prepare(
-      `SELECT completed_on as date, COUNT(*) as count FROM task_completions
-       WHERE completed_by_id = ? AND completed_on >= ? AND completed_on <= ?
-       GROUP BY completed_on`
-    )
-    .all(member.id, startDate, today) as Array<{ date: string; count: number }>;
-  const countByDate = new Map(completionRows.map((r) => [r.date, r.count]));
+  // Per day, every task assigned to this person that day (same source as the day drill-down —
+  // tasksForDate, so what's "not completed" here matches what tapping that day actually shows),
+  // split into done/not-done by task (not by individual slot) so the two bars sum to "how many
+  // things were on their plate that day" in an intuitive, glanceable way.
   const completionsByDay = Array.from({ length: statsDays }, (_, i) => {
     const date = addDays(startDate, i);
-    return { date, count: countByDate.get(date) ?? 0 };
+    const dayTasks = tasksForDate(date).filter((t) => t.assignee_ids.includes(member.id));
+    let count = 0;
+    let notCompleted = 0;
+    for (const t of dayTasks) {
+      if (isTaskDoneForMember(t, member.id)) count++;
+      else notCompleted++;
+    }
+    return { date, count, notCompleted };
   });
 
   // "Late" = a time-of-day slot completed after its window closed, or a one-off task completed

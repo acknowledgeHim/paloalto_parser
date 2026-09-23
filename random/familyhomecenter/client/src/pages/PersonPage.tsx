@@ -162,12 +162,15 @@ export function PersonPage() {
 
       <section className="panel">
         <h2>Trends — last {TREND_DAYS} days</h2>
-        {stats.completionsByDay.every((d) => d.count === 0) ? (
-          <div className="empty-state">Nothing completed yet in this window.</div>
+        {stats.completionsByDay.every((d) => d.count === 0 && d.notCompleted === 0) ? (
+          <div className="empty-state">Nothing assigned yet in this window.</div>
         ) : (
           <CompletionTrendChart data={stats.completionsByDay} color={member.color} onSelectDate={setDetailDate} />
         )}
-        <p className="hint">Tap a day for what was completed and what wasn't.</p>
+        <p className="hint">
+          <span style={{ color: member.color }}>■</span> done &nbsp;
+          <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>■</span> not done — tap a day for details.
+        </p>
       </section>
 
       {stats.lateByDay.some((d) => d.count > 0) && (
