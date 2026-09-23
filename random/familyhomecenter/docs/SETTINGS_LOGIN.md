@@ -30,7 +30,9 @@ everyone, logged in or not.
 Open the profile switcher (top of any page) and tap the 🔑 next to your name. The first time, you
 can set any password immediately — no approval needed (a family roster is a trusted starting
 point, same spirit as the rest of this app). Changing or removing it later requires the current
-one.
+one — unless a parent is already logged in, in which case they can reset *anyone's* password
+(including another parent's) from that person's 🔑 icon without knowing the old one. See
+"Recovering access" below for what to do when no parent is logged in at all.
 
 Picking a name that has no password set works exactly like before: tap it, you're switched in,
 nothing to type.
@@ -50,16 +52,41 @@ so a parent's unlocked Settings session doesn't linger after they've walked away
 
 ## Recovering access if every parent forgets their password
 
-Set the legacy household recovery password in `.env`:
+**If another parent remembers theirs:** have them log in as themselves, then tap the forgetful
+parent's 🔑 icon in the profile switcher and set a new password — no need to know the old one (see
+above).
+
+**If `ADMIN_PASSWORD` is set in `.env`:** Settings' login screen also accepts that one password
+(shared by the whole household, not tied to a specific person) as a fallback — enter it there
+directly, without picking a profile first. Once in, tap the locked-out parent's 🔑 icon and set a
+fresh password for them.
 
 ```
 ADMIN_PASSWORD=something-only-parents-know
 ```
 
-Restart the server. Now Settings' login screen also accepts this one password (shared by the whole
-household, not tied to a specific person) as a fallback — enter it there directly, without picking
-a profile first. Once in, set a fresh password for whichever parent needs one, from their own 🔑
-icon.
+(Restart the server after adding/changing this in `.env`.)
+
+**If neither of those applies** — no other parent, and no `ADMIN_PASSWORD` configured (or that's
+forgotten too) — there's a command-line escape hatch that clears a password directly in the
+database, for whoever has shell/SSH access to the machine running the server (the Pi, typically —
+same trust level as editing `.env` or the database file by hand). From the `server/` directory:
+
+```
+npm run reset-password -- <name or id>
+```
+
+Run it with no name to list everyone and whether they have a password set:
+
+```
+npm run reset-password
+```
+
+This clears that person's password (and logs out any session currently signed in as them) — it
+doesn't set a new one. Afterwards, open the app, tap their name in the profile switcher (no
+password needed now), then their 🔑 icon to set a new password. The script talks directly to
+`server/data/familyhomecenter.db`; it doesn't need the server to be running, but do run it on the
+machine that actually hosts that database file.
 
 ## How it works
 
@@ -72,7 +99,18 @@ icon.
 
 ## Turning it off again
 
-Remove a parent's password (their own 🔑 icon, or have another parent's Settings session do it via
-editing that family member) and unset `ADMIN_PASSWORD` in `.env` — once no parent has one and the
-recovery password is blank, Settings goes back to fully open. Kids' own optional passwords are
-unaffected either way — they only ever protect switching into that person's profile.
+Remove every parent's password (their own 🔑 icon, leaving the new-password field blank — or
+another logged-in parent's 🔑 tap on their behalf) and unset `ADMIN_PASSWORD` in `.env` — once no
+parent has one and the recovery password is blank, Settings goes back to fully open. Kids' own
+optional passwords are unaffected either way — they only ever protect switching into that person's
+profile.
+
+## Bank privacy
+
+Each kid's Bank page (`/person/:id/bank`) is private to that kid and any parent once *that specific
+kid* has their own password set (or a parent logs in) — everyone else is turned away, same
+self-or-parent rule as Settings. A kid who's never set a password keeps their balance visible to
+the household, same open default as everything else, even after a parent sets up their own
+password elsewhere. Adding or removing a manual transaction by hand is always parent-only,
+regardless of whether any password exists — kids can still track savings goals and transfer their
+own earned Prize Bank money themselves.

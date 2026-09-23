@@ -235,6 +235,11 @@ familyMembersRouter.delete('/:id', requireAdmin, (req, res) => {
  * already set, current_password must match it; if none is set yet, this is first-time setup and
  * anything goes (bootstrapping — a family roster is a trusted starting point, same spirit as the
  * rest of this app). Setting a password also logs this browser in as that person.
+ *
+ * A verified admin session (a logged-in parent, or the legacy ADMIN_PASSWORD recovery login —
+ * see isRequestAdmin) skips the current_password check entirely, for anyone's password including
+ * another parent's — this is how a parent resets a kid's forgotten password, and how the recovery
+ * password documented in docs/SETTINGS_LOGIN.md actually gets you somewhere once you're logged in.
  */
 familyMembersRouter.put(
   '/:id/password',
@@ -245,7 +250,8 @@ familyMembersRouter.put(
     if (!existing) return res.status(404).json({ error: 'not found' });
 
     const { current_password, new_password } = req.body as { current_password?: string; new_password?: string | null };
-    if (existing.password_hash && !verifyMemberPassword(current_password ?? '', existing.password_hash)) {
+    const requesterIsAdmin = isRequestAdmin(req.cookies?.[SESSION_COOKIE_NAME]);
+    if (existing.password_hash && !requesterIsAdmin && !verifyMemberPassword(current_password ?? '', existing.password_hash)) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
 
