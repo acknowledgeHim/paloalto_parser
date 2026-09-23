@@ -11,16 +11,17 @@ export function assigneesFor(taskId: string): string[] {
 }
 
 /**
- * A "once" task with no due date applies every single day until it's done (taskAppliesOn has no
- * concept of completions, so by itself it just returns true forever for that case). Its real
- * timeframe is "whenever someone gets to it" — once it has a completion from an earlier day, that
- * timeframe has passed, so it should stop applying (and therefore stop counting as done, in every
- * progress bar/list/log that trusts tasksForDate's output) on every day after that, instead of
- * permanently lingering on every future day's board. It's still included on the exact day it was
- * completed, so it shows crossed out there.
+ * A "once" task (with or without a due date — see taskAppliesOn) applies every single day from
+ * whenever it starts mattering until it's done (taskAppliesOn has no concept of completions, so
+ * by itself it just returns true forever from that point on). Its real timeframe is "whenever
+ * someone gets to it" — once it has a completion from an earlier day, that timeframe has passed,
+ * so it should stop applying (and therefore stop counting as done, in every progress bar/list/log
+ * that trusts tasksForDate's output) on every day after that, instead of permanently lingering on
+ * every future day's board. It's still included on the exact day it was completed, so it shows
+ * crossed out there.
  */
 function onceTaskStillOpenOn(task: Task, date: string): boolean {
-  if (task.recurrence !== 'once' || task.due_date) return true;
+  if (task.recurrence !== 'once') return true;
   const row = db.prepare('SELECT 1 FROM task_completions WHERE task_id = ? AND completed_on < ? LIMIT 1').get(task.id, date);
   return !row;
 }

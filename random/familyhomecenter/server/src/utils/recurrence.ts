@@ -47,7 +47,11 @@ export function taskAppliesOn(task: Pick<Task, 'recurrence' | 'due_date'>, dateS
   const code = DAY_CODES[date.getDay()];
 
   if (recurrence === 'once') {
-    return !task.due_date || task.due_date === dateStr;
+    // Starts applying on its due date (not before — see taskQueries.ts's onceTaskStillOpenOn for
+    // the "no due date" case, which starts immediately) and, same as that case, keeps applying on
+    // every day after too until it's actually done, instead of quietly dropping off the board the
+    // day after it was due.
+    return !task.due_date || dateStr >= task.due_date;
   }
   if (recurrence === 'daily') return true;
   if (recurrence === 'weekdays') return !['SAT', 'SUN'].includes(code);
