@@ -263,11 +263,15 @@ export function BankPage() {
   const [transferComment, setTransferComment] = useState('');
   const [transferError, setTransferError] = useState<string | null>(null);
 
-  // Household-trust-level rule, same spirit as PersonPage's canEditProfile — don't even ask the
-  // server for another kid's bank unless the picked profile is that person or a parent. Real
-  // enforcement is server-side (requireBankAccess) once a password protects it; this just keeps
-  // the client from offering the data/controls at all before that point.
-  const canView = Boolean(activeProfile && (activeProfile.id === id || activeProfile.is_parent === 1));
+  // Private once this specific kid has their own password (or a parent's), self-or-parent only —
+  // but a kid who's never set a password keeps the same open, household-trust visibility as the
+  // rest of the app (anyone can glance at their balance; see services/auth.ts's
+  // bankViewGateActiveFor for the matching server-side rule). Real enforcement is server-side
+  // (requireBankAccess) once a password protects it; this just keeps the client from offering the
+  // data/controls at all before that point.
+  const canView = Boolean(
+    (member && !member.has_password) || (activeProfile && (activeProfile.id === id || activeProfile.is_parent === 1))
+  );
   // Manual transactions (add/delete) are parent-only — a kid can still track goals and transfer
   // their own earned Prize Bank money, but shouldn't be able to hand-credit/debit their account.
   // Same household-trust-level client check as Settings; real enforcement is server-side

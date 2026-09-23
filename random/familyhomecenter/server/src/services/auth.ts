@@ -127,9 +127,23 @@ function memberGateActiveFor(memberId: string): boolean {
   return anyParentHasPassword();
 }
 
-/** Can this session view/edit memberId's own stuff (bank, profile settings)? Self-or-parent. */
-export function canManageMember(token: string | undefined, memberId: string): boolean {
-  if (!memberGateActiveFor(memberId)) return true;
+/**
+ * Bank viewing gates on this specific member's own password (or the legacy recovery password)
+ * only — unlike memberGateActiveFor above, a parent setting up their own password doesn't also
+ * lock every passwordless kid out of seeing their own balance. Once that kid (or a parent) does
+ * set a password, it's private again, same self-or-parent enforcement as everything else.
+ */
+function bankViewGateActiveFor(memberId: string): boolean {
+  if (isAdminPasswordConfigured()) return true;
+  const member = db.prepare('SELECT password_hash FROM family_members WHERE id = ?').get(memberId) as
+    | { password_hash: string | null }
+    | undefined;
+  return Boolean(member?.password_hash);
+}
+
+/** Self-or-parent: open once `gateActive` is false, otherwise only that member's own session or a parent's. */
+function selfOrParentGate(token: string | undefined, memberId: string, gateActive: boolean): boolean {
+  if (!gateActive) return true;
   const session = getValidSession(token);
   if (!session) return false;
   if (!session.family_member_id) return true; // legacy recovery login
@@ -140,9 +154,14 @@ export function canManageMember(token: string | undefined, memberId: string): bo
   return member?.is_parent === 1;
 }
 
-/** Bank access uses the exact same self-or-parent rule as profile editing. */
+/** Can this session view/edit memberId's own stuff (profile settings, avatar, sound)? Self-or-parent. */
+export function canManageMember(token: string | undefined, memberId: string): boolean {
+  return selfOrParentGate(token, memberId, memberGateActiveFor(memberId));
+}
+
+/** Bank viewing — self-or-parent, but only once *this* member (or a parent) has a password; see bankViewGateActiveFor. */
 export function canAccessBank(token: string | undefined, memberId: string): boolean {
-  return canManageMember(token, memberId);
+  return selfOrParentGate(token, memberId, bankViewGateActiveFor(memberId));
 }
 
 /**
