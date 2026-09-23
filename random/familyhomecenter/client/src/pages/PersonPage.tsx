@@ -8,16 +8,30 @@ import { TaskFormModal } from '../components/TaskFormModal.js';
 import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
 import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
-import { canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
+import { canEditHistoricalTask, canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
 const TREND_DAYS = 14;
 const AGENDA_DAYS = 7;
 
 /** What a specific day looked like for this person — every task assigned to them that day, done
- *  or not — opened by tapping a bar in the Trends/Late-completions charts. Read-only: this is
- *  history, not necessarily today, so it doesn't offer the usual complete/uncomplete toggle. */
-function DayDetailModal({ member, date, onClose }: { member: FamilyMember; date: string; onClose: () => void }) {
+ *  or not — opened by tapping a bar in the Trends/Late-completions charts. Mostly read-only (this
+ *  is history, not necessarily today, so there's no complete/uncomplete toggle here), but offers
+ *  an edit button per canEditHistoricalTask — e.g. to fix a to-do that was given the wrong
+ *  time-of-day and so looks like it was missed. */
+function DayDetailModal({
+  member,
+  date,
+  activeProfile,
+  onClose,
+  onEdit,
+}: {
+  member: FamilyMember;
+  date: string;
+  activeProfile: FamilyMember | null;
+  onClose: () => void;
+  onEdit: (task: Task) => void;
+}) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
 
   useEffect(() => {
@@ -51,6 +65,11 @@ function DayDetailModal({ member, date, onClose }: { member: FamilyMember; date:
                   <span className={`day-detail__status ${done ? 'day-detail__status--done' : 'day-detail__status--pending'}`}>
                     {done ? '✓ Done' : 'Not done'}
                   </span>
+                  {canEditHistoricalTask(t, member.id, activeProfile) && (
+                    <button type="button" className="task-card__edit" aria-label="Edit" onClick={() => onEdit(t)}>
+                      ✎
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -231,7 +250,18 @@ export function PersonPage() {
         />
       )}
 
-      {detailDate && <DayDetailModal member={member} date={detailDate} onClose={() => setDetailDate(null)} />}
+      {detailDate && (
+        <DayDetailModal
+          member={member}
+          date={detailDate}
+          activeProfile={activeProfile}
+          onClose={() => setDetailDate(null)}
+          onEdit={(t) => {
+            setDetailDate(null);
+            setModalTask(t);
+          }}
+        />
+      )}
 
       {editingProfile && (
         <FamilyMemberFormModal

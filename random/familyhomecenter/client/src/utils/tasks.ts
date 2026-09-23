@@ -29,6 +29,21 @@ export function canEditTask(task: Task, activeProfile: FamilyMember | null): boo
   return activeProfile.id === task.created_by_id || task.assignee_ids.includes(activeProfile.id);
 }
 
+/**
+ * Editing permission for a historical entry surfaced from the Trends/Late-completions day
+ * drill-down (PersonPage's DayDetailModal) — deliberately stricter than canEditTask's general
+ * "assigned to you or created by you" rule: fixing a chore's own recurrence/timing record needs a
+ * parent's say-so, but a kid can still correct their own to-do (e.g. picked the wrong
+ * time-of-day) without one. pageOwnerId is whose person page this drill-down is on, not
+ * necessarily every assignee of a shared task.
+ */
+export function canEditHistoricalTask(task: Task, pageOwnerId: string, activeProfile: FamilyMember | null): boolean {
+  if (!activeProfile) return false;
+  if (activeProfile.is_parent === 1) return true;
+  if (task.kind === 'chore') return false;
+  return activeProfile.id === pageOwnerId;
+}
+
 /** Fully done for this person — every slot completed if it has more than one, else the one checkbox. */
 export function isTaskDoneFor(task: Task, memberId: string): boolean {
   const slots = parseTimeOfDaySlots(task.time_of_day);
