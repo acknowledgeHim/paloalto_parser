@@ -9,6 +9,13 @@ export const PROGRESS_STYLES = [
   { id: 'stripes', label: 'Stripes', fill: 'repeating-linear-gradient(45deg, #38bdf8, #38bdf8 10px, #0ea5e9 10px, #0ea5e9 20px)' },
   { id: 'gold', label: 'Gold', fill: 'linear-gradient(90deg, #fbbf24, #f59e0b, #d97706)' },
   { id: 'mint', label: 'Mint', fill: 'linear-gradient(90deg, #34d399, #10b981, #059669)' },
+  { id: 'berry', label: 'Berry', fill: 'linear-gradient(90deg, #86198f, #c026d3, #e879f9)' },
+  { id: 'forest', label: 'Forest', fill: 'linear-gradient(90deg, #14532d, #16a34a, #4ade80)' },
+  { id: 'lava', label: 'Lava', fill: 'linear-gradient(90deg, #7f1d1d, #dc2626, #f97316)' },
+  { id: 'sky', label: 'Sky', fill: 'linear-gradient(90deg, #0284c7, #38bdf8, #bae6fd)' },
+  { id: 'lavender', label: 'Lavender', fill: 'linear-gradient(90deg, #7c3aed, #a78bfa, #ede9fe)' },
+  { id: 'slate', label: 'Slate', fill: 'linear-gradient(90deg, #334155, #64748b, #94a3b8)' },
+  { id: 'dots', label: 'Dots', fill: 'repeating-radial-gradient(circle at 8px 8px, #ffffff80 0, #ffffff80 3px, transparent 4px, transparent 16px), #6366f1' },
 ] as const;
 
 export type ProgressStyleId = (typeof PROGRESS_STYLES)[number]['id'];
