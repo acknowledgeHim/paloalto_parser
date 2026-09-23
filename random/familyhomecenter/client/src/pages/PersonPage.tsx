@@ -55,25 +55,37 @@ function DayDetailModal({
         {tasks === null && <div className="empty-state">Loading…</div>}
         {tasks !== null && tasks.length === 0 && <div className="empty-state">Nothing assigned this day.</div>}
         {tasks !== null && tasks.length > 0 && (
-          <ul className="day-detail__list">
-            {tasks.map((t) => {
-              const done = isTaskDoneFor(t, member.id);
-              return (
-                <li key={t.id}>
-                  <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>{' '}
-                  <span className={done ? 'day-detail__title--done' : undefined}>{t.title}</span>
-                  <span className={`day-detail__status ${done ? 'day-detail__status--done' : 'day-detail__status--pending'}`}>
-                    {done ? '✓ Done' : 'Not done'}
-                  </span>
-                  {canEditHistoricalTask(t, member.id, activeProfile) && (
-                    <button type="button" className="task-card__edit" aria-label="Edit" onClick={() => onEdit(t)}>
-                      ✎
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <ul className="day-detail__list">
+              {tasks.map((t) => {
+                const done = isTaskDoneFor(t, member.id);
+                return (
+                  <li key={t.id}>
+                    <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>{' '}
+                    <span className={done ? 'day-detail__title--done' : undefined}>{t.title}</span>
+                    <span className={`day-detail__status ${done ? 'day-detail__status--done' : 'day-detail__status--pending'}`}>
+                      {done ? '✓ Done' : 'Not done'}
+                    </span>
+                    {canEditHistoricalTask(t, member.id, activeProfile) && (
+                      <button type="button" className="task-card__edit" aria-label="Edit" onClick={() => onEdit(t)}>
+                        ✎
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {!activeProfile && (
+              <p className="hint">
+                Pick your name (or a parent's) up top to edit a wrongly-timed to-do or chore from here.
+              </p>
+            )}
+            {activeProfile && !activeProfile.is_parent && !tasks.some((t) => canEditHistoricalTask(t, member.id, activeProfile)) && (
+              <p className="hint">
+                Only {member.name} or a parent can edit a to-do here; only a parent can edit a chore.
+              </p>
+            )}
+          </>
         )}
         <button type="button" className="secondary" onClick={onClose}>Close</button>
       </div>
