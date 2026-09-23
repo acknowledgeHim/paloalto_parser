@@ -1016,6 +1016,15 @@ textarea {
   align-items: center;
   height: 100%;
 }
+.trend-chart__col--clickable {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 0;
+  min-height: 0;
+  cursor: pointer;
+}
+.trend-chart__col--clickable:hover { background: var(--bg); }
 .trend-chart__value { font-size: 0.7em; color: var(--text-muted); height: 14px; }
 .trend-chart__track {
   flex: 1;
@@ -1026,3 +1035,11 @@ textarea {
 }
 .trend-chart__bar { width: 70%; min-height: 3px; border-radius: 4px 4px 0 0; }
 .trend-chart__date { font-size: 0.65em; color: var(--text-muted); margin-top: 4px; }
+
+.day-detail__list { list-style: none; padding: 0; margin: 0; }
+.day-detail__list li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.day-detail__list li:last-child { border-bottom: none; }
+.day-detail__title--done { text-decoration: line-through; color: var(--text-muted); }
+.day-detail__status { margin-left: auto; font-size: 0.8em; font-weight: 700; }
+.day-detail__status--done { color: var(--accent); }
+.day-detail__status--pending { color: var(--text-muted); }

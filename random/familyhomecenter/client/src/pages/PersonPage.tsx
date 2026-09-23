@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, type CalendarEvent, type PersonDetail, type Task } from '../api/client.js';
+import { api, type CalendarEvent, type FamilyMember, type PersonDetail, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { TaskCard } from '../components/TaskCard.js';
@@ -8,11 +8,59 @@ import { TaskFormModal } from '../components/TaskFormModal.js';
 import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
 import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
-import { canEditTask, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
 const TREND_DAYS = 14;
 const AGENDA_DAYS = 7;
+
+/** What a specific day looked like for this person — every task assigned to them that day, done
+ *  or not — opened by tapping a bar in the Trends/Late-completions charts. Read-only: this is
+ *  history, not necessarily today, so it doesn't offer the usual complete/uncomplete toggle. */
+function DayDetailModal({ member, date, onClose }: { member: FamilyMember; date: string; onClose: () => void }) {
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+
+  useEffect(() => {
+    setTasks(null);
+    api
+      .get<Task[]>(`/tasks?date=${date}`)
+      .then((all) => setTasks(sortForColumn(all.filter((t) => t.assignee_ids.includes(member.id)))))
+      .catch(() => setTasks([]));
+  }, [date, member.id]);
+
+  const label = new Date(`${date}T00:00`).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel task-form" onClick={(e) => e.stopPropagation()}>
+        <h2>{member.name} — {label}</h2>
+        {tasks === null && <div className="empty-state">Loading…</div>}
+        {tasks !== null && tasks.length === 0 && <div className="empty-state">Nothing assigned this day.</div>}
+        {tasks !== null && tasks.length > 0 && (
+          <ul className="day-detail__list">
+            {tasks.map((t) => {
+              const done = isTaskDoneFor(t, member.id);
+              return (
+                <li key={t.id}>
+                  <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>{' '}
+                  <span className={done ? 'day-detail__title--done' : undefined}>{t.title}</span>
+                  <span className={`day-detail__status ${done ? 'day-detail__status--done' : 'day-detail__status--pending'}`}>
+                    {done ? '✓ Done' : 'Not done'}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <button type="button" className="secondary" onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
+}
 
 export function PersonPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +70,7 @@ export function PersonPage() {
   const [notFound, setNotFound] = useState(false);
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [detailDate, setDetailDate] = useState<string | null>(null);
 
   const load = () => {
     if (!id) return;
@@ -85,8 +134,9 @@ export function PersonPage() {
         {stats.completionsByDay.every((d) => d.count === 0) ? (
           <div className="empty-state">Nothing completed yet in this window.</div>
         ) : (
-          <CompletionTrendChart data={stats.completionsByDay} color={member.color} />
+          <CompletionTrendChart data={stats.completionsByDay} color={member.color} onSelectDate={setDetailDate} />
         )}
+        <p className="hint">Tap a day for what was completed and what wasn't.</p>
       </section>
 
       {stats.lateByDay.some((d) => d.count > 0) && (
@@ -96,7 +146,7 @@ export function PersonPage() {
             A time-of-day slot finished after its window (morning: noon, afternoon: 4pm), or a
             to-do finished after its due date.
           </p>
-          <CompletionTrendChart data={stats.lateByDay} color="#f59e0b" />
+          <CompletionTrendChart data={stats.lateByDay} color="#f59e0b" onSelectDate={setDetailDate} />
         </section>
       )}
 
@@ -180,6 +230,8 @@ export function PersonPage() {
           }}
         />
       )}
+
+      {detailDate && <DayDetailModal member={member} date={detailDate} onClose={() => setDetailDate(null)} />}
 
       {editingProfile && (
         <FamilyMemberFormModal
