@@ -79,7 +79,13 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
   const agenda: Array<{ date: string; tasks: TaskWithAssignment[] }> = [];
   for (let i = 0; i < upcomingDays; i++) {
     const date = addDays(today, i);
-    agenda.push({ date, tasks: tasksForDate(date).filter((t) => t.assignee_ids.includes(member.id)) });
+    let dayTasks = tasksForDate(date).filter((t) => t.assignee_ids.includes(member.id));
+    // A "once" task is a today thing, not a preview item — it applies from whenever it starts
+    // mattering (its due date, or immediately if none) through every day it stays undone (see
+    // taskAppliesOn/onceTaskStillOpenOn), which would otherwise repeat it across the entire
+    // "Coming up" window instead of just today's agenda entry (i === 0).
+    if (i > 0) dayTasks = dayTasks.filter((t) => t.recurrence !== 'once');
+    agenda.push({ date, tasks: dayTasks });
   }
 
   const startDate = addDays(today, -(statsDays - 1));
