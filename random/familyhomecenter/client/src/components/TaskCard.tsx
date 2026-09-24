@@ -22,6 +22,12 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
   const effectiveViewerId = viewerId ?? activeProfile?.id;
   const slots = parseTimeOfDaySlots(task.time_of_day);
   const multiSlot = slots.length > 1;
+  // Household-trust-level rule, same spirit as canEditTask — checking a task done/undone is
+  // whoever's copy this card shows (effectiveViewerId), so only that person or a parent should be
+  // able to tap it, not whoever else happens to be standing at the kiosk. Enforced client-side
+  // only, same as the rest of this app's identity checks.
+  const canToggle = Boolean(activeProfile && (activeProfile.id === effectiveViewerId || activeProfile.is_parent === 1));
+  const toggleTitle = canToggle ? undefined : 'Only this person or a parent can check this off';
 
   const isDone = (slot: string | null): boolean => {
     if (effectiveViewerId) {
@@ -56,7 +62,13 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
   return (
     <div className={`task-card ${allDone ? 'task-card--done' : ''}`}>
       {!multiSlot && (
-        <button className="task-card__check" onClick={() => toggle(null)} aria-label={isDone(null) ? 'Mark not done' : 'Mark done'}>
+        <button
+          className="task-card__check"
+          onClick={() => toggle(null)}
+          disabled={!canToggle}
+          title={toggleTitle}
+          aria-label={isDone(null) ? 'Mark not done' : 'Mark done'}
+        >
           {isDone(null) ? '✓' : ''}
         </button>
       )}
@@ -108,6 +120,8 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
                   type="button"
                   className={`task-card__slot ${done ? 'task-card__slot--done' : ''} ${passed ? 'task-card__slot--passed' : ''}`}
                   onClick={() => toggle(slot)}
+                  disabled={!canToggle}
+                  title={toggleTitle}
                 >
                   {done ? '✓' : passed ? '⏰' : timeOfDayIcon(slot)} {timeOfDayLabel(slot)}
                 </button>
