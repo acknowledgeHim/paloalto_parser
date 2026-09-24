@@ -456,6 +456,40 @@ def _eval_config_check(check: dict, gaia_lines: list[tuple[int, str]]) -> dict:
     return {"status": "FAIL", "line": 0, "text": "", "had_vars": had_vars}
 
 
+_GAIA_NTP_SERVER_RE = re.compile(r'^(?:set ntp server (?:primary|secondary)|add ntp server)\s+(\S+)')
+
+
+def _eval_gaia_ntp(gaia_lines: list[tuple[int, str]]) -> dict:
+    """CIS 2.3.1 on enterprise Gaia, evaluated directly rather than through
+    the .audit's expect patterns — those demand a literal 'version 3' on each
+    server line, so a server configured with 'version 4' (Gaia's default) or
+    no version token false-FAILed even with NTP on and two servers set.
+    PASS = 'set ntp active on' plus at least two distinct NTP servers."""
+    active, active_ln = None, 0
+    servers: dict[str, int] = {}
+    for ln, txt in gaia_lines:
+        m = re.match(r'^set ntp active (\S+)', txt)
+        if m:
+            active, active_ln = m.group(1).lower(), ln
+            continue
+        m = _GAIA_NTP_SERVER_RE.match(txt)
+        if m:
+            servers.setdefault(m.group(1), ln)
+    ok = active == "on" and len(servers) >= 2
+    if active is None:
+        reason = "'set ntp active' not configured"
+    elif active != "on":
+        reason = f"NTP is disabled ('set ntp active {active}')"
+    elif len(servers) < 2:
+        reason = f"NTP is on but only {len(servers)} server(s) configured — a secondary is required"
+    else:
+        reason = ""
+    evidence = (f"active={active or '(unset)'}, servers="
+                f"{', '.join(servers) or '(none)'}" + (f" — {reason}" if reason else ""))
+    lines = ([active_ln] if active_ln else []) + list(servers.values())
+    return {"status": "PASS" if ok else "FAIL", "lines": lines, "evidence": evidence}
+
+
 # ── SmartConsole Rule Base CSV export ────────────────────────────────────────
 _RULE_HDR_ALIASES: dict[str, list[str]] = {
     "num":         ["no.", "no", "rule number", "#"],
@@ -1197,6 +1231,18 @@ class CheckpointParser:
                              + (info or ""),
                              solution or "Not applicable to this platform.",
                              pci_ids=pci_ids)
+                continue
+
+            if base_id == "2.3.1":
+                result = _eval_gaia_ntp(self.gaia_lines)
+                if result["status"] == "FAIL":
+                    self._issue(severity, umbrella_title, base_id,
+                                 f"[{level}] {umbrella_title}",
+                                 info or f"{umbrella_title} — NTP is not enabled with a primary and secondary server.",
+                                 solution or "See the CIS Check Point Firewall Benchmark for remediation steps.",
+                                 details=result["evidence"],
+                                 line=", ".join(str(l) for l in result["lines"]),
+                                 pci_ids=pci_ids)
                 continue
 
             failures = []
