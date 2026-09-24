@@ -21,9 +21,17 @@ Configuration actions gated once a parent has a password:
   amounts are gated
 - Uploading a custom completion-sound MP3
 
-Everything else — checking off chores, adding to-dos, browsing/adding calendar events, controlling
-music playback and zone grouping, browsing photos, and paging on the intercom — stays open to
-everyone, logged in or not.
+Everything else — adding to-dos, browsing/adding calendar events, controlling music playback and
+zone grouping, browsing photos, and paging on the intercom — stays open to everyone, logged in or
+not.
+
+**Checking a chore or to-do off (or un-checking it) is the one exception**, and doesn't wait for
+any password to exist: only the person it's *for* (whoever's picked in the switcher) or a parent
+can tap it — a sibling's checkbox shows disabled to anyone else. This is a household-trust check
+like the rest of this list (see canEditTask's comment in the code), not a real security boundary —
+it's about a kid checking off *another kid's* chore, not about hiding whether it's done, so it
+stays this loose on purpose. Editing a task's own details (title, recurrence, timing) follows the
+usual self-or-parent rule too, everywhere a task shows up.
 
 ## Setting your own password
 
