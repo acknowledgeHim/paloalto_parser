@@ -103,6 +103,18 @@ export function PersonPage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [detailDate, setDetailDate] = useState<string | null>(null);
 
+  // strugglingTasks only carries the summary fields (title/kind/counts), not the full Task
+  // TaskFormModal needs to edit — fetch it on demand rather than growing that endpoint's payload
+  // for a rarely-used action. Every struggling task is assigned to this page's member by
+  // construction (see the server's assignedTaskIds), so the usual "assigned to you" canEditTask
+  // check is moot — canEditProfile's self-or-parent gate below covers it exactly.
+  const openTaskEdit = (taskId: string) => {
+    api.get<Task[]>('/tasks?all=true').then((all) => {
+      const task = all.find((t) => t.id === taskId);
+      if (task) setModalTask(task);
+    });
+  };
+
   const load = () => {
     if (!id) return;
     api
@@ -194,6 +206,11 @@ export function PersonPage() {
                 <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>
                 <span className="person-page__struggling-title">{t.title}</span>
                 <span className="hint">missed {t.missed} of {t.expected} times</span>
+                {canEditProfile && (
+                  <button type="button" className="task-card__edit" aria-label="Edit" onClick={() => openTaskEdit(t.task_id)}>
+                    ✎
+                  </button>
+                )}
               </li>
             ))}
           </ul>

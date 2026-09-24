@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { api, type FamilyMember, type Task, type CalendarEvent } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
+import { TaskFormModal } from '../components/TaskFormModal.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
-import { isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
 
@@ -35,7 +36,19 @@ function fmtCompletedAt(iso: string): string {
   return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${time}`;
 }
 
-function CompletedTodayModal({ member, tasks, onClose }: { member: FamilyMember; tasks: Task[]; onClose: () => void }) {
+function CompletedTodayModal({
+  member,
+  tasks,
+  activeProfile,
+  onClose,
+  onEdit,
+}: {
+  member: FamilyMember;
+  tasks: Task[];
+  activeProfile: FamilyMember | null;
+  onClose: () => void;
+  onEdit: (task: Task) => void;
+}) {
   const items = completedToday(tasks, member.id);
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -49,6 +62,11 @@ function CompletedTodayModal({ member, tasks, onClose }: { member: FamilyMember;
               {task.title}
               {completion.time_of_day && <span className="hint"> {timeOfDayIcon(completion.time_of_day)}</span>}
               <span className="person-column__count">{fmtCompletedAt(completion.completed_at)}</span>
+              {canEditTask(task, activeProfile) && (
+                <button type="button" className="task-card__edit" aria-label="Edit" onClick={() => onEdit(task)}>
+                  ✎
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -97,10 +115,11 @@ function MemberProgressBars({ member, tasks }: { member: FamilyMember; tasks: Ta
  * have going on."
  */
 export function FamilyBoardPage() {
-  const { members } = useFamilyMembers();
+  const { members, activeProfile } = useFamilyMembers();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [logMemberId, setLogMemberId] = useState<string | null>(null);
+  const [modalTask, setModalTask] = useState<Task | null>(null);
   // Collapsed by default — with several people, everyone's full chore/calendar lists push the
   // next row of columns far down the page. Collapsed shows just the avatar + progress bars;
   // clicking expands that one person's column to the full detail.
@@ -181,10 +200,24 @@ export function FamilyBoardPage() {
                     <div className="empty-state">All done! 🎉</div>
                   )}
                   {pendingTasks.map((t) => (
-                    <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee viewerId={member.id} />
+                    <TaskCard
+                      key={t.id}
+                      task={t}
+                      onChange={loadTasks}
+                      hideAssignee
+                      viewerId={member.id}
+                      onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+                    />
                   ))}
                   {doneMemberTasks.map((t) => (
-                    <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee viewerId={member.id} />
+                    <TaskCard
+                      key={t.id}
+                      task={t}
+                      onChange={loadTasks}
+                      hideAssignee
+                      viewerId={member.id}
+                      onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+                    />
                   ))}
 
                   <h3>Calendar</h3>
@@ -200,7 +233,15 @@ export function FamilyBoardPage() {
           <h2>Unassigned</h2>
           <h3>Chores &amp; to-dos</h3>
           {unassignedTasks.length === 0 && <div className="empty-state">Nothing unclaimed</div>}
-          {unassignedTasks.map((t) => <TaskCard key={t.id} task={t} onChange={loadTasks} hideAssignee />)}
+          {unassignedTasks.map((t) => (
+            <TaskCard
+              key={t.id}
+              task={t}
+              onChange={loadTasks}
+              hideAssignee
+              onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+            />
+          ))}
         </section>
       </div>
 
@@ -213,7 +254,23 @@ export function FamilyBoardPage() {
         <CompletedTodayModal
           member={members.find((m) => m.id === logMemberId)!}
           tasks={tasks}
+          activeProfile={activeProfile}
           onClose={() => setLogMemberId(null)}
+          onEdit={(t) => {
+            setLogMemberId(null);
+            setModalTask(t);
+          }}
+        />
+      )}
+
+      {modalTask && (
+        <TaskFormModal
+          task={modalTask}
+          onClose={() => setModalTask(null)}
+          onSaved={() => {
+            setModalTask(null);
+            loadTasks();
+          }}
         />
       )}
     </div>

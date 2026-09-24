@@ -4,12 +4,15 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { WeatherWidget } from '../components/WeatherWidget.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { TaskCard } from '../components/TaskCard.js';
+import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { canEditTask } from '../utils/tasks.js';
 
 export function Dashboard() {
-  const { members } = useFamilyMembers();
+  const { members, activeProfile } = useFamilyMembers();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [modalTask, setModalTask] = useState<Task | null>(null);
 
   const loadEvents = () => {
     const start = new Date().toISOString();
@@ -73,10 +76,26 @@ export function Dashboard() {
           <h2>Today's chores &amp; tasks ({openTasks.length} open)</h2>
           {tasks.length === 0 && <div className="empty-state">Nothing on the list — add a chore or to-do!</div>}
           {tasks.map((t) => (
-            <TaskCard key={t.id} task={t} onChange={loadTasks} />
+            <TaskCard
+              key={t.id}
+              task={t}
+              onChange={loadTasks}
+              onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+            />
           ))}
         </section>
       </div>
+
+      {modalTask && (
+        <TaskFormModal
+          task={modalTask}
+          onClose={() => setModalTask(null)}
+          onSaved={() => {
+            setModalTask(null);
+            loadTasks();
+          }}
+        />
+      )}
     </div>
   );
 }
