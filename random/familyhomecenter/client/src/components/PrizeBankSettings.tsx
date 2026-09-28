@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Prize, type Task } from '../api/client.js';
+import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { TaskFormModal } from './TaskFormModal.js';
 
 function RewardRow({ task, onSaved }: { task: Task; onSaved: () => void }) {
   const [rewardType, setRewardType] = useState<'none' | 'stars' | 'money'>(task.reward_type ?? 'none');
@@ -42,20 +44,28 @@ function RewardRow({ task, onSaved }: { task: Task; onSaved: () => void }) {
 }
 
 export function PrizeBankSettings() {
+  const { members } = useFamilyMembers();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [prizes, setPrizes] = useState<Prize[]>([]);
+  const [addingTask, setAddingTask] = useState(false);
   const [title, setTitle] = useState('');
   const [costType, setCostType] = useState<'stars' | 'task_count'>('stars');
   const [starCost, setStarCost] = useState(5);
   const [taskId, setTaskId] = useState('');
   const [requiredCount, setRequiredCount] = useState(3);
 
+  const parentIds = new Set(members.filter((m) => m.is_parent === 1).map((m) => m.id));
+
   const load = () => {
-    // Rewards apply to extra to-dos only — routine chores are expected, unpaid duties.
-    api.get<Task[]>('/tasks?all=true').then((t) => setTasks(t.filter((x) => x.active && x.kind === 'todo')));
+    // Rewards apply to extra to-dos only — routine chores are expected, unpaid duties — and only
+    // ones a kid could actually be assigned, so a to-do a parent made for themselves (or shares
+    // with a kid) never shows up as something to pay a reward on.
+    api
+      .get<Task[]>('/tasks?all=true')
+      .then((t) => setTasks(t.filter((x) => x.active && x.kind === 'todo' && !x.assignee_ids.some((id) => parentIds.has(id)))));
     api.get<Prize[]>('/prizes').then(setPrizes);
   };
-  useEffect(load, []);
+  useEffect(load, [members]);
 
   const addPrize = async (e: FormEvent) => {
     e.preventDefault();
@@ -85,14 +95,21 @@ export function PrizeBankSettings() {
         <h2>Prize Bank — extra to-do rewards</h2>
         <p className="hint">
           Set what an extra to-do pays out when completed — routine chores stay unpaid duties and
-          don't show up here. Everyday to-do creation stays open to the whole family — only reward
-          amounts are protected here.
+          don't show up here, and neither does a to-do assigned to a parent. Everyday to-do
+          creation stays open to the whole family — only reward amounts are protected here.
         </p>
-        {tasks.length === 0 && <div className="empty-state">No extra to-dos yet — add one from the Chores &amp; To-dos page.</div>}
+        <button type="button" className="secondary" onClick={() => setAddingTask(true)}>
+          + Add a Prize Bank to-do
+        </button>
+        {tasks.length === 0 && <div className="empty-state">No extra to-dos yet — add one above, or from the Chores &amp; To-dos page.</div>}
         {tasks.map((t) => (
           <RewardRow key={t.id} task={t} onSaved={load} />
         ))}
       </section>
+
+      {addingTask && (
+        <TaskFormModal task={null} onClose={() => setAddingTask(false)} onSaved={() => { setAddingTask(false); load(); }} />
+      )}
 
       <section className="panel">
         <h2>Prize Bank — prizes</h2>
