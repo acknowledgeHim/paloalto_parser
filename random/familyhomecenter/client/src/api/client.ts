@@ -149,6 +149,17 @@ export interface BankSummary {
   prizeBankMoneyAvailable: number;
 }
 
+/** One account across ANY family member — GET /bank/accounts (parent-only), for the cross-member
+ *  transfer picker. A single member's own bank page uses BankAccount instead. */
+export interface AnyBankAccount {
+  id: string;
+  family_member_id: string;
+  member_name: string;
+  member_color: string;
+  name: string;
+  balance: number;
+}
+
 export interface SpendingSummary {
   period: 'week' | 'month' | 'year';
   days: number;

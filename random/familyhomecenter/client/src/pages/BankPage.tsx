@@ -1,6 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, type BankAccount, type BankGoal, type BankSummary, type FamilyMember, type SpendingSummary } from '../api/client.js';
+import {
+  api,
+  type AnyBankAccount,
+  type BankAccount,
+  type BankGoal,
+  type BankSummary,
+  type FamilyMember,
+  type SpendingSummary,
+} from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { CategorySpendChart } from '../components/CategorySpendChart.js';
@@ -217,6 +225,105 @@ function NewGoalForm({ onAdd }: { onAdd: (title: string, targetAmount: number, c
   );
 }
 
+/** Parent-only: move money straight from one family member's account into another's (or a
+ *  parent's) — a real transfer, not a manual deposit/withdrawal on one account alone. */
+function TransferBetweenAccountsForm({
+  accounts,
+  onTransfer,
+}: {
+  accounts: AnyBankAccount[];
+  onTransfer: (fromAccountId: string, toAccountId: string, amount: number, comment: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [fromAccountId, setFromAccountId] = useState('');
+  const [toAccountId, setToAccountId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [comment, setComment] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!fromAccountId || !toAccountId) {
+      setError('Pick both accounts');
+      return;
+    }
+    if (fromAccountId === toAccountId) {
+      setError('Pick two different accounts');
+      return;
+    }
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      setError('Enter an amount greater than 0');
+      return;
+    }
+    if (!comment.trim()) {
+      setError('Say why — a comment is required');
+      return;
+    }
+    setError(null);
+    try {
+      await onTransfer(fromAccountId, toAccountId, amt, comment.trim());
+      setFromAccountId('');
+      setToAccountId('');
+      setAmount('');
+      setComment('');
+      setOpen(false);
+    } catch (err) {
+      setError((err as Error).message || 'Could not transfer that');
+    }
+  };
+
+  if (!open) {
+    return (
+      <button type="button" className="secondary" onClick={() => setOpen(true)}>
+        + Transfer between family members
+      </button>
+    );
+  }
+
+  return (
+    <form className="bank-page__tx-form" onSubmit={submit}>
+      <div className="task-form__row">
+        <select value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
+          <option value="">From...</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.member_name} — {a.name} ({money(a.balance)})
+            </option>
+          ))}
+        </select>
+        <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
+          <option value="">To...</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.member_name} — {a.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <input
+        type="number"
+        step="0.01"
+        min="0.01"
+        placeholder="Amount"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+      />
+      <input placeholder="Why? (e.g. Splitting a birthday gift)" value={comment} onChange={(e) => setComment(e.target.value)} />
+      {error && <div className="settings-login__error">{error}</div>}
+      <div className="task-form__row">
+        <button type="submit" disabled={accounts.length < 2}>
+          Transfer
+        </button>
+        <button type="button" className="secondary" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {accounts.length < 2 && <p className="hint">Need at least two accounts (any family members) to transfer between.</p>}
+    </form>
+  );
+}
+
 function GoalRow({ goal, onAchieve, onDelete }: { goal: BankGoal; onAchieve: () => void; onDelete: () => void }) {
   const pct = Math.min(100, Math.round((Math.max(0, goal.saved) / goal.target_amount) * 100));
   const ready = goal.saved >= goal.target_amount;
@@ -262,6 +369,7 @@ export function BankPage() {
   const [transferAmount, setTransferAmount] = useState('');
   const [transferComment, setTransferComment] = useState('');
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [allAccounts, setAllAccounts] = useState<AnyBankAccount[]>([]);
 
   // Private once this specific kid has their own password (or a parent's), self-or-parent only —
   // but a kid who's never set a password keeps the same open, household-trust visibility as the
@@ -287,6 +395,11 @@ export function BankPage() {
       .catch(() => setDenied(true));
   };
   useEffect(load, [id, canView]);
+  const loadAllAccounts = () => {
+    if (!canManageTransactions) return;
+    api.get<AnyBankAccount[]>('/bank/accounts').then(setAllAccounts).catch(() => {});
+  };
+  useEffect(loadAllAccounts, [canManageTransactions]);
   useEffect(() => {
     if (!id) return;
     api.get<FamilyMember[]>('/family-members').then((all) => setMember(all.find((m) => m.id === id) ?? null));
@@ -343,6 +456,18 @@ export function BankPage() {
     load();
   };
 
+  const transferBetweenAccounts = async (fromAccountId: string, toAccountId: string, amount: number, comment: string) => {
+    await api.post('/bank/transfer', {
+      from_account_id: fromAccountId,
+      to_account_id: toAccountId,
+      amount,
+      comment,
+      created_by_id: activeProfile?.id ?? null,
+    });
+    loadAllAccounts();
+    load();
+  };
+
   const submitTransfer = async (e: FormEvent) => {
     e.preventDefault();
     const amt = Number(transferAmount);
@@ -389,6 +514,14 @@ export function BankPage() {
           <p className="hint">Private to {member.name} and parents.</p>
         </div>
       </header>
+
+      {canManageTransactions && (
+        <section className="panel">
+          <h2>Transfer between family members</h2>
+          <p className="hint">Move money straight from one person's account into another's (or a parent's).</p>
+          <TransferBetweenAccountsForm accounts={allAccounts} onTransfer={transferBetweenAccounts} />
+        </section>
+      )}
 
       {!canView && (
         <div className="empty-state">
