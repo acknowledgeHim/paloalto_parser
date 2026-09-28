@@ -89,7 +89,7 @@ tasksRouter.patch('/:id', (req, res) => {
   const { assignee_ids, ...fields } = req.body as Partial<Task> & { assignee_ids?: string[] };
   const updated: Task = { ...existing, ...fields, id: existing.id };
   db.prepare(
-    `UPDATE tasks SET title=@title, notes=@notes, recurrence=@recurrence,
+    `UPDATE tasks SET kind=@kind, title=@title, notes=@notes, recurrence=@recurrence,
      due_date=@due_date, time_of_day=@time_of_day, active=@active WHERE id=@id`
   ).run(updated);
   if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
