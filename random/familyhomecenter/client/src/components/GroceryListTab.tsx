@@ -69,6 +69,12 @@ export function GroceryListTab() {
   const requesterFor = (id: string | null) => (id ? members.find((m) => m.id === id) ?? null : null);
   const mealFor = (id: string | null) => (id ? meals.find((m) => m.id === id) ?? null : null);
 
+  // Anyone can add, but only who requested it (or a parent) can check it off — same household-
+  // trust, client-side-only rule as task completion elsewhere; see routes/grocery.ts for why this
+  // can't be enforced server-side for a kid with no password.
+  const canRemove = (item: GroceryItem) =>
+    Boolean(activeProfile && (activeProfile.is_parent === 1 || activeProfile.id === item.requested_by_id));
+
   return (
     <div className="grocery-tab">
       <section className="panel">
@@ -79,9 +85,17 @@ export function GroceryListTab() {
             {items.map((item) => {
               const meal = mealFor(item.meal_id);
               const requester = requesterFor(item.requested_by_id);
+              const removable = canRemove(item);
               return (
                 <li key={item.id} className="grocery-tab__row">
-                  <button type="button" className="grocery-tab__check" aria-label={`Got ${item.name}`} onClick={() => gotIt(item.id)}>
+                  <button
+                    type="button"
+                    className="grocery-tab__check"
+                    aria-label={`Got ${item.name}`}
+                    onClick={() => gotIt(item.id)}
+                    disabled={!removable}
+                    title={removable ? undefined : 'Only whoever asked for this, or a parent, can check it off'}
+                  >
                     ✓
                   </button>
                   <div className="grocery-tab__item">

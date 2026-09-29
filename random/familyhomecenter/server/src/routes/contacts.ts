@@ -2,11 +2,14 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 import { distanceFromHomeMiles } from '../services/geocodeAddress.js';
 import type { Contact } from '../types.js';
 
-// Open to everyone, same household-trust default as the rest of this app's everyday lists — a
-// family's own contact book isn't something to gate behind a password.
+// Viewing is open to everyone — a family's own contact book isn't something to hide. Adding,
+// editing, or removing an entry is parent-only (requireAdmin — same "open until a password
+// protects Settings-level actions" gate as the family roster/Prize Bank rewards): this is
+// household reference data, not an everyday item any kid should be able to change.
 export const contactsRouter = Router();
 
 contactsRouter.get('/', (_req, res) => {
@@ -16,6 +19,7 @@ contactsRouter.get('/', (_req, res) => {
 
 contactsRouter.post(
   '/',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const { full_name, relationship, phone, email, address, created_by_id } = req.body as Partial<Contact> & {
       created_by_id?: string;
@@ -46,6 +50,7 @@ contactsRouter.post(
  *  or relationship doesn't re-hit Nominatim for no reason. */
 contactsRouter.patch(
   '/:id',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const existing = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id) as Contact | undefined;
     if (!existing) return res.status(404).json({ error: 'not found' });
@@ -74,15 +79,18 @@ contactsRouter.patch(
   })
 );
 
-contactsRouter.delete('/:id', (req, res) => {
+contactsRouter.delete('/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM contacts WHERE id = ?').run(req.params.id);
   res.status(204).end();
 });
 
 /** POST /:id/refresh-distance — retries geocoding without editing the address itself (e.g. after
- *  a transient failure, or after the home location in Settings changed). */
+ *  a transient failure, or after the home location in Settings changed). Parent-gated along with
+ *  everything else that touches a contact, even though it's not itself sensitive — keeps the rule
+ *  simple (only viewing is open) rather than carving out one exception. */
 contactsRouter.post(
   '/:id/refresh-distance',
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const existing = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id) as Contact | undefined;
     if (!existing) return res.status(404).json({ error: 'not found' });

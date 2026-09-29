@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 import type { GroceryItem } from '../types.js';
 
-// Open to everyone, same household-trust default as adding a to-do or calendar event — no reason
-// to gate "we're out of milk" behind a password.
+// Viewing and adding are open to everyone, same household-trust default as adding a to-do or
+// calendar event — no reason to gate "we're out of milk" behind a password. Editing an item's
+// details is parent-only (requireAdmin, real enforcement once a password exists). Removing one is
+// self-or-parent (whoever requested it, or a parent) — but unlike editing, that can't be enforced
+// server-side for a kid with no password (same limitation as canEditTask elsewhere in this app:
+// there's no session to verify a passwordless kid's identity against), so it stays open here and
+// the client (GroceryListTab) hides the button instead.
 export const groceryRouter = Router();
 
 /** GET / — every current item, requester-first-then-oldest so the newest asks sink to the bottom
@@ -36,7 +42,7 @@ groceryRouter.post('/', (req, res) => {
 /** PATCH /:id — edit an item's name/quantity/meal link (e.g. fix a typo, or attach it to a meal
  *  after the fact). requested_by_id is deliberately left alone here — who asked for it doesn't
  *  change just because someone else tidies up the entry. */
-groceryRouter.patch('/:id', (req, res) => {
+groceryRouter.patch('/:id', requireAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM grocery_items WHERE id = ?').get(req.params.id) as GroceryItem | undefined;
   if (!existing) return res.status(404).json({ error: 'not found' });
 
@@ -52,7 +58,8 @@ groceryRouter.patch('/:id', (req, res) => {
 });
 
 /** DELETE /:id — "got it" and "never mind, don't need it after all" are the same action: it's off
- *  the list either way, no purchased-vs-cancelled distinction kept. */
+ *  the list either way, no purchased-vs-cancelled distinction kept. Self-or-parent, enforced
+ *  client-side only — see the router comment above. */
 groceryRouter.delete('/:id', (req, res) => {
   db.prepare('DELETE FROM grocery_items WHERE id = ?').run(req.params.id);
   res.status(204).end();

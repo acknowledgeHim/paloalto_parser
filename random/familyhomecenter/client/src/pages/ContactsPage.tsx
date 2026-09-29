@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Contact } from '../api/client.js';
+import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { ContactFormModal } from '../components/ContactFormModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 
@@ -13,7 +14,17 @@ function distanceLabel(miles: number): string {
   return `${rounded} mi away`;
 }
 
-function ContactCard({ contact, onEdit, onChange }: { contact: Contact; onEdit: () => void; onChange: () => void }) {
+function ContactCard({
+  contact,
+  canManage,
+  onEdit,
+  onChange,
+}: {
+  contact: Contact;
+  canManage: boolean;
+  onEdit: () => void;
+  onChange: () => void;
+}) {
   const [refreshing, setRefreshing] = useState(false);
 
   const remove = async () => {
@@ -40,16 +51,18 @@ function ContactCard({ contact, onEdit, onChange }: { contact: Contact; onEdit: 
           <h2>{contact.full_name}</h2>
           {contact.relationship && <p className="hint">{contact.relationship}</p>}
         </div>
-        <div className="task-form__row">
-          <button type="button" className="task-card__edit" aria-label="Edit" onClick={onEdit}>✎</button>
-          <ConfirmButton
-            label="✕"
-            ariaLabel={`Delete ${contact.full_name}`}
-            confirmLabel={`Delete ${contact.full_name}?`}
-            onConfirm={remove}
-            className="task-card__edit"
-          />
-        </div>
+        {canManage && (
+          <div className="task-form__row">
+            <button type="button" className="task-card__edit" aria-label="Edit" onClick={onEdit}>✎</button>
+            <ConfirmButton
+              label="✕"
+              ariaLabel={`Delete ${contact.full_name}`}
+              confirmLabel={`Delete ${contact.full_name}?`}
+              onConfirm={remove}
+              className="task-card__edit"
+            />
+          </div>
+        )}
       </div>
 
       {contact.phone && (
@@ -72,10 +85,12 @@ function ContactCard({ contact, onEdit, onChange }: { contact: Contact; onEdit: 
           <span className="contacts-page__row-label">📍 {contact.address}</span>
           {contact.distance_miles != null ? (
             <span className="hint">{distanceLabel(contact.distance_miles)}</span>
-          ) : (
+          ) : canManage ? (
             <button type="button" className="link-button" onClick={refreshDistance} disabled={refreshing}>
               {refreshing ? 'Looking up…' : 'Look up distance'}
             </button>
+          ) : (
+            <span className="hint">Distance unknown</span>
           )}
         </div>
       )}
@@ -84,8 +99,13 @@ function ContactCard({ contact, onEdit, onChange }: { contact: Contact; onEdit: 
 }
 
 export function ContactsPage() {
+  const { activeProfile } = useFamilyMembers();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [modalContact, setModalContact] = useState<Contact | null | undefined>(undefined);
+
+  // Parent-only to add/edit/remove — real enforcement is server-side (requireAdmin) once a
+  // password protects it; viewing (and Call/Text/Email) stays open to everyone.
+  const canManage = activeProfile?.is_parent === 1;
 
   const load = () => {
     api.get<Contact[]>('/contacts').then(setContacts).catch(console.error);
@@ -95,7 +115,9 @@ export function ContactsPage() {
   return (
     <div className="contacts-page">
       <div className="tasks-page__header">
-        <button type="button" className="icon-button" aria-label="Add contact" onClick={() => setModalContact(null)}>+</button>
+        {canManage && (
+          <button type="button" className="icon-button" aria-label="Add contact" onClick={() => setModalContact(null)}>+</button>
+        )}
         <h1>Contacts</h1>
       </div>
       <p className="hint">
@@ -105,10 +127,10 @@ export function ContactsPage() {
         third-party app take over that role).
       </p>
 
-      {contacts.length === 0 && <div className="empty-state">No contacts yet — add one above.</div>}
+      {contacts.length === 0 && <div className="empty-state">No contacts yet{canManage ? ' — add one above.' : '.'}</div>}
       <div className="contacts-page__grid">
         {contacts.map((c) => (
-          <ContactCard key={c.id} contact={c} onEdit={() => setModalContact(c)} onChange={load} />
+          <ContactCard key={c.id} contact={c} canManage={canManage} onEdit={() => setModalContact(c)} onChange={load} />
         ))}
       </div>
 

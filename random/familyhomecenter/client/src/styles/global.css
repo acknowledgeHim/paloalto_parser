@@ -939,6 +939,7 @@ textarea {
   font-size: 1.2em;
   flex-shrink: 0;
 }
+.grocery-tab__check:disabled { opacity: 0.5; cursor: not-allowed; }
 .grocery-tab__item { flex: 1; min-width: 0; }
 .grocery-tab__item-name { font-weight: 600; }
 .grocery-tab__item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
