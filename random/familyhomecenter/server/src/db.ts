@@ -505,6 +505,15 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// A contact's email-to-SMS gateway domain (e.g. "vtext.com" for Verizon) — lets the Contacts page
+// text them from a desktop/kiosk browser, where a plain sms: link has nothing to hand off to. See
+// services/contactText.ts. NULL = that option just doesn't show for this contact.
+try {
+  db.exec('ALTER TABLE contacts ADD COLUMN carrier TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

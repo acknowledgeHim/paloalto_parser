@@ -346,6 +346,9 @@ export interface Contact {
   /** Straight-line ("as the crow flies") miles from home — null if there's no address, or
    *  geocoding hasn't succeeded (yet). */
   distance_miles: number | null;
+  /** Email-to-SMS gateway domain (e.g. "vtext.com") — see utils/smsGateways.ts. Null hides the
+   *  "Text (email)" option for this contact. */
+  carrier: string | null;
   created_by_id: string | null;
   created_at: string;
 }

@@ -26,10 +26,29 @@ function ContactCard({
   onChange: () => void;
 }) {
   const [refreshing, setRefreshing] = useState(false);
+  const [texting, setTexting] = useState(false);
+  const [textMessage, setTextMessage] = useState('');
+  const [textStatus, setTextStatus] = useState<string | null>(null);
+  const [textSending, setTextSending] = useState(false);
 
   const remove = async () => {
     await api.delete(`/contacts/${contact.id}`);
     onChange();
+  };
+
+  const sendText = async () => {
+    if (!textMessage.trim()) return;
+    setTextSending(true);
+    setTextStatus(null);
+    try {
+      await api.post(`/contacts/${contact.id}/text`, { message: textMessage.trim() });
+      setTextStatus('Sent.');
+      setTextMessage('');
+    } catch (err) {
+      setTextStatus((err as Error).message || 'Could not send that');
+    } finally {
+      setTextSending(false);
+    }
   };
 
   const refreshDistance = async () => {
@@ -71,7 +90,31 @@ function ContactCard({
           <div className="task-form__row">
             <a className="secondary contacts-page__link-btn" href={phoneHref('tel', contact.phone)}>Call</a>
             <a className="secondary contacts-page__link-btn" href={phoneHref('sms', contact.phone)}>Text</a>
+            {contact.carrier && (
+              <button type="button" className="secondary contacts-page__link-btn" onClick={() => setTexting((v) => !v)}>
+                Text (email)
+              </button>
+            )}
           </div>
+        </div>
+      )}
+      {texting && (
+        <div className="contacts-page__text-composer">
+          <textarea
+            autoFocus
+            placeholder="Message (keep it short — most carriers cap around 140-160 characters)"
+            value={textMessage}
+            onChange={(e) => setTextMessage(e.target.value)}
+            maxLength={300}
+          />
+          <div className="task-form__row">
+            <button type="button" onClick={sendText} disabled={textSending || !textMessage.trim()}>
+              {textSending ? 'Sending…' : 'Send'}
+            </button>
+            <button type="button" className="secondary" onClick={() => setTexting(false)}>Close</button>
+            <span className="hint">{textMessage.length}/160ish</span>
+          </div>
+          {textStatus && <p className="hint">{textStatus}</p>}
         </div>
       )}
       {contact.email && (
@@ -121,10 +164,12 @@ export function ContactsPage() {
         <h1>Contacts</h1>
       </div>
       <p className="hint">
-        Important numbers everyone can reach — tapping Call/Text uses whatever your phone's default
-        calling/texting app is. To route those through Google Voice, set Google Voice as your
-        device's default phone/SMS app in its settings (Android supports this; iOS doesn't let a
-        third-party app take over that role).
+        Important numbers everyone can reach. Call/Text use whatever your phone's default calling/
+        texting app is — to route those through Google Voice, set Google Voice as your device's
+        default phone/SMS app in its settings (Android supports this; iOS doesn't let a third-party
+        app take over that role). On a desktop or kiosk with no phone app, "Text (email)" sends a
+        text via the contact's carrier instead (needs a carrier set on that contact, and SMTP
+        configured — see docs/GROCERY_EMAIL_SETUP.md for the same setup this reuses).
       </p>
 
       {contacts.length === 0 && <div className="empty-state">No contacts yet{canManage ? ' — add one above.' : '.'}</div>}

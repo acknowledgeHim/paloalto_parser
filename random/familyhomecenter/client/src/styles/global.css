@@ -1159,6 +1159,7 @@ textarea {
 }
 .contacts-page__row-label { min-width: 0; overflow-wrap: anywhere; }
 .contacts-page__link-btn { min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; text-decoration: none; }
+.contacts-page__text-composer { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 
 /* ---- Knowledge base ---- */
 .kb-page__grid {

@@ -230,6 +230,9 @@ export interface Contact {
   /** Straight-line ("as the crow flies") miles from home — see services/geocodeAddress.ts. Null
    *  if there's no address, or geocoding hasn't succeeded (yet). */
   distance_miles: number | null;
+  /** Email-to-SMS gateway domain (e.g. "vtext.com") — see services/contactText.ts. Null = the
+   *  "Text (email)" option doesn't show for this contact. */
+  carrier: string | null;
   created_by_id: string | null;
   created_at: string;
 }

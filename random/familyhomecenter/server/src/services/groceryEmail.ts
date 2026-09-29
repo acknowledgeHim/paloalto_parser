@@ -1,7 +1,6 @@
-import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import { db } from '../db.js';
-import { config } from '../config.js';
+import { isEmailConfigured, sendEmail } from './email.js';
 import type { FamilyMember, GroceryItem, Meal } from '../types.js';
 
 function escapeHtml(s: string): string {
@@ -47,7 +46,7 @@ function buildBody(items: GroceryItem[], members: FamilyMember[], meals: Meal[])
  *  separately from the cron wiring so it's directly testable/triggerable without waiting for
  *  midnight. No-op (logged, not thrown) if SMTP isn't configured or no parent has an email. */
 export async function sendGroceryListEmail(): Promise<void> {
-  if (!config.smtp.host) {
+  if (!isEmailConfigured()) {
     console.log('[grocery] SMTP not configured (SMTP_HOST unset) — skipping nightly digest.');
     return;
   }
@@ -63,21 +62,8 @@ export async function sendGroceryListEmail(): Promise<void> {
   const meals = db.prepare('SELECT * FROM meals').all() as Meal[];
   const { text, html } = buildBody(items, members, meals);
 
-  const transporter = nodemailer.createTransport({
-    host: config.smtp.host,
-    port: config.smtp.port,
-    secure: config.smtp.port === 465,
-    auth: config.smtp.user ? { user: config.smtp.user, pass: config.smtp.pass } : undefined,
-  });
-
   const subject = items.length === 0 ? 'Grocery list — nothing on it tonight' : `Grocery list — ${items.length} item${items.length === 1 ? '' : 's'}`;
-  await transporter.sendMail({
-    from: config.smtp.from,
-    to: recipients.map((r) => r.email).join(', '),
-    subject,
-    text,
-    html,
-  });
+  await sendEmail({ to: recipients.map((r) => r.email).join(', '), subject, text, html });
   console.log(`[grocery] Sent nightly digest (${items.length} item${items.length === 1 ? '' : 's'}) to ${recipients.length} parent${recipients.length === 1 ? '' : 's'}.`);
 }
 
