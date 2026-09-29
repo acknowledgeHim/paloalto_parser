@@ -99,6 +99,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
   const [rewardEligible, setRewardEligible] = useState(Boolean(task?.reward_type));
   const [rewardType, setRewardType] = useState<'stars' | 'money'>(task?.reward_type ?? 'stars');
   const [rewardAmount, setRewardAmount] = useState(task?.reward_amount ?? 1);
+  const [bulkIconStatus, setBulkIconStatus] = useState<string | null>(null);
 
   const toggleWeeklyDay = (code: string) => {
     setWeeklyDays((days) => (days.includes(code) ? days.filter((d) => d !== code) : [...days, code]));
@@ -111,6 +112,20 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
   const toggleAssignee = (id: string) => {
     if (!isParent) return; // kids can only ever be assigned to themselves
     setAssigneeIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  };
+
+  // Sets this icon on every OTHER task sharing this exact title too (e.g. each kid's own copy of
+  // "Make your bed") without saving the rest of this form's edits — a parent picks the icon here
+  // once and it fans out, instead of opening and editing each kid's copy by hand.
+  const applyIconToAllNamed = async () => {
+    if (!title.trim()) return;
+    setBulkIconStatus(null);
+    try {
+      const { updated } = await api.patch<{ updated: number }>('/tasks/by-title/icon', { title: title.trim(), icon });
+      setBulkIconStatus(`Set on ${updated} task${updated === 1 ? '' : 's'} named "${title.trim()}".`);
+    } catch (err) {
+      setBulkIconStatus((err as Error).message || 'Could not apply that to the others');
+    }
   };
 
   const submit = async (e: FormEvent) => {
@@ -208,6 +223,14 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
               </button>
             ))}
           </div>
+          {isParent && title.trim() && (
+            <div className="task-form__row">
+              <button type="button" className="link-button" onClick={applyIconToAllNamed}>
+                Apply to every task named "{title.trim()}"
+              </button>
+            </div>
+          )}
+          {bulkIconStatus && <p className="hint">{bulkIconStatus}</p>}
         </div>
 
         {isParent && kind === 'todo' && (

@@ -83,6 +83,21 @@ tasksRouter.post('/', (req, res) => {
   res.status(201).json({ ...task, assignee_ids: assignee_ids ?? [], completions: [] });
 });
 
+/**
+ * PATCH /by-title/icon { title, icon } — sets the Adventure Map checkpoint icon on every active
+ * task sharing this exact title (e.g. every kid's own "Make your bed" copy) in one shot, instead
+ * of a parent having to open and edit each kid's copy separately. Parent-only (requireAdmin) — a
+ * bulk edit like this isn't an everyday action. Placed before PATCH /:id so it can't be shadowed
+ * by it (Express only matches /:id against a single path segment anyway, but this stays explicit).
+ */
+tasksRouter.patch('/by-title/icon', requireAdmin, (req, res) => {
+  const { title, icon } = req.body as { title?: string; icon?: string | null };
+  if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
+
+  const { changes } = db.prepare('UPDATE tasks SET icon = ? WHERE title = ? AND active = 1').run(icon || null, title.trim());
+  res.json({ updated: changes });
+});
+
 tasksRouter.patch('/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   if (!existing) return res.status(404).json({ error: 'not found' });
