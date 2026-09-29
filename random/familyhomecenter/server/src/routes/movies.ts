@@ -90,21 +90,35 @@ moviesRouter.post(
       photo_count: photoPaths.length,
       seconds_per_photo: secondsPerPhoto,
       music_track: trimmedTrack,
+      progress_percent: 0,
       created_by_id: created_by_id ?? null,
       created_at: new Date().toISOString(),
     };
     db.prepare(
-      `INSERT INTO movies (id, title, status, file_name, error, photo_count, seconds_per_photo, music_track, created_by_id, created_at)
-       VALUES (@id, @title, @status, @file_name, @error, @photo_count, @seconds_per_photo, @music_track, @created_by_id, @created_at)`
+      `INSERT INTO movies (id, title, status, file_name, error, photo_count, seconds_per_photo, music_track, progress_percent, created_by_id, created_at)
+       VALUES (@id, @title, @status, @file_name, @error, @photo_count, @seconds_per_photo, @music_track, @progress_percent, @created_by_id, @created_at)`
     ).run(movie);
     res.status(201).json(movie);
 
     // Rendering happens after the response — this can take anywhere from seconds to a few minutes
-    // on a Pi, so the client polls GET / for the status to flip from 'rendering' instead of the
-    // request hanging open.
-    renderMovie({ photoPaths, secondsPerPhoto, musicAbsolutePath })
+    // on a Pi, so the client polls GET / for status/progress_percent to update instead of the
+    // request hanging open. Throttled to whole percentage points so a burst of frame-by-frame
+    // progress lines doesn't turn into a burst of DB writes.
+    const updateProgress = db.prepare('UPDATE movies SET progress_percent = ? WHERE id = ?');
+    let lastReported = -1;
+    renderMovie({
+      photoPaths,
+      secondsPerPhoto,
+      musicAbsolutePath,
+      onProgress: (percent) => {
+        const rounded = Math.floor(percent);
+        if (rounded === lastReported) return;
+        lastReported = rounded;
+        updateProgress.run(rounded, movie.id);
+      },
+    })
       .then(({ fileName }) => {
-        db.prepare("UPDATE movies SET status = 'ready', file_name = ? WHERE id = ?").run(fileName, movie.id);
+        db.prepare("UPDATE movies SET status = 'ready', file_name = ?, progress_percent = 100 WHERE id = ?").run(fileName, movie.id);
       })
       .catch((err) => {
         console.error(`[movies] render failed for "${movie.title}" (${movie.id}):`, err);

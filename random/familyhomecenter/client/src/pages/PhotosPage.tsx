@@ -14,10 +14,11 @@ function MoviesSection({ photos }: { photos: Photo[] }) {
   };
   useEffect(load, []);
 
-  // Poll while anything's still rendering — ffmpeg on a Pi can take a couple minutes.
+  // Poll while anything's still rendering — ffmpeg on a Pi can take a couple minutes. Frequent
+  // enough that the progress bar below visibly moves, not just "is it stuck or not" guessing.
   useEffect(() => {
     if (!movies.some((m) => m.status === 'rendering')) return;
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 2000);
     return () => clearInterval(t);
   }, [movies]);
 
@@ -42,27 +43,36 @@ function MoviesSection({ photos }: { photos: Photo[] }) {
         <ul className="movie-maker__movie-list">
           {movies.map((m) => (
             <li key={m.id}>
-              <div className="movie-maker__movie-info">
-                <span className="movie-maker__movie-title">{m.title}</span>
-                <span className="hint">
-                  {m.photo_count} photo{m.photo_count === 1 ? '' : 's'}
-                  {m.music_track ? ' · with music' : ''}
-                  {m.status === 'rendering' && ' · Rendering…'}
-                  {m.status === 'failed' && ' · Failed'}
-                </span>
+              <div className="movie-maker__movie-row">
+                <div className="movie-maker__movie-info">
+                  <span className="movie-maker__movie-title">{m.title}</span>
+                  <span className="hint">
+                    {m.photo_count} photo{m.photo_count === 1 ? '' : 's'}
+                    {m.music_track ? ' · with music' : ''}
+                    {m.status === 'failed' && ' · Failed'}
+                  </span>
+                </div>
+                <div className="task-form__row">
+                  {m.status === 'ready' && (
+                    <button type="button" className="secondary" onClick={() => setPlaying(m)}>▶ Watch</button>
+                  )}
+                  <ConfirmButton
+                    label="✕"
+                    ariaLabel={`Delete ${m.title}`}
+                    confirmLabel={`Delete "${m.title}"?`}
+                    onConfirm={() => remove(m.id)}
+                    className="task-card__edit"
+                  />
+                </div>
               </div>
-              <div className="task-form__row">
-                {m.status === 'ready' && (
-                  <button type="button" className="secondary" onClick={() => setPlaying(m)}>▶ Watch</button>
-                )}
-                <ConfirmButton
-                  label="✕"
-                  ariaLabel={`Delete ${m.title}`}
-                  confirmLabel={`Delete "${m.title}"?`}
-                  onConfirm={() => remove(m.id)}
-                  className="task-card__edit"
-                />
-              </div>
+              {m.status === 'rendering' && (
+                <div className="movie-maker__movie-progress">
+                  <div className="progress-bar">
+                    <div className="progress-bar__fill" style={{ width: `${m.progress_percent ?? 0}%` }} />
+                  </div>
+                  <span className="hint">Rendering… {Math.round(m.progress_percent ?? 0)}%</span>
+                </div>
+              )}
               {m.status === 'failed' && m.error && <p className="hint">{m.error}</p>}
             </li>
           ))}

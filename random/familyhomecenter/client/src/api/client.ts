@@ -390,6 +390,8 @@ export interface Movie {
   photo_count: number;
   seconds_per_photo: number;
   music_track: string | null;
+  /** Live render progress (0-100) — only meaningful while status is 'rendering'. */
+  progress_percent: number | null;
   created_by_id: string | null;
   created_at: string;
 }

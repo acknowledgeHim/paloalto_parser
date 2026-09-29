@@ -554,6 +554,15 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Live render progress (0-100), parsed from ffmpeg's own -progress output — see
+// services/movieRender.ts. NULL before rendering starts writing any progress, or once a movie is
+// no longer 'rendering' (the client only ever reads this while it is).
+try {
+  db.exec('ALTER TABLE movies ADD COLUMN progress_percent REAL');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

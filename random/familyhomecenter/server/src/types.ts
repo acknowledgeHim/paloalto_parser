@@ -257,6 +257,9 @@ export interface Movie {
   /** The music library track's relative path (Track.file from GET /music/library/search), or null
    *  for a silent slideshow. */
   music_track: string | null;
+  /** Live render progress (0-100), parsed from ffmpeg's own -progress output — only meaningful
+   *  while status is 'rendering'; null before the first update or once no longer rendering. */
+  progress_percent: number | null;
   created_by_id: string | null;
   created_at: string;
 }

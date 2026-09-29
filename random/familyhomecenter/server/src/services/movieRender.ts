@@ -27,14 +27,37 @@ function buildConcatList(photoPaths: string[], secondsPerPhoto: number): string 
   return lines.join('\n');
 }
 
-function runFfmpeg(args: string[]): Promise<void> {
+/**
+ * Runs ffmpeg, optionally reporting live progress. `-progress pipe:1` (added by the caller) makes
+ * ffmpeg write periodic `key=value` lines to stdout — `out_time_us` (microseconds into the output
+ * timeline; deliberately not `out_time_ms`, which despite its name also reports microseconds in
+ * ffmpeg's own progress output, a long-standing naming quirk not worth depending on) as a fraction
+ * of `totalSeconds` (the slideshow's known total duration) is the percent shown in the UI. This
+ * stream has to actually be drained once we ask ffmpeg to produce it, or its pipe buffer fills and
+ * ffmpeg blocks trying to write to it — hence always attaching the listener below, not just when
+ * onProgress is given.
+ */
+function runFfmpeg(args: string[], totalSeconds: number, onProgress?: (percent: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(config.movies.ffmpegPath, args);
     let stderr = '';
+    let stdoutTail = '';
     proc.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
       // Cap what we retain — a failing run can produce megabytes of frame-by-frame logging.
       if (stderr.length > 8000) stderr = stderr.slice(-8000);
+    });
+    proc.stdout.on('data', (chunk) => {
+      stdoutTail += chunk.toString();
+      const lines = stdoutTail.split('\n');
+      stdoutTail = lines.pop() ?? ''; // keep any trailing partial line for the next chunk
+      if (!onProgress) return;
+      for (const line of lines) {
+        const match = /^out_time_us=(\d+)/.exec(line);
+        if (!match) continue;
+        const seconds = Number(match[1]) / 1_000_000;
+        onProgress(Math.min(100, Math.max(0, (seconds / totalSeconds) * 100)));
+      }
     });
     proc.on('error', (err) => {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -61,8 +84,9 @@ export async function renderMovie(params: {
   photoPaths: string[];
   secondsPerPhoto: number;
   musicAbsolutePath: string | null;
+  onProgress?: (percent: number) => void;
 }): Promise<{ fileName: string }> {
-  const { photoPaths, secondsPerPhoto, musicAbsolutePath } = params;
+  const { photoPaths, secondsPerPhoto, musicAbsolutePath, onProgress } = params;
   if (photoPaths.length === 0) throw new Error('No photos to render');
 
   await fs.mkdir(config.moviesDir, { recursive: true });
@@ -90,10 +114,10 @@ export async function renderMovie(params: {
   } else {
     args.push('-an');
   }
-  args.push('-movflags', '+faststart', outputPath);
+  args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath);
 
   try {
-    await runFfmpeg(args);
+    await runFfmpeg(args, totalSeconds, onProgress);
   } finally {
     await fs.rm(concatListPath, { force: true });
   }
