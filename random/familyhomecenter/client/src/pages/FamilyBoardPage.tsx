@@ -10,6 +10,7 @@ import { AdventureProgressBar } from '../components/AdventureProgressBar.js';
 import { canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { isAdventureStyle, progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
+import { taskIcon } from '../utils/taskIcons.js';
 
 // tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
 // recurring task the server only ever attaches completions where completed_on equals that date,
@@ -60,7 +61,7 @@ function CompletedTodayModal({
           {items.map(({ task, completion }) => (
             <li key={completion.id}>
               <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>{' '}
-              {task.title}
+              {taskIcon(task)} {task.title}
               {completion.time_of_day && <span className="hint"> {timeOfDayIcon(completion.time_of_day)}</span>}
               <span className="person-column__count">{fmtCompletedAt(completion.completed_at)}</span>
               {canEditTask(task, activeProfile) && (

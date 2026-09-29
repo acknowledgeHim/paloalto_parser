@@ -2,6 +2,7 @@ import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { playCompletionSound } from '../utils/sounds.js';
 import { parseTimeOfDaySlots, timeOfDayIcon, timeOfDayLabel, isSlotWindowPassed } from '../utils/timeOfDay.js';
+import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from './MemberAvatar.js';
 
 interface Props {
@@ -73,7 +74,9 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
         </button>
       )}
       <div className="task-card__body">
-        <div className="task-card__title">{task.title}</div>
+        <div className="task-card__title">
+          <span aria-hidden="true">{taskIcon(task)}</span> {task.title}
+        </div>
         {task.notes && <div className="task-card__notes">{task.notes}</div>}
         <div className="task-card__meta">
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
