@@ -37,6 +37,9 @@ function parseSelection(body: Record<string, unknown>): MovieSelection | null {
   if (selection.mode === 'date-range' && typeof selection.start === 'string' && typeof selection.end === 'string') {
     return { mode: 'date-range', start: selection.start, end: selection.end };
   }
+  if (selection.mode === 'name' && typeof selection.query === 'string') {
+    return { mode: 'name', query: selection.query };
+  }
   return null;
 }
 

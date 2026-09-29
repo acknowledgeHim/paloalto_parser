@@ -1,10 +1,13 @@
+import path from 'node:path';
 import { listPhotos, findPhotoById } from './photos.js';
 import { getPhotoDate } from './photoDates.js';
+import { config } from '../config.js';
 
 export type MovieSelection =
   | { mode: 'manual'; photoIds: string[] }
   | { mode: 'random'; count: number }
-  | { mode: 'date-range'; start: string; end: string }; // YYYY-MM-DD, inclusive
+  | { mode: 'date-range'; start: string; end: string } // YYYY-MM-DD, inclusive
+  | { mode: 'name'; query: string }; // case-insensitive substring match against folder+filename
 
 /** Fisher-Yates shuffle, then take the first n — avoids the "sort by Math.random()" trap where
  *  repeated comparisons can bias the result. */
@@ -32,6 +35,15 @@ export async function resolveMovieSelection(selection: MovieSelection): Promise<
   if (selection.mode === 'random') {
     const count = Math.max(1, Math.min(selection.count, allPhotos.length));
     return sampleRandom(allPhotos, count);
+  }
+
+  if (selection.mode === 'name') {
+    // Matches against the path relative to PHOTOS_DIR — so a query like "vacation" or "2023"
+    // catches anything in a folder or filename with that in it, which for a library organized
+    // into event/trip folders (common on a family SMB share) is often more useful than dates.
+    const query = selection.query.trim().toLowerCase();
+    if (!query) return [];
+    return allPhotos.filter((file) => path.relative(config.photosDir, file).toLowerCase().includes(query));
   }
 
   // date-range: read each photo's best-effort date (EXIF or mtime) and keep the ones inside

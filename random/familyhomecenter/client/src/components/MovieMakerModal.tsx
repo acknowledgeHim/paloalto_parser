@@ -2,11 +2,12 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api, type Photo, type Track } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
-type SelectionMode = 'manual' | 'random' | 'date-range';
+type SelectionMode = 'date-range' | 'name' | 'random' | 'manual';
 type Selection =
   | { mode: 'manual'; photoIds: string[] }
   | { mode: 'random'; count: number }
-  | { mode: 'date-range'; start: string; end: string };
+  | { mode: 'date-range'; start: string; end: string }
+  | { mode: 'name'; query: string };
 
 interface Props {
   photos: Photo[];
@@ -23,27 +24,36 @@ interface Props {
 export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
   const { activeProfile } = useFamilyMembers();
   const [title, setTitle] = useState('');
-  const [mode, setMode] = useState<SelectionMode>('manual');
+  // Defaults to a filter, not the grid — with a large library (especially over a slower SMB
+  // share) rendering every photo as a DOM node was enough to freeze the whole modal; the grid is
+  // still available, just not what opens first.
+  const [mode, setMode] = useState<SelectionMode>('date-range');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [randomCount, setRandomCount] = useState(10);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [nameQuery, setNameQuery] = useState('');
   const [secondsPerPhoto, setSecondsPerPhoto] = useState(4);
   const [musicQuery, setMusicQuery] = useState('');
   const [musicResults, setMusicResults] = useState<Track[]>([]);
   const [musicTrack, setMusicTrack] = useState<Track | null>(null);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
+  // A big library (hundreds/thousands of photos, especially over a slower SMB share) rendering as
+  // one giant DOM grid was enough to freeze the whole modal on a Pi-class browser — cap how many
+  // show up at once and let "Show more" reveal the rest in batches instead.
+  const [visibleCount, setVisibleCount] = useState(90);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const buildSelection = (): Selection => {
     if (mode === 'manual') return { mode: 'manual', photoIds: Array.from(selectedIds) };
     if (mode === 'random') return { mode: 'random', count: randomCount };
+    if (mode === 'name') return { mode: 'name', query: nameQuery };
     return { mode: 'date-range', start: startDate, end: endDate };
   };
 
   // Live "N photos match" preview — manual mode already knows its own count locally; the other
-  // two ask the server (resolve-selection doesn't create anything, just resolves the count).
+  // modes ask the server (resolve-selection doesn't create anything, just resolves the count).
   useEffect(() => {
     if (mode === 'manual') {
       setPreviewCount(selectedIds.size);
@@ -53,12 +63,22 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
       setPreviewCount(null);
       return;
     }
-    api
-      .post<{ count: number }>('/movies/resolve-selection', { selection: buildSelection() })
-      .then((r) => setPreviewCount(r.count))
-      .catch(() => setPreviewCount(null));
+    if (mode === 'name' && !nameQuery.trim()) {
+      setPreviewCount(null);
+      return;
+    }
+    // Debounced for 'name' (free text, fires per keystroke) — the other modes change per-click/
+    // per-date-pick, infrequent enough not to need it.
+    const delay = mode === 'name' ? 300 : 0;
+    const t = setTimeout(() => {
+      api
+        .post<{ count: number }>('/movies/resolve-selection', { selection: buildSelection() })
+        .then((r) => setPreviewCount(r.count))
+        .catch(() => setPreviewCount(null));
+    }, delay);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selectedIds, randomCount, startDate, endDate]);
+  }, [mode, selectedIds, randomCount, startDate, endDate, nameQuery]);
 
   useEffect(() => {
     if (!musicQuery.trim()) {
@@ -114,9 +134,10 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
           <label className="member-form__label">Pick photos</label>
           <div className="task-form__row">
             <select value={mode} onChange={(e) => setMode(e.target.value as SelectionMode)}>
-              <option value="manual">Choose from the grid</option>
-              <option value="random">Random</option>
               <option value="date-range">By date taken</option>
+              <option value="name">By folder or filename</option>
+              <option value="random">Random</option>
+              <option value="manual">Choose from the grid</option>
             </select>
           </div>
           {mode === 'random' && (
@@ -132,19 +153,36 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           )}
+          {mode === 'name' && (
+            <>
+              <input
+                placeholder="e.g. Vacation, 2023, Christmas…"
+                value={nameQuery}
+                onChange={(e) => setNameQuery(e.target.value)}
+              />
+              <p className="hint">Matches anywhere in the folder path or filename under PHOTOS_DIR.</p>
+            </>
+          )}
           {mode === 'manual' && (
-            <div className="movie-maker__photo-grid">
-              {photos.map((p) => (
-                <button
-                  type="button"
-                  key={p.id}
-                  className={`movie-maker__photo ${selectedIds.has(p.id) ? 'movie-maker__photo--selected' : ''}`}
-                  onClick={() => toggleSelected(p.id)}
-                >
-                  <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+            <>
+              <div className="movie-maker__photo-grid">
+                {photos.slice(0, visibleCount).map((p) => (
+                  <button
+                    type="button"
+                    key={p.id}
+                    className={`movie-maker__photo ${selectedIds.has(p.id) ? 'movie-maker__photo--selected' : ''}`}
+                    onClick={() => toggleSelected(p.id)}
+                  >
+                    <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+                  </button>
+                ))}
+              </div>
+              {visibleCount < photos.length && (
+                <button type="button" className="secondary" onClick={() => setVisibleCount((c) => c + 90)}>
+                  Show more ({photos.length - visibleCount} left)
                 </button>
-              ))}
-            </div>
+              )}
+            </>
           )}
           {previewCount !== null && (
             <p className="hint">{previewCount} photo{previewCount === 1 ? '' : 's'} {mode === 'manual' ? 'picked' : 'match'}.</p>
