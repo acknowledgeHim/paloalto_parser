@@ -189,6 +189,21 @@ export interface CalendarEvent {
   created_by_id?: string | null;
 }
 
+/** An important phone number/address for the family — see routes/contacts.ts. */
+export interface Contact {
+  id: string;
+  full_name: string;
+  relationship: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  /** Straight-line ("as the crow flies") miles from home — see services/geocodeAddress.ts. Null
+   *  if there's no address, or geocoding hasn't succeeded (yet). */
+  distance_miles: number | null;
+  created_by_id: string | null;
+  created_at: string;
+}
+
 /** A grocery-list entry — see routes/grocery.ts. Getting checked off deletes it (no purchased
  *  history kept); requested_by_id/meal_id are both optional. */
 export interface GroceryItem {

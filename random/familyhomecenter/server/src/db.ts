@@ -249,6 +249,22 @@ db.exec(`
     achieved_at TEXT
   );
 
+  -- Important phone numbers/addresses everyone in the family might need — grandparents, doctors,
+  -- neighbors, etc. distance_miles is a cached, best-effort straight-line distance from home
+  -- (see services/geocodeAddress.ts), re-geocoded whenever the address changes; null means it's
+  -- never been successfully looked up (no address, or geocoding failed/hasn't run yet).
+  CREATE TABLE IF NOT EXISTS contacts (
+    id TEXT PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    relationship TEXT,
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    distance_miles REAL,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   -- A running "need to buy" list, separate from a meal's own ingredients — anyone can ask for
   -- something without it being tied to a specific meal, and meal_id is just an optional link
   -- for when it is (e.g. "we're short a can of tomatoes for Tuesday's chili"). Getting checked

@@ -300,6 +300,23 @@ export interface Meal {
   recipes: Recipe[];
 }
 
+// ---- Contacts ----
+
+/** An important phone number/address for the family. */
+export interface Contact {
+  id: string;
+  full_name: string;
+  relationship: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  /** Straight-line ("as the crow flies") miles from home — null if there's no address, or
+   *  geocoding hasn't succeeded (yet). */
+  distance_miles: number | null;
+  created_by_id: string | null;
+  created_at: string;
+}
+
 // ---- Grocery list ----
 
 /** A grocery-list entry. Checking it off deletes it — no purchased-history is kept. */

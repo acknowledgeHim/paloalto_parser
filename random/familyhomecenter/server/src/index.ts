@@ -18,6 +18,7 @@ import { prizesRouter } from './routes/prizes.js';
 import { bankRouter } from './routes/bank.js';
 import { bankTransfersRouter } from './routes/bankTransfers.js';
 import { groceryRouter } from './routes/grocery.js';
+import { contactsRouter } from './routes/contacts.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
@@ -46,6 +47,7 @@ app.use('/api/prizes', prizesRouter);
 app.use('/api/family-members/:memberId/bank', bankRouter);
 app.use('/api/bank', bankTransfersRouter);
 app.use('/api/grocery', groceryRouter);
+app.use('/api/contacts', contactsRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

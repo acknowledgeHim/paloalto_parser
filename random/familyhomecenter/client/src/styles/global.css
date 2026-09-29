@@ -1072,3 +1072,25 @@ textarea {
 .day-detail__status { margin-left: auto; font-size: 0.8em; font-weight: 700; }
 .day-detail__status--done { color: var(--accent); }
 .day-detail__status--pending { color: var(--text-muted); }
+
+/* ---- Contacts ---- */
+.contacts-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.contacts-page__card { display: flex; flex-direction: column; gap: 8px; margin-bottom: 0; }
+.contacts-page__card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.contacts-page__card-header h2 { margin: 0; }
+.contacts-page__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.contacts-page__row-label { min-width: 0; overflow-wrap: anywhere; }
+.contacts-page__link-btn { min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; text-decoration: none; }
