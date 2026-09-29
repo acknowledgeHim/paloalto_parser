@@ -20,6 +20,7 @@ import { bankTransfersRouter } from './routes/bankTransfers.js';
 import { groceryRouter } from './routes/grocery.js';
 import { contactsRouter } from './routes/contacts.js';
 import { knowledgeBaseRouter } from './routes/knowledgeBase.js';
+import { callingRouter } from './routes/calling.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
@@ -33,6 +34,9 @@ app.use(cors());
 // client-side first, but an uploaded MP3/video isn't, so leave real headroom (base64 inflates
 // ~33% over the raw file size; 80mb comfortably covers a short (~1 min) phone-recorded clip).
 app.use(express.json({ limit: '80mb' }));
+// Twilio's TwiML webhook (routes/calling.ts's POST /voice) posts form-encoded, not JSON — express.json
+// above simply ignores a non-JSON content-type, so this doesn't conflict with it.
+app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 app.use('/api/auth', authRouter);
@@ -51,6 +55,7 @@ app.use('/api/bank', bankTransfersRouter);
 app.use('/api/grocery', groceryRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/knowledge-base', knowledgeBaseRouter);
+app.use('/api/calling', callingRouter);
 // Uploaded KB pictures/videos — express.static (not a custom route) so it handles HTTP Range
 // requests, which video playback/seeking needs.
 app.use('/api/kb-media', express.static(config.kbMediaDir));

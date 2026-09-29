@@ -72,4 +72,16 @@ export const config = {
     pass: process.env.SMTP_PASS ?? '',
     from: process.env.SMTP_FROM ?? process.env.SMTP_USER ?? '',
   },
+
+  twilio: {
+    // Real click-to-call from a desktop/kiosk browser (paid Twilio account) — see
+    // docs/TWILIO_CALLING_SETUP.md. Leave TWILIO_ACCOUNT_SID blank to disable the feature entirely;
+    // everything else in Contacts (tel:/sms: links, email-to-SMS) works regardless.
+    accountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
+    apiKeySid: process.env.TWILIO_API_KEY_SID ?? '',
+    apiKeySecret: process.env.TWILIO_API_KEY_SECRET ?? '',
+    twimlAppSid: process.env.TWILIO_TWIML_APP_SID ?? '',
+    // The Twilio phone number (E.164, e.g. +15551234567) calls are placed from.
+    callerNumber: process.env.TWILIO_CALLER_NUMBER ?? '',
+  },
 };

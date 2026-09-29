@@ -3,6 +3,7 @@ import { api, type Contact } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { ContactFormModal } from '../components/ContactFormModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
+import { BrowserCallButton } from '../components/BrowserCallButton.js';
 
 /** tel:/sms: only want digits (and a leading +) — strip formatting like "(555) 123-4567". */
 function phoneHref(scheme: 'tel' | 'sms', phone: string): string {
@@ -17,11 +18,13 @@ function distanceLabel(miles: number): string {
 function ContactCard({
   contact,
   canManage,
+  callerLabel,
   onEdit,
   onChange,
 }: {
   contact: Contact;
   canManage: boolean;
+  callerLabel: string;
   onEdit: () => void;
   onChange: () => void;
 }) {
@@ -96,6 +99,7 @@ function ContactCard({
               </button>
             )}
           </div>
+          <BrowserCallButton phone={contact.phone} callerLabel={callerLabel} />
         </div>
       )}
       {texting && (
@@ -175,7 +179,14 @@ export function ContactsPage() {
       {contacts.length === 0 && <div className="empty-state">No contacts yet{canManage ? ' — add one above.' : '.'}</div>}
       <div className="contacts-page__grid">
         {contacts.map((c) => (
-          <ContactCard key={c.id} contact={c} canManage={canManage} onEdit={() => setModalContact(c)} onChange={load} />
+          <ContactCard
+            key={c.id}
+            contact={c}
+            canManage={canManage}
+            callerLabel={activeProfile?.name ?? 'Family'}
+            onEdit={() => setModalContact(c)}
+            onChange={load}
+          />
         ))}
       </div>
 
