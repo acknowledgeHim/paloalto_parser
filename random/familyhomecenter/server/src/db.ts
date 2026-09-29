@@ -265,6 +265,32 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Household how-to guides ("shut off the main water valve", "reset a tripped breaker") —
+  -- parent-authored reference material, not an everyday list (see routes/knowledgeBase.ts).
+  CREATE TABLE IF NOT EXISTS kb_articles (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    category TEXT,
+    body TEXT,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- An article's attached pictures/videos, in display order. 'image'/'video' store an uploaded
+  -- file (file_name, under config.kbMediaDir — see services/kbMedia.ts); 'video_link' is an
+  -- external URL (e.g. a YouTube link) embedded instead of hosted, so a long video doesn't need
+  -- to live on the Pi's SD card.
+  CREATE TABLE IF NOT EXISTS kb_media (
+    id TEXT PRIMARY KEY,
+    article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('image', 'video', 'video_link')),
+    file_name TEXT,
+    external_url TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   -- A running "need to buy" list, separate from a meal's own ingredients — anyone can ask for
   -- something without it being tied to a specific meal, and meal_id is just an optional link
   -- for when it is (e.g. "we're short a can of tomatoes for Tuesday's chili"). Getting checked

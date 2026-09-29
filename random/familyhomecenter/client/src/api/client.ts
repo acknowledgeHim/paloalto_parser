@@ -300,6 +300,32 @@ export interface Meal {
   recipes: Recipe[];
 }
 
+// ---- Knowledge base ----
+
+export interface KbMedia {
+  id: string;
+  article_id: string;
+  kind: 'image' | 'video' | 'video_link';
+  /** Set for 'image'/'video' — fetch from /api/kb-media/<file_name>. */
+  file_name: string | null;
+  /** Set for 'video_link' (e.g. a YouTube URL) — embedded instead of hosted. */
+  external_url: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+/** A household how-to guide ("shut off the main water valve", "reset a tripped breaker"). */
+export interface KbArticle {
+  id: string;
+  title: string;
+  category: string | null;
+  body: string | null;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+  media: KbMedia[];
+}
+
 // ---- Contacts ----
 
 /** An important phone number/address for the family. */

@@ -19,6 +19,7 @@ import { bankRouter } from './routes/bank.js';
 import { bankTransfersRouter } from './routes/bankTransfers.js';
 import { groceryRouter } from './routes/grocery.js';
 import { contactsRouter } from './routes/contacts.js';
+import { knowledgeBaseRouter } from './routes/knowledgeBase.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
@@ -27,10 +28,11 @@ import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 
 const app = express();
 app.use(cors());
-// Default 100kb is too small for a family member's avatar photo or a custom completion-sound
-// MP3 (both sent as base64 data URLs) — the avatar is downsized client-side first, but an
-// uploaded MP3 isn't, so leave real headroom (base64 inflates ~33% over the raw file size).
-app.use(express.json({ limit: '15mb' }));
+// Default 100kb is too small for a family member's avatar photo, a custom completion-sound MP3,
+// or a Knowledge Base how-to video (all sent as base64 data URLs) — the avatar is downsized
+// client-side first, but an uploaded MP3/video isn't, so leave real headroom (base64 inflates
+// ~33% over the raw file size; 80mb comfortably covers a short (~1 min) phone-recorded clip).
+app.use(express.json({ limit: '80mb' }));
 app.use(cookieParser());
 
 app.use('/api/auth', authRouter);
@@ -48,6 +50,10 @@ app.use('/api/family-members/:memberId/bank', bankRouter);
 app.use('/api/bank', bankTransfersRouter);
 app.use('/api/grocery', groceryRouter);
 app.use('/api/contacts', contactsRouter);
+app.use('/api/knowledge-base', knowledgeBaseRouter);
+// Uploaded KB pictures/videos — express.static (not a custom route) so it handles HTTP Range
+// requests, which video playback/seeking needs.
+app.use('/api/kb-media', express.static(config.kbMediaDir));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

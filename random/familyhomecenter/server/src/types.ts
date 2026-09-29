@@ -189,6 +189,29 @@ export interface CalendarEvent {
   created_by_id?: string | null;
 }
 
+/** A household how-to guide — see routes/knowledgeBase.ts. */
+export interface KbArticle {
+  id: string;
+  title: string;
+  category: string | null;
+  body: string | null;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One attached picture/video on a KB article. file_name is set for 'image'/'video' (an uploaded
+ *  file under config.kbMediaDir); external_url is set for 'video_link' (e.g. a YouTube URL). */
+export interface KbMedia {
+  id: string;
+  article_id: string;
+  kind: 'image' | 'video' | 'video_link';
+  file_name: string | null;
+  external_url: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 /** An important phone number/address for the family — see routes/contacts.ts. */
 export interface Contact {
   id: string;

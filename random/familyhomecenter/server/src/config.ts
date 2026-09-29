@@ -12,6 +12,7 @@ export const config = {
   thumbsDir: path.join(__dirname, '..', 'data', 'thumbs'),
   avatarsDir: path.join(__dirname, '..', 'data', 'avatars'),
   soundsDir: path.join(__dirname, '..', 'data', 'sounds'),
+  kbMediaDir: path.join(__dirname, '..', 'data', 'kb-media'),
   clientDistDir: path.join(__dirname, '..', '..', 'client', 'dist'),
 
   google: {

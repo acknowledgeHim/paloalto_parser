@@ -10,6 +10,7 @@ export function NavBar() {
         <NavLink to="/tasks" className={({ isActive }) => (isActive ? 'active' : '')}>Chores &amp; Tasks</NavLink>
         <NavLink to="/meals" className={({ isActive }) => (isActive ? 'active' : '')}>Meals</NavLink>
         <NavLink to="/contacts" className={({ isActive }) => (isActive ? 'active' : '')}>Contacts</NavLink>
+        <NavLink to="/knowledge-base" className={({ isActive }) => (isActive ? 'active' : '')}>Knowledge Base</NavLink>
         <NavLink to="/prizes" className={({ isActive }) => (isActive ? 'active' : '')}>Prize Bank</NavLink>
         <NavLink to="/board" className={({ isActive }) => (isActive ? 'active' : '')}>Family Board</NavLink>
         <NavLink to="/music" className={({ isActive }) => (isActive ? 'active' : '')}>Music</NavLink>

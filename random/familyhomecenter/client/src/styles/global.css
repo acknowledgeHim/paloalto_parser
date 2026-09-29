@@ -1095,3 +1095,47 @@ textarea {
 }
 .contacts-page__row-label { min-width: 0; overflow-wrap: anywhere; }
 .contacts-page__link-btn { min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; text-decoration: none; }
+
+/* ---- Knowledge base ---- */
+.kb-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.kb-page__card { display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; }
+.kb-page__body { white-space: pre-wrap; margin: 0; }
+.kb-page__media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.kb-page__media-item { position: relative; }
+.kb-page__media-image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
+.kb-page__media-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  display: block;
+  border: none;
+  grid-column: 1 / -1;
+}
+.kb-page__media-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-height: 28px;
+  width: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: white;
+  border: none;
+}
+.kb-page__media-add { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
