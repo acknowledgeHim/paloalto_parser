@@ -56,7 +56,7 @@
     return fetch(LT_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ text: text, language: "auto", level: "picky" }),
+      body: new URLSearchParams({ text: text, language: "en-US", level: "picky" }),
     }).then(function (r) {
       if (!r.ok) throw new Error("LT " + r.status);
       return r.json();
