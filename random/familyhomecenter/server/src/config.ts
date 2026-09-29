@@ -13,6 +13,7 @@ export const config = {
   avatarsDir: path.join(__dirname, '..', 'data', 'avatars'),
   soundsDir: path.join(__dirname, '..', 'data', 'sounds'),
   kbMediaDir: path.join(__dirname, '..', 'data', 'kb-media'),
+  moviesDir: path.join(__dirname, '..', 'data', 'movies'),
   clientDistDir: path.join(__dirname, '..', '..', 'client', 'dist'),
 
   google: {
@@ -71,6 +72,12 @@ export const config = {
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
     from: process.env.SMTP_FROM ?? process.env.SMTP_USER ?? '',
+  },
+
+  movies: {
+    // Path/command to invoke ffmpeg with — a system binary this app never installs itself, see
+    // docs/MOVIES_SETUP.md. Left at the bare command name, resolved via PATH, unless overridden.
+    ffmpegPath: process.env.FFMPEG_PATH ?? 'ffmpeg',
   },
 
   twilio: {

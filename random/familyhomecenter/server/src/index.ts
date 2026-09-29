@@ -21,6 +21,7 @@ import { groceryRouter } from './routes/grocery.js';
 import { contactsRouter } from './routes/contacts.js';
 import { knowledgeBaseRouter } from './routes/knowledgeBase.js';
 import { callingRouter } from './routes/calling.js';
+import { moviesRouter } from './routes/movies.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
@@ -56,9 +57,11 @@ app.use('/api/grocery', groceryRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/knowledge-base', knowledgeBaseRouter);
 app.use('/api/calling', callingRouter);
-// Uploaded KB pictures/videos — express.static (not a custom route) so it handles HTTP Range
-// requests, which video playback/seeking needs.
+app.use('/api/movies', moviesRouter);
+// Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
+// handles HTTP Range requests, which video playback/seeking needs.
 app.use('/api/kb-media', express.static(config.kbMediaDir));
+app.use('/api/movies-media', express.static(config.moviesDir));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

@@ -295,6 +295,22 @@ db.exec(`
   -- something without it being tied to a specific meal, and meal_id is just an optional link
   -- for when it is (e.g. "we're short a can of tomatoes for Tuesday's chili"). Getting checked
   -- off (routes/grocery.ts's DELETE) just removes it — there's no need to keep a purchased-item
+  -- A rendered photo-slideshow-with-music video (see services/movieRender.ts) — only ever READS
+  -- from PHOTOS_DIR/MUSIC_LIBRARY_DIR to build file_name under config.moviesDir; the originals are
+  -- never touched. file_name/error are set once rendering finishes (success/failure respectively).
+  CREATE TABLE IF NOT EXISTS movies (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('rendering', 'ready', 'failed')),
+    file_name TEXT,
+    error TEXT,
+    photo_count INTEGER NOT NULL,
+    seconds_per_photo REAL NOT NULL,
+    music_track TEXT,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   -- history the way task completions or bank transactions do. See services/groceryEmail.ts for
   -- the nightly digest this feeds.
   CREATE TABLE IF NOT EXISTS grocery_items (

@@ -242,6 +242,25 @@ export interface Contact {
   created_at: string;
 }
 
+/** A rendered photo-slideshow-with-music video — see routes/movies.ts and services/movieRender.ts.
+ *  Only ever reads the source photos/music; never deletes or modifies them. */
+export interface Movie {
+  id: string;
+  title: string;
+  status: 'rendering' | 'ready' | 'failed';
+  /** Set once status is 'ready' — filename under config.moviesDir, served via /api/movies-media. */
+  file_name: string | null;
+  /** Set once status is 'failed' — ffmpeg's own error output, best-effort human-readable. */
+  error: string | null;
+  photo_count: number;
+  seconds_per_photo: number;
+  /** The music library track's relative path (Track.file from GET /music/library/search), or null
+   *  for a silent slideshow. */
+  music_track: string | null;
+  created_by_id: string | null;
+  created_at: string;
+}
+
 /** A grocery-list entry — see routes/grocery.ts. Getting checked off deletes it (no purchased
  *  history kept); requested_by_id/meal_id are both optional. */
 export interface GroceryItem {

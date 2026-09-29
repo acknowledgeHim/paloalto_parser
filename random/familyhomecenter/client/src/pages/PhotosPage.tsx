@@ -1,6 +1,97 @@
 import { useEffect, useState } from 'react';
-import { api, type Photo } from '../api/client.js';
+import { api, type Movie, type Photo } from '../api/client.js';
 import { Slideshow } from '../components/Slideshow.js';
+import { MovieMakerModal } from '../components/MovieMakerModal.js';
+import { ConfirmButton } from '../components/ConfirmButton.js';
+
+function MoviesSection({ photos }: { photos: Photo[] }) {
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [showMaker, setShowMaker] = useState(false);
+  const [playing, setPlaying] = useState<Movie | null>(null);
+
+  const load = () => {
+    api.get<Movie[]>('/movies').then(setMovies).catch(console.error);
+  };
+  useEffect(load, []);
+
+  // Poll while anything's still rendering — ffmpeg on a Pi can take a couple minutes.
+  useEffect(() => {
+    if (!movies.some((m) => m.status === 'rendering')) return;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [movies]);
+
+  const remove = async (id: string) => {
+    await api.delete(`/movies/${id}`);
+    load();
+  };
+
+  return (
+    <section className="panel movie-maker__section">
+      <div className="tasks-page__header">
+        <button type="button" className="icon-button" aria-label="Make a movie" onClick={() => setShowMaker(true)}>+</button>
+        <h2>Movies</h2>
+      </div>
+      <p className="hint">
+        Turn a set of photos into a video slideshow with music from the library — never touches
+        the original photos or music files, just creates a new video saved on this server.
+      </p>
+
+      {movies.length === 0 && <div className="empty-state">No movies yet — make one above.</div>}
+      {movies.length > 0 && (
+        <ul className="movie-maker__movie-list">
+          {movies.map((m) => (
+            <li key={m.id}>
+              <div className="movie-maker__movie-info">
+                <span className="movie-maker__movie-title">{m.title}</span>
+                <span className="hint">
+                  {m.photo_count} photo{m.photo_count === 1 ? '' : 's'}
+                  {m.music_track ? ' · with music' : ''}
+                  {m.status === 'rendering' && ' · Rendering…'}
+                  {m.status === 'failed' && ' · Failed'}
+                </span>
+              </div>
+              <div className="task-form__row">
+                {m.status === 'ready' && (
+                  <button type="button" className="secondary" onClick={() => setPlaying(m)}>▶ Watch</button>
+                )}
+                <ConfirmButton
+                  label="✕"
+                  ariaLabel={`Delete ${m.title}`}
+                  confirmLabel={`Delete "${m.title}"?`}
+                  onConfirm={() => remove(m.id)}
+                  className="task-card__edit"
+                />
+              </div>
+              {m.status === 'failed' && m.error && <p className="hint">{m.error}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showMaker && (
+        <MovieMakerModal
+          photos={photos}
+          onClose={() => setShowMaker(false)}
+          onCreated={() => {
+            setShowMaker(false);
+            load();
+          }}
+        />
+      )}
+
+      {playing && (
+        <div className="modal-overlay" onClick={() => setPlaying(null)}>
+          <div className="modal-panel movie-maker__player" onClick={(e) => e.stopPropagation()}>
+            <h2>{playing.title}</h2>
+            <video className="movie-maker__video" src={`/api/movies-media/${playing.file_name}`} controls autoPlay />
+            <button type="button" className="secondary" onClick={() => setPlaying(null)}>Close</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function PhotosPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -44,6 +135,8 @@ export function PhotosPage() {
           </button>
         ))}
       </div>
+
+      <MoviesSection photos={photos} />
 
       {viewingIndex !== null && (
         <div className="photo-lightbox" onClick={() => setViewingIndex(null)}>

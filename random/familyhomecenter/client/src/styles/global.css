@@ -739,6 +739,38 @@ textarea {
 .photo-lightbox__nav--prev { left: 20px; }
 .photo-lightbox__nav--next { right: 20px; }
 
+/* ---- Movie maker ---- */
+.movie-maker__section { margin-top: 20px; }
+.movie-maker__photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.movie-maker__photo {
+  padding: 0;
+  border: 3px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  background: var(--bg);
+}
+.movie-maker__photo--selected { border-color: var(--accent); }
+.movie-maker__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.movie-maker__music-results { list-style: none; margin: 4px 0 0; padding: 0; max-height: 160px; overflow-y: auto; }
+.movie-maker__music-results li { padding: 2px 0; }
+.movie-maker__movie-list { list-style: none; margin: 0; padding: 0; }
+.movie-maker__movie-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.movie-maker__movie-list li:last-child { border-bottom: none; }
+.movie-maker__movie-info { display: flex; flex-direction: column; gap: 2px; }
+.movie-maker__movie-title { font-weight: 600; }
+.movie-maker__player { max-width: 900px; width: 100%; }
+.movie-maker__video { width: 100%; border-radius: 10px; display: block; margin-bottom: 12px; }
+
 /* ---- Settings login gate ---- */
 .settings-login {
   display: flex;

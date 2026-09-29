@@ -376,3 +376,20 @@ export interface GroceryItem {
 export interface Photo {
   id: string;
 }
+
+/** A rendered photo-slideshow-with-music video. Read-only against the source photos/music that
+ *  made it — this is always a brand new file, nothing about the originals is ever touched. */
+export interface Movie {
+  id: string;
+  title: string;
+  status: 'rendering' | 'ready' | 'failed';
+  /** Set once status is 'ready' — fetch from /api/movies-media/<file_name>. */
+  file_name: string | null;
+  /** Set once status is 'failed' — a best-effort human-readable reason. */
+  error: string | null;
+  photo_count: number;
+  seconds_per_photo: number;
+  music_track: string | null;
+  created_by_id: string | null;
+  created_at: string;
+}
