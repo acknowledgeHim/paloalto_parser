@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { MealPlanTab } from '../components/MealPlanTab.js';
 import { RecipesTab } from '../components/RecipesTab.js';
 import { ConverterTab } from '../components/ConverterTab.js';
+import { GroceryListTab } from '../components/GroceryListTab.js';
 
-type Tab = 'plan' | 'recipes' | 'converter';
+type Tab = 'plan' | 'recipes' | 'grocery' | 'converter';
 
 export function MealsPage() {
   const [tab, setTab] = useState<Tab>('plan');
@@ -14,10 +15,12 @@ export function MealsPage() {
       <div className="meals-page__tabs">
         <button type="button" className={tab === 'plan' ? '' : 'secondary'} onClick={() => setTab('plan')}>Meal Plan</button>
         <button type="button" className={tab === 'recipes' ? '' : 'secondary'} onClick={() => setTab('recipes')}>Recipes</button>
+        <button type="button" className={tab === 'grocery' ? '' : 'secondary'} onClick={() => setTab('grocery')}>Grocery List</button>
         <button type="button" className={tab === 'converter' ? '' : 'secondary'} onClick={() => setTab('converter')}>Converter</button>
       </div>
       {tab === 'plan' && <MealPlanTab />}
       {tab === 'recipes' && <RecipesTab />}
+      {tab === 'grocery' && <GroceryListTab />}
       {tab === 'converter' && <ConverterTab />}
     </div>
   );

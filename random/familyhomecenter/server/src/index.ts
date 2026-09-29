@@ -17,9 +17,11 @@ import { recipesRouter } from './routes/recipes.js';
 import { prizesRouter } from './routes/prizes.js';
 import { bankRouter } from './routes/bank.js';
 import { bankTransfersRouter } from './routes/bankTransfers.js';
+import { groceryRouter } from './routes/grocery.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
+import { startGroceryEmailSchedule } from './services/groceryEmail.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 
 const app = express();
@@ -43,6 +45,7 @@ app.use('/api/recipes', recipesRouter);
 app.use('/api/prizes', prizesRouter);
 app.use('/api/family-members/:memberId/bank', bankRouter);
 app.use('/api/bank', bankTransfersRouter);
+app.use('/api/grocery', groceryRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -64,4 +67,5 @@ server.listen(config.port, config.host, () => {
   console.log(`Family Home Center server listening on http://${config.host}:${config.port}`);
   startCalendarSyncSchedule();
   startThumbnailWarmSchedule();
+  startGroceryEmailSchedule();
 });

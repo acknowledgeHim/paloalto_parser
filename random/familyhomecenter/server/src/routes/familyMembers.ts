@@ -184,7 +184,7 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
 });
 
 familyMembersRouter.post('/', requireAdmin, (req, res) => {
-  const { name, color, avatar, complete_sound, progress_bar_style, is_parent } = req.body as Partial<FamilyMember>;
+  const { name, color, avatar, email, complete_sound, progress_bar_style, is_parent } = req.body as Partial<FamilyMember>;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'name is required' });
   }
@@ -194,6 +194,7 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     name: name.trim(),
     color: color || '#5b8def',
     avatar: avatar ?? null,
+    email: email?.trim() || null,
     complete_sound: complete_sound ?? null,
     progress_bar_style: progress_bar_style ?? null,
     star_balance: 0,
@@ -204,8 +205,8 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO family_members (id, name, color, avatar, complete_sound, progress_bar_style, is_parent, sort_order, created_at)
-     VALUES (@id, @name, @color, @avatar, @complete_sound, @progress_bar_style, @is_parent, @sort_order, @created_at)`
+    `INSERT INTO family_members (id, name, color, avatar, email, complete_sound, progress_bar_style, is_parent, sort_order, created_at)
+     VALUES (@id, @name, @color, @avatar, @email, @complete_sound, @progress_bar_style, @is_parent, @sort_order, @created_at)`
   ).run(member);
   res.status(201).json(toPublic(member));
 });
@@ -235,7 +236,7 @@ familyMembersRouter.patch('/:id', requireSelfOrAdmin, (req, res) => {
     is_parent: body.is_parent !== undefined ? (body.is_parent ? 1 : 0) : existing.is_parent,
   };
   db.prepare(
-    `UPDATE family_members SET name = @name, color = @color, avatar = @avatar,
+    `UPDATE family_members SET name = @name, color = @color, avatar = @avatar, email = @email,
      complete_sound = @complete_sound, progress_bar_style = @progress_bar_style, is_parent = @is_parent WHERE id = @id`
   ).run(updated);
   res.json(toPublic(updated));

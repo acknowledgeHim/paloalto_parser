@@ -37,6 +37,7 @@ interface Props {
 
 export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole = true }: Props) {
   const [name, setName] = useState(member?.name ?? '');
+  const [email, setEmail] = useState(member?.email ?? '');
   const [isParent, setIsParent] = useState(member?.is_parent === 1);
   const [color, setColor] = useState(member?.color ?? COLOR_PRESETS[0]);
   const [emoji, setEmoji] = useState(member && member.avatar !== 'image' ? member.avatar ?? '' : '');
@@ -99,6 +100,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
     try {
       const body: Record<string, unknown> = {
         name: name.trim(),
+        email: email.trim() || null,
         color,
         progress_bar_style: progressStyle === 'solid' ? null : progressStyle,
         // "custom" is applied via the dedicated /sound endpoint below; any preset is stored directly.
@@ -142,6 +144,13 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
         </div>
 
         <input autoFocus placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input
+          type="email"
+          placeholder="Email (optional)"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        {isParent && <p className="hint">A parent's email gets the nightly grocery-list digest, if one's set up — see Meals.</p>}
 
         {canChangeRole && (
           <label className="checkbox">

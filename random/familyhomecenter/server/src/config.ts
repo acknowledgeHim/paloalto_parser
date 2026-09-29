@@ -61,4 +61,14 @@ export const config = {
     // see docs/SETTINGS_LOGIN.md.
     password: process.env.ADMIN_PASSWORD ?? '',
   },
+
+  smtp: {
+    // Any SMTP account works, e.g. a Gmail account with an App Password. See docs/GROCERY_EMAIL_SETUP.md.
+    // Leave SMTP_HOST blank to disable the nightly grocery-list digest entirely.
+    host: process.env.SMTP_HOST ?? '',
+    port: Number(process.env.SMTP_PORT ?? 587),
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASS ?? '',
+    from: process.env.SMTP_FROM ?? process.env.SMTP_USER ?? '',
+  },
 };

@@ -248,6 +248,21 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     achieved_at TEXT
   );
+
+  -- A running "need to buy" list, separate from a meal's own ingredients — anyone can ask for
+  -- something without it being tied to a specific meal, and meal_id is just an optional link
+  -- for when it is (e.g. "we're short a can of tomatoes for Tuesday's chili"). Getting checked
+  -- off (routes/grocery.ts's DELETE) just removes it — there's no need to keep a purchased-item
+  -- history the way task completions or bank transactions do. See services/groceryEmail.ts for
+  -- the nightly digest this feeds.
+  CREATE TABLE IF NOT EXISTS grocery_items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    quantity TEXT,
+    requested_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    meal_id TEXT REFERENCES meals(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Simple migration for databases created before for_member_id existed — SQLite has no
@@ -415,6 +430,14 @@ try {
          OR (earlier.created_at = family_members.created_at AND earlier.id < family_members.id)
     )
   `);
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// Where the nightly grocery-list digest goes (services/groceryEmail.ts) — every parent with one
+// set gets it. NULL/empty = doesn't receive it; nothing else in the app currently uses this.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN email TEXT');
 } catch (err) {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }

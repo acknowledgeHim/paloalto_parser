@@ -19,6 +19,9 @@ export interface FamilyMember {
    *  lower first. Defaults to arrival order; reorderable via POST /family-members/reorder. */
   sort_order: number;
   created_at: string;
+  /** Where the nightly grocery-list digest goes (services/groceryEmail.ts) — only meaningful for a
+   *  parent (is_parent = 1); null/empty means this person doesn't receive it. */
+  email: string | null;
 }
 
 export type TaskKind = 'chore' | 'todo';
@@ -184,4 +187,15 @@ export interface CalendarEvent {
   for_member_id?: string | null;
   /** Who added this event (local events only). */
   created_by_id?: string | null;
+}
+
+/** A grocery-list entry — see routes/grocery.ts. Getting checked off deletes it (no purchased
+ *  history kept); requested_by_id/meal_id are both optional. */
+export interface GroceryItem {
+  id: string;
+  name: string;
+  quantity: string | null;
+  requested_by_id: string | null;
+  meal_id: string | null;
+  created_at: string;
 }

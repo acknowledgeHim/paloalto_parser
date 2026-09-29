@@ -42,6 +42,8 @@ export interface FamilyMember {
   money_balance: number;
   /** Whether this person has their own password set — never the password/hash itself. */
   has_password: boolean;
+  /** Where the nightly grocery-list digest goes — only meaningful for a parent; null = doesn't receive it. */
+  email: string | null;
 }
 
 export interface TaskCompletion {
@@ -296,6 +298,19 @@ export interface Meal {
   created_at: string;
   ingredients: Ingredient[];
   recipes: Recipe[];
+}
+
+// ---- Grocery list ----
+
+/** A grocery-list entry. Checking it off deletes it — no purchased-history is kept. */
+export interface GroceryItem {
+  id: string;
+  name: string;
+  quantity: string | null;
+  requested_by_id: string | null;
+  /** Optional link to an upcoming meal this item is for. */
+  meal_id: string | null;
+  created_at: string;
 }
 
 // ---- Photos ----
