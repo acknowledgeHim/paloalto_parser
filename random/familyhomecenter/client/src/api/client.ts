@@ -44,6 +44,10 @@ export interface FamilyMember {
   has_password: boolean;
   /** Where the nightly grocery-list digest goes — only meaningful for a parent; null = doesn't receive it. */
   email: string | null;
+  /** Start/end icons for the "Adventure Map" progress bar style — null falls back to a default
+   *  (🏠/🏰). Irrelevant for any other progress_bar_style. */
+  adventure_start_icon: string | null;
+  adventure_end_icon: string | null;
 }
 
 export interface TaskCompletion {
@@ -76,6 +80,9 @@ export interface Task {
   active: 0 | 1;
   /** Every completion for the fetched date (or, for a "once" task, ever) — one per person who's done their copy. */
   completions: TaskCompletion[];
+  /** This task's checkpoint icon on the "Adventure Map" progress bar style (see utils/taskIcons.ts
+   *  for the preset picker and the fallback-by-kind used when this is null). */
+  icon: string | null;
 }
 
 // ---- Person detail page ----

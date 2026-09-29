@@ -22,6 +22,10 @@ export interface FamilyMember {
   /** Where the nightly grocery-list digest goes (services/groceryEmail.ts) — only meaningful for a
    *  parent (is_parent = 1); null/empty means this person doesn't receive it. */
   email: string | null;
+  /** Start/end icons for the "Adventure Map" progress_bar_style — null falls back to a default
+   *  (🏠/🏰) client-side. Irrelevant for any other style. */
+  adventure_start_icon: string | null;
+  adventure_end_icon: string | null;
 }
 
 export type TaskKind = 'chore' | 'todo';
@@ -64,6 +68,9 @@ export interface Task {
   reward_amount: number | null;
   active: 0 | 1;
   created_at: string;
+  /** This task's checkpoint icon on the "Adventure Map" progress_bar_style — null falls back to a
+   *  generic icon by kind client-side (client/src/utils/taskIcons.ts). Irrelevant for any other style. */
+  icon: string | null;
 }
 
 /** Task as returned by the API — assignee_ids/completions are computed from the join tables, not columns. */

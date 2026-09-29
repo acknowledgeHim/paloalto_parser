@@ -6,8 +6,9 @@ import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { AdventureProgressBar } from '../components/AdventureProgressBar.js';
 import { canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
-import { progressFillFor } from '../utils/progressStyles.js';
+import { isAdventureStyle, progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
 
 // tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
@@ -76,18 +77,25 @@ function CompletedTodayModal({
   );
 }
 
+function relevantTasksForKind(tasks: Task[], memberId: string, kind: 'chore' | 'todo'): Task[] {
+  return tasks.filter((t) => t.kind === kind && t.assignee_ids.includes(memberId));
+}
+
 function countProgress(tasks: Task[], memberId: string, kind: 'chore' | 'todo') {
-  const relevant = tasks.filter((t) => t.kind === kind && t.assignee_ids.includes(memberId));
+  const relevant = relevantTasksForKind(tasks, memberId, kind);
   const done = relevant.filter((t) => t.completions.some((c) => c.completed_by_id === memberId)).length;
   return { done, total: relevant.length };
 }
 
 function MemberProgressBars({ member, tasks }: { member: FamilyMember; tasks: Task[] }) {
   const fill = progressFillFor(member.progress_bar_style, member.color);
-  const bars: Array<{ label: string; done: number; total: number }> = [
-    { label: 'Chores', ...countProgress(tasks, member.id, 'chore') },
-    { label: 'To-dos', ...countProgress(tasks, member.id, 'todo') },
-  ].filter((b) => b.total > 0);
+  const adventure = isAdventureStyle(member.progress_bar_style);
+  const bars: Array<{ label: string; kind: 'chore' | 'todo'; done: number; total: number }> = (
+    [
+      { label: 'Chores', kind: 'chore' as const, ...countProgress(tasks, member.id, 'chore') },
+      { label: 'To-dos', kind: 'todo' as const, ...countProgress(tasks, member.id, 'todo') },
+    ]
+  ).filter((b) => b.total > 0);
 
   if (bars.length === 0) return null;
 
@@ -99,9 +107,18 @@ function MemberProgressBars({ member, tasks }: { member: FamilyMember; tasks: Ta
             <span>{b.label}</span>
             <span>{b.done}/{b.total}</span>
           </div>
-          <div className="progress-bar">
-            <div className="progress-bar__fill" style={{ width: `${Math.round((b.done / b.total) * 100)}%`, background: fill }} />
-          </div>
+          {adventure ? (
+            <AdventureProgressBar
+              member={member}
+              items={sortForColumn(relevantTasksForKind(tasks, member.id, b.kind))}
+              done={b.done}
+              total={b.total}
+            />
+          ) : (
+            <div className="progress-bar">
+              <div className="progress-bar__fill" style={{ width: `${Math.round((b.done / b.total) * 100)}%`, background: fill }} />
+            </div>
+          )}
         </div>
       ))}
     </div>

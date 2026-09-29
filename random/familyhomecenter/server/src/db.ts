@@ -484,6 +484,27 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// The "Adventure Map" progress_bar_style (client/src/utils/progressStyles.ts) needs a start/end
+// icon per person — NULL falls back to a default (🏠/🏰) client-side, so this never needs backfilling.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN adventure_start_icon TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN adventure_end_icon TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// A chore/to-do's own icon — the Adventure Map progress bar's per-task checkpoint marker (falls
+// back to a generic icon by kind client-side, see client/src/utils/taskIcons.ts, if unset).
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN icon TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

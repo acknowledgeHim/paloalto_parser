@@ -13,6 +13,7 @@ const EMOJI_PRESETS = [
   '🐢', '🐬', '🦖', '🐙', '🦋', '🐝', '🐞', '🦕',
   '🚀', '🚗', '⚽', '🏀', '🎸', '🎮', '🎨', '🌟',
   '🌈', '🌸', '🍕', '🍩', '🍦', '🎂', '⚡', '🔥',
+  '🏠', '🏰', '🏝️', '⛰️', '🌋', '🎪', '🚩', '🏆',
 ] as const;
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -45,6 +46,8 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
   const [pendingImage, setPendingImage] = useState<string | null>(null);
 
   const [progressStyle, setProgressStyle] = useState(member?.progress_bar_style ?? 'solid');
+  const [startIcon, setStartIcon] = useState(member?.adventure_start_icon ?? '');
+  const [endIcon, setEndIcon] = useState(member?.adventure_end_icon ?? '');
 
   const [completeSound, setCompleteSound] = useState(member?.complete_sound ?? 'none');
   const [hasCustomSound, setHasCustomSound] = useState(member?.complete_sound === 'custom');
@@ -103,6 +106,8 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
         email: email.trim() || null,
         color,
         progress_bar_style: progressStyle === 'solid' ? null : progressStyle,
+        adventure_start_icon: startIcon || null,
+        adventure_end_icon: endIcon || null,
         // "custom" is applied via the dedicated /sound endpoint below; any preset is stored directly.
         complete_sound: completeSound === 'none' ? null : completeSound,
         // Custom-image state is applied via the dedicated avatar endpoints below; otherwise this
@@ -282,15 +287,53 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
                 className={`progress-style-picker__option ${progressStyle === s.id ? 'progress-style-picker__option--selected' : ''}`}
                 onClick={() => setProgressStyle(s.id)}
               >
-                <span
-                  className="progress-style-picker__swatch"
-                  style={{ background: progressFillFor(s.id, color) }}
-                />
+                {s.id === 'adventure' ? (
+                  <span className="progress-style-picker__swatch progress-style-picker__swatch--emoji">🗺️</span>
+                ) : (
+                  <span className="progress-style-picker__swatch" style={{ background: progressFillFor(s.id, color) }} />
+                )}
                 {s.label}
               </button>
             ))}
           </div>
         </div>
+
+        {progressStyle === 'adventure' && (
+          <>
+            <div>
+              <label className="member-form__label">Adventure Map — starting point</label>
+              <div className="member-form__swatches">
+                {EMOJI_PRESETS.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    className={`member-form__emoji ${startIcon === em ? 'member-form__emoji--selected' : ''}`}
+                    onClick={() => setStartIcon((cur) => (cur === em ? '' : em))}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+              <p className="hint">Defaults to 🏠 if nothing's picked.</p>
+            </div>
+            <div>
+              <label className="member-form__label">Adventure Map — destination (castle, treasure, etc.)</label>
+              <div className="member-form__swatches">
+                {EMOJI_PRESETS.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    className={`member-form__emoji ${endIcon === em ? 'member-form__emoji--selected' : ''}`}
+                    onClick={() => setEndIcon((cur) => (cur === em ? '' : em))}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+              <p className="hint">Defaults to 🏰 if nothing's picked.</p>
+            </div>
+          </>
+        )}
 
         <div className="task-form__row">
           <button type="submit" disabled={saving}>{member ? 'Save' : 'Add'}</button>

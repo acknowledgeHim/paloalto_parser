@@ -16,6 +16,10 @@ export const PROGRESS_STYLES = [
   { id: 'lavender', label: 'Lavender', fill: 'linear-gradient(90deg, #7c3aed, #a78bfa, #ede9fe)' },
   { id: 'slate', label: 'Slate', fill: 'linear-gradient(90deg, #334155, #64748b, #94a3b8)' },
   { id: 'dots', label: 'Dots', fill: 'repeating-radial-gradient(circle at 8px 8px, #ffffff80 0, #ffffff80 3px, transparent 4px, transparent 16px), #6366f1' },
+  // Not a CSS gradient at all — a completely custom animated component (see AdventureProgressBar).
+  // fill stays null so anything that naively treats every style as a plain background degrades
+  // gracefully to the person's own color instead of rendering nothing.
+  { id: 'adventure', label: 'Adventure Map', fill: null },
 ] as const;
 
 export type ProgressStyleId = (typeof PROGRESS_STYLES)[number]['id'];
@@ -23,4 +27,8 @@ export type ProgressStyleId = (typeof PROGRESS_STYLES)[number]['id'];
 export function progressFillFor(styleId: string | null | undefined, fallbackColor: string): string {
   const style = PROGRESS_STYLES.find((s) => s.id === styleId);
   return style?.fill ?? fallbackColor;
+}
+
+export function isAdventureStyle(styleId: string | null | undefined): boolean {
+  return styleId === 'adventure';
 }

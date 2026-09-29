@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '../utils/timeOfDay.js';
+import { TASK_ICON_PRESETS, taskIcon } from '../utils/taskIcons.js';
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
@@ -83,6 +84,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
   const [title, setTitle] = useState(task?.title ?? '');
   const [notes, setNotes] = useState(task?.notes ?? '');
   const [kind, setKind] = useState<'chore' | 'todo'>(task?.kind ?? 'todo');
+  const [icon, setIcon] = useState<string | null>(task?.icon ?? null);
   const [assigneeIds, setAssigneeIds] = useState<string[]>(
     task?.assignee_ids ?? (isParent ? (defaultAssigneeId ? [defaultAssigneeId] : []) : activeProfile ? [activeProfile.id] : [])
   );
@@ -129,6 +131,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
       title: title.trim(),
       notes: notes.trim() || null,
       kind,
+      icon,
       assignee_ids: finalAssigneeIds,
       recurrence: finalRecurrence,
       time_of_day: timeOfDaySlots.length > 0 ? timeOfDaySlots.join(',') : null,
@@ -181,6 +184,30 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
             <option value="todo">To-do</option>
             <option value="chore">Chore</option>
           </select>
+        </div>
+
+        <div>
+          <label className="member-form__label">Checkpoint icon (for the Adventure Map progress bar)</label>
+          <div className="member-form__swatches">
+            <button
+              type="button"
+              className={`member-form__emoji ${icon === null ? 'member-form__emoji--selected' : ''}`}
+              onClick={() => setIcon(null)}
+              aria-label="Use the default icon"
+            >
+              {taskIcon({ icon: null, kind })}
+            </button>
+            {TASK_ICON_PRESETS.map((em) => (
+              <button
+                key={em}
+                type="button"
+                className={`member-form__emoji ${icon === em ? 'member-form__emoji--selected' : ''}`}
+                onClick={() => setIcon((cur) => (cur === em ? null : em))}
+              >
+                {em}
+              </button>
+            ))}
+          </div>
         </div>
 
         {isParent && kind === 'todo' && (

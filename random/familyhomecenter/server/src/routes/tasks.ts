@@ -54,7 +54,7 @@ tasksRouter.get('/', (req, res) => {
 });
 
 tasksRouter.post('/', (req, res) => {
-  const { kind, title, notes, assignee_ids, created_by_id, recurrence, due_date, time_of_day } = req.body as Partial<Task> & {
+  const { kind, title, notes, assignee_ids, created_by_id, recurrence, due_date, time_of_day, icon } = req.body as Partial<Task> & {
     assignee_ids?: string[];
   };
   if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
@@ -69,14 +69,15 @@ tasksRouter.post('/', (req, res) => {
     recurrence: (recurrence as Task['recurrence']) ?? 'once',
     due_date: due_date ?? null,
     time_of_day: time_of_day ?? null,
+    icon: icon ?? null,
     reward_type: null,
     reward_amount: null,
     active: 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @active, @created_at)`
   ).run(task);
   setAssignees(task.id, assignee_ids ?? []);
   res.status(201).json({ ...task, assignee_ids: assignee_ids ?? [], completions: [] });
@@ -90,7 +91,7 @@ tasksRouter.patch('/:id', (req, res) => {
   const updated: Task = { ...existing, ...fields, id: existing.id };
   db.prepare(
     `UPDATE tasks SET kind=@kind, title=@title, notes=@notes, recurrence=@recurrence,
-     due_date=@due_date, time_of_day=@time_of_day, active=@active WHERE id=@id`
+     due_date=@due_date, time_of_day=@time_of_day, icon=@icon, active=@active WHERE id=@id`
   ).run(updated);
   if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
   res.json({ ...updated, assignee_ids: assignee_ids ?? assigneesFor(req.params.id) });
