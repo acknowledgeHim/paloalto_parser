@@ -13,8 +13,10 @@ export interface FamilyMember {
   money_balance: number;
   /** "<saltHex>:<hashHex>" (see services/auth.ts), or null for no login set. Never sent to the client. */
   password_hash: string | null;
-  /** Visual style id (client/src/utils/progressStyles.ts) for this person's Family Board progress bars. */
+  /** Visual style id (client/src/utils/progressStyles.ts) for this person's Chores progress bar. */
   progress_bar_style: string | null;
+  /** Same, independently, for the To-dos progress bar — Chores and To-dos can look completely different. */
+  todo_progress_bar_style: string | null;
   /** Where this person sorts in the profile switcher, Settings roster, and Family Board columns —
    *  lower first. Defaults to arrival order; reorderable via POST /family-members/reorder. */
   sort_order: number;
@@ -22,10 +24,13 @@ export interface FamilyMember {
   /** Where the nightly grocery-list digest goes (services/groceryEmail.ts) — only meaningful for a
    *  parent (is_parent = 1); null/empty means this person doesn't receive it. */
   email: string | null;
-  /** Start/end icons for the "Adventure Map" progress_bar_style — null falls back to a default
-   *  (🏠/🏰) client-side. Irrelevant for any other style. */
+  /** Start/end icons for the Chores Adventure Map — null falls back to a default (🏠/🏰)
+   *  client-side. Irrelevant unless progress_bar_style is 'adventure'. */
   adventure_start_icon: string | null;
   adventure_end_icon: string | null;
+  /** Same, independently, for the To-dos Adventure Map. */
+  todo_adventure_start_icon: string | null;
+  todo_adventure_end_icon: string | null;
 }
 
 export type TaskKind = 'chore' | 'todo';

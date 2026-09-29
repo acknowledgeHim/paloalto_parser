@@ -9,19 +9,24 @@ interface Props {
   items: Task[];
   done: number;
   total: number;
+  /** Resolved per-kind (Chores vs. To-dos each have their own — see FamilyMemberFormModal); null
+   *  falls back to 🏠/🏰. */
+  startIcon: string | null;
+  endIcon: string | null;
 }
 
 /**
- * The "Adventure Map" progress_bar_style: the person's avatar travels a path from a start icon to
- * an end icon (both configurable per-person — see FamilyMemberFormModal), hopping over one
- * checkpoint icon per completed chore/to-do. Purely positional — "the avatar sits at done/total
- * along the path, and the first `done` checkpoints (in list order) read as cleared" — not tied to
- * *which* specific task is done, so it always stays visually consistent with the 2/5-style count
- * shown above it, the same number this reads `done`/`total` from.
+ * The "Adventure Map" progress bar style: the person's avatar travels a path from a start icon to
+ * an end icon (both configurable per-person, independently for Chores and To-dos — see
+ * FamilyMemberFormModal), hopping over one checkpoint icon per completed chore/to-do. Purely
+ * positional — "the avatar sits at done/total along the path, and the first `done` checkpoints
+ * (in list order) read as cleared" — not tied to *which* specific task is done, so it always stays
+ * visually consistent with the 2/5-style count shown above it, the same number this reads
+ * `done`/`total` from.
  */
-export function AdventureProgressBar({ member, items, done, total }: Props) {
-  const startIcon = member.adventure_start_icon || '🏠';
-  const endIcon = member.adventure_end_icon || '🏰';
+export function AdventureProgressBar({ member, items, done, total, startIcon: startIconProp, endIcon: endIconProp }: Props) {
+  const startIcon = startIconProp || '🏠';
+  const endIcon = endIconProp || '🏰';
   const pct = total > 0 ? (done / total) * 100 : 0;
   const finished = total > 0 && done >= total;
 

@@ -88,9 +88,16 @@ function countProgress(tasks: Task[], memberId: string, kind: 'chore' | 'todo') 
   return { done, total: relevant.length };
 }
 
+/** Chores and To-dos each have their own independent style/icons (see FamilyMemberFormModal) —
+ *  the original progress_bar_style/adventure_*_icon columns are the Chores bar's settings
+ *  specifically; todo_* are To-dos'. */
+function styleFor(member: FamilyMember, kind: 'chore' | 'todo') {
+  return kind === 'todo'
+    ? { style: member.todo_progress_bar_style, startIcon: member.todo_adventure_start_icon, endIcon: member.todo_adventure_end_icon }
+    : { style: member.progress_bar_style, startIcon: member.adventure_start_icon, endIcon: member.adventure_end_icon };
+}
+
 function MemberProgressBars({ member, tasks }: { member: FamilyMember; tasks: Task[] }) {
-  const fill = progressFillFor(member.progress_bar_style, member.color);
-  const adventure = isAdventureStyle(member.progress_bar_style);
   const bars: Array<{ label: string; kind: 'chore' | 'todo'; done: number; total: number }> = (
     [
       { label: 'Chores', kind: 'chore' as const, ...countProgress(tasks, member.id, 'chore') },
@@ -102,26 +109,34 @@ function MemberProgressBars({ member, tasks }: { member: FamilyMember; tasks: Ta
 
   return (
     <div className="member-progress">
-      {bars.map((b) => (
-        <div key={b.label} className="dashboard__progress">
-          <div className="dashboard__progress-label">
-            <span>{b.label}</span>
-            <span>{b.done}/{b.total}</span>
-          </div>
-          {adventure ? (
-            <AdventureProgressBar
-              member={member}
-              items={sortForColumn(relevantTasksForKind(tasks, member.id, b.kind))}
-              done={b.done}
-              total={b.total}
-            />
-          ) : (
-            <div className="progress-bar">
-              <div className="progress-bar__fill" style={{ width: `${Math.round((b.done / b.total) * 100)}%`, background: fill }} />
+      {bars.map((b) => {
+        const { style, startIcon, endIcon } = styleFor(member, b.kind);
+        return (
+          <div key={b.label} className="dashboard__progress">
+            <div className="dashboard__progress-label">
+              <span>{b.label}</span>
+              <span>{b.done}/{b.total}</span>
             </div>
-          )}
-        </div>
-      ))}
+            {isAdventureStyle(style) ? (
+              <AdventureProgressBar
+                member={member}
+                items={sortForColumn(relevantTasksForKind(tasks, member.id, b.kind))}
+                done={b.done}
+                total={b.total}
+                startIcon={startIcon}
+                endIcon={endIcon}
+              />
+            ) : (
+              <div className="progress-bar">
+                <div
+                  className="progress-bar__fill"
+                  style={{ width: `${Math.round((b.done / b.total) * 100)}%`, background: progressFillFor(style, member.color) }}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

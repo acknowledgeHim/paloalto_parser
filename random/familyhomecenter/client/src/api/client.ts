@@ -32,8 +32,10 @@ export interface FamilyMember {
   avatar: string | null;
   /** Sound id (see utils/sounds.ts) to play when this person completes a task; null = no sound. */
   complete_sound: string | null;
-  /** Visual style id (see utils/progressStyles.ts) for this person's Family Board progress bars. */
+  /** Visual style id (see utils/progressStyles.ts) for this person's Chores progress bar. */
   progress_bar_style: string | null;
+  /** Same, independently, for the To-dos progress bar — Chores and To-dos can look completely different. */
+  todo_progress_bar_style: string | null;
   /** Where this person sorts in the profile switcher, Settings roster, and Family Board columns. */
   sort_order: number;
   is_parent: 0 | 1;
@@ -44,10 +46,13 @@ export interface FamilyMember {
   has_password: boolean;
   /** Where the nightly grocery-list digest goes — only meaningful for a parent; null = doesn't receive it. */
   email: string | null;
-  /** Start/end icons for the "Adventure Map" progress bar style — null falls back to a default
-   *  (🏠/🏰). Irrelevant for any other progress_bar_style. */
+  /** Start/end icons for the Chores Adventure Map — null falls back to a default (🏠/🏰).
+   *  Irrelevant unless progress_bar_style is 'adventure'. */
   adventure_start_icon: string | null;
   adventure_end_icon: string | null;
+  /** Same, independently, for the To-dos Adventure Map. */
+  todo_adventure_start_icon: string | null;
+  todo_adventure_end_icon: string | null;
 }
 
 export interface TaskCompletion {

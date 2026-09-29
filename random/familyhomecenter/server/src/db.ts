@@ -486,6 +486,10 @@ try {
 
 // The "Adventure Map" progress_bar_style (client/src/utils/progressStyles.ts) needs a start/end
 // icon per person — NULL falls back to a default (🏠/🏰) client-side, so this never needs backfilling.
+// These three columns are the Chores bar's settings specifically (progress_bar_style/
+// adventure_start_icon/adventure_end_icon predate the chore-vs-to-do split below, so they kept
+// their original names rather than being renamed and re-migrated — nothing here touches their
+// existing values, just narrows what they're understood to mean).
 try {
   db.exec('ALTER TABLE family_members ADD COLUMN adventure_start_icon TEXT');
 } catch (err) {
@@ -493,6 +497,26 @@ try {
 }
 try {
   db.exec('ALTER TABLE family_members ADD COLUMN adventure_end_icon TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
+// The To-dos bar's own independent style/icons — Chores and To-dos can now look completely
+// different (e.g. Adventure Map with a castle for Chores, plain Rainbow for To-dos). Backfilled
+// from the existing chore-scoped columns (one-time, only on the actual first run of this
+// migration — see the sort_order migration above for the same pattern) so a family that already
+// picked a style/icons keeps seeing exactly that on both bars, instead of To-dos silently
+// reverting to the plain default the moment these columns exist.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN todo_progress_bar_style TEXT');
+  db.exec('ALTER TABLE family_members ADD COLUMN todo_adventure_start_icon TEXT');
+  db.exec('ALTER TABLE family_members ADD COLUMN todo_adventure_end_icon TEXT');
+  db.exec(`
+    UPDATE family_members SET
+      todo_progress_bar_style = progress_bar_style,
+      todo_adventure_start_icon = adventure_start_icon,
+      todo_adventure_end_icon = adventure_end_icon
+  `);
 } catch (err) {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }

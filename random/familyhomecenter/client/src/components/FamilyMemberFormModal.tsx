@@ -16,6 +16,90 @@ const EMOJI_PRESETS = [
   '🏠', '🏰', '🏝️', '⛰️', '🌋', '🎪', '🚩', '🏆',
 ] as const;
 
+/** The style picker + (when Adventure Map is picked) its start/end icon pickers — used once for
+ *  Chores and once for To-dos, each with its own independent state. */
+function ProgressStylePicker({
+  label,
+  color,
+  style,
+  setStyle,
+  startIcon,
+  setStartIcon,
+  endIcon,
+  setEndIcon,
+}: {
+  label: string;
+  color: string;
+  style: string;
+  setStyle: (id: string) => void;
+  startIcon: string;
+  setStartIcon: (fn: (cur: string) => string) => void;
+  endIcon: string;
+  setEndIcon: (fn: (cur: string) => string) => void;
+}) {
+  return (
+    <>
+      <div>
+        <label className="member-form__label">{label} progress bar style</label>
+        <div className="progress-style-picker">
+          {PROGRESS_STYLES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`progress-style-picker__option ${style === s.id ? 'progress-style-picker__option--selected' : ''}`}
+              onClick={() => setStyle(s.id)}
+            >
+              {s.id === 'adventure' ? (
+                <span className="progress-style-picker__swatch progress-style-picker__swatch--emoji">🗺️</span>
+              ) : (
+                <span className="progress-style-picker__swatch" style={{ background: progressFillFor(s.id, color) }} />
+              )}
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {style === 'adventure' && (
+        <>
+          <div>
+            <label className="member-form__label">{label} Adventure Map — starting point</label>
+            <div className="member-form__swatches">
+              {EMOJI_PRESETS.map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  className={`member-form__emoji ${startIcon === em ? 'member-form__emoji--selected' : ''}`}
+                  onClick={() => setStartIcon((cur) => (cur === em ? '' : em))}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+            <p className="hint">Defaults to 🏠 if nothing's picked.</p>
+          </div>
+          <div>
+            <label className="member-form__label">{label} Adventure Map — destination (castle, treasure, etc.)</label>
+            <div className="member-form__swatches">
+              {EMOJI_PRESETS.map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  className={`member-form__emoji ${endIcon === em ? 'member-form__emoji--selected' : ''}`}
+                  onClick={() => setEndIcon((cur) => (cur === em ? '' : em))}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+            <p className="hint">Defaults to 🏰 if nothing's picked.</p>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -48,6 +132,9 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
   const [progressStyle, setProgressStyle] = useState(member?.progress_bar_style ?? 'solid');
   const [startIcon, setStartIcon] = useState(member?.adventure_start_icon ?? '');
   const [endIcon, setEndIcon] = useState(member?.adventure_end_icon ?? '');
+  const [todoProgressStyle, setTodoProgressStyle] = useState(member?.todo_progress_bar_style ?? 'solid');
+  const [todoStartIcon, setTodoStartIcon] = useState(member?.todo_adventure_start_icon ?? '');
+  const [todoEndIcon, setTodoEndIcon] = useState(member?.todo_adventure_end_icon ?? '');
 
   const [completeSound, setCompleteSound] = useState(member?.complete_sound ?? 'none');
   const [hasCustomSound, setHasCustomSound] = useState(member?.complete_sound === 'custom');
@@ -108,6 +195,9 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
         progress_bar_style: progressStyle === 'solid' ? null : progressStyle,
         adventure_start_icon: startIcon || null,
         adventure_end_icon: endIcon || null,
+        todo_progress_bar_style: todoProgressStyle === 'solid' ? null : todoProgressStyle,
+        todo_adventure_start_icon: todoStartIcon || null,
+        todo_adventure_end_icon: todoEndIcon || null,
         // "custom" is applied via the dedicated /sound endpoint below; any preset is stored directly.
         complete_sound: completeSound === 'none' ? null : completeSound,
         // Custom-image state is applied via the dedicated avatar endpoints below; otherwise this
@@ -277,63 +367,27 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
           )}
         </div>
 
-        <div>
-          <label className="member-form__label">Family Board progress bar style</label>
-          <div className="progress-style-picker">
-            {PROGRESS_STYLES.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className={`progress-style-picker__option ${progressStyle === s.id ? 'progress-style-picker__option--selected' : ''}`}
-                onClick={() => setProgressStyle(s.id)}
-              >
-                {s.id === 'adventure' ? (
-                  <span className="progress-style-picker__swatch progress-style-picker__swatch--emoji">🗺️</span>
-                ) : (
-                  <span className="progress-style-picker__swatch" style={{ background: progressFillFor(s.id, color) }} />
-                )}
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ProgressStylePicker
+          label="Chores"
+          color={color}
+          style={progressStyle}
+          setStyle={setProgressStyle}
+          startIcon={startIcon}
+          setStartIcon={setStartIcon}
+          endIcon={endIcon}
+          setEndIcon={setEndIcon}
+        />
 
-        {progressStyle === 'adventure' && (
-          <>
-            <div>
-              <label className="member-form__label">Adventure Map — starting point</label>
-              <div className="member-form__swatches">
-                {EMOJI_PRESETS.map((em) => (
-                  <button
-                    key={em}
-                    type="button"
-                    className={`member-form__emoji ${startIcon === em ? 'member-form__emoji--selected' : ''}`}
-                    onClick={() => setStartIcon((cur) => (cur === em ? '' : em))}
-                  >
-                    {em}
-                  </button>
-                ))}
-              </div>
-              <p className="hint">Defaults to 🏠 if nothing's picked.</p>
-            </div>
-            <div>
-              <label className="member-form__label">Adventure Map — destination (castle, treasure, etc.)</label>
-              <div className="member-form__swatches">
-                {EMOJI_PRESETS.map((em) => (
-                  <button
-                    key={em}
-                    type="button"
-                    className={`member-form__emoji ${endIcon === em ? 'member-form__emoji--selected' : ''}`}
-                    onClick={() => setEndIcon((cur) => (cur === em ? '' : em))}
-                  >
-                    {em}
-                  </button>
-                ))}
-              </div>
-              <p className="hint">Defaults to 🏰 if nothing's picked.</p>
-            </div>
-          </>
-        )}
+        <ProgressStylePicker
+          label="To-dos"
+          color={color}
+          style={todoProgressStyle}
+          setStyle={setTodoProgressStyle}
+          startIcon={todoStartIcon}
+          setStartIcon={setTodoStartIcon}
+          endIcon={todoEndIcon}
+          setEndIcon={setTodoEndIcon}
+        />
 
         <div className="task-form__row">
           <button type="submit" disabled={saving}>{member ? 'Save' : 'Add'}</button>
