@@ -2,6 +2,12 @@
 # /etc/mpd-zone{{ZONE}}.conf for zones 1..N. All zones share the same music_directory (one copy
 # of your files) but keep separate databases/state, since each is logically an independent player.
 
+# MPD refuses to start as root unless told which unprivileged user to drop to (a safety check baked
+# into mpd itself, not something this config can skip) — the systemd unit has no User=, so it starts
+# as root and needs this. Must be a user with read access to music_directory and a member of the
+# `audio` group (the default `pi` user already is, on Raspberry Pi OS).
+user               "{{RUN_USER}}"
+
 music_directory    "{{MUSIC_DIR}}"
 db_file            "{{DATA_DIR}}/mpd-zone{{ZONE}}/db"
 log_file           "{{DATA_DIR}}/mpd-zone{{ZONE}}/log"

@@ -74,6 +74,18 @@ sudo systemctl status mpd-zone@1.service   # should be "active (running)"
 Copy your MP3s (or FLAC/OGG — MPD handles most common formats) into `/home/pi/music`. All 4 zones
 read the same folder; only their databases and playback state are separate.
 
+**If `systemctl status` shows "failed"**: check the real reason with
+`sudo journalctl -u mpd-zone@1.service -n 50 --no-pager`. The most common cause is mpd refusing to
+run as root with no unprivileged user configured to drop to (a safety check built into mpd itself) —
+`generate-mpd-configs.sh` writes a `user` line into each zone's config for exactly this, so if you
+generated your configs before that was added, just re-run it and restart:
+
+```bash
+./scripts/music/generate-mpd-configs.sh 4 /home/pi/music
+sudo systemctl restart mpd-zone@{1,2,3,4}.service
+sudo systemctl status mpd-zone@1.service
+```
+
 ## 5. Set up librespot (Spotify Connect), one instance per zone
 
 ```bash
