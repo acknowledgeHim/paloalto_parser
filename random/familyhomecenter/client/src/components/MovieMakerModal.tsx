@@ -143,8 +143,11 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <form className="modal-panel task-form movie-maker" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+    // No close-on-backdrop-click here (unlike most modals in this app) — this form takes real
+    // effort to fill in (picking a mode, dates, searching/browsing for music), so an accidental
+    // outside click shouldn't be able to discard all of that. Cancel below is the only way out.
+    <div className="modal-overlay">
+      <form className="modal-panel task-form movie-maker" onSubmit={submit}>
         <h2>Make a movie</h2>
         <input autoFocus placeholder="Title (e.g. Summer 2024)" value={title} onChange={(e) => setTitle(e.target.value)} />
 
