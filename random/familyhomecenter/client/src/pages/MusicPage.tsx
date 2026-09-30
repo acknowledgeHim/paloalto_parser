@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, type Zone, type ZoneGroup, type ZoneStatus, type Track } from '../api/client.js';
+import { api, type Zone, type ZoneGroup, type ZoneStatus, type Track, type LibraryStatus } from '../api/client.js';
+import { LibraryBrowser } from '../components/LibraryBrowser.js';
 
 function fmtTime(seconds: number | null): string {
   if (seconds === null) return '';
@@ -18,7 +19,10 @@ export function MusicPage() {
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Track[]>([]);
+  const [searched, setSearched] = useState(false);
   const [targetZone, setTargetZone] = useState<number>(1);
+  const [libraryMode, setLibraryMode] = useState<'search' | 'browse'>('search');
+  const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | null>(null);
 
   const [spotify, setSpotify] = useState<{ configured: boolean; connected: boolean }>({ configured: false, connected: false });
 
@@ -38,6 +42,7 @@ export function MusicPage() {
     loadZones();
     loadStatuses();
     api.get<{ configured: boolean; connected: boolean }>('/music/spotify/status').then(setSpotify).catch(console.error);
+    api.get<LibraryStatus>('/music/library/status').then(setLibraryStatus).catch(() => setLibraryStatus({ connected: false, error: 'request failed' }));
     const interval = setInterval(loadStatuses, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -70,7 +75,12 @@ export function MusicPage() {
 
   const runSearch = async () => {
     if (!query.trim()) return;
-    setResults(await api.get<Track[]>(`/music/library/search?q=${encodeURIComponent(query)}`));
+    setSearched(true);
+    try {
+      setResults(await api.get<Track[]>(`/music/library/search?q=${encodeURIComponent(query)}`));
+    } catch {
+      setResults([]);
+    }
   };
 
   const playTrack = async (file: string) => {
@@ -155,26 +165,61 @@ export function MusicPage() {
 
       <section className="panel">
         <h2>Your music library</h2>
+        {libraryStatus && !libraryStatus.connected && (
+          <div className="empty-state">
+            Can't reach the music library (MPD) right now{libraryStatus.error ? ` — ${libraryStatus.error}` : ''}.
+            See docs/MUSIC_SETUP.md.
+          </div>
+        )}
         <div className="task-form__row">
-          <input placeholder="Search artist, album, or song" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && runSearch()} />
-          <button onClick={runSearch}>Search</button>
           <select value={targetZone} onChange={(e) => setTargetZone(Number(e.target.value))}>
             {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
           </select>
-        </div>
-        {results.length === 0 && <div className="empty-state">Search your local library — see docs/MUSIC_SETUP.md if this comes back empty.</div>}
-        {results.map((t) => (
-          <div key={t.file} className="library-row">
-            <div>
-              <div className="library-row__title">{t.title}</div>
-              <div className="hint">{t.artist} {t.album ? `— ${t.album}` : ''}</div>
-            </div>
-            <div className="task-form__row">
-              <button onClick={() => playTrack(t.file)}>Play</button>
-              <button className="secondary" onClick={() => queueTrack(t.file)}>Queue</button>
-            </div>
+          <div className="task-form__row">
+            <button type="button" className={libraryMode === 'search' ? '' : 'secondary'} onClick={() => setLibraryMode('search')}>Search</button>
+            <button type="button" className={libraryMode === 'browse' ? '' : 'secondary'} onClick={() => setLibraryMode('browse')}>Browse</button>
           </div>
-        ))}
+        </div>
+
+        {libraryMode === 'search' && (
+          <>
+            <div className="task-form__row">
+              <input placeholder="Search artist, album, or song" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && runSearch()} />
+              <button onClick={runSearch}>Search</button>
+            </div>
+            {searched && results.length === 0 && (
+              <div className="empty-state">
+                No matches{libraryStatus?.connected === false ? " — that's likely because the library index is unreachable (see above), not that nothing matched" : ''}.
+              </div>
+            )}
+            {!searched && results.length === 0 && (
+              <div className="empty-state">Search your local library, or switch to Browse.</div>
+            )}
+            {results.map((t) => (
+              <div key={t.file} className="library-row">
+                <div>
+                  <div className="library-row__title">{t.title}</div>
+                  <div className="hint">{t.artist} {t.album ? `— ${t.album}` : ''}</div>
+                </div>
+                <div className="task-form__row">
+                  <button onClick={() => playTrack(t.file)}>Play</button>
+                  <button className="secondary" onClick={() => queueTrack(t.file)}>Queue</button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {libraryMode === 'browse' && (
+          <LibraryBrowser
+            renderActions={(t) => (
+              <div className="task-form__row">
+                <button onClick={() => playTrack(t.file)}>Play</button>
+                <button className="secondary" onClick={() => queueTrack(t.file)}>Queue</button>
+              </div>
+            )}
+          />
+        )}
       </section>
 
       <section className="panel">

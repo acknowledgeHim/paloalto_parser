@@ -624,6 +624,19 @@ textarea {
 .library-row:last-child { border-bottom: none; }
 .library-row__title { font-weight: 600; }
 
+.library-browser__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.library-browser__list li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.library-browser__list li:last-child { border-bottom: none; }
+
 /* ---- Intercom ---- */
 .intercom-page__zones {
   display: flex;

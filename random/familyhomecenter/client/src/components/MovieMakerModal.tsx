@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, type Photo, type Track } from '../api/client.js';
+import { api, type Photo, type Track, type LibraryStatus } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { LibraryBrowser } from './LibraryBrowser.js';
 
 type SelectionMode = 'date-range' | 'name' | 'random' | 'manual';
 type Selection =
@@ -37,7 +38,10 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
   const [musicQuery, setMusicQuery] = useState('');
   const [musicResults, setMusicResults] = useState<Track[]>([]);
   const [musicTrack, setMusicTrack] = useState<Track | null>(null);
+  const [musicMode, setMusicMode] = useState<'search' | 'browse'>('search');
+  const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | null>(null);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   // A big library (hundreds/thousands of photos, especially over a slower SMB share) rendering as
   // one giant DOM grid was enough to freeze the whole modal on a Pi-class browser — cap how many
   // show up at once and let "Show more" reveal the rest in batches instead.
@@ -52,33 +56,47 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
     return { mode: 'date-range', start: startDate, end: endDate };
   };
 
+  // Whether there's enough picked to attempt a render — synchronous, so the submit button doesn't
+  // stay stuck waiting on the (sometimes slow, over a network share) resolve-selection preview
+  // below. The preview is purely informational; hitting Create always gets an authoritative answer
+  // from the actual POST /movies call regardless of whether the preview has come back yet.
+  const selectionValid =
+    mode === 'manual' ? selectedIds.size > 0 :
+    mode === 'random' ? randomCount > 0 :
+    mode === 'name' ? nameQuery.trim() !== '' :
+    Boolean(startDate && endDate);
+
   // Live "N photos match" preview — manual mode already knows its own count locally; the other
   // modes ask the server (resolve-selection doesn't create anything, just resolves the count).
   useEffect(() => {
     if (mode === 'manual') {
       setPreviewCount(selectedIds.size);
+      setPreviewLoading(false);
       return;
     }
-    if (mode === 'date-range' && (!startDate || !endDate)) {
+    if (!selectionValid) {
       setPreviewCount(null);
+      setPreviewLoading(false);
       return;
     }
-    if (mode === 'name' && !nameQuery.trim()) {
-      setPreviewCount(null);
-      return;
-    }
-    // Debounced for 'name' (free text, fires per keystroke) — the other modes change per-click/
-    // per-date-pick, infrequent enough not to need it.
-    const delay = mode === 'name' ? 300 : 0;
+    // Debounced — 'name' fires per keystroke, and 'date-range' can fire twice in a row while
+    // picking both ends; the resolve itself can also be slow over a network share, so avoid
+    // piling up redundant requests while the user is still choosing.
+    setPreviewLoading(true);
     const t = setTimeout(() => {
       api
         .post<{ count: number }>('/movies/resolve-selection', { selection: buildSelection() })
         .then((r) => setPreviewCount(r.count))
-        .catch(() => setPreviewCount(null));
-    }, delay);
+        .catch(() => setPreviewCount(null))
+        .finally(() => setPreviewLoading(false));
+    }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selectedIds, randomCount, startDate, endDate, nameQuery]);
+  }, [mode, selectedIds, randomCount, startDate, endDate, nameQuery, selectionValid]);
+
+  useEffect(() => {
+    api.get<LibraryStatus>('/music/library/status').then(setLibraryStatus).catch(() => setLibraryStatus({ connected: false, error: 'request failed' }));
+  }, []);
 
   useEffect(() => {
     if (!musicQuery.trim()) {
@@ -105,7 +123,7 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !previewCount) return;
+    if (!title.trim() || !selectionValid) return;
     setError(null);
     setCreating(true);
     try {
@@ -184,6 +202,9 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
               )}
             </>
           )}
+          {mode !== 'manual' && selectionValid && previewLoading && previewCount === null && (
+            <p className="hint">Checking how many photos match…</p>
+          )}
           {previewCount !== null && (
             <p className="hint">{previewCount} photo{previewCount === 1 ? '' : 's'} {mode === 'manual' ? 'picked' : 'match'}.</p>
           )}
@@ -209,25 +230,46 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
             </div>
           ) : (
             <>
-              <input placeholder="Search the music library…" value={musicQuery} onChange={(e) => setMusicQuery(e.target.value)} />
-              {musicResults.length > 0 && (
-                <ul className="movie-maker__music-results">
-                  {musicResults.slice(0, 8).map((t) => (
-                    <li key={t.file}>
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={() => {
-                          setMusicTrack(t);
-                          setMusicResults([]);
-                          setMusicQuery('');
-                        }}
-                      >
-                        {t.title}{t.artist ? ` — ${t.artist}` : ''}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              {libraryStatus && !libraryStatus.connected && (
+                <p className="hint">
+                  Can't reach the music library (MPD) right now{libraryStatus.error ? ` — ${libraryStatus.error}` : ''} —
+                  see docs/MUSIC_SETUP.md.
+                </p>
+              )}
+              <div className="task-form__row">
+                <button type="button" className={musicMode === 'search' ? '' : 'secondary'} onClick={() => setMusicMode('search')}>Search</button>
+                <button type="button" className={musicMode === 'browse' ? '' : 'secondary'} onClick={() => setMusicMode('browse')}>Browse</button>
+              </div>
+              {musicMode === 'search' && (
+                <>
+                  <input placeholder="Search the music library…" value={musicQuery} onChange={(e) => setMusicQuery(e.target.value)} />
+                  {musicResults.length > 0 && (
+                    <ul className="movie-maker__music-results">
+                      {musicResults.slice(0, 8).map((t) => (
+                        <li key={t.file}>
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => {
+                              setMusicTrack(t);
+                              setMusicResults([]);
+                              setMusicQuery('');
+                            }}
+                          >
+                            {t.title}{t.artist ? ` — ${t.artist}` : ''}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+              {musicMode === 'browse' && (
+                <LibraryBrowser
+                  renderActions={(t) => (
+                    <button type="button" className="link-button" onClick={() => setMusicTrack(t)}>Use this</button>
+                  )}
+                />
               )}
             </>
           )}
@@ -236,7 +278,7 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
 
         {error && <div className="settings-login__error">{error}</div>}
         <div className="task-form__row">
-          <button type="submit" disabled={creating || !previewCount}>
+          <button type="submit" disabled={creating || !title.trim() || !selectionValid}>
             {creating ? 'Starting…' : 'Create movie'}
           </button>
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>

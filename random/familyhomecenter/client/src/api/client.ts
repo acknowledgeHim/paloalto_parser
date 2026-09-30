@@ -255,6 +255,15 @@ export interface Track {
   duration: number | null;
 }
 
+/** GET /music/library/status — whether the index MPD instance (used for search/browse) is
+ *  actually reachable. Search/browse both quietly return an empty list on a connection problem
+ *  (so a hiccup doesn't take the page down), which looks identical to "no matches" — this lets
+ *  the UI tell the two apart. */
+export interface LibraryStatus {
+  connected: boolean;
+  error: string | null;
+}
+
 export interface SpotifyDevice {
   id: string;
   name: string;

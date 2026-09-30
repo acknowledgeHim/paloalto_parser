@@ -12,7 +12,7 @@ import {
   reportSpotifyEvent,
   listZoneIds,
 } from '../services/music/zoneManager.js';
-import { searchLibrary, listArtists, listAlbumsByArtist, listTracksByAlbum, rescanAll } from '../services/music/library.js';
+import { searchLibrary, listArtists, listAlbumsByArtist, listTracksByAlbum, rescanAll, checkLibraryStatus } from '../services/music/library.js';
 import * as spotify from '../services/music/spotify.js';
 
 export const musicRouter = Router();
@@ -109,6 +109,12 @@ musicRouter.get(
 );
 
 // ---- Local library (library.ts degrades to empty results rather than throwing) ----
+musicRouter.get(
+  '/library/status',
+  asyncHandler(async (_req, res) => {
+    res.json(await checkLibraryStatus());
+  })
+);
 musicRouter.get(
   '/library/search',
   asyncHandler(async (req, res) => {

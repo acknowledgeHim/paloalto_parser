@@ -103,11 +103,14 @@ function MoviesSection({ photos }: { photos: Photo[] }) {
   );
 }
 
+const PAGE_SIZE = 120;
+
 export function PhotosPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [slideshowOn, setSlideshowOn] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const load = () => {
     setLoading(true);
@@ -115,6 +118,9 @@ export function PhotosPage() {
   };
 
   useEffect(load, []);
+  // Reset paging whenever the underlying photo list changes size (refresh, new photos added) so
+  // stale indexes from a previous library size don't leave the grid showing fewer than PAGE_SIZE.
+  useEffect(() => setVisibleCount(PAGE_SIZE), [photos.length]);
 
   if (slideshowOn) {
     return <Slideshow intervalSeconds={12} onExit={() => setSlideshowOn(false)} />;
@@ -130,6 +136,8 @@ export function PhotosPage() {
         </div>
       </div>
 
+      <MoviesSection photos={photos} />
+
       {loading && <div className="empty-state">Loading photos…</div>}
       {!loading && photos.length === 0 && (
         <div className="empty-state">
@@ -139,14 +147,18 @@ export function PhotosPage() {
       )}
 
       <div className="photos-page__grid">
-        {photos.map((p, i) => (
+        {photos.slice(0, visibleCount).map((p, i) => (
           <button key={p.id} className="photos-page__thumb" onClick={() => setViewingIndex(i)}>
             <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
           </button>
         ))}
       </div>
 
-      <MoviesSection photos={photos} />
+      {visibleCount < photos.length && (
+        <button className="secondary" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+          Show more ({photos.length - visibleCount} left)
+        </button>
+      )}
 
       {viewingIndex !== null && (
         <div className="photo-lightbox" onClick={() => setViewingIndex(null)}>

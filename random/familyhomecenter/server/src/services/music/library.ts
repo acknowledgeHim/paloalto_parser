@@ -26,6 +26,19 @@ function rowToTrack(row: Record<string, string>): Track {
 // The index MPD instance being unreachable (not yet set up, briefly restarting) should make library
 // browsing come back empty, not take the whole dashboard down — every export here degrades gracefully.
 
+/** Whether the index MPD instance is actually reachable — search/browse both degrade to empty
+ *  results on failure (by design, so a hiccup doesn't take the page down), which looks identical
+ *  in the UI to "no matches". This lets the client tell those two cases apart and point at the
+ *  real problem (MPD not running/configured) instead of just "try a different search". */
+export async function checkLibraryStatus(): Promise<{ connected: boolean; error: string | null }> {
+  try {
+    await indexClient.command('ping');
+    return { connected: true, error: null };
+  } catch (err) {
+    return { connected: false, error: (err as Error).message };
+  }
+}
+
 export async function searchLibrary(query: string, limit = 100): Promise<Track[]> {
   try {
     // Legacy "search TAG NEEDLE" form: a case-insensitive substring match, here across every tag.
