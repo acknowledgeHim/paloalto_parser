@@ -49,8 +49,9 @@ every few seconds and the entry switches to a **▶ Watch** button once it's don
 
 - **It's not instant.** A Raspberry Pi encodes video in software (no shortcuts here — this app
   doesn't assume any particular Pi model's hardware encoder), so a few dozen photos can take
-  anywhere from under a minute to several minutes depending on the Pi. The page doesn't need to
-  stay open while it renders — check back and it'll be there.
+  anywhere from a minute to several minutes depending on the Pi. Movies are 1080p, built from the
+  full-size original photos for the best quality — reading those over a network share is part of
+  the wait. The page doesn't need to stay open while it renders — check back and it'll be there.
 - **The look**: a plain, clean slideshow — each photo held for the time you set, a straightforward
   cut to the next one, with a brief fade in at the start and fade out at the end. No pans, zooms,
   or crossfades between photos in this version.
@@ -61,7 +62,7 @@ every few seconds and the entry switches to a **▶ Watch** button once it's don
 - **Orientation**: photos are turned upright using their EXIF orientation tag (the same as the
   slideshow), so portrait shots from a phone don't come out sideways.
 - **Storage**: each movie is its own MP4 file under `server/data/movies` — sized roughly like any
-  video of that length/resolution (720p). Delete ones you don't want from the Movies list to free
+  video of that length/resolution (1080p). Delete ones you don't want from the Movies list to free
   up space; there's no automatic cleanup.
 
 ## Troubleshooting

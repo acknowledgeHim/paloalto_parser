@@ -5,10 +5,9 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import sharp from 'sharp';
 import { config } from '../config.js';
-import { getOrCreateThumbnail } from './photos.js';
 
-const WIDTH = 1280;
-const HEIGHT = 720;
+const WIDTH = 1920;
+const HEIGHT = 1080;
 const FADE_SECONDS = 1;
 /** With music, the video carries on this long past the last photo — the picture fades to black
  *  over the first END_FADE_SECONDS of it while the music finishes fading out. Without music
@@ -19,8 +18,10 @@ const END_FADE_SECONDS = 2;
 const MUSIC_FADE_SECONDS = 10;
 /** Share of the progress bar given to preparing (orienting/letterboxing) the photos, before
  *  ffmpeg itself starts — the rest tracks ffmpeg's own -progress output. */
-const PREP_PROGRESS_SHARE = 10;
-const PREP_CONCURRENCY = 4;
+const PREP_PROGRESS_SHARE = 25;
+/** Kept low on purpose — each worker decodes a full-size original (easily 12-48MP) in memory,
+ *  which adds up fast on a Pi, and each one is also a full-file read over the SMB share. */
+const PREP_CONCURRENCY = 2;
 
 /** ffmpeg's concat-demuxer list format needs a path wrapped in single quotes, with any literal
  *  single quote in the path itself escaped as '\''. */
@@ -95,9 +96,10 @@ function runFfmpeg(args: string[], totalSeconds: number, onProgress?: (percent: 
  * photos makes it rebuild its filter graph mid-stream, which resets the fps/tpad/fade state and
  * drops photos.
  *
- * Reads each photo's cached slideshow thumbnail (services/photos.ts — already upright, downsized,
- * and usually pre-warmed locally) rather than the original, which is far quicker than a full-size
- * read over an SMB share; falls back to the original if no thumbnail can be made.
+ * Reads the full-size original rather than the cached slideshow thumbnail (services/photos.ts):
+ * slower over an SMB share, but the thumbnail is only 1920px wide (too small for a portrait photo
+ * to fill a 1080p frame's height) and already JPEG-compressed once, so starting from it would cost
+ * quality. Frames are written at high JPEG quality so this step adds as little loss as possible.
  */
 async function prepareFrames(
   photoPaths: string[],
@@ -110,18 +112,12 @@ async function prepareFrames(
   async function worker() {
     while (next < photoPaths.length) {
       const i = next++;
-      let source = photoPaths[i];
-      try {
-        source = await getOrCreateThumbnail(photoPaths[i]);
-      } catch (err) {
-        console.warn(`[movies] no thumbnail for "${photoPaths[i]}", using the original:`, (err as Error).message);
-      }
       const framePath = path.join(frameDir, `${String(i).padStart(6, '0')}.jpg`);
-      await sharp(source)
-        .rotate() // a no-op on a thumbnail (already upright); still needed for an original fallback
+      await sharp(photoPaths[i])
+        .rotate() // upright per EXIF Orientation
         .resize(WIDTH, HEIGHT, { fit: 'contain', background: '#000000' })
         .flatten({ background: '#000000' })
-        .jpeg({ quality: 90 })
+        .jpeg({ quality: 95 })
         .toFile(framePath);
       results[i] = framePath;
       done++;
@@ -161,8 +157,8 @@ async function concatMusic(trackPaths: string[], outputPath: string): Promise<vo
  * final MUSIC_FADE_SECONDS; any music left over past that point is simply cut.
  *
  * Read-only against every source file — the photos/music are only ever ffmpeg/sharp inputs; the
- * sole things written are the new movie file under config.moviesDir, a temp working dir (always
- * removed afterward), and the shared thumbnail cache. Throws on failure (a missing ffmpeg binary, an unreadable input,
+ * sole things written are the new movie file under config.moviesDir and a temp working dir (always
+ * removed afterward). Throws on failure (a missing ffmpeg binary, an unreadable input,
  * etc.) — never partially "succeeds".
  */
 export async function renderMovie(params: {
