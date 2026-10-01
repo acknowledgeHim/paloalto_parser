@@ -4,6 +4,12 @@ import { Slideshow } from '../components/Slideshow.js';
 import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 
+/** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
+function fmtMovieLength(m: Movie): string {
+  const total = Math.round(m.photo_count * m.seconds_per_photo + (m.music_tracks.length > 0 ? 4 : 0));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
 function MoviesSection({ photos }: { photos: Photo[] }) {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showMaker, setShowMaker] = useState(false);
@@ -48,7 +54,10 @@ function MoviesSection({ photos }: { photos: Photo[] }) {
                   <span className="movie-maker__movie-title">{m.title}</span>
                   <span className="hint">
                     {m.photo_count} photo{m.photo_count === 1 ? '' : 's'}
-                    {m.music_track ? ' · with music' : ''}
+                    {' · '}{fmtMovieLength(m)}
+                    {m.music_tracks.length > 0
+                      ? ` · ${m.music_tracks.length} song${m.music_tracks.length === 1 ? '' : 's'}`
+                      : ''}
                     {m.status === 'failed' && ' · Failed'}
                   </span>
                 </div>

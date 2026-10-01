@@ -10,6 +10,18 @@ type Selection =
   | { mode: 'date-range'; start: string; end: string }
   | { mode: 'name'; query: string };
 
+/** Mirrors server/src/services/movieRender.ts — with music, the video runs this long past the last
+ *  photo while the music fades out. */
+const MUSIC_TAIL_SECONDS = 4;
+
+function fmtDuration(totalSeconds: number): string {
+  const s = Math.round(totalSeconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+}
+
 interface Props {
   photos: Photo[];
   onClose: () => void;
@@ -18,7 +30,7 @@ interface Props {
 
 /**
  * Renders a new slideshow video from a photo selection (manual pick, random N, or by date taken)
- * plus an optional track from the music library — read-only against both: a movie is always a
+ * plus optional tracks from the music library, played back to back — read-only against both: a movie is always a
  * brand new file (server/src/services/movieRender.ts), nothing about the source photos/music is
  * ever deleted or modified to make one.
  */
@@ -37,7 +49,7 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
   const [secondsPerPhoto, setSecondsPerPhoto] = useState(4);
   const [musicQuery, setMusicQuery] = useState('');
   const [musicResults, setMusicResults] = useState<Track[]>([]);
-  const [musicTrack, setMusicTrack] = useState<Track | null>(null);
+  const [musicTracks, setMusicTracks] = useState<Track[]>([]);
   const [musicMode, setMusicMode] = useState<'search' | 'browse'>('search');
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | null>(null);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
@@ -112,6 +124,32 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
     return () => clearTimeout(t);
   }, [musicQuery]);
 
+  const addTrack = (t: Track) => setMusicTracks((tracks) => [...tracks, t]);
+  const removeTrack = (index: number) => setMusicTracks((tracks) => tracks.filter((_, i) => i !== index));
+  const moveTrack = (index: number, delta: number) =>
+    setMusicTracks((tracks) => {
+      const target = index + delta;
+      if (target < 0 || target >= tracks.length) return tracks;
+      const next = [...tracks];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+
+  // Running totals so it's easy to add just enough music to cover the whole slideshow. The movie's
+  // length is only known once the photo count is (manual/preview); a track with no duration in
+  // the library index just can't be counted.
+  const movieSeconds =
+    previewCount !== null && previewCount > 0
+      ? previewCount * secondsPerPhoto + (musicTracks.length > 0 ? MUSIC_TAIL_SECONDS : 0)
+      : null;
+  const musicSeconds = musicTracks.reduce((sum, t) => sum + (t.duration ?? 0), 0);
+  const unknownDurationCount = musicTracks.filter((t) => t.duration == null).length;
+  // Remaining once the music would be added — the 4s tail only applies once there's music at all.
+  const musicShortBy =
+    previewCount !== null && previewCount > 0
+      ? previewCount * secondsPerPhoto + MUSIC_TAIL_SECONDS - musicSeconds
+      : null;
+
   const toggleSelected = (id: string) => {
     setSelectedIds((ids) => {
       const next = new Set(ids);
@@ -131,7 +169,7 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
         title: title.trim(),
         selection: buildSelection(),
         seconds_per_photo: secondsPerPhoto,
-        music_track: musicTrack?.file ?? null,
+        music_tracks: musicTracks.map((t) => t.file),
         created_by_id: activeProfile?.id ?? null,
       });
       onCreated();
@@ -223,60 +261,89 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
             onChange={(e) => setSecondsPerPhoto(Number(e.target.value) || 1)}
           />
         </label>
+        {movieSeconds !== null && (
+          <p className="hint movie-maker__length">
+            Movie length: <strong>{fmtDuration(movieSeconds)}</strong>
+            {' '}({previewCount} × {secondsPerPhoto}s{musicTracks.length > 0 ? ` + ${MUSIC_TAIL_SECONDS}s fade-out` : ''})
+          </p>
+        )}
 
         <div>
           <label className="member-form__label">Music (optional)</label>
-          {musicTrack ? (
-            <div className="task-form__row">
-              <span>{musicTrack.title}{musicTrack.artist ? ` — ${musicTrack.artist}` : ''}</span>
-              <button type="button" className="secondary" onClick={() => setMusicTrack(null)}>Remove</button>
-            </div>
-          ) : (
+          {musicTracks.length > 0 && (
             <>
-              {libraryStatus && !libraryStatus.connected && (
-                <p className="hint">
-                  Can't reach the music library (MPD) right now{libraryStatus.error ? ` — ${libraryStatus.error}` : ''} —
-                  see docs/MUSIC_SETUP.md.
-                </p>
-              )}
-              <div className="task-form__row">
-                <button type="button" className={musicMode === 'search' ? '' : 'secondary'} onClick={() => setMusicMode('search')}>Search</button>
-                <button type="button" className={musicMode === 'browse' ? '' : 'secondary'} onClick={() => setMusicMode('browse')}>Browse</button>
-              </div>
-              {musicMode === 'search' && (
-                <>
-                  <input placeholder="Search the music library…" value={musicQuery} onChange={(e) => setMusicQuery(e.target.value)} />
-                  {musicResults.length > 0 && (
-                    <ul className="movie-maker__music-results">
-                      {musicResults.slice(0, 8).map((t) => (
-                        <li key={t.file}>
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => {
-                              setMusicTrack(t);
-                              setMusicResults([]);
-                              setMusicQuery('');
-                            }}
-                          >
-                            {t.title}{t.artist ? ` — ${t.artist}` : ''}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-              {musicMode === 'browse' && (
-                <LibraryBrowser
-                  renderActions={(t) => (
-                    <button type="button" className="link-button" onClick={() => setMusicTrack(t)}>Use this</button>
-                  )}
-                />
+              <ol className="movie-maker__track-list">
+                {musicTracks.map((t, i) => (
+                  <li key={`${t.file}-${i}`}>
+                    <span className="movie-maker__track-name">
+                      {t.title}{t.artist ? ` — ${t.artist}` : ''}
+                    </span>
+                    <span className="hint">{t.duration != null ? fmtDuration(t.duration) : '?:??'}</span>
+                    <button type="button" className="secondary" disabled={i === 0} aria-label="Move up" onClick={() => moveTrack(i, -1)}>↑</button>
+                    <button type="button" className="secondary" disabled={i === musicTracks.length - 1} aria-label="Move down" onClick={() => moveTrack(i, 1)}>↓</button>
+                    <button type="button" className="secondary" aria-label="Remove" onClick={() => removeTrack(i)}>✕</button>
+                  </li>
+                ))}
+              </ol>
+              <p className="hint movie-maker__length">
+                Music total: <strong>{fmtDuration(musicSeconds)}</strong>
+                {unknownDurationCount > 0 && ` (+ ${unknownDurationCount} track${unknownDurationCount === 1 ? '' : 's'} of unknown length)`}
+                {movieSeconds !== null && <> of {fmtDuration(movieSeconds)}</>}
+                {musicShortBy !== null && (
+                  musicShortBy > 0
+                    ? <> — add about <strong>{fmtDuration(musicShortBy)}</strong> more to cover the whole movie, or it'll loop back to the first track.</>
+                    : <> — enough to cover the whole movie ✓</>
+                )}
+              </p>
+            </>
+          )}
+          {libraryStatus && !libraryStatus.connected && (
+            <p className="hint">
+              Can't reach the music library (MPD) right now{libraryStatus.error ? ` — ${libraryStatus.error}` : ''} —
+              see docs/MUSIC_SETUP.md.
+            </p>
+          )}
+          <div className="task-form__row">
+            <button type="button" className={musicMode === 'search' ? '' : 'secondary'} onClick={() => setMusicMode('search')}>Search</button>
+            <button type="button" className={musicMode === 'browse' ? '' : 'secondary'} onClick={() => setMusicMode('browse')}>Browse</button>
+          </div>
+          {musicMode === 'search' && (
+            <>
+              <input placeholder="Search the music library…" value={musicQuery} onChange={(e) => setMusicQuery(e.target.value)} />
+              {musicResults.length > 0 && (
+                <ul className="movie-maker__music-results">
+                  {musicResults.slice(0, 8).map((t) => (
+                    <li key={t.file}>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => {
+                          addTrack(t);
+                          setMusicResults([]);
+                          setMusicQuery('');
+                        }}
+                      >
+                        + {t.title}{t.artist ? ` — ${t.artist}` : ''}{t.duration != null ? ` (${fmtDuration(t.duration)})` : ''}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </>
           )}
-          <p className="hint">Loops under the whole slideshow, whatever its own length.</p>
+          {musicMode === 'browse' && (
+            <LibraryBrowser
+              renderActions={(t) => (
+                <button type="button" className="link-button" onClick={() => addTrack(t)}>
+                  + Add{t.duration != null ? ` (${fmtDuration(t.duration)})` : ''}
+                </button>
+              )}
+            />
+          )}
+          <p className="hint">
+            Tracks play in order. The video ends {MUSIC_TAIL_SECONDS}s after the last photo, with the
+            music fading out over the last 10 seconds — anything left over is cut.
+          </p>
         </div>
 
         {error && <div className="settings-login__error">{error}</div>}

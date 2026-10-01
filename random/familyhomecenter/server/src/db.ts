@@ -563,6 +563,15 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Every music track a movie plays, in order, as a JSON array of library-relative paths — a movie
+// can now string several tracks together. music_track stays as the first of them, so movies made
+// before this column existed (one track at most) still read correctly.
+try {
+  db.exec('ALTER TABLE movies ADD COLUMN music_tracks TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;
