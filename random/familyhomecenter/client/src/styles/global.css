@@ -787,6 +787,18 @@ textarea {
 .movie-maker__movie-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .movie-maker__movie-info { display: flex; flex-direction: column; gap: 2px; }
 .movie-maker__movie-title { font-weight: 600; }
+/* A link (so the browser's download attribute works) styled like button.secondary. */
+.movie-maker__download {
+  min-height: var(--tap-min);
+  padding: 0 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
 .movie-maker__movie-progress { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .movie-maker__movie-progress .progress-bar { flex: 1; }
 .movie-maker__player { max-width: 900px; width: 100%; }

@@ -10,6 +10,13 @@ function fmtMovieLength(m: Movie): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+/** The saved file is named after the movie's title rather than its internal id — minus characters
+ *  that aren't allowed in filenames on Windows/macOS. */
+function movieDownloadName(m: Movie): string {
+  const safe = m.title.replace(/[\\/:*?"<>|]+/g, '').trim();
+  return `${safe || 'movie'}.mp4`;
+}
+
 function MoviesSection({ photos }: { photos: Photo[] }) {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showMaker, setShowMaker] = useState(false);
@@ -64,6 +71,15 @@ function MoviesSection({ photos }: { photos: Photo[] }) {
                 <div className="task-form__row">
                   {m.status === 'ready' && (
                     <button type="button" className="secondary" onClick={() => setPlaying(m)}>▶ Watch</button>
+                  )}
+                  {m.status === 'ready' && (
+                    <a
+                      className="movie-maker__download"
+                      href={`/api/movies-media/${m.file_name}`}
+                      download={movieDownloadName(m)}
+                    >
+                      ⬇ Download
+                    </a>
                   )}
                   <ConfirmButton
                     label="✕"
