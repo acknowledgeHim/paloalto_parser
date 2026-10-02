@@ -386,6 +386,15 @@ export interface Photo {
   id: string;
 }
 
+/** GET /photos/details — for sorting/filtering the movie maker's photo grid. */
+export interface PhotoDetail {
+  id: string;
+  /** Folder + filename relative to PHOTOS_DIR. */
+  path: string;
+  /** Best-effort date taken (EXIF, else file modified time), ISO 8601. */
+  taken_at: string;
+}
+
 /** A rendered photo-slideshow-with-music video. Read-only against the source photos/music that
  *  made it — this is always a brand new file, nothing about the originals is ever touched. */
 export interface Movie {

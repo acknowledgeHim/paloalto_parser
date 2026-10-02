@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { api, type Photo, type Track, type LibraryStatus } from '../api/client.js';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { api, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { LibraryBrowser } from './LibraryBrowser.js';
 
 type SelectionMode = 'date-range' | 'name' | 'random' | 'manual';
+type GridSort = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 type Selection =
   | { mode: 'manual'; photoIds: string[] }
   | { mode: 'random'; count: number }
@@ -22,8 +23,13 @@ function fmtDuration(totalSeconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
+const GRID_PAGE_SIZE = 90;
+
+function fmtTakenDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 interface Props {
-  photos: Photo[];
   onClose: () => void;
   onCreated: () => void;
 }
@@ -34,7 +40,7 @@ interface Props {
  * brand new file (server/src/services/movieRender.ts), nothing about the source photos/music is
  * ever deleted or modified to make one.
  */
-export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
+export function MovieMakerModal({ onClose, onCreated }: Props) {
   const { activeProfile } = useFamilyMembers();
   const [title, setTitle] = useState('');
   // Defaults to a filter, not the grid — with a large library (especially over a slower SMB
@@ -57,12 +63,59 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
   // A big library (hundreds/thousands of photos, especially over a slower SMB share) rendering as
   // one giant DOM grid was enough to freeze the whole modal on a Pi-class browser — cap how many
   // show up at once and let "Show more" reveal the rest in batches instead.
-  const [visibleCount, setVisibleCount] = useState(90);
+  const [visibleCount, setVisibleCount] = useState(GRID_PAGE_SIZE);
+  // The grid's own photo list, with folder/filename and date taken so it can be sorted and
+  // filtered — only fetched once the grid is actually opened, since the first fetch after a
+  // restart may need to read dates for the whole library.
+  const [gridPhotos, setGridPhotos] = useState<PhotoDetail[] | null>(null);
+  const [gridError, setGridError] = useState(false);
+  const [gridSort, setGridSort] = useState<GridSort>('date-desc');
+  const [gridFilter, setGridFilter] = useState('');
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
+  useEffect(() => {
+    if (mode !== 'manual' || gridPhotos) return;
+    setGridError(false);
+    api.get<PhotoDetail[]>('/photos/details').then(setGridPhotos).catch(() => setGridError(true));
+  }, [mode, gridPhotos]);
+
+  const sortedGridPhotos = useMemo(() => {
+    if (!gridPhotos) return [];
+    const sorted = [...gridPhotos];
+    if (gridSort === 'date-desc') sorted.sort((a, b) => b.taken_at.localeCompare(a.taken_at));
+    else if (gridSort === 'date-asc') sorted.sort((a, b) => a.taken_at.localeCompare(b.taken_at));
+    else {
+      sorted.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
+      if (gridSort === 'name-desc') sorted.reverse();
+    }
+    return sorted;
+  }, [gridPhotos, gridSort]);
+
+  const shownGridPhotos = useMemo(() => {
+    const q = gridFilter.trim().toLowerCase();
+    return sortedGridPhotos.filter(
+      (p) => (!q || p.path.toLowerCase().includes(q)) && (!showSelectedOnly || selectedIds.has(p.id))
+    );
+  }, [sortedGridPhotos, gridFilter, showSelectedOnly, selectedIds]);
+
+  // Back to the first page whenever what's shown changes, so a new sort/filter starts at the top.
+  useEffect(() => setVisibleCount(GRID_PAGE_SIZE), [gridSort, gridFilter, showSelectedOnly]);
+
+  const selectAllShown = () =>
+    setSelectedIds((ids) => {
+      const next = new Set(ids);
+      shownGridPhotos.forEach((p) => next.add(p.id));
+      return next;
+    });
+
   const buildSelection = (): Selection => {
-    if (mode === 'manual') return { mode: 'manual', photoIds: Array.from(selectedIds) };
+    // Picked photos play in the grid's current sort order (not the order they were tapped), so
+    // e.g. "Date taken (oldest first)" makes a chronological movie.
+    if (mode === 'manual') {
+      return { mode: 'manual', photoIds: sortedGridPhotos.filter((p) => selectedIds.has(p.id)).map((p) => p.id) };
+    }
     if (mode === 'random') return { mode: 'random', count: randomCount };
     if (mode === 'name') return { mode: 'name', query: nameQuery };
     return { mode: 'date-range', start: startDate, end: endDate };
@@ -224,22 +277,64 @@ export function MovieMakerModal({ photos, onClose, onCreated }: Props) {
           )}
           {mode === 'manual' && (
             <>
-              <div className="movie-maker__photo-grid">
-                {photos.slice(0, visibleCount).map((p) => (
-                  <button
-                    type="button"
-                    key={p.id}
-                    className={`movie-maker__photo ${selectedIds.has(p.id) ? 'movie-maker__photo--selected' : ''}`}
-                    onClick={() => toggleSelected(p.id)}
-                  >
-                    <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+              {!gridPhotos && !gridError && <p className="hint">Loading photos…</p>}
+              {gridError && (
+                <p className="hint">
+                  Couldn't load the photo list.{' '}
+                  <button type="button" className="link-button" onClick={() => { setGridError(false); setGridPhotos(null); api.get<PhotoDetail[]>('/photos/details').then(setGridPhotos).catch(() => setGridError(true)); }}>
+                    Try again
                   </button>
-                ))}
-              </div>
-              {visibleCount < photos.length && (
-                <button type="button" className="secondary" onClick={() => setVisibleCount((c) => c + 90)}>
-                  Show more ({photos.length - visibleCount} left)
-                </button>
+                </p>
+              )}
+              {gridPhotos && (
+                <>
+                  <div className="task-form__row">
+                    <select value={gridSort} onChange={(e) => setGridSort(e.target.value as GridSort)} aria-label="Sort photos">
+                      <option value="date-desc">Date taken (newest first)</option>
+                      <option value="date-asc">Date taken (oldest first)</option>
+                      <option value="name-asc">Folder / filename (A–Z)</option>
+                      <option value="name-desc">Folder / filename (Z–A)</option>
+                    </select>
+                    <input
+                      placeholder="Filter by folder or filename…"
+                      value={gridFilter}
+                      onChange={(e) => setGridFilter(e.target.value)}
+                    />
+                  </div>
+                  <div className="task-form__row">
+                    <button type="button" className="secondary" onClick={selectAllShown} disabled={shownGridPhotos.length === 0}>
+                      Select all shown ({shownGridPhotos.length})
+                    </button>
+                    <button type="button" className="secondary" onClick={() => setSelectedIds(new Set())} disabled={selectedIds.size === 0}>
+                      Clear selection
+                    </button>
+                    <label className="member-form__label member-form__label--inline">
+                      <input type="checkbox" checked={showSelectedOnly} onChange={(e) => setShowSelectedOnly(e.target.checked)} />
+                      Show only picked
+                    </label>
+                  </div>
+                  <div className="movie-maker__photo-grid">
+                    {shownGridPhotos.slice(0, visibleCount).map((p) => (
+                      <button
+                        type="button"
+                        key={p.id}
+                        title={p.path}
+                        className={`movie-maker__photo ${selectedIds.has(p.id) ? 'movie-maker__photo--selected' : ''}`}
+                        onClick={() => toggleSelected(p.id)}
+                      >
+                        <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+                        <span className="movie-maker__photo-date">{fmtTakenDate(p.taken_at)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {shownGridPhotos.length === 0 && <p className="hint">No photos match that filter.</p>}
+                  {visibleCount < shownGridPhotos.length && (
+                    <button type="button" className="secondary" onClick={() => setVisibleCount((c) => c + GRID_PAGE_SIZE)}>
+                      Show more ({shownGridPhotos.length - visibleCount} left)
+                    </button>
+                  )}
+                  <p className="hint">Picked photos play in the order shown by the sort above.</p>
+                </>
               )}
             </>
           )}

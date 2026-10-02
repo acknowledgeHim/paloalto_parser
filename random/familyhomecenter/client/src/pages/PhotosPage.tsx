@@ -17,7 +17,7 @@ function movieDownloadName(m: Movie): string {
   return `${safe || 'movie'}.mp4`;
 }
 
-function MoviesSection({ photos }: { photos: Photo[] }) {
+function MoviesSection() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showMaker, setShowMaker] = useState(false);
   const [playing, setPlaying] = useState<Movie | null>(null);
@@ -106,7 +106,6 @@ function MoviesSection({ photos }: { photos: Photo[] }) {
 
       {showMaker && (
         <MovieMakerModal
-          photos={photos}
           onClose={() => setShowMaker(false)}
           onCreated={() => {
             setShowMaker(false);
@@ -161,7 +160,7 @@ export function PhotosPage() {
         </div>
       </div>
 
-      <MoviesSection photos={photos} />
+      <MoviesSection />
 
       {loading && <div className="empty-state">Loading photos…</div>}
       {!loading && photos.length === 0 && (

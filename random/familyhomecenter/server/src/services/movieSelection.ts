@@ -28,7 +28,7 @@ function sampleRandom<T>(items: T[], n: number): T[] {
 // documents for going sequential.
 const DATE_LOOKUP_CONCURRENCY = 8;
 
-async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
   async function worker() {
