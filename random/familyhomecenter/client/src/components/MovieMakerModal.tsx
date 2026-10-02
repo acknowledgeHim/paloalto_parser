@@ -25,6 +25,16 @@ function fmtDuration(totalSeconds: number): string {
 
 const GRID_PAGE_SIZE = 90;
 
+/** Splits a PHOTOS_DIR-relative path into its folder part ('' for a photo at the top level) and
+ *  filename. */
+function splitPhotoPath(relativePath: string): { folder: string; file: string } {
+  const normalized = relativePath.replace(/\\/g, '/');
+  const slash = normalized.lastIndexOf('/');
+  return slash === -1
+    ? { folder: '', file: normalized }
+    : { folder: normalized.slice(0, slash), file: normalized.slice(slash + 1) };
+}
+
 function fmtTakenDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
@@ -70,7 +80,8 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
   const [gridPhotos, setGridPhotos] = useState<PhotoDetail[] | null>(null);
   const [gridError, setGridError] = useState(false);
   const [gridSort, setGridSort] = useState<GridSort>('date-desc');
-  const [gridFilter, setGridFilter] = useState('');
+  const [folderFilter, setFolderFilter] = useState('');
+  const [fileFilter, setFileFilter] = useState('');
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -93,15 +104,32 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
     return sorted;
   }, [gridPhotos, gridSort]);
 
+  // Folder and filename are matched separately — a camera's numbered filenames (IMG_20261234…)
+  // would otherwise turn a folder search like "2026" into a pile of unrelated photos.
   const shownGridPhotos = useMemo(() => {
-    const q = gridFilter.trim().toLowerCase();
-    return sortedGridPhotos.filter(
-      (p) => (!q || p.path.toLowerCase().includes(q)) && (!showSelectedOnly || selectedIds.has(p.id))
-    );
-  }, [sortedGridPhotos, gridFilter, showSelectedOnly, selectedIds]);
+    const folderQ = folderFilter.trim().toLowerCase();
+    const fileQ = fileFilter.trim().toLowerCase();
+    return sortedGridPhotos.filter((p) => {
+      const { folder, file } = splitPhotoPath(p.path);
+      return (
+        (!folderQ || folder.toLowerCase().includes(folderQ)) &&
+        (!fileQ || file.toLowerCase().includes(fileQ)) &&
+        (!showSelectedOnly || selectedIds.has(p.id))
+      );
+    });
+  }, [sortedGridPhotos, folderFilter, fileFilter, showSelectedOnly, selectedIds]);
+
+  // Every distinct folder, offered as suggestions in the folder filter box.
+  const gridFolders = useMemo(
+    () =>
+      Array.from(new Set((gridPhotos ?? []).map((p) => splitPhotoPath(p.path).folder).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+      ),
+    [gridPhotos]
+  );
 
   // Back to the first page whenever what's shown changes, so a new sort/filter starts at the top.
-  useEffect(() => setVisibleCount(GRID_PAGE_SIZE), [gridSort, gridFilter, showSelectedOnly]);
+  useEffect(() => setVisibleCount(GRID_PAGE_SIZE), [gridSort, folderFilter, fileFilter, showSelectedOnly]);
 
   const selectAllShown = () =>
     setSelectedIds((ids) => {
@@ -295,10 +323,23 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
                       <option value="name-asc">Folder / filename (A–Z)</option>
                       <option value="name-desc">Folder / filename (Z–A)</option>
                     </select>
+                  </div>
+                  <div className="task-form__row">
                     <input
-                      placeholder="Filter by folder or filename…"
-                      value={gridFilter}
-                      onChange={(e) => setGridFilter(e.target.value)}
+                      placeholder="Folder contains…"
+                      list="movie-maker-folders"
+                      value={folderFilter}
+                      onChange={(e) => setFolderFilter(e.target.value)}
+                      aria-label="Filter by folder"
+                    />
+                    <datalist id="movie-maker-folders">
+                      {gridFolders.map((f) => <option key={f} value={f} />)}
+                    </datalist>
+                    <input
+                      placeholder="Filename contains…"
+                      value={fileFilter}
+                      onChange={(e) => setFileFilter(e.target.value)}
+                      aria-label="Filter by filename"
                     />
                   </div>
                   <div className="task-form__row">

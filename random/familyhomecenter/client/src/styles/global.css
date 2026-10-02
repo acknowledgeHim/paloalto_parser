@@ -754,6 +754,20 @@ textarea {
 
 /* ---- Movie maker ---- */
 .movie-maker__section { margin-top: 20px; }
+/* The movie maker has much more in it than the app's other forms, so it gets a wider panel and
+   more compact controls (still comfortably tappable at 40px) than the 420px / 56px defaults. */
+.modal-panel.movie-maker { max-width: 860px; gap: 8px; }
+/* :where() keeps these at single-class specificity, so more specific rules (the track list's small
+   ↑/↓/✕ buttons, the photo tiles) still win. */
+.movie-maker :where(input:not([type='checkbox']), select, button:not(.movie-maker__photo):not(.link-button)) {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 0.95em;
+}
+.movie-maker .task-form__row { flex-wrap: wrap; gap: 8px; align-items: center; }
+.movie-maker .task-form__row > :where(input, select) { min-width: 160px; }
+.movie-maker .task-form__row > :where(span, datalist) { flex: initial; }
 .movie-maker__photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
