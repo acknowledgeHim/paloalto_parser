@@ -572,6 +572,52 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
+// is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
+// the result (which of this app's groups each device should be in) every minute.
+db.exec(`
+  -- A device (by MAC address, or IP if it has a fixed one) and whose it is. family_member_id NULL =
+  -- known but not assigned to anyone, so no family rules apply to it.
+  CREATE TABLE IF NOT EXISTS internet_devices (
+    id TEXT PRIMARY KEY,
+    client TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    family_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Per-person state. paused_until: a manual pause (ISO time, far future = until resumed).
+  -- allowed_until: internet allowed even during a scheduled block (bonus time / "resume" during
+  -- bedtime). filtered: their devices get the kids' web filter.
+  CREATE TABLE IF NOT EXISTS internet_members (
+    family_member_id TEXT PRIMARY KEY REFERENCES family_members(id) ON DELETE CASCADE,
+    filtered INTEGER NOT NULL DEFAULT 0,
+    paused_until TEXT,
+    allowed_until TEXT
+  );
+
+  -- Recurring "no internet" windows, e.g. bedtime. days = comma-separated weekday numbers the
+  -- window *starts* on (0 = Sunday); an end time at or before the start time runs past midnight.
+  CREATE TABLE IF NOT EXISTS internet_schedules (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    label TEXT NOT NULL DEFAULT '',
+    days TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1
+  );
+
+  -- Sites always allowed (even while paused/filtered) or always blocked for filtered members.
+  CREATE TABLE IF NOT EXISTS internet_sites (
+    id TEXT PRIMARY KEY,
+    domain TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('allow', 'block')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (domain, kind)
+  );
+`);
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

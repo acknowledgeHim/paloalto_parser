@@ -16,6 +16,7 @@ import { MusicPage } from './pages/MusicPage.js';
 import { PhotosPage } from './pages/PhotosPage.js';
 import { IntercomPage } from './pages/IntercomPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { InternetPage } from './pages/InternetPage.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
@@ -74,6 +75,7 @@ export function App() {
           <Route path="/music" element={<MusicPage />} />
           <Route path="/photos" element={<PhotosPage />} />
           <Route path="/intercom" element={<IntercomPage />} />
+          <Route path="/internet" element={<InternetPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

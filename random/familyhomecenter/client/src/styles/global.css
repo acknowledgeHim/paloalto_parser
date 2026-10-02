@@ -127,9 +127,14 @@ textarea {
 }
 .navbar__links {
   display: flex;
-  gap: 24px;
+  /* Wraps onto a second line rather than pushing the last links and the profile switcher off a
+     narrower screen. */
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  min-width: 0;
 }
 .navbar__links a {
+  white-space: nowrap;
   color: var(--text-muted);
   text-decoration: none;
   font-weight: 600;
@@ -1300,3 +1305,44 @@ textarea {
   border: none;
 }
 .kb-page__media-add { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* ---- Internet (Pi-hole) ---- */
+.internet-page { display: flex; flex-direction: column; gap: 14px; }
+.internet-page h1 { margin: 0; }
+.internet-page__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.internet-page__header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.internet-page__bad { color: #b42318; font-weight: 600; }
+.internet-page__notice { background: #fef3c7; color: #92610a; border-radius: 10px; padding: 8px 12px; }
+.internet-page__people { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.internet-person { display: flex; flex-direction: column; gap: 10px; border-left: 6px solid #22a06b; }
+.internet-person--paused { border-left-color: #d64545; }
+.internet-person__head { display: flex; align-items: center; gap: 10px; }
+.internet-person__name { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.internet-badge--on { background: #d9f2e3; color: #157347; text-transform: none; }
+.internet-badge--off { background: #fde8e8; color: #9b1c1c; text-transform: none; }
+.internet-person__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.internet-person__actions button { min-height: 44px; padding: 0 14px; }
+.internet-person__toggle, .internet-filter-categories label { display: flex; align-items: center; gap: 8px; }
+.internet-person__toggle input, .internet-filter-categories input { width: 22px; height: 22px; min-height: 0; }
+.internet-person__schedules { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 8px; }
+.internet-schedule { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.9em; }
+.internet-schedule--off { opacity: 0.5; }
+.internet-schedule__actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.internet-schedule-form { display: flex; flex-direction: column; gap: 8px; }
+.internet-schedule-form__days { display: flex; flex-wrap: wrap; gap: 4px; }
+.internet-schedule-form__days button { min-height: 40px; padding: 0 10px; }
+.internet-schedule-form__times { display: flex; flex-wrap: wrap; gap: 10px; }
+.internet-schedule-form__times label { display: flex; align-items: center; gap: 6px; }
+.internet-section h3 { font-size: 1em; margin: 16px 0 6px; }
+.internet-device-list { list-style: none; margin: 0; padding: 0; }
+.internet-device-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.internet-device-list li:last-child { border-bottom: none; }
+.internet-device-list__name { flex: 1; min-width: 200px; }
+.internet-device-list--found { margin-top: 8px; }
+.internet-device-list--found input { max-width: 180px; }
+.internet-manual-device { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.internet-manual-device input { flex: 1; min-width: 180px; }
+.internet-filter-categories { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.internet-sites { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.internet-site-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.internet-site-list li { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }

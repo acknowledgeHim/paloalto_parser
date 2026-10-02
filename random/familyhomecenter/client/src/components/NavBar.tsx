@@ -16,6 +16,7 @@ export function NavBar() {
         <NavLink to="/music" className={({ isActive }) => (isActive ? 'active' : '')}>Music</NavLink>
         <NavLink to="/photos" className={({ isActive }) => (isActive ? 'active' : '')}>Photos</NavLink>
         <NavLink to="/intercom" className={({ isActive }) => (isActive ? 'active' : '')}>Intercom</NavLink>
+        <NavLink to="/internet" className={({ isActive }) => (isActive ? 'active' : '')}>Internet</NavLink>
         <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
       </div>
       <ProfileSwitcher />

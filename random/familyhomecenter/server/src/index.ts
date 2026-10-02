@@ -22,11 +22,13 @@ import { contactsRouter } from './routes/contacts.js';
 import { knowledgeBaseRouter } from './routes/knowledgeBase.js';
 import { callingRouter } from './routes/calling.js';
 import { moviesRouter } from './routes/movies.js';
+import { internetRouter } from './routes/internet.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
 import { startGroceryEmailSchedule } from './services/groceryEmail.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
+import { startInternetSchedule } from './services/internetControl.js';
 
 const app = express();
 app.use(cors());
@@ -58,6 +60,7 @@ app.use('/api/contacts', contactsRouter);
 app.use('/api/knowledge-base', knowledgeBaseRouter);
 app.use('/api/calling', callingRouter);
 app.use('/api/movies', moviesRouter);
+app.use('/api/internet', internetRouter);
 // Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
 // handles HTTP Range requests, which video playback/seeking needs.
 app.use('/api/kb-media', express.static(config.kbMediaDir));
@@ -84,4 +87,5 @@ server.listen(config.port, config.host, () => {
   startCalendarSyncSchedule();
   startThumbnailWarmSchedule();
   startGroceryEmailSchedule();
+  startInternetSchedule();
 });

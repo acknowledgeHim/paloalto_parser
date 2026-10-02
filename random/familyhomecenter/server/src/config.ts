@@ -80,6 +80,15 @@ export const config = {
     ffmpegPath: process.env.FFMPEG_PATH ?? 'ffmpeg',
   },
 
+  pihole: {
+    // Pi-hole v6's web address (its API lives under /api) — http://localhost when it runs on this
+    // same Pi. Leave blank to hide the Internet page's controls. See docs/PIHOLE_SETUP.md.
+    url: process.env.PIHOLE_URL ?? '',
+    // Pi-hole's web interface password (or an "app password" from its Settings > Web interface /
+    // API page). Blank if the Pi-hole has no password at all.
+    password: process.env.PIHOLE_PASSWORD ?? '',
+  },
+
   twilio: {
     // Real click-to-call from a desktop/kiosk browser (paid Twilio account) — see
     // docs/TWILIO_CALLING_SETUP.md. Leave TWILIO_ACCOUNT_SID blank to disable the feature entirely;

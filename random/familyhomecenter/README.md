@@ -47,6 +47,12 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   dashboard installs as a home-screen app — see docs/INTERCOM_SETUP.md).
   One-way paging: the DAC8x's zones are output-only, so this is an
   announcement system, not a two-way call — see that doc for the scope note.
+- 🛡️ **Internet controls** — with a Pi-hole on the network (usually this same
+  Pi): ad/tracker blocking for the whole house, plus per-kid pause/resume,
+  bedtime-style schedules with bonus-time buttons, a kid web filter (adult
+  content, gambling, VPN/proxy workarounds, optionally social media), and
+  always-allowed/blocked site lists. Parents change it; anyone can see who's
+  paused and until when — see docs/PIHOLE_SETUP.md.
 - 🍽️ **Meals & recipes** — plan breakfast/lunch/dinner per day, optionally
   assigned to a specific family member (or left as a whole-family meal).
   A meal can be typed in freehand with its own ingredient list, built from
@@ -166,6 +172,8 @@ Optional integrations, each with its own guide:
   wiring it to the Pi — including over Ethernet/Cat6 if there's real distance between them)
 - [docs/DUAL_TOUCHSCREEN_SETUP.md](docs/DUAL_TOUCHSCREEN_SETUP.md) (drive two touchscreens with
   different content from one Pi 5's two HDMI outputs)
+- [docs/PIHOLE_SETUP.md](docs/PIHOLE_SETUP.md) (Pi-hole install, Linksys router DNS setup, and
+  per-kid internet controls)
 - [docs/BACKUP.md](docs/BACKUP.md) (`npm run backup` in `server/` — safe to run while the server's
   up; covers automating it with cron and restoring)
 
