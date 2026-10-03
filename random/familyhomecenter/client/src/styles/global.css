@@ -1323,6 +1323,19 @@ textarea {
 .internet-person__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .internet-person__actions button { min-height: 44px; padding: 0 14px; }
 .internet-person__toggle, .internet-filter-categories label { display: flex; align-items: center; gap: 8px; }
+.internet-person__mode { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.internet-person__mode select { flex: 1; min-height: 44px; }
+.internet-approved { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--bg); }
+.internet-approved__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.internet-approved__chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); font-size: 0.9em; }
+.internet-approved__chip button { min-height: 28px; width: 28px; padding: 0; border-radius: 50%; background: transparent; color: var(--text-muted); }
+.internet-approved__add { display: flex; gap: 6px; }
+.internet-approved__add input { flex: 1; min-width: 0; min-height: 40px; }
+.internet-approved__add button { min-height: 40px; padding: 0 14px; }
+.internet-blocked-list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; }
+.internet-blocked-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.9em; }
+.internet-blocked-list li:last-child { border-bottom: none; }
+.internet-blocked-list button { min-height: 36px; padding: 0 12px; flex-shrink: 0; }
 .internet-person__toggle input, .internet-filter-categories input { width: 22px; height: 22px; min-height: 0; }
 .internet-person__schedules { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 8px; }
 .internet-schedule { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.9em; }

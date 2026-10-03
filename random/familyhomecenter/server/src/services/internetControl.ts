@@ -16,12 +16,23 @@ import * as pihole from './pihole.js';
  * alone. "Always allowed" sites are allow-entries scoped to both groups, so they keep working even
  * while paused.
  *
+ * "Approved sites only" mode reuses the paused group's block-everything rule: the kid's devices go
+ * into "FHC Paused" plus their own "FHC Approved <id>" group, which holds allow-entries for just
+ * that kid's approved sites. An actual pause or schedule then simply drops the approved group, so
+ * a paused approved-only kid is as offline as anyone else (household "always allowed" aside).
+ *
  * This app's database is the source of truth; anything in Pi-hole can be rebuilt from it (the
  * "Repair Pi-hole setup" action does exactly that).
  */
 
 const GROUP_PAUSED = 'FHC Paused';
 const GROUP_FILTERED = 'FHC Kid filter';
+/** Per-kid group for "approved sites only" — suffixed with the start of the member id (stable even
+ *  if they're renamed); the comment carries the name for anyone browsing Pi-hole's own UI. */
+const APPROVED_PREFIX = 'FHC Approved ';
+function approvedGroupName(memberId: string): string {
+  return `${APPROVED_PREFIX}${memberId.slice(0, 8)}`;
+}
 // Matches any domain at all. Deliberately not the more obvious ".*", so it can't collide with a
 // catch-all regex someone added by hand in Pi-hole (each regex can only exist once).
 const PAUSE_REGEX = '^.+$';
@@ -76,9 +87,12 @@ export interface InternetDevice {
   family_member_id: string | null;
 }
 
+export type InternetMode = 'open' | 'filtered' | 'approved';
+
 interface MemberRow {
   family_member_id: string;
   filtered: number;
+  approved_only: number;
   paused_until: string | null;
   allowed_until: string | null;
 }
@@ -104,6 +118,7 @@ export function getMemberRow(memberId: string): MemberRow {
     (db.prepare('SELECT * FROM internet_members WHERE family_member_id = ?').get(memberId) as MemberRow | undefined) ?? {
       family_member_id: memberId,
       filtered: 0,
+      approved_only: 0,
       paused_until: null,
       allowed_until: null,
     }
@@ -112,10 +127,11 @@ export function getMemberRow(memberId: string): MemberRow {
 
 export function saveMemberRow(row: MemberRow): void {
   db.prepare(
-    `INSERT INTO internet_members (family_member_id, filtered, paused_until, allowed_until)
-     VALUES (@family_member_id, @filtered, @paused_until, @allowed_until)
+    `INSERT INTO internet_members (family_member_id, filtered, approved_only, paused_until, allowed_until)
+     VALUES (@family_member_id, @filtered, @approved_only, @paused_until, @allowed_until)
      ON CONFLICT(family_member_id) DO UPDATE SET
-       filtered = excluded.filtered, paused_until = excluded.paused_until, allowed_until = excluded.allowed_until`
+       filtered = excluded.filtered, approved_only = excluded.approved_only,
+       paused_until = excluded.paused_until, allowed_until = excluded.allowed_until`
   ).run(row);
 }
 
@@ -157,12 +173,27 @@ export interface MemberInternetState {
   /** When the current pause/schedule/allowance ends; null = until a parent changes it. */
   until: string | null;
   schedule_label: string | null;
+  /** Only true in 'filtered' mode. */
   filtered: boolean;
+  mode: InternetMode;
+}
+
+function rowMode(row: MemberRow): InternetMode {
+  if (row.approved_only === 1) return 'approved';
+  return row.filtered === 1 ? 'filtered' : 'open';
+}
+
+export function setMemberMode(memberId: string, mode: InternetMode): void {
+  const row = getMemberRow(memberId);
+  row.filtered = mode === 'filtered' ? 1 : 0;
+  row.approved_only = mode === 'approved' ? 1 : 0;
+  saveMemberRow(row);
 }
 
 export function memberState(memberId: string, now = new Date()): MemberInternetState {
   const row = getMemberRow(memberId);
-  const filtered = row.filtered === 1;
+  const mode = rowMode(row);
+  const filtered = mode === 'filtered';
   if (row.paused_until && new Date(row.paused_until) > now) {
     return {
       paused: true,
@@ -170,17 +201,18 @@ export function memberState(memberId: string, now = new Date()): MemberInternetS
       until: row.paused_until === FOREVER ? null : row.paused_until,
       schedule_label: null,
       filtered,
+      mode,
     };
   }
   const schedules = db.prepare('SELECT * FROM internet_schedules WHERE family_member_id = ?').all(memberId) as InternetSchedule[];
   const active = activeScheduleEnd(schedules, now);
   if (row.allowed_until && new Date(row.allowed_until) > now) {
-    return { paused: false, reason: active ? 'allowed' : null, until: active ? row.allowed_until : null, schedule_label: null, filtered };
+    return { paused: false, reason: active ? 'allowed' : null, until: active ? row.allowed_until : null, schedule_label: null, filtered, mode };
   }
   if (active) {
-    return { paused: true, reason: 'schedule', until: active.end.toISOString(), schedule_label: active.label || null, filtered };
+    return { paused: true, reason: 'schedule', until: active.end.toISOString(), schedule_label: active.label || null, filtered, mode };
   }
-  return { paused: false, reason: null, until: null, schedule_label: null, filtered };
+  return { paused: false, reason: null, until: null, schedule_label: null, filtered, mode };
 }
 
 /** Pauses for `minutes`, or until resumed if null. Overrides any allowance in effect. */
@@ -232,16 +264,78 @@ function siteRegex(domain: string): string {
 }
 
 export async function pushSite(site: InternetSite): Promise<void> {
-  const { paused, filtered } = await ensureBaseSetup();
-  if (site.kind === 'allow') {
-    await pihole.upsertDomain('allow', 'regex', siteRegex(site.domain), `${COMMENT} — always allowed`, [paused, filtered]);
-  } else {
-    await pihole.upsertDomain('deny', 'regex', siteRegex(site.domain), `${COMMENT} — blocked for filtered members`, [filtered]);
-  }
+  if (site.kind === 'allow') return syncAllowEntries();
+  const { filtered } = await ensureBaseSetup();
+  await pihole.upsertDomain('deny', 'regex', siteRegex(site.domain), `${COMMENT} — blocked for filtered members`, [filtered]);
 }
 
+/** Call after the site's row is deleted. */
 export async function removeSite(site: InternetSite): Promise<void> {
-  await pihole.deleteDomain(site.kind === 'allow' ? 'allow' : 'deny', 'regex', siteRegex(site.domain));
+  if (site.kind === 'allow') return syncAllowEntries();
+  await pihole.deleteDomain('deny', 'regex', siteRegex(site.domain));
+}
+
+/** Ids of every per-kid approved group, creating any that are missing for `memberIds`. */
+async function approvedGroupIds(memberIds: string[]): Promise<Map<string, number>> {
+  let groups = await pihole.listGroups();
+  const missing = memberIds.filter((id) => !groups.some((g) => g.name === approvedGroupName(id)));
+  for (const id of missing) {
+    const name = (db.prepare('SELECT name FROM family_members WHERE id = ?').get(id) as { name: string } | undefined)?.name ?? id;
+    await pihole.createGroup(approvedGroupName(id), `${COMMENT} — approved sites for ${name}`);
+  }
+  if (missing.length) groups = await pihole.listGroups();
+  const ids = new Map<string, number>();
+  for (const id of memberIds) {
+    const g = groups.find((x) => x.name === approvedGroupName(id));
+    if (g) ids.set(id, g.id);
+  }
+  return ids;
+}
+
+export interface MemberSite {
+  id: string;
+  family_member_id: string;
+  domain: string;
+}
+
+/**
+ * Makes Pi-hole's allow-entries match this app's household "always allowed" sites plus every kid's
+ * approved sites. One regex can only exist once in Pi-hole, so a domain that's both always-allowed
+ * and approved for a kid (or approved for two kids) becomes a single entry scoped to every group
+ * that needs it. Entries this app made that are no longer wanted are removed; anything added by
+ * hand in Pi-hole is left alone.
+ */
+export async function syncAllowEntries(): Promise<void> {
+  const { paused, filtered } = await ensureBaseSetup();
+  const memberSites = db.prepare('SELECT * FROM internet_member_sites').all() as MemberSite[];
+  const groupFor = await approvedGroupIds([...new Set(memberSites.map((s) => s.family_member_id))]);
+
+  const desired = new Map<string, Set<number>>();
+  const want = (domain: string, ...groups: number[]) => {
+    const key = siteRegex(domain);
+    const set = desired.get(key) ?? new Set<number>();
+    groups.forEach((g) => set.add(g));
+    desired.set(key, set);
+  };
+  for (const site of db.prepare("SELECT * FROM internet_sites WHERE kind = 'allow'").all() as InternetSite[]) {
+    want(site.domain, paused, filtered);
+  }
+  for (const site of memberSites) {
+    const g = groupFor.get(site.family_member_id);
+    if (g !== undefined) want(site.domain, g);
+  }
+
+  const existing = (await pihole.listDomains('allow', 'regex')).filter((d) => d.comment?.startsWith(COMMENT));
+  for (const [regex, groups] of desired) {
+    const sorted = [...groups].sort((a, b) => a - b);
+    const current = existing.find((d) => d.domain === regex);
+    if (!current || [...current.groups].sort((a, b) => a - b).join() !== sorted.join() || !current.enabled) {
+      await pihole.upsertDomain('allow', 'regex', regex, `${COMMENT} — allowed site`, sorted);
+    }
+  }
+  for (const d of existing) {
+    if (!desired.has(d.domain)) await pihole.deleteDomain('allow', 'regex', d.domain);
+  }
 }
 
 export interface GravityStatus {
@@ -298,7 +392,8 @@ export async function repairSetup(): Promise<void> {
   groupIds = null;
   await ensureBaseSetup();
   await syncFilterLists();
-  for (const site of db.prepare('SELECT * FROM internet_sites').all() as InternetSite[]) await pushSite(site);
+  for (const site of db.prepare("SELECT * FROM internet_sites WHERE kind = 'block'").all() as InternetSite[]) await pushSite(site);
+  await syncAllowEntries();
   await syncDevices();
 }
 
@@ -345,12 +440,20 @@ export function syncDevices(): Promise<void> {
 
 async function doSync(): Promise<void> {
   const { paused, filtered } = await ensureBaseSetup();
-  const ours = new Set([paused, filtered]);
   const clients = await pihole.listClients();
   const devices = db.prepare('SELECT * FROM internet_devices').all() as InternetDevice[];
   const now = new Date();
   const stateCache = new Map<string, MemberInternetState>();
   const handled = new Set<number>();
+
+  // Every group this app manages — including approved groups of kids no longer in that mode, so
+  // their devices get taken back out.
+  const approvedMembers = (db.prepare('SELECT family_member_id FROM internet_members WHERE approved_only = 1').all() as Array<{
+    family_member_id: string;
+  }>).map((r) => r.family_member_id);
+  const approvedIds = await approvedGroupIds(approvedMembers);
+  const ours = new Set([paused, filtered]);
+  for (const g of await pihole.listGroups()) if (g.name.startsWith(APPROVED_PREFIX)) ours.add(g.id);
 
   for (const device of devices) {
     let want: number[] = [];
@@ -360,8 +463,11 @@ async function doSync(): Promise<void> {
         state = memberState(device.family_member_id, now);
         stateCache.set(device.family_member_id, state);
       }
-      if (state.paused) want.push(paused);
-      if (state.filtered) want.push(filtered);
+      if (state.paused || state.mode === 'approved') want.push(paused);
+      if (state.mode === 'filtered') want.push(filtered);
+      // An actual pause/schedule wins over approved sites — drop the approved group then.
+      const approvedGroup = approvedIds.get(device.family_member_id);
+      if (state.mode === 'approved' && !state.paused && approvedGroup !== undefined) want.push(approvedGroup);
     }
     const existing = clients.find((c) => sameClient(c.client, device.client));
     if (!existing) {
@@ -421,4 +527,81 @@ export function normalizeDomain(input: string): string | null {
 
 export function isValidTime(t: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+}
+
+// ---- "What's being blocked?" ----
+
+/** Pi-hole v6 query statuses that mean the lookup was blocked. */
+const BLOCKED_STATUSES = new Set([
+  'GRAVITY',
+  'REGEX',
+  'DENYLIST',
+  'GRAVITY_CNAME',
+  'REGEX_CNAME',
+  'DENYLIST_CNAME',
+  'EXTERNAL_BLOCKED_IP',
+  'EXTERNAL_BLOCKED_NULL',
+  'EXTERNAL_BLOCKED_NXRA',
+  'SPECIAL_DOMAIN',
+]);
+
+// Two-part public suffixes common enough to matter for "approve the whole site" suggestions — not
+// the full Public Suffix List, just enough that "bbc.co.uk" doesn't come out as "co.uk".
+const TWO_PART_SUFFIXES = new Set(['co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'org.au', 'edu.au', 'co.nz', 'co.jp', 'com.br', 'co.in', 'co.za', 'com.mx']);
+
+/** "i.ytimg.com" → "ytimg.com": the site a lookup belongs to, which is what's worth approving. */
+export function siteForDomain(domain: string): string {
+  const labels = domain.toLowerCase().split('.').filter(Boolean);
+  const keep = TWO_PART_SUFFIXES.has(labels.slice(-2).join('.')) ? 3 : 2;
+  return labels.slice(-keep).join('.');
+}
+
+export interface BlockedSite {
+  site: string;
+  /** A few of the actual names looked up under it, for context. */
+  examples: string[];
+  count: number;
+  last_seen: string;
+  approved: boolean;
+}
+
+/**
+ * What a kid's devices tried and failed to reach lately, grouped by site, newest first — so a
+ * parent can see why an approved site is half-broken (it needs another domain, e.g. YouTube needs
+ * ytimg.com) and approve the missing piece. Pi-hole's query log is by IP, so MAC-identified devices
+ * are looked up in its network table first.
+ */
+export async function recentBlockedSites(memberId: string): Promise<BlockedSite[]> {
+  const devices = db.prepare('SELECT * FROM internet_devices WHERE family_member_id = ?').all(memberId) as InternetDevice[];
+  if (devices.length === 0) return [];
+  const network = await pihole.listNetworkDevices();
+  const ips = new Set<string>();
+  for (const d of devices) {
+    if (!d.client.includes(':') || !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(d.client)) {
+      ips.add(d.client); // already an IP
+      continue;
+    }
+    const match = network.find((n) => n.hwaddr.toLowerCase() === d.client.toLowerCase());
+    match?.ips.forEach((i) => ips.add(i.ip));
+  }
+
+  const approved = new Set(
+    (db.prepare('SELECT domain FROM internet_member_sites WHERE family_member_id = ?').all(memberId) as Array<{ domain: string }>).map(
+      (r) => r.domain
+    )
+  );
+  const bySite = new Map<string, BlockedSite>();
+  for (const ip of ips) {
+    for (const q of await pihole.getQueriesForClient(ip, 500)) {
+      if (!q.status || !BLOCKED_STATUSES.has(q.status)) continue;
+      const site = siteForDomain(q.domain);
+      const seen = new Date(q.time * 1000).toISOString();
+      const entry = bySite.get(site) ?? { site, examples: [], count: 0, last_seen: seen, approved: approved.has(site) };
+      entry.count++;
+      if (seen > entry.last_seen) entry.last_seen = seen;
+      if (entry.examples.length < 3 && !entry.examples.includes(q.domain)) entry.examples.push(q.domain);
+      bySite.set(site, entry);
+    }
+  }
+  return [...bySite.values()].sort((a, b) => b.last_seen.localeCompare(a.last_seen)).slice(0, 40);
 }

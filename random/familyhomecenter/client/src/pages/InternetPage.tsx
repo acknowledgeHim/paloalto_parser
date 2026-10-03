@@ -12,6 +12,7 @@ interface MemberState {
   until: string | null;
   schedule_label: string | null;
   filtered: boolean;
+  mode: 'open' | 'filtered' | 'approved';
 }
 
 interface OverviewMember extends Pick<FamilyMember, 'id' | 'name' | 'color' | 'avatar'> {
@@ -42,6 +43,20 @@ interface Site {
   kind: 'allow' | 'block';
 }
 
+interface MemberSite {
+  id: string;
+  family_member_id: string;
+  domain: string;
+}
+
+interface BlockedSite {
+  site: string;
+  examples: string[];
+  count: number;
+  last_seen: string;
+  approved: boolean;
+}
+
 interface Overview {
   configured: boolean;
   pihole: {
@@ -59,6 +74,7 @@ interface Overview {
   devices: Device[];
   schedules: Schedule[];
   sites: Site[];
+  member_sites: MemberSite[];
   filter_categories: Array<{ key: string; label: string }>;
   enabled_filter_categories: string[];
 }
@@ -230,6 +246,7 @@ export function InternetPage() {
             member={m}
             devices={overview.devices.filter((d) => d.family_member_id === m.id)}
             schedules={overview.schedules.filter((s) => s.family_member_id === m.id)}
+            approvedSites={overview.member_sites.filter((s) => s.family_member_id === m.id)}
             canManage={canManage}
             act={act}
           />
@@ -250,12 +267,14 @@ function PersonCard({
   member,
   devices,
   schedules,
+  approvedSites,
   canManage,
   act,
 }: {
   member: OverviewMember;
   devices: Device[];
   schedules: Schedule[];
+  approvedSites: MemberSite[];
   canManage: boolean;
   act: Act;
 }) {
@@ -303,15 +322,17 @@ function PersonCard({
         </div>
       )}
 
-      <label className="internet-person__toggle">
-        <input
-          type="checkbox"
-          checked={s.filtered}
-          disabled={!canManage}
-          onChange={(e) => act(() => api.patch(base, { filtered: e.target.checked }))}
-        />
-        Kid web filter
+      <label className="internet-person__mode">
+        <span>Web access</span>
+        <select value={s.mode} disabled={!canManage} onChange={(e) => act(() => api.patch(base, { mode: e.target.value }))}>
+          <option value="open">Open (ads blocked only)</option>
+          <option value="filtered">Kid web filter</option>
+          <option value="approved">Approved sites only</option>
+        </select>
       </label>
+      {s.mode === 'approved' && (
+        <ApprovedSites memberId={member.id} sites={approvedSites} canManage={canManage} act={act} />
+      )}
 
       <div className="internet-person__schedules">
         {schedules.map((sch) => (
@@ -354,6 +375,110 @@ function PersonCard({
         )}
       </div>
     </section>
+  );
+}
+
+/** A kid's own approved list, plus "what's being blocked?" to find the extra domains a site needs
+ *  (YouTube, for one, won't play without ytimg.com and googlevideo.com). */
+function ApprovedSites({
+  memberId,
+  sites,
+  canManage,
+  act,
+}: {
+  memberId: string;
+  sites: MemberSite[];
+  canManage: boolean;
+  act: Act;
+}) {
+  const [domain, setDomain] = useState('');
+  const [blocked, setBlocked] = useState<BlockedSite[] | null>(null);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
+  const [blockedError, setBlockedError] = useState<string | null>(null);
+  const base = `/internet/members/${memberId}/sites`;
+
+  const loadBlocked = async () => {
+    setLoadingBlocked(true);
+    setBlockedError(null);
+    try {
+      setBlocked(await api.get<BlockedSite[]>(`/internet/members/${memberId}/blocked`));
+    } catch (err) {
+      setBlockedError((err as Error).message);
+    } finally {
+      setLoadingBlocked(false);
+    }
+  };
+
+  const approve = async (site: string) => {
+    if (await act(() => api.post(base, { domain: site }))) {
+      setBlocked((cur) => cur?.map((b) => (b.site === site ? { ...b, approved: true } : b)) ?? null);
+    }
+  };
+
+  return (
+    <div className="internet-approved">
+      {sites.length === 0 ? (
+        <p className="hint">Nothing approved yet — everything's blocked except the household "Always allowed" list.</p>
+      ) : (
+        <div className="internet-approved__chips">
+          {sites.map((site) => (
+            <span key={site.id} className="internet-approved__chip">
+              {site.domain}
+              {canManage && (
+                <button type="button" aria-label={`Remove ${site.domain}`} onClick={() => act(() => api.delete(`${base}/${site.id}`))}>
+                  ✕
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      {canManage && (
+        <>
+          <form
+            className="internet-approved__add"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (await act(() => api.post(base, { domain }))) setDomain('');
+            }}
+          >
+            <input placeholder="Approve a site (e.g. pbskids.org)" value={domain} onChange={(e) => setDomain(e.target.value)} />
+            <button type="submit" disabled={!domain.trim()}>Approve</button>
+          </form>
+          <button type="button" className="link-button" onClick={loadBlocked} disabled={loadingBlocked}>
+            {loadingBlocked ? 'Checking…' : blocked ? '↻ Refresh what\'s being blocked' : "What's being blocked?"}
+          </button>
+          {blockedError && <p className="hint internet-page__bad">{blockedError}</p>}
+          {blocked && blocked.length === 0 && <p className="hint">Nothing blocked recently.</p>}
+          {blocked && blocked.length > 0 && (
+            <>
+              <p className="hint">
+                Recent lookups that were blocked. A site that only half-works usually needs one or
+                two of these too.
+              </p>
+              <ul className="internet-blocked-list">
+                {blocked.map((b) => (
+                  <li key={b.site}>
+                    <span>
+                      <strong>{b.site}</strong>{' '}
+                      <span className="hint">
+                        {b.count}× · {fmtUntil(b.last_seen)}
+                        {b.examples.some((x) => x !== b.site) ? ` · ${b.examples.filter((x) => x !== b.site).join(', ')}` : ''}
+                      </span>
+                    </span>
+                    {b.approved ? (
+                      <span className="hint">Approved ✓</span>
+                    ) : (
+                      <button type="button" className="secondary" onClick={() => approve(b.site)}>Approve</button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -552,7 +677,7 @@ function FilterSection({ overview, canManage, act }: { overview: Overview; canMa
   return (
     <section className="panel internet-section">
       <h2>Kid web filter</h2>
-      <p className="hint">Applies to everyone with "Kid web filter" ticked above. Ad and tracker blocking applies to every device either way.</p>
+      <p className="hint">Applies to kids set to "Kid web filter" above. Ad and tracker blocking applies to every device either way.</p>
       <div className="internet-filter-categories">
         {overview.filter_categories.map((c) => (
           <label key={c.key}>
@@ -565,7 +690,7 @@ function FilterSection({ overview, canManage, act }: { overview: Overview; canMa
       <div className="internet-sites">
         <SiteList
           title="Always allowed"
-          hint="Works for kids even when filtered, paused, or at bedtime — e.g. school sites."
+          hint="Works for every kid even when filtered, paused, at bedtime, or on approved-sites-only — e.g. school sites."
           kind="allow"
           sites={overview.sites.filter((s) => s.kind === 'allow')}
           canManage={canManage}

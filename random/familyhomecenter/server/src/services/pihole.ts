@@ -142,6 +142,10 @@ function domainPath(type: DomainType, kind: DomainKind, domain?: string): string
   return `/domains/${type}/${kind}${domain === undefined ? '' : `/${encodeURIComponent(domain)}`}`;
 }
 
+export async function listDomains(type: DomainType, kind: DomainKind): Promise<PiholeDomain[]> {
+  return (await request<{ domains: PiholeDomain[] }>('GET', domainPath(type, kind))).domains;
+}
+
 export async function getDomain(type: DomainType, kind: DomainKind, domain: string): Promise<PiholeDomain | null> {
   const found = await request<{ domains: PiholeDomain[] }>('GET', domainPath(type, kind, domain));
   return found.domains.find((d) => d.domain === domain) ?? null;
@@ -224,6 +228,19 @@ export interface PiholeSummary {
 
 export async function getSummary(): Promise<PiholeSummary> {
   return request<PiholeSummary>('GET', '/stats/summary');
+}
+
+export interface PiholeQuery {
+  time: number;
+  domain: string;
+  status: string | null;
+  client: { ip: string; name: string | null };
+}
+
+/** The most recent `length` lookups made by one device (by IP), newest first. */
+export async function getQueriesForClient(clientIp: string, length: number): Promise<PiholeQuery[]> {
+  const params = new URLSearchParams({ client_ip: clientIp, length: String(length) });
+  return (await request<{ queries: PiholeQuery[] }>('GET', `/queries?${params}`)).queries;
 }
 
 export async function getBlockingStatus(): Promise<string> {

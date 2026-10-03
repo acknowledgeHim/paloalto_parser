@@ -13,6 +13,9 @@ import {
   getMemberRow,
   saveMemberRow,
   memberState,
+  setMemberMode,
+  syncAllowEntries,
+  recentBlockedSites,
   pauseMember,
   resumeMember,
   normalizeClient,
@@ -26,6 +29,8 @@ import {
   type InternetDevice,
   type InternetSchedule,
   type InternetSite,
+  type InternetMode,
+  type MemberSite,
 } from '../services/internetControl.js';
 
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. Viewing
@@ -86,6 +91,7 @@ internetRouter.get(
       devices: db.prepare('SELECT id, client, name, family_member_id FROM internet_devices ORDER BY name').all(),
       schedules: db.prepare('SELECT * FROM internet_schedules ORDER BY start_time').all(),
       sites: db.prepare('SELECT id, domain, kind FROM internet_sites ORDER BY domain').all(),
+      member_sites: db.prepare('SELECT id, family_member_id, domain FROM internet_member_sites ORDER BY domain').all(),
       filter_categories: FILTER_CATEGORIES.map((c) => ({ key: c.key, label: c.label })),
       enabled_filter_categories: getEnabledFilterCategories(),
     });
@@ -209,17 +215,81 @@ internetRouter.post(
   })
 );
 
-/** PATCH /members/:memberId { filtered } */
+const MODES: InternetMode[] = ['open', 'filtered', 'approved'];
+
+/** PATCH /members/:memberId { mode: 'open' | 'filtered' | 'approved' } (or legacy { filtered }) */
 internetRouter.patch(
   '/members/:memberId',
   requireAdmin,
   asyncHandler(async (req, res) => {
     if (!memberExists(req.params.memberId)) return res.status(404).json({ error: 'not found' });
-    const { filtered } = req.body as { filtered?: boolean };
-    const row = getMemberRow(req.params.memberId);
-    if (typeof filtered === 'boolean') row.filtered = filtered ? 1 : 0;
-    saveMemberRow(row);
+    const { mode, filtered } = req.body as { mode?: string; filtered?: boolean };
+    if (mode !== undefined) {
+      if (!MODES.includes(mode as InternetMode)) return res.status(400).json({ error: 'Invalid mode' });
+      setMemberMode(req.params.memberId, mode as InternetMode);
+    } else if (typeof filtered === 'boolean') {
+      const row = getMemberRow(req.params.memberId);
+      row.filtered = filtered ? 1 : 0;
+      saveMemberRow(row);
+    }
     res.json({ state: memberState(req.params.memberId), warning: await syncAfterChange() });
+  })
+);
+
+// ---- A kid's own approved sites ("approved sites only" mode) ----
+
+internetRouter.post(
+  '/members/:memberId/sites',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const memberId = req.params.memberId;
+    if (!memberExists(memberId)) return res.status(404).json({ error: 'not found' });
+    const raw = (req.body as { domain?: string }).domain;
+    const normalized = raw ? normalizeDomain(raw) : null;
+    if (!normalized) return res.status(400).json({ error: 'Enter a website like example.com' });
+    if (db.prepare('SELECT 1 FROM internet_member_sites WHERE family_member_id = ? AND domain = ?').get(memberId, normalized)) {
+      return res.status(400).json({ error: 'Already approved' });
+    }
+    const site: MemberSite = { id: uuidv4(), family_member_id: memberId, domain: normalized };
+    db.prepare('INSERT INTO internet_member_sites (id, family_member_id, domain) VALUES (@id, @family_member_id, @domain)').run(site);
+    let warning: string | null = null;
+    try {
+      await syncAllowEntries();
+      await syncDevices(); // the kid's approved group may have only just been created
+    } catch (err) {
+      warning = (err as Error).message;
+    }
+    res.status(201).json({ site, warning });
+  })
+);
+
+internetRouter.delete(
+  '/members/:memberId/sites/:siteId',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    db.prepare('DELETE FROM internet_member_sites WHERE id = ? AND family_member_id = ?').run(req.params.siteId, req.params.memberId);
+    let warning: string | null = null;
+    try {
+      await syncAllowEntries();
+    } catch (err) {
+      warning = (err as Error).message;
+    }
+    res.json({ warning });
+  })
+);
+
+/** GET /members/:memberId/blocked — sites this kid's devices tried to reach and couldn't, lately.
+ *  Parent-only: it's a view of what a kid's been doing online. */
+internetRouter.get(
+  '/members/:memberId/blocked',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    if (!memberExists(req.params.memberId)) return res.status(404).json({ error: 'not found' });
+    try {
+      res.json(await recentBlockedSites(req.params.memberId));
+    } catch (err) {
+      res.status(502).json({ error: (err as Error).message });
+    }
   })
 );
 
@@ -315,6 +385,17 @@ internetRouter.delete(
   asyncHandler(async (req, res) => {
     const site = db.prepare('SELECT * FROM internet_sites WHERE id = ?').get(req.params.id) as InternetSite | undefined;
     if (!site) return res.status(404).json({ error: 'not found' });
+    if (site.kind === 'allow') {
+      // Allow-entries are rebuilt from the database as a whole (they can be shared with kids'
+      // approved sites), so the row goes first and the sync follows.
+      db.prepare('DELETE FROM internet_sites WHERE id = ?').run(site.id);
+      try {
+        await removeSite(site);
+      } catch (err) {
+        return res.json({ warning: (err as Error).message });
+      }
+      return res.json({ warning: null });
+    }
     try {
       await removeSite(site);
     } catch (err) {

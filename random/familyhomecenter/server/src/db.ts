@@ -608,6 +608,15 @@ db.exec(`
     enabled INTEGER NOT NULL DEFAULT 1
   );
 
+  -- A kid's own approved sites, for "approved sites only" mode.
+  CREATE TABLE IF NOT EXISTS internet_member_sites (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    domain TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (family_member_id, domain)
+  );
+
   -- Sites always allowed (even while paused/filtered) or always blocked for filtered members.
   CREATE TABLE IF NOT EXISTS internet_sites (
     id TEXT PRIMARY KEY,
@@ -617,6 +626,14 @@ db.exec(`
     UNIQUE (domain, kind)
   );
 `);
+
+// Internet "approved sites only" mode (services/internetControl.ts) — added after internet_members
+// shipped, hence a migration rather than part of its CREATE TABLE.
+try {
+  db.exec('ALTER TABLE internet_members ADD COLUMN approved_only INTEGER NOT NULL DEFAULT 0');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;

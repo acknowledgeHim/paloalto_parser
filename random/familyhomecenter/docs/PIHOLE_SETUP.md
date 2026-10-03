@@ -5,8 +5,12 @@ The **Internet** page lets a parent, from the dashboard:
 - **Pause** a kid's internet (30 min, 1 hr, 2 hr, or until resumed), or pause/resume all kids at once
 - Set **schedules** — e.g. "Bedtime, Sun–Thu, 9:00 PM–7:00 AM" — with **+30 min / +1 hr** bonus
   time or a one-tap **Resume** when you want to make an exception tonight
-- Turn on a **kid web filter** per person: adult content, gambling, ways around the filter (VPNs,
-  proxies, private DNS), and optionally social media
+- Choose each kid's **web access**:
+  - **Open** — ads and trackers blocked, nothing else
+  - **Kid web filter** — also blocks adult content, gambling, ways around the filter (VPNs,
+    proxies, private DNS), and optionally social media
+  - **Approved sites only** — everything is blocked except that kid's own approved list (good for
+    younger kids), with a **What's being blocked?** helper to approve what a site needs
 - Keep lists of **always allowed** sites (school sites keep working even at bedtime) and sites
   **blocked for kids**
 
@@ -18,7 +22,8 @@ parent can change anything — the same login as Settings, see [SETTINGS_LOGIN.m
 
 Pi-hole is the house's DNS server — the "phone book" every device asks to turn `youtube.com` into
 an address. This app puts each kid's devices into Pi-hole groups: a "paused" group whose devices
-get no answers at all, and a "kid filter" group with the family blocklists. It re-checks every
+get no answers at all, a "kid filter" group with the family blocklists, and for each
+approved-sites-only kid a group of their own whose approved sites are let through the block. It re-checks every
 minute, so schedules start and stop on time.
 
 Worth knowing up front:
@@ -133,8 +138,20 @@ Pi-hole every so often and slips out of its rules:
 - Android: Wi-Fi → your network → Privacy → **Use device MAC**
 - Windows: Wi-Fi → Random hardware addresses → **Off**
 
-Then on each kid's card: tick **Kid web filter**, and **+ Add a schedule** (Bedtime defaults to
+Then on each kid's card: pick their **Web access**, and **+ Add a schedule** (Bedtime defaults to
 Sun–Thu 9 PM–7 AM — days are the nights it *starts*).
+
+### Approved sites only
+
+Type a site (e.g. `pbskids.org`) and **Approve** — that covers the site and everything under it
+(`www.`, `m.`, …). Most sites also quietly load pieces from *other* domains (YouTube needs
+`ytimg.com` and `googlevideo.com`, for example), so the first visit to a new site often half-works.
+When that happens, have them try it, then tap **What's being blocked?** on their card: it lists
+what their devices tried to reach in the last little while, grouped by site, each with an
+**Approve** button. Approve the ones that belong to the site and leave the rest.
+
+Pausing and schedules still apply on top: a paused approved-only kid is fully offline, apart from
+the household **Always allowed** list (which works for every kid in every mode).
 
 ## Closing the gaps (optional)
 
