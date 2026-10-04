@@ -45,6 +45,25 @@ you'd need to cover the whole thing. Hit **Create movie** — it starts
 rendering in the background and shows up in the list right away as "Rendering…"; the page checks in
 every few seconds and the entry switches to a **▶ Watch** button once it's done.
 
+## Editing a movie
+
+Each movie remembers exactly which photos (in order) and songs it was made from, so **✎ Edit**
+reopens the movie maker pre-filled: the grid shows the movie's photos picked, in **Movie order**
+(the order they play), with any newly picked photos playing after them. Change the photos, songs,
+seconds per photo, or title, then:
+
+- **Update movie** re-renders it in place. The current version stays watchable until the new one
+  is done; if the re-render fails, the movie keeps the previous version and shows why.
+- **Save as new movie** leaves the original alone and makes a new one.
+
+Photos removed from the library since are left out (the editor says how many). Movies made before
+this feature can't be edited, only deleted.
+
+**Who can edit or delete:** whoever made the movie (whoever was picked in the profile switcher, or
+logged in) or a parent — the list shows "by <name>". Like profile edits, this is enforced once
+that person or a parent has a password set (see [SETTINGS_LOGIN.md](SETTINGS_LOGIN.md)); before
+then it's on the honor system, with the buttons only shown to the creator or a parent.
+
 ## What to expect
 
 - **It's not instant.** A Raspberry Pi encodes video in software (no shortcuts here — this app

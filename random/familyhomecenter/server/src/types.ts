@@ -260,6 +260,9 @@ export interface Movie {
   /** Every track played, in order (music_track is the first of these) — empty for a silent
    *  slideshow. Stored as a JSON array in the music_tracks column. */
   music_tracks: string[];
+  /** Whether the photos/songs it was made from are saved (movies made before that was tracked
+   *  can't be edited, only deleted). */
+  has_source: boolean;
   /** Live render progress (0-100), parsed from ffmpeg's own -progress output — only meaningful
    *  while status is 'rendering'; null before the first update or once no longer rendering. */
   progress_percent: number | null;

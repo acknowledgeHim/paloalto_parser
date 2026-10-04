@@ -3,6 +3,7 @@ import { api, type Movie, type Photo } from '../api/client.js';
 import { Slideshow } from '../components/Slideshow.js';
 import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
+import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
 function fmtMovieLength(m: Movie): string {
@@ -18,9 +19,23 @@ function movieDownloadName(m: Movie): string {
 }
 
 function MoviesSection() {
+  const { members, activeProfile } = useFamilyMembers();
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showMaker, setShowMaker] = useState(false);
+  const [editing, setEditing] = useState<Movie | null>(null);
   const [playing, setPlaying] = useState<Movie | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Whoever made a movie, or a parent, can edit/delete it — what's picked in the profile switcher
+  // decides which buttons show; the server enforces it for real once passwords are set up (see
+  // canManageMovie in server/src/routes/movies.ts).
+  const noParentYet = members.every((m) => m.is_parent !== 1);
+  const canManage = (m: Movie) => {
+    if (activeProfile?.is_parent === 1) return true;
+    if (m.created_by_id) return activeProfile?.id === m.created_by_id;
+    return noParentYet;
+  };
+  const creatorName = (m: Movie) => members.find((x) => x.id === m.created_by_id)?.name ?? null;
 
   const load = () => {
     api.get<Movie[]>('/movies').then(setMovies).catch(console.error);
@@ -36,7 +51,12 @@ function MoviesSection() {
   }, [movies]);
 
   const remove = async (id: string) => {
-    await api.delete(`/movies/${id}`);
+    setActionError(null);
+    try {
+      await api.delete(`/movies/${id}`);
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
     load();
   };
 
@@ -51,6 +71,7 @@ function MoviesSection() {
         the original photos or music files, just creates a new video saved on this server.
       </p>
 
+      {actionError && <div className="settings-login__error">{actionError}</div>}
       {movies.length === 0 && <div className="empty-state">No movies yet — make one above.</div>}
       {movies.length > 0 && (
         <ul className="movie-maker__movie-list">
@@ -65,6 +86,7 @@ function MoviesSection() {
                     {m.music_tracks.length > 0
                       ? ` · ${m.music_tracks.length} song${m.music_tracks.length === 1 ? '' : 's'}`
                       : ''}
+                    {creatorName(m) && ` · by ${creatorName(m)}`}
                     {m.status === 'failed' && ' · Failed'}
                   </span>
                 </div>
@@ -81,13 +103,18 @@ function MoviesSection() {
                       ⬇ Download
                     </a>
                   )}
-                  <ConfirmButton
-                    label="✕"
-                    ariaLabel={`Delete ${m.title}`}
-                    confirmLabel={`Delete "${m.title}"?`}
-                    onConfirm={() => remove(m.id)}
-                    className="task-card__edit"
-                  />
+                  {canManage(m) && m.has_source && m.status !== 'rendering' && (
+                    <button type="button" className="secondary" onClick={() => setEditing(m)}>✎ Edit</button>
+                  )}
+                  {canManage(m) && (
+                    <ConfirmButton
+                      label="✕"
+                      ariaLabel={`Delete ${m.title}`}
+                      confirmLabel={`Delete "${m.title}"?`}
+                      onConfirm={() => remove(m.id)}
+                      className="task-card__edit"
+                    />
+                  )}
                 </div>
               </div>
               {m.status === 'rendering' && (
@@ -98,17 +125,22 @@ function MoviesSection() {
                   <span className="hint">Rendering… {Math.round(m.progress_percent ?? 0)}%</span>
                 </div>
               )}
-              {m.status === 'failed' && m.error && <p className="hint">{m.error}</p>}
+              {m.error && (m.status === 'failed' || m.status === 'ready') && <p className="hint">{m.error}</p>}
             </li>
           ))}
         </ul>
       )}
 
-      {showMaker && (
+      {(showMaker || editing) && (
         <MovieMakerModal
-          onClose={() => setShowMaker(false)}
+          editing={editing ?? undefined}
+          onClose={() => {
+            setShowMaker(false);
+            setEditing(null);
+          }}
           onCreated={() => {
             setShowMaker(false);
+            setEditing(null);
             load();
           }}
         />

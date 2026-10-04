@@ -410,6 +410,8 @@ export interface Movie {
   music_track: string | null;
   /** Every track played, in order — empty for a silent slideshow. */
   music_tracks: string[];
+  /** Whether the photos/songs it was made from are saved, so it can be edited and re-rendered. */
+  has_source: boolean;
   /** Live render progress (0-100) — only meaningful while status is 'rendering'. */
   progress_percent: number | null;
   created_by_id: string | null;

@@ -572,6 +572,17 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// What a movie was made from, so it can be edited and re-rendered later: photo_paths is a JSON
+// array of photo paths relative to PHOTOS_DIR (in play order), music_track_details a JSON array of
+// the tracks' {file, title, artist, duration} as picked. NULL for movies made before this existed.
+for (const column of ['photo_paths TEXT', 'music_track_details TEXT']) {
+  try {
+    db.exec(`ALTER TABLE movies ADD COLUMN ${column}`);
+  } catch (err) {
+    if (!(err as Error).message.includes('duplicate column')) throw err;
+  }
+}
+
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
 // the result (which of this app's groups each device should be in) every minute.

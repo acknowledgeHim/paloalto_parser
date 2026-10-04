@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { api, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
+import { api, type Movie, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { LibraryBrowser } from './LibraryBrowser.js';
 
 type SelectionMode = 'date-range' | 'name' | 'random' | 'manual';
-type GridSort = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+type GridSort = 'movie' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 type Selection =
   | { mode: 'manual'; photoIds: string[] }
   | { mode: 'random'; count: number }
@@ -39,7 +39,18 @@ function fmtTakenDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** GET /movies/:id/source — what an existing movie was made from. */
+interface MovieSource {
+  title: string;
+  seconds_per_photo: number;
+  photo_ids: string[];
+  missing_photos: number;
+  tracks: Array<{ file: string; title: string; artist: string | null; duration: number | null }>;
+}
+
 interface Props {
+  /** Set to edit an existing movie (pre-filled from what it was made from) instead of making a new one. */
+  editing?: Movie;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -50,7 +61,7 @@ interface Props {
  * brand new file (server/src/services/movieRender.ts), nothing about the source photos/music is
  * ever deleted or modified to make one.
  */
-export function MovieMakerModal({ onClose, onCreated }: Props) {
+export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
   const { activeProfile } = useFamilyMembers();
   const [title, setTitle] = useState('');
   // Defaults to a filter, not the grid — with a large library (especially over a slower SMB
@@ -85,6 +96,29 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Editing: the movie's own photo order, which the grid's "Movie order" sort follows (so an
+  // unchanged movie re-renders in the same order), and how many of its photos are gone now.
+  const [movieOrder, setMovieOrder] = useState<string[]>([]);
+  const [missingPhotos, setMissingPhotos] = useState(0);
+  const [sourceLoading, setSourceLoading] = useState(Boolean(editing));
+
+  useEffect(() => {
+    if (!editing) return;
+    api
+      .get<MovieSource>(`/movies/${editing.id}/source`)
+      .then((src) => {
+        setTitle(src.title);
+        setSecondsPerPhoto(src.seconds_per_photo);
+        setMusicTracks(src.tracks.map((t) => ({ ...t, album: null })));
+        setMode('manual');
+        setSelectedIds(new Set(src.photo_ids));
+        setMovieOrder(src.photo_ids);
+        setMissingPhotos(src.missing_photos);
+        setGridSort('movie');
+      })
+      .catch((err) => setError(`Couldn't load this movie's photos and songs: ${(err as Error).message}`))
+      .finally(() => setSourceLoading(false));
+  }, [editing]);
 
   useEffect(() => {
     if (mode !== 'manual' || gridPhotos) return;
@@ -95,14 +129,26 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
   const sortedGridPhotos = useMemo(() => {
     if (!gridPhotos) return [];
     const sorted = [...gridPhotos];
-    if (gridSort === 'date-desc') sorted.sort((a, b) => b.taken_at.localeCompare(a.taken_at));
+    if (gridSort === 'movie') {
+      // The movie's photos first, in the order they play; everything else after, newest first —
+      // so anything newly picked plays after the original photos.
+      const position = new Map(movieOrder.map((id, i) => [id, i]));
+      sorted.sort((a, b) => {
+        const pa = position.get(a.id);
+        const pb = position.get(b.id);
+        if (pa !== undefined && pb !== undefined) return pa - pb;
+        if (pa !== undefined) return -1;
+        if (pb !== undefined) return 1;
+        return b.taken_at.localeCompare(a.taken_at);
+      });
+    } else if (gridSort === 'date-desc') sorted.sort((a, b) => b.taken_at.localeCompare(a.taken_at));
     else if (gridSort === 'date-asc') sorted.sort((a, b) => a.taken_at.localeCompare(b.taken_at));
     else {
       sorted.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
       if (gridSort === 'name-desc') sorted.reverse();
     }
     return sorted;
-  }, [gridPhotos, gridSort]);
+  }, [gridPhotos, gridSort, movieOrder]);
 
   // Folder and filename are matched separately — a camera's numbered filenames (IMG_20261234…)
   // would otherwise turn a folder search like "2026" into a pile of unrelated photos.
@@ -240,19 +286,22 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
     });
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  /** Creates a new movie, or — editing, unless `asNew` — re-renders the existing one in place. */
+  const save = async (asNew: boolean) => {
     if (!title.trim() || !selectionValid) return;
     setError(null);
     setCreating(true);
+    const payload = {
+      title: title.trim(),
+      selection: buildSelection(),
+      seconds_per_photo: secondsPerPhoto,
+      music_tracks: musicTracks.map((t) => t.file),
+      music_track_details: musicTracks.map((t) => ({ file: t.file, title: t.title, artist: t.artist, duration: t.duration })),
+      created_by_id: activeProfile?.id ?? null,
+    };
     try {
-      await api.post('/movies', {
-        title: title.trim(),
-        selection: buildSelection(),
-        seconds_per_photo: secondsPerPhoto,
-        music_tracks: musicTracks.map((t) => t.file),
-        created_by_id: activeProfile?.id ?? null,
-      });
+      if (editing && !asNew) await api.put(`/movies/${editing.id}`, payload);
+      else await api.post('/movies', payload);
       onCreated();
     } catch (err) {
       setError((err as Error).message || 'Could not start that movie');
@@ -261,13 +310,25 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
     }
   };
 
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    save(false);
+  };
+
   return (
     // No close-on-backdrop-click here (unlike most modals in this app) — this form takes real
     // effort to fill in (picking a mode, dates, searching/browsing for music), so an accidental
     // outside click shouldn't be able to discard all of that. Cancel below is the only way out.
     <div className="modal-overlay">
       <form className="modal-panel task-form movie-maker" onSubmit={submit}>
-        <h2>Make a movie</h2>
+        <h2>{editing ? 'Edit movie' : 'Make a movie'}</h2>
+        {sourceLoading && <p className="hint">Loading this movie's photos and songs…</p>}
+        {editing && missingPhotos > 0 && (
+          <p className="hint">
+            {missingPhotos} of this movie's photo{missingPhotos === 1 ? ' is' : 's are'} no longer in the
+            photo library, so {missingPhotos === 1 ? "it's" : "they're"} left out.
+          </p>
+        )}
         <input autoFocus placeholder="Title (e.g. Summer 2024)" value={title} onChange={(e) => setTitle(e.target.value)} />
 
         <div>
@@ -318,6 +379,7 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
                 <>
                   <div className="task-form__row">
                     <select value={gridSort} onChange={(e) => setGridSort(e.target.value as GridSort)} aria-label="Sort photos">
+                      {editing && <option value="movie">Movie order</option>}
                       <option value="date-desc">Date taken (newest first)</option>
                       <option value="date-asc">Date taken (oldest first)</option>
                       <option value="name-asc">Folder / filename (A–Z)</option>
@@ -484,14 +546,25 @@ export function MovieMakerModal({ onClose, onCreated }: Props) {
 
         {error && <div className="settings-login__error">{error}</div>}
         <div className="task-form__row">
-          <button type="submit" disabled={creating || !title.trim() || !selectionValid}>
-            {creating ? 'Starting…' : 'Create movie'}
+          <button type="submit" disabled={creating || sourceLoading || !title.trim() || !selectionValid}>
+            {creating ? 'Starting…' : editing ? 'Update movie' : 'Create movie'}
           </button>
+          {editing && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={creating || sourceLoading || !title.trim() || !selectionValid}
+              onClick={() => save(true)}
+            >
+              Save as new movie
+            </button>
+          )}
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
         </div>
         <p className="hint">
           Rendering happens in the background and can take a few minutes on a Pi — it'll show up
           below, and switch to "Watch" once it's ready.
+          {editing && ' Updating keeps the current version watchable until the new one is done.'}
         </p>
       </form>
     </div>
