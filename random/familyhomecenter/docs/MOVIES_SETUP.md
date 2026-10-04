@@ -45,6 +45,14 @@ you'd need to cover the whole thing. Hit **Create movie** — it starts
 rendering in the background and shows up in the list right away as "Rendering…"; the page checks in
 every few seconds and the entry switches to a **▶ Watch** button once it's done.
 
+## Drafts (auto-save)
+
+The movie maker auto-saves what you've picked — title, photos, songs, timing — every 30 seconds,
+and again the moment you close it or the screen goes idle (the screensaver would otherwise throw
+the form away). Unfinished movies show at the top of the Movies list with **Continue** and **✕**;
+a draft is cleared once its movie is created or updated, and drafts untouched for 30 days are
+cleaned up. Drafts live on the server, so you can start on the kiosk and finish on a phone.
+
 ## Editing a movie
 
 Each movie remembers exactly which photos (in order) and songs it was made from, so **✎ Edit**

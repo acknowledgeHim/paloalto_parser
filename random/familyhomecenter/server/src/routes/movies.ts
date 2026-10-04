@@ -219,6 +219,113 @@ moviesRouter.post(
   })
 );
 
+// ---- Drafts (auto-saved movie maker forms) ----
+
+interface DraftRow {
+  id: string;
+  movie_id: string | null;
+  created_by_id: string | null;
+  title: string;
+  state: string;
+  updated_at: string;
+}
+
+const MAX_DRAFT_STATE_BYTES = 2_000_000;
+const DRAFT_MAX_AGE_DAYS = 30;
+
+function draftSummary(row: DraftRow) {
+  let photoCount = 0;
+  let trackCount = 0;
+  try {
+    const state = JSON.parse(row.state) as { selectedIds?: unknown[]; musicTracks?: unknown[] };
+    photoCount = Array.isArray(state.selectedIds) ? state.selectedIds.length : 0;
+    trackCount = Array.isArray(state.musicTracks) ? state.musicTracks.length : 0;
+  } catch {
+    // unreadable state — still listed so it can be deleted
+  }
+  return {
+    id: row.id,
+    movie_id: row.movie_id,
+    created_by_id: row.created_by_id,
+    title: row.title,
+    updated_at: row.updated_at,
+    photo_count: photoCount,
+    track_count: trackCount,
+  };
+}
+
+/** Same self-or-parent rule as the movies themselves, for deleting someone's draft. */
+function canManageDraft(token: string | undefined, draft: DraftRow): boolean {
+  if (draft.created_by_id) return canManageMember(token, draft.created_by_id);
+  return true; // nobody's — household trust
+}
+
+function validDraftBody(body: Record<string, unknown>): { title: string; state: string } | string {
+  if (body.state === undefined || body.state === null || typeof body.state !== 'object') return 'state is required';
+  const state = JSON.stringify(body.state);
+  if (state.length > MAX_DRAFT_STATE_BYTES) return 'Draft is too large';
+  return { title: typeof body.title === 'string' ? body.title.trim().slice(0, 200) : '', state };
+}
+
+/** GET /drafts — every draft (summaries; GET /drafts/:id for the full form). Drafts untouched for
+ *  DRAFT_MAX_AGE_DAYS are cleared out here rather than on a schedule. */
+moviesRouter.get('/drafts', (_req, res) => {
+  db.prepare(`DELETE FROM movie_drafts WHERE updated_at < ?`).run(new Date(Date.now() - DRAFT_MAX_AGE_DAYS * 86_400_000).toISOString());
+  const rows = db.prepare('SELECT * FROM movie_drafts ORDER BY updated_at DESC').all() as DraftRow[];
+  res.json(rows.map(draftSummary));
+});
+
+moviesRouter.get('/drafts/:draftId', (req, res) => {
+  const row = db.prepare('SELECT * FROM movie_drafts WHERE id = ?').get(req.params.draftId) as DraftRow | undefined;
+  if (!row) return res.status(404).json({ error: 'not found' });
+  res.json({ ...draftSummary(row), state: JSON.parse(row.state) });
+});
+
+/** POST /drafts — first save of a form. Edits to an existing movie reuse that movie's draft if it
+ *  already has one (one set of unsaved changes per movie). */
+moviesRouter.post('/drafts', (req, res) => {
+  const parsed = validDraftBody(req.body);
+  if (typeof parsed === 'string') return res.status(400).json({ error: parsed });
+  const { movie_id, created_by_id } = req.body as { movie_id?: string | null; created_by_id?: string | null };
+  if (movie_id && !getMovieRow(movie_id)) return res.status(400).json({ error: 'Unknown movie' });
+  const createdBy = sessionMemberId(req.cookies?.[SESSION_COOKIE_NAME]) ?? created_by_id ?? null;
+  const memberOk = createdBy ? Boolean(db.prepare('SELECT 1 FROM family_members WHERE id = ?').get(createdBy)) : true;
+  const updatedAt = new Date().toISOString();
+  const existing = movie_id
+    ? (db.prepare('SELECT id FROM movie_drafts WHERE movie_id = ?').get(movie_id) as { id: string } | undefined)
+    : undefined;
+  const id = existing?.id ?? uuidv4();
+  db.prepare(
+    `INSERT INTO movie_drafts (id, movie_id, created_by_id, title, state, updated_at)
+     VALUES (@id, @movie_id, @created_by_id, @title, @state, @updated_at)
+     ON CONFLICT(id) DO UPDATE SET title = excluded.title, state = excluded.state, updated_at = excluded.updated_at`
+  ).run({ id, movie_id: movie_id ?? null, created_by_id: memberOk ? createdBy : null, ...parsed, updated_at: updatedAt });
+  res.status(201).json({ id, updated_at: updatedAt });
+});
+
+/** PUT /drafts/:draftId — later saves. 404 if it's gone (e.g. finished elsewhere) so the client
+ *  can start a fresh one. */
+moviesRouter.put('/drafts/:draftId', (req, res) => {
+  const parsed = validDraftBody(req.body);
+  if (typeof parsed === 'string') return res.status(400).json({ error: parsed });
+  const updatedAt = new Date().toISOString();
+  const result = db
+    .prepare('UPDATE movie_drafts SET title = @title, state = @state, updated_at = @updated_at WHERE id = @id')
+    .run({ id: req.params.draftId, ...parsed, updated_at: updatedAt });
+  if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+  res.json({ id: req.params.draftId, updated_at: updatedAt });
+});
+
+moviesRouter.delete('/drafts/:draftId', (req, res) => {
+  const row = db.prepare('SELECT * FROM movie_drafts WHERE id = ?').get(req.params.draftId) as DraftRow | undefined;
+  if (!row) return res.status(204).end();
+  if (!canManageDraft(req.cookies?.[SESSION_COOKIE_NAME], row)) {
+    return res.status(401).json({ error: 'Only whoever started this draft, or a parent, can delete it' });
+  }
+  db.prepare('DELETE FROM movie_drafts WHERE id = ?').run(row.id);
+  res.status(204).end();
+});
+
 /** GET /:id/source — what a movie was made from, to pre-fill the editor: its photos (as photo ids,
  *  in play order; any since removed from PHOTOS_DIR are counted in missing_photos) and songs. */
 moviesRouter.get(

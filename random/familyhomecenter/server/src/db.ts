@@ -583,6 +583,21 @@ for (const column of ['photo_paths TEXT', 'music_track_details TEXT']) {
   }
 }
 
+// Auto-saved, not-yet-rendered movie maker forms (routes/movies.ts's /drafts), so a half-built movie
+// survives the screensaver, a closed browser, or switching screens. movie_id set = unsaved edits to
+// that existing movie (at most one per movie); NULL = a new movie in progress. state is the form,
+// as JSON, exactly as the client saved it.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS movie_drafts (
+    id TEXT PRIMARY KEY,
+    movie_id TEXT REFERENCES movies(id) ON DELETE CASCADE,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    title TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`);
+
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
 // the result (which of this app's groups each device should be in) every minute.

@@ -18,11 +18,30 @@ function movieDownloadName(m: Movie): string {
   return `${safe || 'movie'}.mp4`;
 }
 
+/** GET /movies/drafts — an auto-saved, unfinished movie maker form. */
+interface MovieDraft {
+  id: string;
+  movie_id: string | null;
+  created_by_id: string | null;
+  title: string;
+  updated_at: string;
+  photo_count: number;
+  track_count: number;
+}
+
+function fmtSavedAt(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+}
+
 function MoviesSection() {
   const { members, activeProfile } = useFamilyMembers();
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showMaker, setShowMaker] = useState(false);
   const [editing, setEditing] = useState<Movie | null>(null);
+  const [drafts, setDrafts] = useState<MovieDraft[]>([]);
+  const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<Movie | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -35,10 +54,39 @@ function MoviesSection() {
     if (m.created_by_id) return activeProfile?.id === m.created_by_id;
     return noParentYet;
   };
-  const creatorName = (m: Movie) => members.find((x) => x.id === m.created_by_id)?.name ?? null;
+  const creatorName = (m: Pick<Movie, 'created_by_id'>) => members.find((x) => x.id === m.created_by_id)?.name ?? null;
+  // Your own drafts (or nobody's); a parent sees everyone's.
+  const visibleDrafts = drafts.filter(
+    (d) => activeProfile?.is_parent === 1 || !d.created_by_id || d.created_by_id === activeProfile?.id
+  );
+  const draftForMovie = (movieId: string) => drafts.find((d) => d.movie_id === movieId);
+
+  const openDraft = (d: MovieDraft) => {
+    const movie = d.movie_id ? movies.find((m) => m.id === d.movie_id) : undefined;
+    setResumeDraftId(d.id);
+    setEditing(movie ?? null);
+    if (!movie) setShowMaker(true);
+  };
+  const removeDraft = async (id: string) => {
+    setActionError(null);
+    try {
+      await api.delete(`/movies/drafts/${id}`);
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+    load();
+  };
+  const closeMaker = () => {
+    setShowMaker(false);
+    setEditing(null);
+    setResumeDraftId(null);
+    // The closing form's last auto-save is sent on its way out — give it a moment to land.
+    setTimeout(load, 500);
+  };
 
   const load = () => {
     api.get<Movie[]>('/movies').then(setMovies).catch(console.error);
+    api.get<MovieDraft[]>('/movies/drafts').then(setDrafts).catch(console.error);
   };
   useEffect(load, []);
 
@@ -63,7 +111,17 @@ function MoviesSection() {
   return (
     <section className="panel movie-maker__section">
       <div className="tasks-page__header">
-        <button type="button" className="icon-button" aria-label="Make a movie" onClick={() => setShowMaker(true)}>+</button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Make a movie"
+          onClick={() => {
+            setResumeDraftId(null);
+            setShowMaker(true);
+          }}
+        >
+          +
+        </button>
         <h2>Movies</h2>
       </div>
       <p className="hint">
@@ -72,6 +130,37 @@ function MoviesSection() {
       </p>
 
       {actionError && <div className="settings-login__error">{actionError}</div>}
+      {visibleDrafts.length > 0 && (
+        <ul className="movie-maker__draft-list">
+          {visibleDrafts.map((d) => {
+            const movie = d.movie_id ? movies.find((m) => m.id === d.movie_id) : undefined;
+            return (
+              <li key={d.id}>
+                <div className="movie-maker__movie-info">
+                  <span className="movie-maker__movie-title">
+                    📝 {movie ? `Unsaved changes to "${movie.title}"` : d.title || 'Untitled movie'}
+                  </span>
+                  <span className="hint">
+                    Unfinished · {d.photo_count} photo{d.photo_count === 1 ? '' : 's'} picked · {d.track_count} song
+                    {d.track_count === 1 ? '' : 's'} · saved {fmtSavedAt(d.updated_at)}
+                    {creatorName(d) && ` · ${creatorName(d)}`}
+                  </span>
+                </div>
+                <div className="task-form__row">
+                  <button type="button" onClick={() => openDraft(d)} disabled={movie?.status === 'rendering'}>Continue</button>
+                  <ConfirmButton
+                    label="✕"
+                    ariaLabel={`Discard draft ${d.title}`}
+                    confirmLabel="Discard this draft?"
+                    onConfirm={() => removeDraft(d.id)}
+                    className="task-card__edit"
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {movies.length === 0 && <div className="empty-state">No movies yet — make one above.</div>}
       {movies.length > 0 && (
         <ul className="movie-maker__movie-list">
@@ -104,7 +193,17 @@ function MoviesSection() {
                     </a>
                   )}
                   {canManage(m) && m.has_source && m.status !== 'rendering' && (
-                    <button type="button" className="secondary" onClick={() => setEditing(m)}>✎ Edit</button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        // Pick up any unsaved changes to this movie rather than starting a second set.
+                        setResumeDraftId(draftForMovie(m.id)?.id ?? null);
+                        setEditing(m);
+                      }}
+                    >
+                      ✎ Edit
+                    </button>
                   )}
                   {canManage(m) && (
                     <ConfirmButton
@@ -134,13 +233,12 @@ function MoviesSection() {
       {(showMaker || editing) && (
         <MovieMakerModal
           editing={editing ?? undefined}
-          onClose={() => {
-            setShowMaker(false);
-            setEditing(null);
-          }}
+          draftId={resumeDraftId ?? undefined}
+          onClose={closeMaker}
           onCreated={() => {
             setShowMaker(false);
             setEditing(null);
+            setResumeDraftId(null);
             load();
           }}
         />

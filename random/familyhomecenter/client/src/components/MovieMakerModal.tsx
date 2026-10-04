@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, type Movie, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { LibraryBrowser } from './LibraryBrowser.js';
@@ -48,9 +48,29 @@ interface MovieSource {
   tracks: Array<{ file: string; title: string; artist: string | null; duration: number | null }>;
 }
 
+/** The whole form, as auto-saved to a draft (server/src/routes/movies.ts's /drafts). */
+interface DraftState {
+  title: string;
+  mode: SelectionMode;
+  selectedIds: string[];
+  randomCount: number;
+  startDate: string;
+  endDate: string;
+  nameQuery: string;
+  secondsPerPhoto: number;
+  musicTracks: Track[];
+  movieOrder: string[];
+  missingPhotos: number;
+  gridSort: GridSort;
+}
+
+const AUTOSAVE_MS = 30_000;
+
 interface Props {
   /** Set to edit an existing movie (pre-filled from what it was made from) instead of making a new one. */
   editing?: Movie;
+  /** Resume this auto-saved draft instead of starting fresh / from the movie's saved source. */
+  draftId?: string;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -61,7 +81,7 @@ interface Props {
  * brand new file (server/src/services/movieRender.ts), nothing about the source photos/music is
  * ever deleted or modified to make one.
  */
-export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
+export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onCreated }: Props) {
   const { activeProfile } = useFamilyMembers();
   const [title, setTitle] = useState('');
   // Defaults to a filter, not the grid — with a large library (especially over a slower SMB
@@ -100,12 +120,34 @@ export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
   // unchanged movie re-renders in the same order), and how many of its photos are gone now.
   const [movieOrder, setMovieOrder] = useState<string[]>([]);
   const [missingPhotos, setMissingPhotos] = useState(0);
-  const [sourceLoading, setSourceLoading] = useState(Boolean(editing));
+  const [sourceLoading, setSourceLoading] = useState(Boolean(editing || initialDraftId));
 
-  useEffect(() => {
-    if (!editing) return;
+  // ---- Auto-save ----
+  // Every AUTOSAVE_MS (if anything changed), and once more on the way out — Cancel, or the whole
+  // app unmounting when the screensaver kicks in — so a half-built movie is never lost. The draft
+  // is deleted once the movie is actually created/updated.
+  const [draftId, setDraftId] = useState<string | null>(initialDraftId ?? null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+
+  const applyState = (st: DraftState) => {
+    setTitle(st.title);
+    setMode(st.mode);
+    setSelectedIds(new Set(st.selectedIds));
+    setRandomCount(st.randomCount);
+    setStartDate(st.startDate);
+    setEndDate(st.endDate);
+    setNameQuery(st.nameQuery);
+    setSecondsPerPhoto(st.secondsPerPhoto);
+    setMusicTracks(st.musicTracks);
+    setMovieOrder(st.movieOrder);
+    setMissingPhotos(st.missingPhotos);
+    setGridSort(st.gridSort);
+  };
+
+  const loadSource = (movie: Movie) => {
+    setSourceLoading(true);
     api
-      .get<MovieSource>(`/movies/${editing.id}/source`)
+      .get<MovieSource>(`/movies/${movie.id}/source`)
       .then((src) => {
         setTitle(src.title);
         setSecondsPerPhoto(src.seconds_per_photo);
@@ -118,7 +160,27 @@ export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
       })
       .catch((err) => setError(`Couldn't load this movie's photos and songs: ${(err as Error).message}`))
       .finally(() => setSourceLoading(false));
-  }, [editing]);
+  };
+
+  useEffect(() => {
+    if (initialDraftId) {
+      api
+        .get<{ state: DraftState; updated_at: string }>(`/movies/drafts/${initialDraftId}`)
+        .then((d) => {
+          applyState(d.state);
+          setDraftSavedAt(d.updated_at);
+        })
+        .catch(() => {
+          // Draft vanished (finished on another screen?) — fall back to a normal start.
+          setDraftId(null);
+          if (editing) return loadSource(editing);
+        })
+        .finally(() => setSourceLoading(false));
+    } else if (editing) {
+      loadSource(editing);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (mode !== 'manual' || gridPhotos) return;
@@ -183,6 +245,107 @@ export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
       shownGridPhotos.forEach((p) => next.add(p.id));
       return next;
     });
+
+  const draftState: DraftState = {
+    title,
+    mode,
+    selectedIds: [...selectedIds],
+    randomCount,
+    startDate,
+    endDate,
+    nameQuery,
+    secondsPerPhoto,
+    musicTracks,
+    movieOrder,
+    missingPhotos,
+    gridSort,
+  };
+  const draftJson = JSON.stringify(draftState);
+  // A brand new movie isn't worth a draft until something's actually been entered.
+  const worthSaving = Boolean(
+    editing || title.trim() || selectedIds.size || musicTracks.length || startDate || endDate || nameQuery.trim()
+  );
+
+  // The interval/unmount handlers below outlive any one render, so they read the latest form
+  // through refs. lastSavedJson starts as whatever the form first loaded as, so just opening (or
+  // opening to edit, unchanged) never creates a draft.
+  const latest = useRef({ draftJson, draftState, worthSaving, title, draftId });
+  latest.current = { draftJson, draftState, worthSaving, title, draftId };
+  const lastSavedJson = useRef<string | null>(null);
+  const finished = useRef(false);
+
+  useEffect(() => {
+    if (!sourceLoading && lastSavedJson.current === null) lastSavedJson.current = draftJson;
+  }, [sourceLoading, draftJson]);
+
+  const saveDraft = async (onTheWayOut = false) => {
+    const cur = latest.current;
+    if (lastSavedJson.current === null || cur.draftJson === lastSavedJson.current || !cur.worthSaving) return;
+    const body = {
+      movie_id: editing?.id ?? null,
+      created_by_id: activeProfile?.id ?? null,
+      title: cur.title,
+      state: cur.draftState,
+    };
+    lastSavedJson.current = cur.draftJson;
+    if (onTheWayOut) {
+      // keepalive lets the request finish even though this component (or the page) is going away.
+      fetch(cur.draftId ? `/api/movies/drafts/${cur.draftId}` : '/api/movies/drafts', {
+        method: cur.draftId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        keepalive: true,
+      }).catch(() => {});
+      return;
+    }
+    try {
+      let saved: { id: string; updated_at: string };
+      try {
+        saved = cur.draftId
+          ? await api.put<{ id: string; updated_at: string }>(`/movies/drafts/${cur.draftId}`, body)
+          : await api.post<{ id: string; updated_at: string }>('/movies/drafts', body);
+      } catch (err) {
+        if (!cur.draftId) throw err;
+        // Draft was removed elsewhere — start a new one.
+        saved = await api.post<{ id: string; updated_at: string }>('/movies/drafts', body);
+      }
+      setDraftId(saved.id);
+      latest.current.draftId = saved.id;
+      setDraftSavedAt(saved.updated_at);
+    } catch {
+      lastSavedJson.current = null; // try again next tick
+    }
+  };
+
+  useEffect(() => {
+    const t = setInterval(() => saveDraft(), AUTOSAVE_MS);
+    const flush = () => {
+      if (!finished.current) saveDraft(true);
+    };
+    window.addEventListener('pagehide', flush);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const discardDraft = async () => {
+    const id = latest.current.draftId;
+    if (id) await api.delete(`/movies/drafts/${id}`).catch(() => {});
+    setDraftId(null);
+    latest.current.draftId = null;
+    setDraftSavedAt(null);
+  };
+
+  /** Editing with a draft open: throw the unsaved changes away and reload the saved movie. */
+  const startOver = async () => {
+    if (!editing) return;
+    await discardDraft();
+    lastSavedJson.current = null;
+    loadSource(editing);
+  };
 
   const buildSelection = (): Selection => {
     // Picked photos play in the grid's current sort order (not the order they were tapped), so
@@ -302,6 +465,8 @@ export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
     try {
       if (editing && !asNew) await api.put(`/movies/${editing.id}`, payload);
       else await api.post('/movies', payload);
+      finished.current = true;
+      await discardDraft();
       onCreated();
     } catch (err) {
       setError((err as Error).message || 'Could not start that movie');
@@ -322,7 +487,18 @@ export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
     <div className="modal-overlay">
       <form className="modal-panel task-form movie-maker" onSubmit={submit}>
         <h2>{editing ? 'Edit movie' : 'Make a movie'}</h2>
-        {sourceLoading && <p className="hint">Loading this movie's photos and songs…</p>}
+        {sourceLoading && <p className="hint">Loading…</p>}
+        {initialDraftId && !sourceLoading && draftId && (
+          <p className="hint movie-maker__draft-note">
+            Picked up where you left off{draftSavedAt ? ` (saved ${new Date(draftSavedAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })})` : ''}.
+            {editing && (
+              <>
+                {' '}
+                <button type="button" className="link-button" onClick={startOver}>Start over from the saved movie</button>
+              </>
+            )}
+          </p>
+        )}
         {editing && missingPhotos > 0 && (
           <p className="hint">
             {missingPhotos} of this movie's photo{missingPhotos === 1 ? ' is' : 's are'} no longer in the
@@ -559,8 +735,26 @@ export function MovieMakerModal({ editing, onClose, onCreated }: Props) {
               Save as new movie
             </button>
           )}
-          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="secondary" onClick={onClose}>{draftId || worthSaving ? 'Close' : 'Cancel'}</button>
+          {draftId && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={async () => {
+                finished.current = true;
+                await discardDraft();
+                onClose();
+              }}
+            >
+              Discard draft
+            </button>
+          )}
         </div>
+        <p className="hint">
+          {draftSavedAt
+            ? `Draft auto-saved ${new Date(draftSavedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} — Close keeps it; continue it any time from the Movies list.`
+            : 'Your work auto-saves as a draft every 30 seconds.'}
+        </p>
         <p className="hint">
           Rendering happens in the background and can take a few minutes on a Pi — it'll show up
           below, and switch to "Watch" once it's ready.
