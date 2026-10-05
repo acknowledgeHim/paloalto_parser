@@ -42,5 +42,8 @@
     "@types/ws": "^8.18.1",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
+  },
+  "overrides": {
+    "nanoid": "^5.1.16"
   }
 }
