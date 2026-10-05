@@ -20,6 +20,7 @@ import { InternetPage } from './pages/InternetPage.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
+import { SectionGate } from './state/SectionAccess.js';
 
 export function App() {
   const { activeProfile, setActiveProfile } = useFamilyMembers();
@@ -63,19 +64,20 @@ export function App() {
       <main className="page-container">
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/meals" element={<MealsPage />} />
-          <Route path="/contacts" element={<ContactsPage />} />
-          <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
-          <Route path="/prizes" element={<PrizeBankPage />} />
-          <Route path="/board" element={<FamilyBoardPage />} />
-          <Route path="/person/:id" element={<PersonPage />} />
-          <Route path="/person/:id/bank" element={<BankPage />} />
-          <Route path="/music" element={<MusicPage />} />
-          <Route path="/photos" element={<PhotosPage />} />
-          <Route path="/intercom" element={<IntercomPage />} />
-          <Route path="/internet" element={<InternetPage />} />
+          <Route path="/calendar" element={<SectionGate section="calendar"><CalendarPage /></SectionGate>} />
+          <Route path="/tasks" element={<SectionGate section="tasks"><TasksPage /></SectionGate>} />
+          <Route path="/meals" element={<SectionGate section="meals"><MealsPage /></SectionGate>} />
+          <Route path="/contacts" element={<SectionGate section="contacts"><ContactsPage /></SectionGate>} />
+          <Route path="/knowledge-base" element={<SectionGate section="knowledge-base"><KnowledgeBasePage /></SectionGate>} />
+          <Route path="/prizes" element={<SectionGate section="prizes"><PrizeBankPage /></SectionGate>} />
+          <Route path="/board" element={<SectionGate section="board"><FamilyBoardPage /></SectionGate>} />
+          {/* A person's page is reached from the Family Board; their bank from the Prize Bank. */}
+          <Route path="/person/:id" element={<SectionGate section="board"><PersonPage /></SectionGate>} />
+          <Route path="/person/:id/bank" element={<SectionGate section="prizes"><BankPage /></SectionGate>} />
+          <Route path="/music" element={<SectionGate section="music"><MusicPage /></SectionGate>} />
+          <Route path="/photos" element={<SectionGate section="photos"><PhotosPage /></SectionGate>} />
+          <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />
+          <Route path="/internet" element={<SectionGate section="internet"><InternetPage /></SectionGate>} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

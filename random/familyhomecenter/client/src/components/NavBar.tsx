@@ -3,6 +3,8 @@ import { NavLink } from 'react-router-dom';
 import { ProfileSwitcher } from './ProfileSwitcher.js';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { useSectionAccess } from '../state/SectionAccess.js';
+import { SECTIONS } from '../utils/sections.js';
 
 /** Kids' pending requests for more time / a website, shown on the Internet tab for parents (or for
  *  everyone, before any parent is set up). Checked once a minute. */
@@ -30,23 +32,18 @@ function usePendingInternetRequests(): number {
 
 export function NavBar() {
   const pendingRequests = usePendingInternetRequests();
+  // Tabs a parent has turned off for whoever's picked are hidden (Settings → Kids' access).
+  const { canSee } = useSectionAccess();
   return (
     <nav className="navbar">
       <div className="navbar__links">
         <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>Home</NavLink>
-        <NavLink to="/calendar" className={({ isActive }) => (isActive ? 'active' : '')}>Calendar</NavLink>
-        <NavLink to="/tasks" className={({ isActive }) => (isActive ? 'active' : '')}>Chores &amp; Tasks</NavLink>
-        <NavLink to="/meals" className={({ isActive }) => (isActive ? 'active' : '')}>Meals</NavLink>
-        <NavLink to="/contacts" className={({ isActive }) => (isActive ? 'active' : '')}>Contacts</NavLink>
-        <NavLink to="/knowledge-base" className={({ isActive }) => (isActive ? 'active' : '')}>Knowledge Base</NavLink>
-        <NavLink to="/prizes" className={({ isActive }) => (isActive ? 'active' : '')}>Prize Bank</NavLink>
-        <NavLink to="/board" className={({ isActive }) => (isActive ? 'active' : '')}>Family Board</NavLink>
-        <NavLink to="/music" className={({ isActive }) => (isActive ? 'active' : '')}>Music</NavLink>
-        <NavLink to="/photos" className={({ isActive }) => (isActive ? 'active' : '')}>Photos</NavLink>
-        <NavLink to="/intercom" className={({ isActive }) => (isActive ? 'active' : '')}>Intercom</NavLink>
-        <NavLink to="/internet" className={({ isActive }) => (isActive ? 'active' : '')}>
-          Internet{pendingRequests > 0 && <span className="navbar__badge">{pendingRequests}</span>}
-        </NavLink>
+        {SECTIONS.filter((sec) => sec.path && canSee(sec.key)).map((sec) => (
+          <NavLink key={sec.key} to={sec.path!} className={({ isActive }) => (isActive ? 'active' : '')}>
+            {sec.label}
+            {sec.key === 'internet' && pendingRequests > 0 && <span className="navbar__badge">{pendingRequests}</span>}
+          </NavLink>
+        ))}
         <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
       </div>
       <ProfileSwitcher />

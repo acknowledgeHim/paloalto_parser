@@ -122,3 +122,25 @@ the household, same open default as everything else, even after a parent sets up
 password elsewhere. Adding or removing a manual transaction by hand is always parent-only,
 regardless of whether any password exists — kids can still track savings goals and transfer their
 own earned Prize Bank money themselves.
+
+## Kids' access (turning sections off)
+
+**Settings → Kids' access** lets a parent choose, per kid, which parts of the app they can use
+right now — e.g. only Calendar, Chores & Tasks, and Family Board until homework's done. Each kid has
+a checkbox per section (plus **All on** / **All off**); **Movies** and **Documents** have their own
+switches separate from **Photos**, so a kid can still browse photos without making movies. It
+stays that way until a parent changes it.
+
+What a limited kid sees: turned-off tabs disappear from their menu, opening one anyway shows "🔒 This
+part is turned off for you right now — ask a parent", and the Home dashboard hides those panels
+(Home itself always stays). Parents — and anyone logged in as a parent — always see everything.
+
+**Making it stick:** limits follow whoever's picked in the profile switcher. So:
+
+- Set the **Nobody picked** row too — it applies when no one's chosen, so un-picking yourself
+  doesn't get around it.
+- Give each limited kid a password (🔑 next to their name) so they can't switch to a sibling's
+  less-limited profile; with a parent password set, only a parent can change Kids' access.
+
+It's a screen-level control for the family dashboard, not a lock on the server's data — pair it
+with the Internet page's time limits for anything that really needs enforcing.

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { KidsAccessSettings } from '../components/KidsAccessSettings.js';
 import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
@@ -237,6 +238,8 @@ export function SettingsPage() {
       )}
 
       <PrizeBankSettings />
+
+      <KidsAccessSettings />
 
       <section className="panel">
         <h2>Calendar sources</h2>

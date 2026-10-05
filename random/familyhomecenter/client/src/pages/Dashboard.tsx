@@ -7,10 +7,13 @@ import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { OnThisDay } from '../components/OnThisDay.js';
+import { useSectionAccess } from '../state/SectionAccess.js';
 import { canEditTask } from '../utils/tasks.js';
 
 export function Dashboard() {
   const { members, activeProfile } = useFamilyMembers();
+  // Panels from sections a parent has turned off for whoever's picked stay hidden here too.
+  const { canSee } = useSectionAccess();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [modalTask, setModalTask] = useState<Task | null>(null);
@@ -44,7 +47,7 @@ export function Dashboard() {
         <WeatherWidget />
       </header>
 
-      {rewardTasks.length > 0 && (
+      {canSee('prizes') && rewardTasks.length > 0 && (
         <section className="panel">
           <h2>Prize Bank progress today</h2>
           {members.map((m) => {
@@ -67,15 +70,17 @@ export function Dashboard() {
         </section>
       )}
 
-      <OnThisDay />
+      {canSee('photos') && <OnThisDay />}
 
       <div className="dashboard__columns">
-        <section className="panel">
-          <h2>Coming up</h2>
-          <CalendarAgenda events={events} />
-        </section>
+        {canSee('calendar') && (
+          <section className="panel">
+            <h2>Coming up</h2>
+            <CalendarAgenda events={events} />
+          </section>
+        )}
 
-        <section className="panel">
+        {canSee('tasks') && <section className="panel">
           <h2>Today's chores &amp; tasks ({openTasks.length} open)</h2>
           {tasks.length === 0 && <div className="empty-state">Nothing on the list — add a chore or to-do!</div>}
           {tasks.map((t) => (
@@ -86,7 +91,7 @@ export function Dashboard() {
               onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
             />
           ))}
-        </section>
+        </section>}
       </div>
 
       {modalTask && (

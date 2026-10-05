@@ -5,6 +5,7 @@ import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { DocumentEditorModal } from '../components/DocumentEditorModal.js';
 import { AlbumChecklist, FAVORITES_ID, useAlbums } from '../components/PhotoAlbums.js';
+import { useSectionAccess } from '../state/SectionAccess.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
@@ -500,6 +501,7 @@ const PAGE_SIZE = 120;
 
 export function PhotosPage() {
   const { members } = useFamilyMembers();
+  const { canSee } = useSectionAccess();
   const canManage = useCanManageOwned();
   const albumsApi = useAlbums();
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -585,8 +587,9 @@ export function PhotosPage() {
         </div>
       </div>
 
-      <MoviesSection />
-      <DocumentsSection />
+      {/* Movies and Documents each have their own switch in Settings → Kids' access. */}
+      {canSee('movies') && <MoviesSection />}
+      {canSee('documents') && <DocumentsSection />}
 
       {/* Albums — kept only in the app's database; the photos themselves never move. */}
       <div className="photo-albums-bar">
