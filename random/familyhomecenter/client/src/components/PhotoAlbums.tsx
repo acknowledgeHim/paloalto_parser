@@ -88,18 +88,26 @@ export function AlbumChecklist({ albumsApi, photoIds, onDone }: { albumsApi: Alb
 
   return (
     <div className="album-checklist" onClick={(e) => e.stopPropagation()}>
-      {albumsApi.albums.map((a) => (
-        <label key={a.id}>
-          <input type="checkbox" checked={allIn(a.id)} onChange={() => toggle(a.id)} />
-          {a.is_favorites ? '⭐ ' : ''}
-          {a.name}
-        </label>
-      ))}
+      {/* Done sits in the header so it's always on screen; only the album list scrolls. */}
+      <div className="album-checklist__head">
+        <strong>Albums</strong>
+        {onDone && (
+          <button type="button" onClick={onDone}>Done</button>
+        )}
+      </div>
+      <div className="album-checklist__list">
+        {albumsApi.albums.map((a) => (
+          <label key={a.id} title={a.name}>
+            <input type="checkbox" checked={allIn(a.id)} onChange={() => toggle(a.id)} />
+            <span>
+              {a.is_favorites ? '⭐ ' : ''}
+              {a.name}
+            </span>
+          </label>
+        ))}
+      </div>
       {error && <div className="settings-login__error">{error}</div>}
-      {onDone && (
-        <button type="button" className="secondary" onClick={onDone}>Done</button>
-      )}
-      {/* Below Done on purpose: picking existing albums is the common case; making one is rarer. */}
+      {/* At the bottom: picking existing albums is the common case; making one is rarer. */}
       <form
         className="album-checklist__new"
         onSubmit={(e) => {
