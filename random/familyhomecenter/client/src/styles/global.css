@@ -1471,3 +1471,5 @@ textarea {
 .internet-report__days { display: flex; flex-wrap: wrap; gap: 14px; margin: 6px 0; }
 .internet-report__days > span { display: flex; flex-direction: column; align-items: center; font-size: 0.9em; }
 .navbar__badge { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: 999px; background: #d64545; color: #fff; font-size: 0.75em; line-height: 20px; text-align: center; vertical-align: middle; }
+.movie-maker__missing-confirm { padding: 12px; border-radius: 10px; background: #fef3c7; color: #5c3d06; }
+.movie-maker__missing-confirm p { margin: 0 0 8px; }

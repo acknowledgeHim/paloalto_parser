@@ -89,7 +89,11 @@ seconds per photo, or title, then:
   is done; if the re-render fails, the movie keeps the previous version and shows why.
 - **Save as new movie** leaves the original alone and makes a new one.
 
-Photos removed from the library since are left out (the editor says how many). Movies made before
+If some of a movie's photos can't be found right now — the photo share is offline, or a folder
+was moved or renamed — the editor warns you, and **Update movie** asks before going ahead. Going
+ahead makes the video from the photos it can see, but the missing ones **stay saved with the movie**
+(in their places, with their captions): once they're findable again, Edit shows them picked and
+Update puts them back in. If the share's just down, it's usually best to wait. Movies made before
 this feature can't be edited, only deleted.
 
 **Who can edit or delete:** whoever made the movie (whoever was picked in the profile switcher, or

@@ -532,8 +532,18 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     }
   };
 
+  // Updating while some of the movie's photos can't be found (photo share offline, folder moved)
+  // asks first: the new video will be made without them. The server keeps them in the movie's saved
+  // list either way, so they come back on a later Update once they're findable again.
+  const [confirmingMissing, setConfirmingMissing] = useState(false);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (editing && missingPhotos > 0 && !confirmingMissing) {
+      setConfirmingMissing(true);
+      return;
+    }
+    setConfirmingMissing(false);
     save(false);
   };
 
@@ -557,10 +567,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
           </p>
         )}
         {editing && missingPhotos > 0 && (
-          <p className="hint">
-            {missingPhotos} of this movie's photo{missingPhotos === 1 ? ' is' : 's are'} no longer in the
-            photo library, so {missingPhotos === 1 ? "it's" : "they're"} left out.
-          </p>
+          <div className="internet-page__notice">
+            ⚠️ {missingPhotos} of this movie's photo{missingPhotos === 1 ? " can't" : "s can't"} be found right now —
+            is the photo share offline, or was a folder moved? {missingPhotos === 1 ? "It's" : "They're"} still
+            saved with the movie, just not shown here.
+          </div>
         )}
         <input autoFocus placeholder="Title (e.g. Summer 2024)" value={title} onChange={(e) => setTitle(e.target.value)} />
 
@@ -847,6 +858,23 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
         </div>
 
         {error && <div className="settings-login__error">{error}</div>}
+        {confirmingMissing && (
+          <div className="movie-maker__missing-confirm">
+            <p>
+              <strong>
+                {missingPhotos} photo{missingPhotos === 1 ? ' is' : 's are'} missing right now, so the updated video
+                will be made without {missingPhotos === 1 ? 'it' : 'them'}.
+              </strong>{' '}
+              {missingPhotos === 1 ? 'It stays' : 'They stay'} saved with the movie — once the photos are back,
+              Edit → Update again puts {missingPhotos === 1 ? 'it' : 'them'} back in. If the share is just down,
+              it's usually better to wait.
+            </p>
+            <div className="task-form__row">
+              <button type="submit" className="secondary">Update anyway</button>
+              <button type="button" onClick={() => setConfirmingMissing(false)}>Wait — don't update</button>
+            </div>
+          </div>
+        )}
         <div className="task-form__row">
           <button type="submit" disabled={creating || sourceLoading || !title.trim() || !selectionValid}>
             {creating ? 'Starting…' : editing ? 'Update movie' : 'Create movie'}

@@ -246,6 +246,25 @@ function relativePhotoPaths(absolutePaths: string[]): string {
 }
 
 /** Captions as stored: { relative photo path: caption } for the photos that have one. */
+/**
+ * The photo list to save on an edit: the photos just picked, plus any of the movie's earlier photos
+ * that are only missing because they can't be found right now (the photo share is offline, or a
+ * folder was moved) — the editor can't show those, so it could never have meant to remove them.
+ * Each one goes back where it was in the old order; the video is rendered without them, and the
+ * next edit once they're back puts them in again.
+ */
+function mergeKeepingMissing(oldPaths: string[], newPaths: string[], missing: Set<string>): string[] {
+  const oldIndex = new Map(oldPaths.map((p, i) => [p, i]));
+  const pendingMissing = oldPaths.filter((p) => missing.has(p) && !newPaths.includes(p));
+  const out: string[] = [];
+  for (const p of newPaths) {
+    const at = oldIndex.get(p) ?? Infinity; // newly picked photos come after all the old ones
+    while (pendingMissing.length && oldIndex.get(pendingMissing[0])! < at) out.push(pendingMissing.shift()!);
+    out.push(p);
+  }
+  return [...out, ...pendingMissing];
+}
+
 function captionsJson(input: MovieInput): string {
   const out: Record<string, string> = {};
   input.photoPaths.forEach((abs, i) => {
@@ -532,6 +551,17 @@ moviesRouter.put(
     const input = await parseMovieInput(req.body);
     if (typeof input === 'string') return res.status(400).json({ error: input });
 
+    // Keep any of the movie's photos that are missing right now (see mergeKeepingMissing), with
+    // their captions.
+    const oldPaths = parseJsonArray<string>(row.photo_paths) ?? [];
+    const present = new Set((await listPhotos()).map((abs) => path.relative(config.photosDir, abs)));
+    const missing = new Set(oldPaths.filter((p) => !present.has(p)));
+    const newPaths = input.photoPaths.map((abs) => path.relative(config.photosDir, abs));
+    const savedPaths = mergeKeepingMissing(oldPaths, newPaths, missing);
+    const oldCaptions = parseCaptions(row.photo_captions);
+    const savedCaptions: Record<string, string> = JSON.parse(captionsJson(input));
+    for (const p of missing) if (oldCaptions[p] && savedPaths.includes(p)) savedCaptions[p] = oldCaptions[p];
+
     db.prepare(
       `UPDATE movies SET title = @title, status = 'rendering', error = NULL, progress_percent = 0,
          photo_count = @photo_count, seconds_per_photo = @seconds_per_photo, music_track = @music_track,
@@ -541,13 +571,13 @@ moviesRouter.put(
     ).run({
       id: row.id,
       options: JSON.stringify(input.options),
-      photo_captions: captionsJson(input),
+      photo_captions: JSON.stringify(savedCaptions),
       title: input.title,
       photo_count: input.photoPaths.length,
       seconds_per_photo: input.secondsPerPhoto,
       music_track: input.tracks[0] ?? null,
       music_tracks: JSON.stringify(input.tracks),
-      photo_paths: relativePhotoPaths(input.photoPaths),
+      photo_paths: JSON.stringify(savedPaths),
       music_track_details: JSON.stringify(input.trackDetails),
     });
     res.json(rowToMovie(getMovieRow(row.id)!));
