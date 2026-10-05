@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { listPhotos, findPhotoById } from './photos.js';
+import { listPhotos, listVisiblePhotos, findPhotoById } from './photos.js';
 import { getPhotoDate } from './photoDates.js';
 import { config } from '../config.js';
 import { albumPhotoPaths } from './albums.js';
@@ -72,8 +72,9 @@ async function resolveUnfiltered(selection: MovieSelection): Promise<string[]> {
   const allPhotos = await listPhotos();
 
   if (selection.mode === 'random') {
-    // Sample from what's left after the quality filter, so "10 random" still means 10.
-    const pool = filterByQuality(allPhotos, selection);
+    // Sample from what's left after hidden photos and the quality filter, so "10 random" still
+    // means 10.
+    const pool = filterByQuality(await listVisiblePhotos(), selection);
     const count = Math.max(1, Math.min(selection.count, pool.length));
     return sampleRandom(pool, count);
   }

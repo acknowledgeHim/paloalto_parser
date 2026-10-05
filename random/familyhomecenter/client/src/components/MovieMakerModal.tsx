@@ -298,6 +298,8 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
         (!folderQ || folder.toLowerCase().includes(folderQ)) &&
         (!fileQ || file.toLowerCase().includes(fileQ)) &&
         (!showSelectedOnly || selectedIds.has(p.id)) &&
+        // Hidden photos stay out of the picker — unless already in the movie being edited.
+        (!p.hidden || selectedIds.has(p.id)) &&
         passesQualityFilter(p, quality)
       );
     });

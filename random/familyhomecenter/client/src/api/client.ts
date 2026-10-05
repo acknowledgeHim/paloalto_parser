@@ -386,6 +386,8 @@ export interface Photo {
   id: string;
   /** From the background duplicate/blur analysis — null until it's run on this photo. */
   blurry: boolean | null;
+  /** Marked hidden — out of sight unless "Show hidden photos" is on. */
+  hidden: boolean;
 }
 
 /** A photo album (GET /albums) — kept only in the app's database; photos are never moved. */
@@ -411,6 +413,8 @@ export interface PhotoDetail {
   dup_group: string | null;
   /** The one of its duplicate group to keep (highest resolution of the sharpest). */
   dup_best: boolean;
+  /** Marked hidden on the Photos page — left out of pickers. */
+  hidden: boolean;
 }
 
 /** A rendered photo-slideshow-with-music video. Read-only against the source photos/music that

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { api, type Movie, type Photo, type ScreensaverMovie } from '../api/client.js';
+import { useEffect, useRef, useState } from 'react';
+import { api, type Movie, type Photo, type PhotoDetail, type ScreensaverMovie } from '../api/client.js';
 import { Slideshow } from '../components/Slideshow.js';
 import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
@@ -506,8 +506,17 @@ export function PhotosPage() {
   const albumsApi = useAlbums();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  // The photo open in the viewer, by id (not position): filing it into an album or hiding it can
+  // take it out of the filtered list, and it should stay put until you move on. viewPos remembers
+  // where it was, so › goes to whatever slid into its place.
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const viewPos = useRef(0);
   const [slideshowOn, setSlideshowOn] = useState(false);
+  // Dates/paths for sorting — loaded after the (quicker) plain photo list.
+  const [details, setDetails] = useState<Map<string, PhotoDetail> | null>(null);
+  const [sortBy, setSortBy] = useState<'library' | 'date-desc' | 'date-asc' | 'name'>('library');
+  const [albumStatus, setAlbumStatus] = useState<'all' | 'none' | 'some'>('all');
+  const [showHidden, setShowHidden] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   // '' = all photos; otherwise an album id.
   const [albumFilter, setAlbumFilter] = useState('');
@@ -523,6 +532,10 @@ export function PhotosPage() {
   const load = () => {
     setLoading(true);
     api.get<Photo[]>('/photos').then(setPhotos).catch(console.error).finally(() => setLoading(false));
+    api
+      .get<PhotoDetail[]>('/photos/details')
+      .then((d) => setDetails(new Map(d.map((p) => [p.id, p]))))
+      .catch(() => setDetails(null));
     albumsApi.reload();
   };
 
@@ -534,21 +547,54 @@ export function PhotosPage() {
     // Album contents change as photos are added/removed — memberships is the signal.
   }, [albumFilter, albumsApi.memberships]);
 
+  const inAnyAlbum = (id: string) => (albumsApi.memberships[id] ?? []).length > 0;
   const visible = (() => {
     let list = photos;
     if (albumFilter) {
       const byId = new Map(photos.map((p) => [p.id, p]));
       list = albumPhotoIds.map((id) => byId.get(id)).filter((p): p is Photo => Boolean(p));
     }
-    return excludeBlurry ? list.filter((p) => !p.blurry) : list;
+    if (!showHidden) list = list.filter((p) => !p.hidden);
+    if (excludeBlurry) list = list.filter((p) => !p.blurry);
+    if (albumStatus === 'none') list = list.filter((p) => !inAnyAlbum(p.id));
+    if (albumStatus === 'some') list = list.filter((p) => inAnyAlbum(p.id));
+    if (sortBy !== 'library' && details) {
+      const d = (p: Photo) => details.get(p.id);
+      list = [...list].sort((a, b) => {
+        if (sortBy === 'name') return (d(a)?.path ?? '').localeCompare(d(b)?.path ?? '', undefined, { numeric: true, sensitivity: 'base' });
+        const cmp = (d(a)?.taken_at ?? '').localeCompare(d(b)?.taken_at ?? '');
+        return sortBy === 'date-asc' ? cmp : -cmp;
+      });
+    }
+    return list;
   })();
+
+  const hide = async (ids: string[], hidden: boolean) => {
+    setPhotos((cur) => cur.map((p) => (ids.includes(p.id) ? { ...p, hidden } : p)));
+    await api.post('/photos/hidden', hidden ? { add: ids } : { remove: ids });
+  };
 
   // Reset paging whenever what's shown changes size (refresh, new photos, another album) so stale
   // indexes don't leave the grid showing fewer than PAGE_SIZE.
-  useEffect(() => setVisibleCount(PAGE_SIZE), [visible.length, albumFilter]);
+  useEffect(() => setVisibleCount(PAGE_SIZE), [albumFilter, albumStatus, sortBy, showHidden, excludeBlurry]);
 
   const activeAlbum = albumsApi.albums.find((a) => a.id === albumFilter);
-  const viewing = viewingIndex !== null ? visible[viewingIndex] : undefined;
+  const viewing = viewingId ? photos.find((p) => p.id === viewingId) : undefined;
+  const viewingIndexNow = viewing ? visible.findIndex((p) => p.id === viewing.id) : -1;
+  if (viewingIndexNow >= 0) viewPos.current = viewingIndexNow;
+  /** ‹ / ›: from the photo's spot in the list — or, if it just left the list (filed or hidden),
+   *  from where it was, so › lands on the photo that took its place. */
+  const step = (delta: number) => {
+    if (visible.length === 0) return setViewingId(null);
+    const from = viewingIndexNow >= 0 ? viewingIndexNow : viewPos.current - (delta > 0 ? 1 : 0);
+    const next = (((from + delta) % visible.length) + visible.length) % visible.length;
+    viewPos.current = next;
+    setViewingId(visible[next].id);
+  };
+  const closeViewer = () => {
+    setViewingId(null);
+    setAlbumPanel(null);
+  };
 
   const toggleSelected = (id: string) =>
     setSelected((cur) => {
@@ -664,6 +710,27 @@ export function PhotosPage() {
 
       <div className="photos-page__grid-tools">
         <label className="member-form__label member-form__label--inline">
+          Sort
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}>
+            <option value="library">Library order</option>
+            <option value="date-desc" disabled={!details}>Date taken (newest first)</option>
+            <option value="date-asc" disabled={!details}>Date taken (oldest first)</option>
+            <option value="name" disabled={!details}>Folder / filename</option>
+          </select>
+        </label>
+        <label className="member-form__label member-form__label--inline">
+          Albums
+          <select value={albumStatus} onChange={(e) => setAlbumStatus(e.target.value as typeof albumStatus)}>
+            <option value="all">All photos</option>
+            <option value="none">Not in any album</option>
+            <option value="some">In an album</option>
+          </select>
+        </label>
+        <label className="member-form__label member-form__label--inline photos-page__check">
+          <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
+          Show hidden photos ({photos.filter((p) => p.hidden).length})
+        </label>
+        <label className="member-form__label member-form__label--inline">
           Blurry photos
           <select value={excludeBlurry ? 'exclude' : 'include'} onChange={(e) => setExcludeBlurry(e.target.value === 'exclude')}>
             <option value="include">Include</option>
@@ -688,6 +755,30 @@ export function PhotosPage() {
             <button type="button" className="secondary" disabled={selected.size === 0} onClick={() => setAlbumPanel(albumPanel === 'selection' ? null : 'selection')}>
               📁 Albums…
             </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={selected.size === 0}
+              onClick={() => albumAction(async () => {
+                await hide([...selected], true);
+                setSelected(new Set());
+              })}
+            >
+              🙈 Hide
+            </button>
+            {showHidden && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={selected.size === 0}
+                onClick={() => albumAction(async () => {
+                  await hide([...selected], false);
+                  setSelected(new Set());
+                })}
+              >
+                👁 Unhide
+              </button>
+            )}
             {activeAlbum && (
               <button
                 type="button"
@@ -724,12 +815,17 @@ export function PhotosPage() {
         {visible.slice(0, visibleCount).map((p, i) => (
           <button
             key={p.id}
-            className={`photos-page__thumb ${selecting && selected.has(p.id) ? 'photos-page__thumb--selected' : ''}`}
-            onClick={() => (selecting ? toggleSelected(p.id) : setViewingIndex(i))}
+            className={`photos-page__thumb ${selecting && selected.has(p.id) ? 'photos-page__thumb--selected' : ''} ${p.hidden ? 'photos-page__thumb--hidden' : ''}`}
+            onClick={() => {
+              if (selecting) return toggleSelected(p.id);
+              viewPos.current = i;
+              setViewingId(p.id);
+            }}
           >
             <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
             {albumsApi.isIn(p.id, FAVORITES_ID) && <span className="photos-page__star">⭐</span>}
             {p.blurry && <span className="photos-page__blurry">Possibly blurry</span>}
+            {p.hidden && <span className="photos-page__hidden-tag">🙈 Hidden</span>}
           </button>
         ))}
       </div>
@@ -740,8 +836,8 @@ export function PhotosPage() {
         </button>
       )}
 
-      {viewing && viewingIndex !== null && (
-        <div className="photo-lightbox" onClick={() => { setViewingIndex(null); setAlbumPanel(null); }}>
+      {viewing && (
+        <div className="photo-lightbox" onClick={closeViewer}>
           <img src={`/api/photos/${viewing.id}/image`} alt="" />
           <div className="photo-lightbox__actions" onClick={(e) => e.stopPropagation()}>
             <button
@@ -759,24 +855,32 @@ export function PhotosPage() {
             <button type="button" className="photo-lightbox__action" aria-label="Albums" onClick={() => setAlbumPanel(albumPanel === 'viewer' ? null : 'viewer')}>
               📁
             </button>
+            <button
+              type="button"
+              className="photo-lightbox__action"
+              aria-label={viewing.hidden ? 'Unhide' : 'Hide'}
+              title={viewing.hidden ? 'Unhide' : 'Hide this photo'}
+              onClick={() =>
+                albumAction(async () => {
+                  const nowHidden = !viewing.hidden;
+                  await hide([viewing.id], nowHidden);
+                  // Hiding means you're done with it — move on (unless hidden ones are showing).
+                  if (nowHidden && !showHidden) step(1);
+                })
+              }
+            >
+              {viewing.hidden ? '👁' : '🙈'}
+            </button>
             {albumPanel === 'viewer' && <AlbumChecklist albumsApi={albumsApi} photoIds={[viewing.id]} onDone={() => setAlbumPanel(null)} />}
           </div>
-          <button
-            className="photo-lightbox__close"
-            onClick={(e) => { e.stopPropagation(); setViewingIndex(null); setAlbumPanel(null); }}
-          >
+          {viewing.hidden && <div className="photo-lightbox__badge">🙈 Hidden</div>}
+          <button className="photo-lightbox__close" onClick={(e) => { e.stopPropagation(); closeViewer(); }}>
             ✕
           </button>
-          <button
-            className="photo-lightbox__nav photo-lightbox__nav--prev"
-            onClick={(e) => { e.stopPropagation(); setViewingIndex((viewingIndex - 1 + visible.length) % visible.length); }}
-          >
+          <button className="photo-lightbox__nav photo-lightbox__nav--prev" onClick={(e) => { e.stopPropagation(); step(-1); }}>
             ‹
           </button>
-          <button
-            className="photo-lightbox__nav photo-lightbox__nav--next"
-            onClick={(e) => { e.stopPropagation(); setViewingIndex((viewingIndex + 1) % visible.length); }}
-          >
+          <button className="photo-lightbox__nav photo-lightbox__nav--next" onClick={(e) => { e.stopPropagation(); step(1); }}>
             ›
           </button>
         </div>

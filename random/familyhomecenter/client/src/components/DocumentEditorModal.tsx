@@ -163,7 +163,8 @@ export function DocumentEditorModal({ documentId, onClose, onSaved }: Props) {
 
   /** Every photo's date/path/quality — fetched once, only when a template or "by day" needs it. */
   const loadDetails = async (): Promise<PhotoDetail[]> => {
-    if (!details.current) details.current = await api.get<PhotoDetail[]>('/photos/details');
+    // Hidden photos (Photos page → Hide) are never pulled into templates.
+    if (!details.current) details.current = (await api.get<PhotoDetail[]>('/photos/details')).filter((p) => !p.hidden);
     return details.current;
   };
 

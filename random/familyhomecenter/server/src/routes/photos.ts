@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import path from 'node:path';
-import { listPhotos, getOrCreateThumbnail, photoIdFor, findPhotoById } from '../services/photos.js';
+import { listPhotos, listVisiblePhotos, hiddenPhotoPaths, getOrCreateThumbnail, photoIdFor, findPhotoById } from '../services/photos.js';
+import { db } from '../db.js';
 import { getPhotoDate } from '../services/photoDates.js';
 import { mapWithConcurrency } from '../services/movieSelection.js';
 import { config } from '../config.js';
@@ -14,7 +15,13 @@ photosRouter.get(
   asyncHandler(async (_req, res) => {
     const files = await listPhotos();
     const quality = getPhotoQuality();
-    res.json(files.map((f) => ({ id: photoIdFor(f), blurry: quality.get(path.relative(config.photosDir, f))?.blurry ?? null })));
+    const hidden = hiddenPhotoPaths();
+    res.json(
+      files.map((f) => {
+        const rel = path.relative(config.photosDir, f);
+        return { id: photoIdFor(f), blurry: quality.get(rel)?.blurry ?? null, hidden: hidden.has(rel) };
+      })
+    );
   })
 );
 
@@ -27,6 +34,7 @@ photosRouter.get(
   asyncHandler(async (_req, res) => {
     const files = await listPhotos();
     const quality = getPhotoQuality();
+    const hidden = hiddenPhotoPaths();
     const details = await mapWithConcurrency(files, 8, async (f) => {
       const rel = path.relative(config.photosDir, f);
       const q = quality.get(rel);
@@ -38,6 +46,7 @@ photosRouter.get(
         blurry: q?.blurry ?? null,
         dup_group: q?.dup_group ?? null,
         dup_best: q?.dup_best ?? false,
+        hidden: hidden.has(rel),
       };
     });
     res.json(details);
@@ -48,7 +57,7 @@ photosRouter.get(
 photosRouter.get(
   '/on-this-day',
   asyncHandler(async (_req, res) => {
-    const files = await listPhotos();
+    const files = await listVisiblePhotos();
     const now = new Date();
     const dated = await mapWithConcurrency(files, 8, async (f) => ({ f, date: await getPhotoDate(f) }));
     const matches = dated
@@ -60,10 +69,31 @@ photosRouter.get(
   })
 );
 
+/** POST /hidden { add?: ids, remove?: ids } — hide or unhide photos. Only a note in the database;
+ *  the files aren't touched. Open to everyone, like adding to an album. */
+photosRouter.post(
+  '/hidden',
+  asyncHandler(async (req, res) => {
+    const { add, remove } = req.body as { add?: unknown; remove?: unknown };
+    const idToPath = new Map((await listPhotos()).map((abs) => [photoIdFor(abs), path.relative(config.photosDir, abs)]));
+    const paths = (ids: unknown) =>
+      (Array.isArray(ids) ? ids : []).map((id) => (typeof id === 'string' ? idToPath.get(id) : undefined)).filter((p): p is string => Boolean(p));
+    const now = new Date().toISOString();
+    const insert = db.prepare('INSERT OR IGNORE INTO hidden_photos (path, hidden_at) VALUES (?, ?)');
+    const del = db.prepare('DELETE FROM hidden_photos WHERE path = ?');
+    db.transaction(() => {
+      for (const p of paths(add)) insert.run(p, now);
+      for (const p of paths(remove)) del.run(p);
+    })();
+    res.json({ ok: true });
+  })
+);
+
 photosRouter.get(
   '/random',
   asyncHandler(async (_req, res) => {
-    const files = await listPhotos();
+    // The slideshow/screensaver — hidden photos never come up.
+    const files = await listVisiblePhotos();
     if (files.length === 0) return res.status(404).json({ error: 'no photos found' });
     const pick = files[Math.floor(Math.random() * files.length)];
     res.json({ id: photoIdFor(pick) });

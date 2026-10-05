@@ -96,8 +96,9 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // The blurry/duplicate options apply to every way of picking.
-  const usable = useMemo(() => (photos ?? []).filter((p) => passesQualityFilter(p, quality)), [photos, quality]);
+  // Hidden photos (Photos page → Hide) never show here; the blurry/duplicate options apply to every
+  // way of picking.
+  const usable = useMemo(() => (photos ?? []).filter((p) => !p.hidden && passesQualityFilter(p, quality)), [photos, quality]);
 
   /** What the current mode narrows the library down to (before the grid's own filters). */
   const narrowed = useMemo(() => {

@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import sharp from 'sharp';
 import cron from 'node-cron';
 import { config } from '../config.js';
+import { db } from '../db.js';
 import { getPhotoDate } from './photoDates.js';
 import { analyzePhoto } from './photoAnalysis.js';
 
@@ -117,4 +118,18 @@ export function startThumbnailWarmSchedule(): void {
   cron.schedule('*/30 * * * *', () => {
     warmThumbnailCache().catch((e) => console.warn('[photos] scheduled thumbnail warm-up failed', e));
   });
+}
+
+// ---- Hidden photos ----
+
+/** Paths (relative to PHOTOS_DIR) of photos marked hidden — see db.ts's hidden_photos. */
+export function hiddenPhotoPaths(): Set<string> {
+  return new Set((db.prepare('SELECT path FROM hidden_photos').all() as Array<{ path: string }>).map((r) => r.path));
+}
+
+/** The library minus hidden photos — what the slideshow, On this day, and random picks draw from. */
+export async function listVisiblePhotos(): Promise<string[]> {
+  const hidden = hiddenPhotoPaths();
+  if (hidden.size === 0) return listPhotos();
+  return (await listPhotos()).filter((abs) => !hidden.has(path.relative(config.photosDir, abs)));
 }

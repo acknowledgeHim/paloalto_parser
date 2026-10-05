@@ -645,6 +645,16 @@ db.exec(`
   );
 `);
 
+// Hidden photos (routes/photos.ts): photos someone's marked to keep out of sight — out of the
+// Photos grid unless "Show hidden" is on, and out of the slideshow, On this day, and the movie/
+// document pickers. Just a note of the path; the file itself is never touched.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hidden_photos (
+    path TEXT PRIMARY KEY,
+    hidden_at TEXT NOT NULL
+  );
+`);
+
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
 // the result (which of this app's groups each device should be in) every minute.

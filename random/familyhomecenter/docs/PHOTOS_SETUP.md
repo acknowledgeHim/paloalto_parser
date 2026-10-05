@@ -140,6 +140,24 @@ album is for whoever made it or a parent. Favorites can't be renamed or deleted.
 
 Movies and photo documents can pick **From an album**.
 
+## Sorting, filing, and hiding
+
+Above the Photos grid:
+
+- **Sort** — Library order, Date taken (newest / oldest first), or Folder / filename.
+- **Albums** — All photos, **Not in any album**, or **In an album** (Favorites counts).
+- **Show hidden photos** — off by default.
+
+**Hiding** a photo (🙈 in the photo viewer, or **☑ Select photos → 🙈 Hide** for many) keeps it out
+of sight: out of the grid unless *Show hidden photos* is on (then it's dimmed, with 👁 to unhide),
+and out of the slideshow/screensaver, On this day, and the movie and document pickers. Like albums,
+it's only a note in the app's database — the file isn't moved or changed.
+
+**Going through photos to file them:** set **Albums → Not in any album**, open the first photo, and
+for each one either **📁** it into album(s) or **🙈** hide it. Filing keeps the photo on screen (so
+you can add it to more than one album) until you tap **›**; hiding moves straight on. Either way it
+drops out of the list, so what's left is only what still needs sorting.
+
 ## On this day
 
 When there are photos taken on today's date in past years, the Dashboard shows an **On this day**
