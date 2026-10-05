@@ -125,7 +125,7 @@ own earned Prize Bank money themselves.
 
 ## Kids' access (turning sections off)
 
-**Settings → Kids' access** lets a parent choose, per kid, which parts of the app they can use
+**Settings → Kids' access** (right under Family members) lets a parent choose, per kid, which parts of the app they can use
 right now — e.g. only Calendar, Chores & Tasks, and Family Board until homework's done. Each kid has
 a checkbox per section (plus **All on** / **All off**); **Movies** and **Documents** have their own
 switches separate from **Photos**, so a kid can still browse photos without making movies. It

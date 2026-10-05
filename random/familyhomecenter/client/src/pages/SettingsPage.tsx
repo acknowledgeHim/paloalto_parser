@@ -226,6 +226,9 @@ export function SettingsPage() {
         <button type="button" onClick={() => setMemberModal('new')}>Add family member</button>
       </section>
 
+      {/* Right under the family list: which parts of the app each kid can use. */}
+      <KidsAccessSettings />
+
       {memberModal && (
         <FamilyMemberFormModal
           member={memberModal === 'new' ? null : memberModal}
@@ -238,8 +241,6 @@ export function SettingsPage() {
       )}
 
       <PrizeBankSettings />
-
-      <KidsAccessSettings />
 
       <section className="panel">
         <h2>Calendar sources</h2>
