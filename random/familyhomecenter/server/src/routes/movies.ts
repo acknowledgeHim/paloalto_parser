@@ -7,13 +7,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { resolveMovieSelection, type MovieSelection } from '../services/movieSelection.js';
 import { renderMovie, deleteMovieFile } from '../services/movieRender.js';
 import { listPhotos, photoIdFor } from '../services/photos.js';
-import {
-  canManageMember,
-  isAdminGateActive,
-  isRequestAdmin,
-  sessionMemberId,
-  SESSION_COOKIE_NAME,
-} from '../services/auth.js';
+import { canManageMember, canManageOwnedItem, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 import type { Movie } from '../types.js';
 
 // Open to everyone, same household-trust default as Photos/Music — this is a fun family feature,
@@ -78,16 +72,9 @@ function getMovieRow(id: string): MovieRow | undefined {
   return db.prepare('SELECT * FROM movies WHERE id = ?').get(id) as MovieRow | undefined;
 }
 
-/**
- * Only whoever made a movie, or a parent, can edit or delete it. Same activation rule as a
- * member's own profile (services/auth.ts's canManageMember): enforced once that person or any
- * parent has a password, household-trust before that. A movie with no recorded creator (made
- * before this was tracked, or with nobody picked in the switcher) is parent-only once the Settings
- * gate is on.
- */
+/** Only whoever made a movie, or a parent, can edit or delete it — see canManageOwnedItem. */
 function canManageMovie(token: string | undefined, movie: MovieRow): boolean {
-  if (movie.created_by_id) return canManageMember(token, movie.created_by_id);
-  return !isAdminGateActive() || isRequestAdmin(token);
+  return canManageOwnedItem(token, movie.created_by_id);
 }
 
 interface TrackDetail {

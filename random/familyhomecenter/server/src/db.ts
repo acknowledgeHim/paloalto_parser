@@ -598,6 +598,19 @@ db.exec(`
   );
 `);
 
+// Photo documents (routes/photoDocuments.ts): a title plus sections of text and pictures, turned
+// into a .docx on download. content is JSON — see services/photoDocument.ts's DocumentContent.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_documents (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`);
+
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
 // the result (which of this app's groups each device should be in) every minute.

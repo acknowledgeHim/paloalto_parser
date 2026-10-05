@@ -3,6 +3,7 @@ import { api, type Movie, type Photo } from '../api/client.js';
 import { Slideshow } from '../components/Slideshow.js';
 import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
+import { DocumentEditorModal } from '../components/DocumentEditorModal.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
@@ -35,6 +36,122 @@ function fmtSavedAt(iso: string): string {
   return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
 }
 
+/**
+ * Whoever made something (a movie, a document), or a parent, can edit/delete it — what's picked in
+ * the profile switcher decides which buttons show; the server enforces it for real once passwords
+ * are set up (canManageOwnedItem in server/src/services/auth.ts).
+ */
+function useCanManageOwned(): (item: { created_by_id: string | null }) => boolean {
+  const { members, activeProfile } = useFamilyMembers();
+  const noParentYet = members.every((m) => m.is_parent !== 1);
+  return (item) => {
+    if (activeProfile?.is_parent === 1) return true;
+    if (item.created_by_id) return activeProfile?.id === item.created_by_id;
+    return noParentYet;
+  };
+}
+
+/** GET /photo-documents */
+interface PhotoDocumentSummary {
+  id: string;
+  title: string;
+  created_by_id: string | null;
+  updated_at: string;
+  section_count: number;
+  photo_count: number;
+}
+
+function DocumentsSection() {
+  const { members } = useFamilyMembers();
+  const canManage = useCanManageOwned();
+  const [docs, setDocs] = useState<PhotoDocumentSummary[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const load = () => {
+    api.get<PhotoDocumentSummary[]>('/photo-documents').then(setDocs).catch(console.error);
+  };
+  useEffect(load, []);
+
+  const remove = async (id: string) => {
+    setActionError(null);
+    try {
+      await api.delete(`/photo-documents/${id}`);
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+    load();
+  };
+
+  const creatorName = (d: PhotoDocumentSummary) => members.find((m) => m.id === d.created_by_id)?.name ?? null;
+  const close = () => {
+    setCreating(false);
+    setEditingId(null);
+  };
+
+  return (
+    <section className="panel movie-maker__section">
+      <div className="tasks-page__header">
+        <button type="button" className="icon-button" aria-label="Make a document" onClick={() => setCreating(true)}>+</button>
+        <h2>Documents</h2>
+      </div>
+      <p className="hint">
+        Put pictures into a Word document — give it a title, group pictures into sections with your
+        own writing and captions, then download it. Never touches the original photos.
+      </p>
+      {actionError && <div className="settings-login__error">{actionError}</div>}
+      {docs.length === 0 && <div className="empty-state">No documents yet — make one above.</div>}
+      {docs.length > 0 && (
+        <ul className="movie-maker__movie-list">
+          {docs.map((d) => (
+            <li key={d.id}>
+              <div className="movie-maker__movie-row">
+                <div className="movie-maker__movie-info">
+                  <span className="movie-maker__movie-title">📄 {d.title}</span>
+                  <span className="hint">
+                    {d.section_count} section{d.section_count === 1 ? '' : 's'} · {d.photo_count} picture
+                    {d.photo_count === 1 ? '' : 's'}
+                    {creatorName(d) && ` · by ${creatorName(d)}`}
+                  </span>
+                </div>
+                <div className="task-form__row">
+                  {/* A plain link: the server builds the .docx and sends it as a download. */}
+                  <a className="movie-maker__download" href={`/api/photo-documents/${d.id}/download`}>
+                    ⬇ Download
+                  </a>
+                  {canManage(d) && (
+                    <button type="button" className="secondary" onClick={() => setEditingId(d.id)}>✎ Edit</button>
+                  )}
+                  {canManage(d) && (
+                    <ConfirmButton
+                      label="✕"
+                      ariaLabel={`Delete ${d.title}`}
+                      confirmLabel={`Delete "${d.title}"?`}
+                      onConfirm={() => remove(d.id)}
+                      className="task-card__edit"
+                    />
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(creating || editingId) && (
+        <DocumentEditorModal
+          documentId={editingId ?? undefined}
+          onClose={close}
+          onSaved={() => {
+            close();
+            load();
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
 function MoviesSection() {
   const { members, activeProfile } = useFamilyMembers();
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -45,21 +162,12 @@ function MoviesSection() {
   const [playing, setPlaying] = useState<Movie | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Whoever made a movie, or a parent, can edit/delete it — what's picked in the profile switcher
-  // decides which buttons show; the server enforces it for real once passwords are set up (see
-  // canManageMovie in server/src/routes/movies.ts).
-  const noParentYet = members.every((m) => m.is_parent !== 1);
-  const canManage = (m: Movie) => {
-    if (activeProfile?.is_parent === 1) return true;
-    if (m.created_by_id) return activeProfile?.id === m.created_by_id;
-    return noParentYet;
-  };
+  const canManage = useCanManageOwned();
   const creatorName = (m: Pick<Movie, 'created_by_id'>) => members.find((x) => x.id === m.created_by_id)?.name ?? null;
   // Your own drafts (or nobody's); a parent sees everyone's.
   const visibleDrafts = drafts.filter(
     (d) => activeProfile?.is_parent === 1 || !d.created_by_id || d.created_by_id === activeProfile?.id
   );
-  const draftForMovie = (movieId: string) => drafts.find((d) => d.movie_id === movieId);
 
   const openDraft = (d: MovieDraft) => {
     const movie = d.movie_id ? movies.find((m) => m.id === d.movie_id) : undefined;
@@ -197,8 +305,8 @@ function MoviesSection() {
                       type="button"
                       className="secondary"
                       onClick={() => {
-                        // Pick up any unsaved changes to this movie rather than starting a second set.
-                        setResumeDraftId(draftForMovie(m.id)?.id ?? null);
+                        // Edits don't auto-save (any older draft of edits stays listed above to continue).
+                        setResumeDraftId(null);
                         setEditing(m);
                       }}
                     >
@@ -291,6 +399,7 @@ export function PhotosPage() {
       </div>
 
       <MoviesSection />
+      <DocumentsSection />
 
       {loading && <div className="empty-state">Loading photos…</div>}
       {!loading && photos.length === 0 && (

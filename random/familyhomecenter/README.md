@@ -47,6 +47,10 @@ A touchscreen family dashboard built for a Raspberry Pi 5, covering:
   dashboard installs as a home-screen app — see docs/INTERCOM_SETUP.md).
   One-way paging: the DAC8x's zones are output-only, so this is an
   announcement system, not a two-way call — see that doc for the scope note.
+- 📄 **Photo documents** — pick groups of photos, add a title, section headings,
+  your own writing, and per-picture captions, then download it as a Word
+  (.docx) document. Editable later by whoever made it or a parent — see
+  docs/PHOTO_DOCUMENTS.md.
 - 🛡️ **Internet controls** — with a Pi-hole on the network (usually this same
   Pi): ad/tracker blocking for the whole house, plus per-kid pause/resume,
   bedtime-style schedules with bonus-time buttons, a kid web filter (adult
@@ -172,6 +176,8 @@ Optional integrations, each with its own guide:
   wiring it to the Pi — including over Ethernet/Cat6 if there's real distance between them)
 - [docs/DUAL_TOUCHSCREEN_SETUP.md](docs/DUAL_TOUCHSCREEN_SETUP.md) (drive two touchscreens with
   different content from one Pi 5's two HDMI outputs)
+- [docs/PHOTO_DOCUMENTS.md](docs/PHOTO_DOCUMENTS.md) (turning photos + writing into a downloadable
+  Word document)
 - [docs/PIHOLE_SETUP.md](docs/PIHOLE_SETUP.md) (Pi-hole install, Linksys router DNS setup, and
   per-kid internet controls)
 - [docs/BACKUP.md](docs/BACKUP.md) (`npm run backup` in `server/` — safe to run while the server's

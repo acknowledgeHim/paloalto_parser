@@ -159,6 +159,17 @@ export function canManageMember(token: string | undefined, memberId: string): bo
   return selfOrParentGate(token, memberId, memberGateActiveFor(memberId));
 }
 
+/**
+ * Something one family member made (a movie, a photo document): only they or a parent can change or
+ * delete it. Same activation rule as canManageMember — enforced once that person or any parent has
+ * a password, household-trust before that. Something with no recorded creator (made with nobody
+ * picked in the switcher, or before creators were tracked) is parent-only once Settings is gated.
+ */
+export function canManageOwnedItem(token: string | undefined, createdById: string | null): boolean {
+  if (createdById) return canManageMember(token, createdById);
+  return !isAdminGateActive() || isRequestAdmin(token);
+}
+
 /** Bank viewing — self-or-parent, but only once *this* member (or a parent) has a password; see bankViewGateActiveFor. */
 export function canAccessBank(token: string | undefined, memberId: string): boolean {
   return selfOrParentGate(token, memberId, bankViewGateActiveFor(memberId));

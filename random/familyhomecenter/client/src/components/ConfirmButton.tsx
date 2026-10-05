@@ -10,6 +10,8 @@ interface Props {
   className?: string;
   /** Accessible name for the initial button, when label is just an icon (e.g. "✕"). */
   ariaLabel?: string;
+  /** The confirm button's label, for actions that aren't a delete (e.g. "Yes, close"). */
+  yesLabel?: string;
 }
 
 /**
@@ -18,7 +20,7 @@ interface Props {
  * touchscreen. Expands in place rather than a full modal, to stay quick for the common "yes I
  * meant it" case.
  */
-export function ConfirmButton({ label, confirmLabel, onConfirm, className = 'link-button', ariaLabel }: Props) {
+export function ConfirmButton({ label, confirmLabel, onConfirm, className = 'link-button', ariaLabel, yesLabel = 'Yes, delete' }: Props) {
   const [confirming, setConfirming] = useState(false);
 
   if (!confirming) {
@@ -40,7 +42,7 @@ export function ConfirmButton({ label, confirmLabel, onConfirm, className = 'lin
           onConfirm();
         }}
       >
-        Yes, delete
+        {yesLabel}
       </button>
       <button type="button" className="secondary" onClick={() => setConfirming(false)}>
         Cancel

@@ -23,6 +23,7 @@ import { knowledgeBaseRouter } from './routes/knowledgeBase.js';
 import { callingRouter } from './routes/calling.js';
 import { moviesRouter } from './routes/movies.js';
 import { internetRouter } from './routes/internet.js';
+import { photoDocumentsRouter } from './routes/photoDocuments.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
@@ -61,6 +62,7 @@ app.use('/api/knowledge-base', knowledgeBaseRouter);
 app.use('/api/calling', callingRouter);
 app.use('/api/movies', moviesRouter);
 app.use('/api/internet', internetRouter);
+app.use('/api/photo-documents', photoDocumentsRouter);
 // Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
 // handles HTTP Range requests, which video playback/seeking needs.
 app.use('/api/kb-media', express.static(config.kbMediaDir));

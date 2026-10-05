@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, type Movie, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { LibraryBrowser } from './LibraryBrowser.js';
+import { fmtTakenDate, splitPhotoPath } from '../utils/photoDetails.js';
 
 type SelectionMode = 'date-range' | 'name' | 'random' | 'manual';
 type GridSort = 'movie' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
@@ -24,20 +25,6 @@ function fmtDuration(totalSeconds: number): string {
 }
 
 const GRID_PAGE_SIZE = 90;
-
-/** Splits a PHOTOS_DIR-relative path into its folder part ('' for a photo at the top level) and
- *  filename. */
-function splitPhotoPath(relativePath: string): { folder: string; file: string } {
-  const normalized = relativePath.replace(/\\/g, '/');
-  const slash = normalized.lastIndexOf('/');
-  return slash === -1
-    ? { folder: '', file: normalized }
-    : { folder: normalized.slice(0, slash), file: normalized.slice(slash + 1) };
-}
-
-function fmtTakenDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 /** GET /movies/:id/source — what an existing movie was made from. */
 interface MovieSource {
@@ -261,9 +248,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     gridSort,
   };
   const draftJson = JSON.stringify(draftState);
-  // A brand new movie isn't worth a draft until something's actually been entered.
+  // Only new movies auto-save — edits to an existing one are saved deliberately with Update (or
+  // dropped with Cancel). And a new movie isn't worth a draft until something's been entered.
   const worthSaving = Boolean(
-    editing || title.trim() || selectedIds.size || musicTracks.length || startDate || endDate || nameQuery.trim()
+    (!editing || initialDraftId) &&
+      (title.trim() || selectedIds.size || musicTracks.length || startDate || endDate || nameQuery.trim())
   );
 
   // The interval/unmount handlers below outlive any one render, so they read the latest form
@@ -735,7 +724,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
               Save as new movie
             </button>
           )}
-          <button type="button" className="secondary" onClick={onClose}>{draftId || worthSaving ? 'Close' : 'Cancel'}</button>
+          <button type="button" className="secondary" onClick={onClose}>{draftId || (worthSaving && !editing) ? 'Close' : 'Cancel'}</button>
           {draftId && (
             <button
               type="button"
@@ -750,11 +739,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
             </button>
           )}
         </div>
-        <p className="hint">
+        {(!editing || draftId) && <p className="hint">
           {draftSavedAt
             ? `Draft auto-saved ${new Date(draftSavedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} — Close keeps it; continue it any time from the Movies list.`
             : 'Your work auto-saves as a draft every 30 seconds.'}
-        </p>
+        </p>}
         <p className="hint">
           Rendering happens in the background and can take a few minutes on a Pi — it'll show up
           below, and switch to "Watch" once it's ready.
