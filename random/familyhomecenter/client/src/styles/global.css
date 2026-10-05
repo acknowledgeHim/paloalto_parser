@@ -1438,3 +1438,12 @@ textarea {
 .movie-maker__screensaver-menu button { min-height: 40px; padding: 0 14px; }
 .screensaver-movie { position: fixed; inset: 0; background: #000; z-index: 2000; }
 .screensaver-movie video { width: 100%; height: 100%; object-fit: contain; }
+
+/* ---- Document templates / cover ---- */
+.doc-editor__templates { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--accent); border-radius: 12px; }
+.doc-editor__template-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.doc-editor__cover { display: flex; flex-direction: column; gap: 6px; }
+.doc-editor__cover-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.doc-editor__cover-row img, .doc-editor__cover-row .doc-editor__missing { width: 220px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; }
+.doc-editor__cover-fields { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 200px; }
+.doc-editor__cover-add { align-self: flex-start; }

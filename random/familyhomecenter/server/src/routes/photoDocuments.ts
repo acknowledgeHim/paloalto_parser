@@ -7,6 +7,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { listPhotos, photoIdFor } from '../services/photos.js';
 import { canManageOwnedItem, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 import { buildPhotoDocument, type DocumentContent, type DocumentSection } from '../services/photoDocument.js';
+import { convertDocxToPdf, PdfUnavailableError } from '../services/pdfConvert.js';
 
 // Photo documents: a title plus sections (heading, text, pictures with captions), downloaded as a
 // .docx built fresh each time (services/photoDocument.ts). Anyone can view/download; only whoever
@@ -93,7 +94,17 @@ async function parseBody(body: Record<string, unknown>): Promise<{ title: string
     sections.push({ heading, text, columns, photos });
   }
   if (photoTotal > LIMITS.photos) return `At most ${LIMITS.photos} pictures per document`;
-  return { title, content: { sections } };
+
+  let cover: DocumentContent['cover'] = null;
+  const rawCover = body.cover as Record<string, unknown> | null | undefined;
+  if (rawCover && typeof rawCover === 'object') {
+    const caption = typeof rawCover.caption === 'string' ? rawCover.caption.slice(0, LIMITS.caption) : '';
+    const rel =
+      (typeof rawCover.id === 'string' ? pathById.get(rawCover.id) : undefined) ??
+      (typeof rawCover.path === 'string' && isSafeRelative(rawCover.path) ? rawCover.path : undefined);
+    if (rel) cover = { path: rel, caption };
+  }
+  return { title, content: { cover, sections } };
 }
 
 photoDocumentsRouter.get('/', (_req, res) => {
@@ -110,8 +121,13 @@ photoDocumentsRouter.get(
     if (!row) return res.status(404).json({ error: 'not found' });
     const existing = new Set(await listPhotos());
     const content = parseContent(row.content);
+    const withId = (p: { path: string; caption: string }) => {
+      const abs = path.join(config.photosDir, p.path);
+      return { ...p, id: existing.has(abs) ? photoIdFor(abs) : null };
+    };
     res.json({
       ...summary(row),
+      cover: content.cover ? withId(content.cover) : null,
       sections: content.sections.map((s) => ({
         ...s,
         photos: s.photos.map((p) => {
@@ -175,11 +191,12 @@ photoDocumentsRouter.delete('/:id', (req, res) => {
 });
 
 /** "Summer 2026" → "Summer 2026.docx", minus characters Windows/macOS won't take in a filename. */
-function downloadName(title: string): string {
-  return `${title.replace(/[\\/:*?"<>|]+/g, '').trim() || 'document'}.docx`;
+function downloadName(title: string, ext: 'docx' | 'pdf'): string {
+  return `${title.replace(/[\\/:*?"<>|]+/g, '').trim() || 'document'}.${ext}`;
 }
 
-/** GET /:id/download — builds the .docx now from the saved document. */
+/** GET /:id/download[?format=pdf] — builds the .docx now from the saved document (and converts it
+ *  to PDF with LibreOffice if asked). */
 photoDocumentsRouter.get(
   '/:id/download',
   asyncHandler(async (req, res) => {
@@ -194,13 +211,23 @@ photoDocumentsRouter.get(
       byline: creator ? `By ${creator} · ${date}` : date,
       content: parseContent(row.content),
     });
-    const name = downloadName(row.title);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    const pdf = req.query.format === 'pdf';
+    let body = buffer;
+    if (pdf) {
+      try {
+        body = await convertDocxToPdf(buffer);
+      } catch (err) {
+        const status = err instanceof PdfUnavailableError ? 503 : 500;
+        return res.status(status).type('text/plain').send((err as Error).message);
+      }
+    }
+    const name = downloadName(row.title, pdf ? 'pdf' : 'docx');
+    res.setHeader('Content-Type', pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     // filename* carries the real (possibly non-ASCII) name; filename is a plain-ASCII fallback.
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`
     );
-    res.send(buffer);
+    res.send(body);
   })
 );

@@ -7,6 +7,7 @@ import {
   HeadingLevel,
   ImageRun,
   Packer,
+  PageBreak,
   Paragraph,
   Table,
   TableCell,
@@ -33,6 +34,8 @@ export interface DocumentSection {
 }
 
 export interface DocumentContent {
+  /** Optional big picture right under the title, on its own cover page. */
+  cover?: DocumentPhoto | null;
   sections: DocumentSection[];
 }
 
@@ -161,7 +164,8 @@ export async function buildPhotoDocument(params: {
   content: DocumentContent;
 }): Promise<Buffer> {
   // Prepare every picture first (a couple at a time — full-size originals are big on a Pi).
-  const allPhotos = params.content.sections.flatMap((s) => s.photos);
+  const cover = params.content.cover ?? null;
+  const allPhotos = [...(cover ? [cover] : []), ...params.content.sections.flatMap((s) => s.photos)];
   const prepared = new Array<PreparedImage | null>(allPhotos.length);
   let next = 0;
   async function worker() {
@@ -186,6 +190,14 @@ export async function buildPhotoDocument(params: {
   }
 
   let photoIndex = 0;
+  if (cover) {
+    const img = prepared[photoIndex++];
+    if (img) {
+      children.push(...pictureParagraphs(img, cover.caption, CONTENT_WIDTH_PX, 680));
+      // The cover gets its own page; the sections start on the next one.
+      children.push(new Paragraph({ children: [new PageBreak()] }));
+    }
+  }
   for (const section of params.content.sections) {
     if (section.heading.trim()) {
       children.push(

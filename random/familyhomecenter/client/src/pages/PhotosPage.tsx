@@ -105,6 +105,29 @@ function DocumentsSection() {
   };
 
   const creatorName = (d: PhotoDocumentSummary) => members.find((m) => m.id === d.created_by_id)?.name ?? null;
+
+  // Downloads go through fetch rather than a plain link: building (and for PDF, converting) takes a
+  // few seconds, so this shows "Preparing…", and a failure (e.g. no LibreOffice for PDF) shows as a
+  // message here instead of the browser navigating to an error page.
+  const [preparing, setPreparing] = useState<string | null>(null); // `${id}:${format}`
+  const download = async (d: PhotoDocumentSummary, format: 'docx' | 'pdf') => {
+    setActionError(null);
+    setPreparing(`${d.id}:${format}`);
+    try {
+      const resp = await fetch(`/api/photo-documents/${d.id}/download${format === 'pdf' ? '?format=pdf' : ''}`);
+      if (!resp.ok) throw new Error((await resp.text()) || `Download failed (${resp.status})`);
+      const url = URL.createObjectURL(await resp.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${d.title.replace(/[\\/:*?"<>|]+/g, '').trim() || 'document'}.${format}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setPreparing(null);
+    }
+  };
   const close = () => {
     setCreating(false);
     setEditingId(null);
@@ -136,10 +159,12 @@ function DocumentsSection() {
                   </span>
                 </div>
                 <div className="task-form__row">
-                  {/* A plain link: the server builds the .docx and sends it as a download. */}
-                  <a className="movie-maker__download" href={`/api/photo-documents/${d.id}/download`}>
-                    ⬇ Download
-                  </a>
+                  <button type="button" className="secondary" disabled={preparing !== null} onClick={() => download(d, 'docx')}>
+                    {preparing === `${d.id}:docx` ? 'Preparing…' : '⬇ Word'}
+                  </button>
+                  <button type="button" className="secondary" disabled={preparing !== null} onClick={() => download(d, 'pdf')}>
+                    {preparing === `${d.id}:pdf` ? 'Preparing…' : '⬇ PDF'}
+                  </button>
                   {canManage(d) && (
                     <button type="button" className="secondary" onClick={() => setEditingId(d.id)}>✎ Edit</button>
                   )}

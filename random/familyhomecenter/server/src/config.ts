@@ -80,6 +80,12 @@ export const config = {
     ffmpegPath: process.env.FFMPEG_PATH ?? 'ffmpeg',
   },
 
+  documents: {
+    // LibreOffice's command-line binary, for PDF downloads of photo documents (Word downloads don't
+    // need it) — see docs/PHOTO_DOCUMENTS.md. Resolved via PATH unless overridden.
+    sofficePath: process.env.SOFFICE_PATH || 'soffice',
+  },
+
   pihole: {
     // Pi-hole v6's web address (its API lives under /api) — http://localhost when it runs on this
     // same Pi. Leave blank to hide the Internet page's controls. See docs/PIHOLE_SETUP.md.
