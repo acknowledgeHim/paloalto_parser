@@ -1384,3 +1384,4 @@ textarea {
 .doc-editor__photo-actions button { flex: 1; min-height: 34px; padding: 0; }
 .photo-picker__overlay { z-index: 1100; }
 .photo-picker__photo--added { opacity: 0.4; }
+.photo-picker__photo--preview { cursor: default; }
