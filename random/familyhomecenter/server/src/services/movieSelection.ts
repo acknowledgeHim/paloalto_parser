@@ -2,12 +2,24 @@ import path from 'node:path';
 import { listPhotos, findPhotoById } from './photos.js';
 import { getPhotoDate } from './photoDates.js';
 import { config } from '../config.js';
+import { albumPhotoPaths } from './albums.js';
+import { filterByQuality } from './photoAnalysis.js';
 
-export type MovieSelection =
-  | { mode: 'manual'; photoIds: string[] }
-  | { mode: 'random'; count: number }
-  | { mode: 'date-range'; start: string; end: string } // YYYY-MM-DD, inclusive
-  | { mode: 'name'; query: string }; // case-insensitive substring match against folder+filename
+/** Leave out possibly-blurry photos and/or all but the sharpest of each near-duplicate group
+ *  (services/photoAnalysis.ts). Ignored for 'manual' — hand-picked photos are taken as picked. */
+interface QualityOptions {
+  excludeBlurry?: boolean;
+  excludeDuplicates?: boolean;
+}
+
+export type MovieSelection = QualityOptions &
+  (
+    | { mode: 'manual'; photoIds: string[] }
+    | { mode: 'random'; count: number }
+    | { mode: 'date-range'; start: string; end: string } // YYYY-MM-DD, inclusive
+    | { mode: 'name'; query: string } // case-insensitive substring match against folder+filename
+    | { mode: 'album'; albumId: string } // in the order photos were added to the album
+  );
 
 /** Fisher-Yates shuffle, then take the first n — avoids the "sort by Math.random()" trap where
  *  repeated comparisons can bias the result. */
@@ -46,6 +58,12 @@ export async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (i
  * (listPhotos/getPhotoDate only ever read PHOTOS_DIR, never write to or delete anything there).
  */
 export async function resolveMovieSelection(selection: MovieSelection): Promise<string[]> {
+  if (selection.mode === 'manual') return resolveUnfiltered(selection);
+  return filterByQuality(await resolveUnfiltered(selection), selection);
+}
+
+async function resolveUnfiltered(selection: MovieSelection): Promise<string[]> {
+  if (selection.mode === 'album') return albumPhotoPaths(selection.albumId);
   if (selection.mode === 'manual') {
     const resolved = await Promise.all(selection.photoIds.map((id) => findPhotoById(id)));
     return resolved.filter((p): p is string => Boolean(p));
@@ -54,8 +72,10 @@ export async function resolveMovieSelection(selection: MovieSelection): Promise<
   const allPhotos = await listPhotos();
 
   if (selection.mode === 'random') {
-    const count = Math.max(1, Math.min(selection.count, allPhotos.length));
-    return sampleRandom(allPhotos, count);
+    // Sample from what's left after the quality filter, so "10 random" still means 10.
+    const pool = filterByQuality(allPhotos, selection);
+    const count = Math.max(1, Math.min(selection.count, pool.length));
+    return sampleRandom(pool, count);
   }
 
   if (selection.mode === 'name') {

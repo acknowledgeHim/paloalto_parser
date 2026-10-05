@@ -384,6 +384,18 @@ export interface GroceryItem {
 
 export interface Photo {
   id: string;
+  /** From the background duplicate/blur analysis — null until it's run on this photo. */
+  blurry: boolean | null;
+}
+
+/** A photo album (GET /albums) — kept only in the app's database; photos are never moved. */
+export interface PhotoAlbum {
+  id: string;
+  name: string;
+  is_favorites: boolean;
+  created_by_id: string | null;
+  count: number;
+  cover_id: string | null;
 }
 
 /** GET /photos/details — for sorting/filtering the movie maker's photo grid. */
@@ -393,6 +405,12 @@ export interface PhotoDetail {
   path: string;
   /** Best-effort date taken (EXIF, else file modified time), ISO 8601. */
   taken_at: string;
+  /** Possibly blurry (null = not analyzed yet). */
+  blurry: boolean | null;
+  /** Shared by near-duplicates of the same shot; null if it has none. */
+  dup_group: string | null;
+  /** The one of its duplicate group to keep (highest resolution of the sharpest). */
+  dup_best: boolean;
 }
 
 /** A rendered photo-slideshow-with-music video. Read-only against the source photos/music that

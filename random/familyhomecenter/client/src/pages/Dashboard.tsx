@@ -6,6 +6,7 @@ import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { OnThisDay } from '../components/OnThisDay.js';
 import { canEditTask } from '../utils/tasks.js';
 
 export function Dashboard() {
@@ -65,6 +66,8 @@ export function Dashboard() {
           })}
         </section>
       )}
+
+      <OnThisDay />
 
       <div className="dashboard__columns">
         <section className="panel">

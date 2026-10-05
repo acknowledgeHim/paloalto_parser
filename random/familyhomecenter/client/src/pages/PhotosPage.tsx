@@ -4,6 +4,7 @@ import { Slideshow } from '../components/Slideshow.js';
 import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { DocumentEditorModal } from '../components/DocumentEditorModal.js';
+import { AlbumChecklist, FAVORITES_ID, useAlbums } from '../components/PhotoAlbums.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
@@ -368,21 +369,77 @@ function MoviesSection() {
 const PAGE_SIZE = 120;
 
 export function PhotosPage() {
+  const { members } = useFamilyMembers();
+  const canManage = useCanManageOwned();
+  const albumsApi = useAlbums();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [slideshowOn, setSlideshowOn] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // '' = all photos; otherwise an album id.
+  const [albumFilter, setAlbumFilter] = useState('');
+  const [albumPhotoIds, setAlbumPhotoIds] = useState<string[]>([]);
+  const [excludeBlurry, setExcludeBlurry] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [albumPanel, setAlbumPanel] = useState<'viewer' | 'selection' | null>(null);
+  const [newAlbumName, setNewAlbumName] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [albumError, setAlbumError] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
     api.get<Photo[]>('/photos').then(setPhotos).catch(console.error).finally(() => setLoading(false));
+    albumsApi.reload();
   };
 
   useEffect(load, []);
-  // Reset paging whenever the underlying photo list changes size (refresh, new photos added) so
-  // stale indexes from a previous library size don't leave the grid showing fewer than PAGE_SIZE.
-  useEffect(() => setVisibleCount(PAGE_SIZE), [photos.length]);
+
+  useEffect(() => {
+    if (!albumFilter) return;
+    api.get<string[]>(`/albums/${albumFilter}/photos`).then(setAlbumPhotoIds).catch(() => setAlbumPhotoIds([]));
+    // Album contents change as photos are added/removed — memberships is the signal.
+  }, [albumFilter, albumsApi.memberships]);
+
+  const visible = (() => {
+    let list = photos;
+    if (albumFilter) {
+      const byId = new Map(photos.map((p) => [p.id, p]));
+      list = albumPhotoIds.map((id) => byId.get(id)).filter((p): p is Photo => Boolean(p));
+    }
+    return excludeBlurry ? list.filter((p) => !p.blurry) : list;
+  })();
+
+  // Reset paging whenever what's shown changes size (refresh, new photos, another album) so stale
+  // indexes don't leave the grid showing fewer than PAGE_SIZE.
+  useEffect(() => setVisibleCount(PAGE_SIZE), [visible.length, albumFilter]);
+
+  const activeAlbum = albumsApi.albums.find((a) => a.id === albumFilter);
+  const viewing = viewingIndex !== null ? visible[viewingIndex] : undefined;
+
+  const toggleSelected = (id: string) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+    setAlbumPanel(null);
+  };
+
+  const albumAction = async (fn: () => Promise<unknown>) => {
+    setAlbumError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setAlbumError((err as Error).message);
+    }
+  };
 
   if (slideshowOn) {
     return <Slideshow intervalSeconds={12} onExit={() => setSlideshowOn(false)} />;
@@ -401,6 +458,124 @@ export function PhotosPage() {
       <MoviesSection />
       <DocumentsSection />
 
+      {/* Albums — kept only in the app's database; the photos themselves never move. */}
+      <div className="photo-albums-bar">
+        <button type="button" className={albumFilter === '' ? '' : 'secondary'} onClick={() => setAlbumFilter('')}>
+          All photos ({photos.length})
+        </button>
+        {albumsApi.albums.map((a) => (
+          <button key={a.id} type="button" className={albumFilter === a.id ? '' : 'secondary'} onClick={() => setAlbumFilter(a.id)}>
+            {a.is_favorites ? '⭐ ' : '📁 '}
+            {a.name} ({a.count})
+          </button>
+        ))}
+        {newAlbumName === null ? (
+          <button type="button" className="secondary" onClick={() => setNewAlbumName('')}>＋ New album</button>
+        ) : (
+          <form
+            className="photo-albums-bar__new"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newAlbumName.trim()) return;
+              albumAction(async () => {
+                const album = await albumsApi.create(newAlbumName.trim());
+                setNewAlbumName(null);
+                setAlbumFilter(album.id);
+              });
+            }}
+          >
+            <input autoFocus placeholder="Album name" value={newAlbumName} onChange={(e) => setNewAlbumName(e.target.value)} />
+            <button type="submit" disabled={!newAlbumName.trim()}>Create</button>
+            <button type="button" className="secondary" onClick={() => setNewAlbumName(null)}>Cancel</button>
+          </form>
+        )}
+      </div>
+      {activeAlbum && !activeAlbum.is_favorites && canManage(activeAlbum) && (
+        <div className="photo-albums-bar photo-albums-bar__manage">
+          {renaming === null ? (
+            <button type="button" className="link-button" onClick={() => setRenaming(activeAlbum.name)}>Rename album</button>
+          ) : (
+            <form
+              className="photo-albums-bar__new"
+              onSubmit={(e) => {
+                e.preventDefault();
+                albumAction(async () => {
+                  await api.patch(`/albums/${activeAlbum.id}`, { name: renaming });
+                  setRenaming(null);
+                  await albumsApi.reload();
+                });
+              }}
+            >
+              <input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} />
+              <button type="submit" disabled={!renaming.trim()}>Save</button>
+              <button type="button" className="secondary" onClick={() => setRenaming(null)}>Cancel</button>
+            </form>
+          )}
+          <ConfirmButton
+            label="Delete album"
+            confirmLabel={`Delete the "${activeAlbum.name}" album? (The photos stay.)`}
+            onConfirm={() =>
+              albumAction(async () => {
+                await api.delete(`/albums/${activeAlbum.id}`);
+                setAlbumFilter('');
+                await albumsApi.reload();
+              })
+            }
+          />
+          {activeAlbum.created_by_id && (
+            <span className="hint">Made by {members.find((m) => m.id === activeAlbum.created_by_id)?.name ?? 'someone'}</span>
+          )}
+        </div>
+      )}
+      {albumError && <div className="settings-login__error">{albumError}</div>}
+
+      <div className="photos-page__grid-tools">
+        <label className="member-form__label member-form__label--inline">
+          Blurry photos
+          <select value={excludeBlurry ? 'exclude' : 'include'} onChange={(e) => setExcludeBlurry(e.target.value === 'exclude')}>
+            <option value="include">Include</option>
+            <option value="exclude">Exclude</option>
+          </select>
+        </label>
+        {!selecting ? (
+          <button type="button" className="secondary" onClick={() => setSelecting(true)} disabled={visible.length === 0}>
+            ☑ Select photos
+          </button>
+        ) : (
+          <div className="photos-page__selection">
+            <strong>{selected.size} selected</strong>
+            <button type="button" className="secondary" onClick={() => setSelected(new Set(visible.map((p) => p.id)))}>Select all</button>
+            <button
+              type="button"
+              disabled={selected.size === 0}
+              onClick={() => albumAction(() => albumsApi.add(FAVORITES_ID, [...selected]))}
+            >
+              ⭐ Favorite
+            </button>
+            <button type="button" className="secondary" disabled={selected.size === 0} onClick={() => setAlbumPanel(albumPanel === 'selection' ? null : 'selection')}>
+              📁 Albums…
+            </button>
+            {activeAlbum && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={selected.size === 0}
+                onClick={() => albumAction(async () => {
+                  await albumsApi.remove(activeAlbum.id, [...selected]);
+                  setSelected(new Set());
+                })}
+              >
+                Remove from {activeAlbum.is_favorites ? 'Favorites' : `"${activeAlbum.name}"`}
+              </button>
+            )}
+            <button type="button" className="secondary" onClick={stopSelecting}>Done</button>
+          </div>
+        )}
+      </div>
+      {selecting && albumPanel === 'selection' && selected.size > 0 && (
+        <AlbumChecklist albumsApi={albumsApi} photoIds={[...selected]} onDone={() => setAlbumPanel(null)} />
+      )}
+
       {loading && <div className="empty-state">Loading photos…</div>}
       {!loading && photos.length === 0 && (
         <div className="empty-state">
@@ -408,39 +583,66 @@ export function PhotosPage() {
           docs/PHOTOS_SETUP.md) and tap Refresh.
         </div>
       )}
+      {!loading && photos.length > 0 && visible.length === 0 && (
+        <div className="empty-state">{albumFilter ? 'No photos in this album yet — select some from All photos and add them.' : 'No photos to show.'}</div>
+      )}
 
       <div className="photos-page__grid">
-        {photos.slice(0, visibleCount).map((p, i) => (
-          <button key={p.id} className="photos-page__thumb" onClick={() => setViewingIndex(i)}>
+        {visible.slice(0, visibleCount).map((p, i) => (
+          <button
+            key={p.id}
+            className={`photos-page__thumb ${selecting && selected.has(p.id) ? 'photos-page__thumb--selected' : ''}`}
+            onClick={() => (selecting ? toggleSelected(p.id) : setViewingIndex(i))}
+          >
             <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+            {albumsApi.isIn(p.id, FAVORITES_ID) && <span className="photos-page__star">⭐</span>}
+            {p.blurry && <span className="photos-page__blurry">Possibly blurry</span>}
           </button>
         ))}
       </div>
 
-      {visibleCount < photos.length && (
+      {visibleCount < visible.length && (
         <button className="secondary" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
-          Show more ({photos.length - visibleCount} left)
+          Show more ({visible.length - visibleCount} left)
         </button>
       )}
 
-      {viewingIndex !== null && (
-        <div className="photo-lightbox" onClick={() => setViewingIndex(null)}>
-          <img src={`/api/photos/${photos[viewingIndex].id}/image`} alt="" />
+      {viewing && viewingIndex !== null && (
+        <div className="photo-lightbox" onClick={() => { setViewingIndex(null); setAlbumPanel(null); }}>
+          <img src={`/api/photos/${viewing.id}/image`} alt="" />
+          <div className="photo-lightbox__actions" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="photo-lightbox__action"
+              aria-label={albumsApi.isIn(viewing.id, FAVORITES_ID) ? 'Remove from Favorites' : 'Add to Favorites'}
+              onClick={() =>
+                albumAction(() =>
+                  albumsApi.isIn(viewing.id, FAVORITES_ID) ? albumsApi.remove(FAVORITES_ID, [viewing.id]) : albumsApi.add(FAVORITES_ID, [viewing.id])
+                )
+              }
+            >
+              {albumsApi.isIn(viewing.id, FAVORITES_ID) ? '★' : '☆'}
+            </button>
+            <button type="button" className="photo-lightbox__action" aria-label="Albums" onClick={() => setAlbumPanel(albumPanel === 'viewer' ? null : 'viewer')}>
+              📁
+            </button>
+            {albumPanel === 'viewer' && <AlbumChecklist albumsApi={albumsApi} photoIds={[viewing.id]} onDone={() => setAlbumPanel(null)} />}
+          </div>
           <button
             className="photo-lightbox__close"
-            onClick={(e) => { e.stopPropagation(); setViewingIndex(null); }}
+            onClick={(e) => { e.stopPropagation(); setViewingIndex(null); setAlbumPanel(null); }}
           >
             ✕
           </button>
           <button
             className="photo-lightbox__nav photo-lightbox__nav--prev"
-            onClick={(e) => { e.stopPropagation(); setViewingIndex((viewingIndex - 1 + photos.length) % photos.length); }}
+            onClick={(e) => { e.stopPropagation(); setViewingIndex((viewingIndex - 1 + visible.length) % visible.length); }}
           >
             ‹
           </button>
           <button
             className="photo-lightbox__nav photo-lightbox__nav--next"
-            onClick={(e) => { e.stopPropagation(); setViewingIndex((viewingIndex + 1) % photos.length); }}
+            onClick={(e) => { e.stopPropagation(); setViewingIndex((viewingIndex + 1) % visible.length); }}
           >
             ›
           </button>

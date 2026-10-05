@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type PhotoDetail } from '../api/client.js';
-import { fmtTakenDate, splitPhotoPath } from '../utils/photoDetails.js';
+import { api, type PhotoAlbum, type PhotoDetail } from '../api/client.js';
+import { fmtTakenDate, NO_QUALITY_FILTER, passesQualityFilter, splitPhotoPath, type PhotoQualityFilter } from '../utils/photoDetails.js';
+import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js';
 
 /** The same ways to pick photos as the movie maker, in the same order. */
-type Mode = 'date-range' | 'name' | 'random' | 'manual';
+type Mode = 'date-range' | 'name' | 'album' | 'random' | 'manual';
 type Sort = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 
 const PAGE_SIZE = 90;
@@ -43,6 +44,10 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
   const [nameQuery, setNameQuery] = useState('');
   const [randomCount, setRandomCount] = useState(10);
   const [randomSeed, setRandomSeed] = useState(0); // bump to shuffle again
+  const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
+  const [albumId, setAlbumId] = useState('');
+  const [albumPhotoIds, setAlbumPhotoIds] = useState<string[] | null>(null);
+  const [quality, setQuality] = useState<PhotoQualityFilter>(NO_QUALITY_FILTER);
   // Grid
   const [sort, setSort] = useState<Sort>('date-desc');
   const [folderFilter, setFolderFilter] = useState('');
@@ -56,9 +61,20 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
     api.get<PhotoDetail[]>('/photos/details').then(setPhotos).catch(() => setLoadError(true));
   };
   useEffect(load, []);
+  useEffect(() => {
+    api.get<PhotoAlbum[]>('/albums').then(setAlbums).catch(() => setAlbums([]));
+  }, []);
+  useEffect(() => {
+    setAlbumPhotoIds(null);
+    if (!albumId) return;
+    api.get<string[]>(`/albums/${albumId}/photos`).then(setAlbumPhotoIds).catch(() => setAlbumPhotoIds([]));
+  }, [albumId]);
+
+  // The blurry/duplicate options apply to every way of picking.
+  const usable = useMemo(() => (photos ?? []).filter((p) => passesQualityFilter(p, quality)), [photos, quality]);
 
   const sorted = useMemo(() => {
-    const list = [...(photos ?? [])];
+    const list = [...usable];
     if (sort === 'date-desc') list.sort((a, b) => b.taken_at.localeCompare(a.taken_at));
     else if (sort === 'date-asc') list.sort((a, b) => a.taken_at.localeCompare(b.taken_at));
     else {
@@ -66,12 +82,12 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
       if (sort === 'name-desc') list.reverse();
     }
     return list;
-  }, [photos, sort]);
+  }, [usable, sort]);
 
   // What the date-range / name / random modes match (not counting ones already in the section).
   // Order follows the movie maker: date range oldest first, name in folder/filename order.
   const matches = useMemo(() => {
-    const available = (photos ?? []).filter((p) => !alreadyAdded.has(p.id));
+    const available = usable.filter((p) => !alreadyAdded.has(p.id));
     if (mode === 'date-range') {
       if (!startDate || !endDate) return [];
       const start = new Date(`${startDate}T00:00:00`).getTime();
@@ -90,11 +106,16 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
         .filter((p) => p.path.toLowerCase().includes(q))
         .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
     }
+    if (mode === 'album') {
+      if (!albumPhotoIds) return [];
+      const byId = new Map(available.map((p) => [p.id, p]));
+      return albumPhotoIds.map((id) => byId.get(id)).filter((p): p is PhotoDetail => Boolean(p));
+    }
     if (mode === 'random') return sampleRandom(available, Math.max(1, randomCount));
     return [];
     // randomSeed: re-shuffles on "Shuffle again"
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photos, alreadyAdded, mode, startDate, endDate, nameQuery, randomCount, randomSeed]);
+  }, [usable, alreadyAdded, mode, startDate, endDate, nameQuery, randomCount, randomSeed, albumPhotoIds]);
 
   const shown = useMemo(() => {
     const folderQ = folderFilter.trim().toLowerCase();
@@ -117,7 +138,10 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
     [photos]
   );
 
-  useEffect(() => setVisibleCount(PAGE_SIZE), [mode, sort, folderFilter, fileFilter, showPickedOnly, startDate, endDate, nameQuery, randomCount]);
+  useEffect(
+    () => setVisibleCount(PAGE_SIZE),
+    [mode, sort, folderFilter, fileFilter, showPickedOnly, startDate, endDate, nameQuery, randomCount, albumId, quality]
+  );
 
   const toggle = (id: string) =>
     setPicked((cur) => {
@@ -151,6 +175,7 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
         onClick={() => toggle(p.id)}
       >
         <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+        <PhotoQualityTags p={p} />
         <span className="movie-maker__photo-date">{added ? 'Already added' : fmtTakenDate(p.taken_at)}</span>
       </button>
     );
@@ -174,6 +199,7 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
               <select value={mode} onChange={(e) => setMode(e.target.value as Mode)} aria-label="How to pick photos">
                 <option value="date-range">By date taken</option>
                 <option value="name">By folder or filename</option>
+                <option value="album">From an album</option>
                 <option value="random">Random</option>
                 <option value="manual">Choose from the grid</option>
               </select>
@@ -191,6 +217,14 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
                 <input placeholder="e.g. Vacation, 2023, Christmas…" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} />
                 <p className="hint">Matches anywhere in the folder path or filename under PHOTOS_DIR.</p>
               </>
+            )}
+            {mode === 'album' && (
+              <select value={albumId} onChange={(e) => setAlbumId(e.target.value)} aria-label="Album">
+                <option value="">Pick an album…</option>
+                {albums.map((a) => (
+                  <option key={a.id} value={a.id}>{a.is_favorites ? '⭐ ' : ''}{a.name} ({a.count})</option>
+                ))}
+              </select>
             )}
             {mode === 'random' && (
               <div className="task-form__row">
@@ -245,10 +279,14 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
               </>
             )}
 
+            <PhotoQualityOptions value={quality} onChange={setQuality} />
+
             {mode !== 'manual' && (
               <p className="hint">
                 {mode === 'date-range' && (!startDate || !endDate)
                   ? 'Pick both dates.'
+                  : mode === 'album' && !albumId
+                    ? 'Pick an album.'
                   : mode === 'name' && !nameQuery.trim()
                     ? 'Type part of a folder or filename.'
                     : `${matches.length} photo${matches.length === 1 ? '' : 's'} match${matches.length === 1 ? 'es' : ''}${alreadyAdded.size ? ' (not counting ones already in this section)' : ''}.`}

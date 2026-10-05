@@ -14,3 +14,21 @@ export function splitPhotoPath(relativePath: string): { folder: string; file: st
 export function fmtTakenDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+/** "Blurry photos: Include / Exclude" and "Duplicates: Include all / Keep the best" — offered
+ *  wherever photos are picked or browsed. */
+export interface PhotoQualityFilter {
+  excludeBlurry: boolean;
+  excludeDuplicates: boolean;
+}
+
+export const NO_QUALITY_FILTER: PhotoQualityFilter = { excludeBlurry: false, excludeDuplicates: false };
+
+export function passesQualityFilter(
+  p: { blurry: boolean | null; dup_group?: string | null; dup_best?: boolean },
+  filter: PhotoQualityFilter
+): boolean {
+  if (filter.excludeBlurry && p.blurry) return false;
+  if (filter.excludeDuplicates && p.dup_group && !p.dup_best) return false;
+  return true;
+}

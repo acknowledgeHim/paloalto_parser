@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import cron from 'node-cron';
 import { config } from '../config.js';
 import { getPhotoDate } from './photoDates.js';
+import { analyzePhoto } from './photoAnalysis.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const THUMB_WIDTH = 1920; // downsized for smooth slideshow playback on the Pi's GPU
@@ -93,6 +94,8 @@ export async function warmThumbnailCache(): Promise<{ processed: number; failed:
         // Also warm the date-taken cache, so sorting the movie maker's photo grid by date (and
         // date-range movie selections) doesn't have to read every photo's EXIF on first use.
         await getPhotoDate(file);
+        // …and the duplicate/blur analysis (from the thumbnail just made — cheap once it exists).
+        await analyzePhoto(file);
         processed++;
       } catch (err) {
         failed++;

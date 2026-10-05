@@ -125,3 +125,36 @@ shares photos straight from iPhones, either:
   they save as JPEG, or
 - convert existing HEICs in bulk before copying them over, e.g. with
   `heif-convert` (`sudo apt install libheif-examples`).
+
+## Albums and favorites
+
+Tap a photo and use **☆** to add it to **⭐ Favorites**, or **📁** to add it to any album (or make a
+new one right there). For lots at once, **☑ Select photos** on the Photos page → tap photos →
+**⭐ Favorite** or **📁 Albums…**. The chips above the grid switch between All photos, Favorites, and
+each album.
+
+Albums live only in the app's database (`server/data/familyhomecenter.db`) — a photo "in" an album
+is just a note of its path. **Nothing on PHOTOS_DIR is ever moved, copied, renamed, or deleted**, and
+deleting an album only deletes the album. Anyone can add/remove photos; renaming or deleting an
+album is for whoever made it or a parent. Favorites can't be renamed or deleted.
+
+Movies and photo documents can pick **From an album**.
+
+## On this day
+
+When there are photos taken on today's date in past years, the Dashboard shows an **On this day**
+strip ("3 years ago"). Tap one to see it full size.
+
+## Blurry photos and duplicates
+
+In the background, alongside the thumbnail warm-up, each photo gets a quick check for blur and a
+"fingerprint" for spotting near-duplicates (the same shot taken a few times, or a re-saved copy).
+Wherever you browse or pick photos — the Photos page, the movie maker, the document picker — you'll
+see **Possibly blurry** / **Duplicate** tags and these options:
+
+- **Blurry photos: Include / Exclude**
+- **Duplicates: Include all / Keep only the best of each** (the highest-resolution, sharpest copy)
+
+It's a heuristic: a deliberately soft photo (fog, a plain sky) can be flagged, which is why the
+default is to include everything. Photos not checked yet are always included. A large library takes
+a while to analyze the first time; after that only new or changed photos are checked.

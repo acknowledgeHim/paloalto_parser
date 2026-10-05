@@ -611,6 +611,38 @@ db.exec(`
   );
 `);
 
+// Photo albums (routes/albums.ts) — named collections of photos kept purely in this database: an
+// album item is just a path relative to PHOTOS_DIR, so the files on the share are never moved,
+// copied, or touched. The built-in Favorites album (is_favorites = 1, id 'favorites') always exists
+// and can't be renamed or deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_albums (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    is_favorites INTEGER NOT NULL DEFAULT 0,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS photo_album_items (
+    album_id TEXT NOT NULL REFERENCES photo_albums(id) ON DELETE CASCADE,
+    path TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (album_id, path)
+  );
+  INSERT OR IGNORE INTO photo_albums (id, name, is_favorites, created_at) VALUES ('favorites', 'Favorites', 1, datetime('now'));
+
+  -- Per-photo fingerprint (64-bit difference hash, hex) and sharpness score, for spotting
+  -- near-duplicates and blurry shots (services/photoAnalysis.ts). mtime_ms re-analyzes a photo
+  -- that's been replaced in place.
+  CREATE TABLE IF NOT EXISTS photo_analysis (
+    path TEXT PRIMARY KEY,
+    mtime_ms REAL NOT NULL,
+    dhash TEXT NOT NULL,
+    sharpness REAL NOT NULL,
+    pixels INTEGER NOT NULL DEFAULT 0
+  );
+`);
+
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
 // the result (which of this app's groups each device should be in) every minute.

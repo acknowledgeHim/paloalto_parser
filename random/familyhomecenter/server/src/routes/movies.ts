@@ -30,6 +30,15 @@ function resolveMusicTrackPath(track: string): string | null {
 function parseSelection(body: Record<string, unknown>): MovieSelection | null {
   const selection = body.selection as Record<string, unknown> | undefined;
   if (!selection || typeof selection.mode !== 'string') return null;
+  const base = parseSelectionMode(selection);
+  if (!base) return null;
+  return { ...base, excludeBlurry: selection.excludeBlurry === true, excludeDuplicates: selection.excludeDuplicates === true };
+}
+
+function parseSelectionMode(selection: Record<string, unknown>): MovieSelection | null {
+  if (selection.mode === 'album' && typeof selection.albumId === 'string') {
+    return { mode: 'album', albumId: selection.albumId };
+  }
   if (selection.mode === 'manual' && Array.isArray(selection.photoIds)) {
     return { mode: 'manual', photoIds: selection.photoIds as string[] };
   }

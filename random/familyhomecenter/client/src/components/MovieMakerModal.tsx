@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { api, type Movie, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
+import { api, type Movie, type PhotoAlbum, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { LibraryBrowser } from './LibraryBrowser.js';
-import { fmtTakenDate, splitPhotoPath } from '../utils/photoDetails.js';
+import { fmtTakenDate, NO_QUALITY_FILTER, passesQualityFilter, splitPhotoPath, type PhotoQualityFilter } from '../utils/photoDetails.js';
+import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js';
 
-type SelectionMode = 'date-range' | 'name' | 'random' | 'manual';
+type SelectionMode = 'date-range' | 'name' | 'album' | 'random' | 'manual';
 type GridSort = 'movie' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
-type Selection =
+type Selection = (
   | { mode: 'manual'; photoIds: string[] }
   | { mode: 'random'; count: number }
   | { mode: 'date-range'; start: string; end: string }
-  | { mode: 'name'; query: string };
+  | { mode: 'name'; query: string }
+  | { mode: 'album'; albumId: string }
+) & { excludeBlurry?: boolean; excludeDuplicates?: boolean };
 
 /** Mirrors server/src/services/movieRender.ts — with music, the video runs this long past the last
  *  photo while the music fades out. */
@@ -49,6 +52,9 @@ interface DraftState {
   movieOrder: string[];
   missingPhotos: number;
   gridSort: GridSort;
+  // Added later — optional so older drafts still load.
+  albumId?: string;
+  quality?: PhotoQualityFilter;
 }
 
 const AUTOSAVE_MS = 30_000;
@@ -80,6 +86,9 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [nameQuery, setNameQuery] = useState('');
+  const [albumId, setAlbumId] = useState('');
+  const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
+  const [quality, setQuality] = useState<PhotoQualityFilter>(NO_QUALITY_FILTER);
   const [secondsPerPhoto, setSecondsPerPhoto] = useState(4);
   const [musicQuery, setMusicQuery] = useState('');
   const [musicResults, setMusicResults] = useState<Track[]>([]);
@@ -129,6 +138,8 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     setMovieOrder(st.movieOrder);
     setMissingPhotos(st.missingPhotos);
     setGridSort(st.gridSort);
+    setAlbumId(st.albumId ?? '');
+    setQuality(st.quality ?? NO_QUALITY_FILTER);
   };
 
   const loadSource = (movie: Movie) => {
@@ -209,10 +220,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
       return (
         (!folderQ || folder.toLowerCase().includes(folderQ)) &&
         (!fileQ || file.toLowerCase().includes(fileQ)) &&
-        (!showSelectedOnly || selectedIds.has(p.id))
+        (!showSelectedOnly || selectedIds.has(p.id)) &&
+        passesQualityFilter(p, quality)
       );
     });
-  }, [sortedGridPhotos, folderFilter, fileFilter, showSelectedOnly, selectedIds]);
+  }, [sortedGridPhotos, folderFilter, fileFilter, showSelectedOnly, selectedIds, quality]);
 
   // Every distinct folder, offered as suggestions in the folder filter box.
   const gridFolders = useMemo(
@@ -224,7 +236,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   );
 
   // Back to the first page whenever what's shown changes, so a new sort/filter starts at the top.
-  useEffect(() => setVisibleCount(GRID_PAGE_SIZE), [gridSort, folderFilter, fileFilter, showSelectedOnly]);
+  useEffect(() => setVisibleCount(GRID_PAGE_SIZE), [gridSort, folderFilter, fileFilter, showSelectedOnly, quality]);
+
+  useEffect(() => {
+    api.get<PhotoAlbum[]>('/albums').then(setAlbums).catch(() => setAlbums([]));
+  }, []);
 
   const selectAllShown = () =>
     setSelectedIds((ids) => {
@@ -246,6 +262,8 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     movieOrder,
     missingPhotos,
     gridSort,
+    albumId,
+    quality,
   };
   const draftJson = JSON.stringify(draftState);
   // Only new movies auto-save — edits to an existing one are saved deliberately with Update (or
@@ -336,15 +354,19 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     loadSource(editing);
   };
 
+  // Grid picks that the blurry/duplicate options would leave out are dropped too, so the options
+  // mean the same thing in every mode.
+  const pickedGridIds = sortedGridPhotos.filter((p) => selectedIds.has(p.id) && passesQualityFilter(p, quality)).map((p) => p.id);
+
   const buildSelection = (): Selection => {
     // Picked photos play in the grid's current sort order (not the order they were tapped), so
     // e.g. "Date taken (oldest first)" makes a chronological movie.
-    if (mode === 'manual') {
-      return { mode: 'manual', photoIds: sortedGridPhotos.filter((p) => selectedIds.has(p.id)).map((p) => p.id) };
-    }
-    if (mode === 'random') return { mode: 'random', count: randomCount };
-    if (mode === 'name') return { mode: 'name', query: nameQuery };
-    return { mode: 'date-range', start: startDate, end: endDate };
+    if (mode === 'manual') return { mode: 'manual', photoIds: gridPhotos ? pickedGridIds : [...selectedIds] };
+    const flags = { excludeBlurry: quality.excludeBlurry, excludeDuplicates: quality.excludeDuplicates };
+    if (mode === 'random') return { mode: 'random', count: randomCount, ...flags };
+    if (mode === 'name') return { mode: 'name', query: nameQuery, ...flags };
+    if (mode === 'album') return { mode: 'album', albumId, ...flags };
+    return { mode: 'date-range', start: startDate, end: endDate, ...flags };
   };
 
   // Whether there's enough picked to attempt a render — synchronous, so the submit button doesn't
@@ -355,13 +377,14 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     mode === 'manual' ? selectedIds.size > 0 :
     mode === 'random' ? randomCount > 0 :
     mode === 'name' ? nameQuery.trim() !== '' :
+    mode === 'album' ? Boolean(albumId) :
     Boolean(startDate && endDate);
 
   // Live "N photos match" preview — manual mode already knows its own count locally; the other
   // modes ask the server (resolve-selection doesn't create anything, just resolves the count).
   useEffect(() => {
     if (mode === 'manual') {
-      setPreviewCount(selectedIds.size);
+      setPreviewCount(gridPhotos ? pickedGridIds.length : selectedIds.size);
       setPreviewLoading(false);
       return;
     }
@@ -383,7 +406,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selectedIds, randomCount, startDate, endDate, nameQuery, selectionValid]);
+  }, [mode, selectedIds, randomCount, startDate, endDate, nameQuery, albumId, quality, gridPhotos, gridSort, selectionValid]);
 
   useEffect(() => {
     api.get<LibraryStatus>('/music/library/status').then(setLibraryStatus).catch(() => setLibraryStatus({ connected: false, error: 'request failed' }));
@@ -502,6 +525,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
             <select value={mode} onChange={(e) => setMode(e.target.value as SelectionMode)}>
               <option value="date-range">By date taken</option>
               <option value="name">By folder or filename</option>
+              <option value="album">From an album</option>
               <option value="random">Random</option>
               <option value="manual">Choose from the grid</option>
             </select>
@@ -519,6 +543,15 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           )}
+          {mode === 'album' && (
+            <select value={albumId} onChange={(e) => setAlbumId(e.target.value)} aria-label="Album">
+              <option value="">Pick an album…</option>
+              {albums.map((a) => (
+                <option key={a.id} value={a.id}>{a.is_favorites ? '⭐ ' : ''}{a.name} ({a.count})</option>
+              ))}
+            </select>
+          )}
+          <PhotoQualityOptions value={quality} onChange={setQuality} />
           {mode === 'name' && (
             <>
               <input
@@ -591,6 +624,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
                         onClick={() => toggleSelected(p.id)}
                       >
                         <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+                        <PhotoQualityTags p={p} />
                         <span className="movie-maker__photo-date">{fmtTakenDate(p.taken_at)}</span>
                       </button>
                     ))}

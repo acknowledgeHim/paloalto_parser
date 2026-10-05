@@ -757,6 +757,28 @@ textarea {
 .photo-lightbox__nav--prev { left: 20px; }
 .photo-lightbox__nav--next { right: 20px; }
 
+.photos-page__thumb { position: relative; border: 3px solid transparent; }
+.photos-page__thumb--selected { border-color: var(--accent); }
+.photos-page__star { position: absolute; top: 6px; right: 6px; font-size: 1.1em; text-shadow: 0 0 3px rgba(0,0,0,0.6); }
+.photos-page__blurry { position: absolute; top: 6px; left: 6px; background: rgba(180, 35, 24, 0.85); color: #fff; font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+.photos-page__grid-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
+.photos-page__selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.photos-page__selection button, .photos-page__grid-tools > button { min-height: 44px; padding: 0 14px; }
+.photo-albums-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.photo-albums-bar button { min-height: 40px; padding: 0 14px; border-radius: 999px; }
+.photo-albums-bar__manage { margin-top: 6px; }
+.photo-albums-bar__manage button { border-radius: 10px; }
+.photo-albums-bar__new { display: flex; gap: 6px; }
+.photo-albums-bar__new input { min-height: 40px; }
+.photo-lightbox__actions { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; z-index: 2; }
+.photo-lightbox__action { width: 56px; height: 56px; padding: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.15); color: #ffd43b; font-size: 1.6em; }
+.album-checklist { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--panel); color: var(--text); border: 1px solid var(--border); min-width: 240px; max-height: 60vh; overflow-y: auto; margin-bottom: 10px; }
+.album-checklist label { display: flex; align-items: center; gap: 8px; }
+.album-checklist label input { width: 22px; height: 22px; min-height: 0; }
+.album-checklist__new { display: flex; gap: 6px; }
+.album-checklist__new input { flex: 1; min-width: 0; min-height: 40px; }
+.album-checklist__new button, .album-checklist > button { min-height: 40px; padding: 0 12px; }
+
 /* ---- Movie maker ---- */
 .movie-maker__section { margin-top: 20px; }
 /* The movie maker has much more in it than the app's other forms, so it gets a wider panel and
@@ -1385,3 +1407,16 @@ textarea {
 .photo-picker__overlay { z-index: 1100; }
 .photo-picker__photo--added { opacity: 0.4; }
 .photo-picker__photo--preview { cursor: default; }
+
+/* ---- Photo quality (blurry / duplicate) ---- */
+.photo-quality-tags { position: absolute; top: 3px; left: 3px; right: 3px; display: flex; flex-wrap: wrap; gap: 3px; pointer-events: none; }
+.photo-quality-tags span { background: rgba(180, 35, 24, 0.85); color: #fff; font-size: 0.6rem; font-weight: 700; padding: 1px 5px; border-radius: 6px; }
+.photo-quality-options select { min-width: 0; }
+
+/* ---- On this day (Dashboard) ---- */
+.on-this-day { margin-bottom: 16px; }
+.on-this-day__strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.on-this-day__photo { position: relative; flex: 0 0 160px; height: 120px; padding: 0; border: none; border-radius: 10px; overflow: hidden; background: var(--bg); }
+.on-this-day__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.on-this-day__photo span { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px; font-size: 0.75rem; color: #fff; background: rgba(0, 0, 0, 0.55); }
+.on-this-day__caption { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0, 0, 0, 0.5); padding: 6px 14px; border-radius: 999px; }
