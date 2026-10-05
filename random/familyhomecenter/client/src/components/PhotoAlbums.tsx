@@ -95,6 +95,11 @@ export function AlbumChecklist({ albumsApi, photoIds, onDone }: { albumsApi: Alb
           {a.name}
         </label>
       ))}
+      {error && <div className="settings-login__error">{error}</div>}
+      {onDone && (
+        <button type="button" className="secondary" onClick={onDone}>Done</button>
+      )}
+      {/* Below Done on purpose: picking existing albums is the common case; making one is rarer. */}
       <form
         className="album-checklist__new"
         onSubmit={(e) => {
@@ -105,10 +110,6 @@ export function AlbumChecklist({ albumsApi, photoIds, onDone }: { albumsApi: Alb
         <input placeholder="New album name" value={newName} onChange={(e) => setNewName(e.target.value)} />
         <button type="submit" disabled={!newName.trim()}>Create</button>
       </form>
-      {error && <div className="settings-login__error">{error}</div>}
-      {onDone && (
-        <button type="button" className="secondary" onClick={onDone}>Done</button>
-      )}
     </div>
   );
 }
