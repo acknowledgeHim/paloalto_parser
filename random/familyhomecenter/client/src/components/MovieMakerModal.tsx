@@ -6,13 +6,12 @@ import { fmtTakenDate, NO_QUALITY_FILTER, passesQualityFilter, splitPhotoPath, t
 import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js';
 
 type SelectionMode = 'date-range' | 'name' | 'album' | 'random' | 'manual';
-type GridSort = 'movie' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+type GridSort = 'movie' | 'album' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 type Selection = (
   | { mode: 'manual'; photoIds: string[] }
   | { mode: 'random'; count: number }
   | { mode: 'date-range'; start: string; end: string }
   | { mode: 'name'; query: string }
-  | { mode: 'album'; albumId: string }
 ) & { excludeBlurry?: boolean; excludeDuplicates?: boolean };
 
 /** Mirrors server/src/services/movieRender.ts — with music, the video runs this long past the last
@@ -33,6 +32,13 @@ function fmtDuration(totalSeconds: number): string {
 }
 
 const GRID_PAGE_SIZE = 90;
+
+/** The local calendar day (YYYY-MM-DD) a photo was taken — what "By date taken" compares against,
+ *  same as the server's date-range selection. */
+function localDayOf(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 /** GET /movies/:id/source — what an existing movie was made from. */
 interface MovieSource {
@@ -102,6 +108,8 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   const [albumId, setAlbumId] = useState('');
   const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
   const [quality, setQuality] = useState<PhotoQualityFilter>(NO_QUALITY_FILTER);
+  // "From an album" is the photo grid narrowed to one album — pick some or Select all.
+  const [albumPhotoIds, setAlbumPhotoIds] = useState<string[] | null>(null);
   const [secondsPerPhoto, setSecondsPerPhoto] = useState(4);
   const [musicQuery, setMusicQuery] = useState('');
   const [musicResults, setMusicResults] = useState<Track[]>([]);
@@ -210,16 +218,46 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Every mode but Random picks photos on the grid: "Choose from the grid" shows everything, and
+  // By date taken / By folder or filename / From an album narrow it down — then pick some, or
+  // Select all. (Random still picks for you, on the server.)
+  const gridMode = mode !== 'random';
+  // Whether the narrowing mode has what it needs to show anything yet.
+  const gridReady =
+    mode === 'manual' ||
+    (mode === 'album' && Boolean(albumId)) ||
+    (mode === 'date-range' && Boolean(startDate && endDate)) ||
+    (mode === 'name' && nameQuery.trim() !== '');
+
   useEffect(() => {
-    if (mode !== 'manual' || gridPhotos) return;
+    setAlbumPhotoIds(null);
+    if (!albumId) return;
+    api.get<string[]>(`/albums/${albumId}/photos`).then(setAlbumPhotoIds).catch(() => setAlbumPhotoIds([]));
+  }, [albumId]);
+
+  // Each way of picking starts in its natural order (still re-sortable): an album in the order its
+  // photos were added, a date range oldest first, a folder/filename search by folder and name.
+  useEffect(() => {
+    if (mode === 'album' && albumId) setGridSort('album');
+    else if (mode === 'date-range') setGridSort('date-asc');
+    else if (mode === 'name') setGridSort('name-asc');
+    else if (mode === 'manual' && gridSort === 'album') setGridSort(editing ? 'movie' : 'date-desc');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, albumId]);
+
+  useEffect(() => {
+    if (!gridMode || gridPhotos) return;
     setGridError(false);
     api.get<PhotoDetail[]>('/photos/details').then(setGridPhotos).catch(() => setGridError(true));
-  }, [mode, gridPhotos]);
+  }, [gridMode, gridPhotos]);
 
   const sortedGridPhotos = useMemo(() => {
     if (!gridPhotos) return [];
     const sorted = [...gridPhotos];
-    if (gridSort === 'movie') {
+    if (gridSort === 'album') {
+      const position = new Map((albumPhotoIds ?? []).map((id, i) => [id, i]));
+      sorted.sort((a, b) => (position.get(a.id) ?? Infinity) - (position.get(b.id) ?? Infinity) || b.taken_at.localeCompare(a.taken_at));
+    } else if (gridSort === 'movie') {
       // The movie's photos first, in the order they play; everything else after, newest first —
       // so anything newly picked plays after the original photos.
       const position = new Map(movieOrder.map((id, i) => [id, i]));
@@ -238,14 +276,23 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
       if (gridSort === 'name-desc') sorted.reverse();
     }
     return sorted;
-  }, [gridPhotos, gridSort, movieOrder]);
+  }, [gridPhotos, gridSort, movieOrder, albumPhotoIds]);
 
   // Folder and filename are matched separately — a camera's numbered filenames (IMG_20261234…)
   // would otherwise turn a folder search like "2026" into a pile of unrelated photos.
   const shownGridPhotos = useMemo(() => {
     const folderQ = folderFilter.trim().toLowerCase();
     const fileQ = fileFilter.trim().toLowerCase();
+    const inAlbum = mode === 'album' ? new Set(albumPhotoIds ?? []) : null;
+    const nameQ = nameQuery.trim().toLowerCase();
+    if (!gridReady) return [];
     return sortedGridPhotos.filter((p) => {
+      if (inAlbum && !inAlbum.has(p.id)) return false;
+      if (mode === 'date-range') {
+        const day = localDayOf(p.taken_at);
+        if (day < startDate || day > endDate) return false;
+      }
+      if (mode === 'name' && !p.path.toLowerCase().includes(nameQ)) return false;
       const { folder, file } = splitPhotoPath(p.path);
       return (
         (!folderQ || folder.toLowerCase().includes(folderQ)) &&
@@ -254,7 +301,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
         passesQualityFilter(p, quality)
       );
     });
-  }, [sortedGridPhotos, folderFilter, fileFilter, showSelectedOnly, selectedIds, quality]);
+  }, [sortedGridPhotos, folderFilter, fileFilter, showSelectedOnly, selectedIds, quality, mode, albumPhotoIds, gridReady, startDate, endDate, nameQuery]);
 
   // Every distinct folder, offered as suggestions in the folder filter box.
   const gridFolders = useMemo(
@@ -396,11 +443,12 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   const buildSelection = (): Selection => {
     // Picked photos play in the grid's current sort order (not the order they were tapped), so
     // e.g. "Date taken (oldest first)" makes a chronological movie.
-    if (mode === 'manual') return { mode: 'manual', photoIds: gridPhotos ? pickedGridIds : [...selectedIds] };
+    // Grid and album picks both go to the server as the exact photos picked. (Picks made in other
+    // albums, or the full grid, stay picked — so one movie can mix albums.)
+    if (gridMode) return { mode: 'manual', photoIds: gridPhotos ? pickedGridIds : [...selectedIds] };
     const flags = { excludeBlurry: quality.excludeBlurry, excludeDuplicates: quality.excludeDuplicates };
     if (mode === 'random') return { mode: 'random', count: randomCount, ...flags };
     if (mode === 'name') return { mode: 'name', query: nameQuery, ...flags };
-    if (mode === 'album') return { mode: 'album', albumId, ...flags };
     return { mode: 'date-range', start: startDate, end: endDate, ...flags };
   };
 
@@ -409,16 +457,15 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   // below. The preview is purely informational; hitting Create always gets an authoritative answer
   // from the actual POST /movies call regardless of whether the preview has come back yet.
   const selectionValid =
-    mode === 'manual' ? selectedIds.size > 0 :
+    gridMode ? selectedIds.size > 0 :
     mode === 'random' ? randomCount > 0 :
     mode === 'name' ? nameQuery.trim() !== '' :
-    mode === 'album' ? Boolean(albumId) :
     Boolean(startDate && endDate);
 
   // Live "N photos match" preview — manual mode already knows its own count locally; the other
   // modes ask the server (resolve-selection doesn't create anything, just resolves the count).
   useEffect(() => {
-    if (mode === 'manual') {
+    if (gridMode) {
       setPreviewCount(gridPhotos ? pickedGridIds.length : selectedIds.size);
       setPreviewLoading(false);
       return;
@@ -618,9 +665,14 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
               <p className="hint">Matches anywhere in the folder path or filename under PHOTOS_DIR.</p>
             </>
           )}
-          {mode === 'manual' && (
+          {gridMode && !gridReady && (
+            <p className="hint">
+              {mode === 'date-range' ? 'Pick both dates to see the photos taken then.' : mode === 'name' ? 'Type part of a folder or filename to see the matching photos.' : 'Pick an album to see its photos.'}
+            </p>
+          )}
+          {gridMode && gridReady && (
             <>
-              {!gridPhotos && !gridError && <p className="hint">Loading photos…</p>}
+              {(!gridPhotos || (mode === 'album' && !albumPhotoIds)) && !gridError && <p className="hint">Loading photos…</p>}
               {gridError && (
                 <p className="hint">
                   Couldn't load the photo list.{' '}
@@ -634,6 +686,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
                   <div className="task-form__row">
                     <select value={gridSort} onChange={(e) => setGridSort(e.target.value as GridSort)} aria-label="Sort photos">
                       {editing && <option value="movie">Movie order</option>}
+                      {mode === 'album' && <option value="album">Album order</option>}
                       <option value="date-desc">Date taken (newest first)</option>
                       <option value="date-asc">Date taken (oldest first)</option>
                       <option value="name-asc">Folder / filename (A–Z)</option>
@@ -696,11 +749,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
               )}
             </>
           )}
-          {mode !== 'manual' && selectionValid && previewLoading && previewCount === null && (
+          {!gridMode && selectionValid && previewLoading && previewCount === null && (
             <p className="hint">Checking how many photos match…</p>
           )}
           {previewCount !== null && (
-            <p className="hint">{previewCount} photo{previewCount === 1 ? '' : 's'} {mode === 'manual' ? 'picked' : 'match'}.</p>
+            <p className="hint">{previewCount} photo{previewCount === 1 ? '' : 's'} {gridMode ? 'picked' : 'match'}.</p>
           )}
         </div>
 
@@ -752,16 +805,16 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
           {titleCard && (
             <input placeholder="Subtitle under the title (optional, e.g. July 2026)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
           )}
-          {mode === 'manual' ? (
+          {gridMode ? (
             selectedIds.size > 0 && (
               <button type="button" className="secondary" onClick={() => setShowCaptions((v) => !v)}>
                 ✎ Captions ({Object.entries(captions).filter(([id, c]) => c.trim() && selectedIds.has(id)).length} of {selectedIds.size})
               </button>
             )
           ) : (
-            <p className="hint">To caption photos, pick them with "Choose from the grid" (or caption them later with Edit).</p>
+            <p className="hint">To caption photos, pick them with "Choose from the grid" or "From an album" (or caption them later with Edit).</p>
           )}
-          {mode === 'manual' && showCaptions && (
+          {gridMode && showCaptions && (
             <div className="movie-maker__captions">
               {(gridPhotos ? pickedGridIds : [...selectedIds]).map((id, i) => (
                 <div key={id} className="movie-maker__caption-row">

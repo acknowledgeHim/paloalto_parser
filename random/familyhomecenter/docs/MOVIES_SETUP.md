@@ -78,6 +78,14 @@ a draft is cleared once its movie is created or updated, and drafts untouched fo
 cleaned up. Drafts live on the server, so you can start on the kiosk and finish on a phone.
 Editing an existing movie doesn't auto-save — **Update movie** saves it, **Cancel** drops the changes.
 
+## Picking photos
+
+**By date taken**, **By folder or filename**, and **From an album** each show the matching photos on
+the grid — tap the ones you want, or **Select all shown** — with the same sort, folder/filename
+filters, **Show only picked**, and blurry/duplicate options as **Choose from the grid** (which shows
+everything). Picks stay picked when you switch between them, so a movie can mix albums and date
+ranges; they play in the grid's current sort order. **Random** picks for you.
+
 ## Editing a movie
 
 Each movie remembers exactly which photos (in order) and songs it was made from, so **✎ Edit**

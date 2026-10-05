@@ -5,7 +5,7 @@ import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js'
 
 /** The same ways to pick photos as the movie maker, in the same order. */
 type Mode = 'date-range' | 'name' | 'album' | 'random' | 'manual';
-type Sort = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+type Sort = 'album' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 
 const PAGE_SIZE = 90;
 
@@ -28,17 +28,25 @@ function sampleRandom<T>(items: T[], n: number): T[] {
   return arr.slice(0, n);
 }
 
+/** The local calendar day (YYYY-MM-DD) a photo was taken. */
+function localDayOf(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /**
- * A pop-over for picking a group of pictures, with the movie maker's options: by date taken (a
- * range), by folder or filename, random, or choose from the grid (sort, separate folder/filename
- * filters, select all shown, show only picked). Everything works off GET /photos/details, so the
- * date range uses the same "date taken" (EXIF, else file date) as the movie maker.
+ * A pop-over for picking a group of pictures, with the movie maker's options. Every way but Random
+ * shows photos on a grid to pick from: "Choose from the grid" shows everything, while By date taken,
+ * By folder or filename, and From an album narrow it down first — then tap the ones you want or
+ * Select all, with the same sort, folder/filename filters, Show only picked, and blurry/duplicate
+ * options throughout. Random picks for you (Shuffle again for another set). Everything works off
+ * GET /photos/details, so "date taken" matches the movie maker's (EXIF, else file date).
  */
 export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
   const [photos, setPhotos] = useState<PhotoDetail[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [mode, setMode] = useState<Mode>('manual');
-  // Date range / name / random
+  // Narrowing (date range / name / album) and random
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [nameQuery, setNameQuery] = useState('');
@@ -70,52 +78,60 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
     api.get<string[]>(`/albums/${albumId}/photos`).then(setAlbumPhotoIds).catch(() => setAlbumPhotoIds([]));
   }, [albumId]);
 
+  const gridMode = mode !== 'random';
+  // Whether a narrowing mode has what it needs to show anything yet.
+  const ready =
+    mode === 'manual' ||
+    mode === 'random' ||
+    (mode === 'album' && Boolean(albumId) && albumPhotoIds !== null) ||
+    (mode === 'date-range' && Boolean(startDate && endDate)) ||
+    (mode === 'name' && nameQuery.trim() !== '');
+
+  // Each way of picking starts in its natural order (still re-sortable).
+  useEffect(() => {
+    if (mode === 'album') setSort('album');
+    else if (mode === 'date-range') setSort('date-asc');
+    else if (mode === 'name') setSort('name-asc');
+    else if (sort === 'album') setSort('date-desc');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   // The blurry/duplicate options apply to every way of picking.
   const usable = useMemo(() => (photos ?? []).filter((p) => passesQualityFilter(p, quality)), [photos, quality]);
 
+  /** What the current mode narrows the library down to (before the grid's own filters). */
+  const narrowed = useMemo(() => {
+    if (!ready) return [];
+    if (mode === 'date-range') {
+      return usable.filter((p) => {
+        const day = localDayOf(p.taken_at);
+        return day >= startDate && day <= endDate;
+      });
+    }
+    if (mode === 'name') {
+      const q = nameQuery.trim().toLowerCase();
+      return usable.filter((p) => p.path.toLowerCase().includes(q));
+    }
+    if (mode === 'album') {
+      const inAlbum = new Set(albumPhotoIds ?? []);
+      return usable.filter((p) => inAlbum.has(p.id));
+    }
+    return usable;
+  }, [usable, ready, mode, startDate, endDate, nameQuery, albumPhotoIds]);
+
   const sorted = useMemo(() => {
-    const list = [...usable];
-    if (sort === 'date-desc') list.sort((a, b) => b.taken_at.localeCompare(a.taken_at));
+    const list = [...narrowed];
+    if (sort === 'album') {
+      const position = new Map((albumPhotoIds ?? []).map((id, i) => [id, i]));
+      list.sort((a, b) => (position.get(a.id) ?? Infinity) - (position.get(b.id) ?? Infinity));
+    } else if (sort === 'date-desc') list.sort((a, b) => b.taken_at.localeCompare(a.taken_at));
     else if (sort === 'date-asc') list.sort((a, b) => a.taken_at.localeCompare(b.taken_at));
     else {
       list.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
       if (sort === 'name-desc') list.reverse();
     }
     return list;
-  }, [usable, sort]);
-
-  // What the date-range / name / random modes match (not counting ones already in the section).
-  // Order follows the movie maker: date range oldest first, name in folder/filename order.
-  const matches = useMemo(() => {
-    const available = usable.filter((p) => !alreadyAdded.has(p.id));
-    if (mode === 'date-range') {
-      if (!startDate || !endDate) return [];
-      const start = new Date(`${startDate}T00:00:00`).getTime();
-      const end = new Date(`${endDate}T23:59:59`).getTime();
-      return available
-        .filter((p) => {
-          const t = new Date(p.taken_at).getTime();
-          return t >= start && t <= end;
-        })
-        .sort((a, b) => a.taken_at.localeCompare(b.taken_at));
-    }
-    if (mode === 'name') {
-      const q = nameQuery.trim().toLowerCase();
-      if (!q) return [];
-      return available
-        .filter((p) => p.path.toLowerCase().includes(q))
-        .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
-    }
-    if (mode === 'album') {
-      if (!albumPhotoIds) return [];
-      const byId = new Map(available.map((p) => [p.id, p]));
-      return albumPhotoIds.map((id) => byId.get(id)).filter((p): p is PhotoDetail => Boolean(p));
-    }
-    if (mode === 'random') return sampleRandom(available, Math.max(1, randomCount));
-    return [];
-    // randomSeed: re-shuffles on "Shuffle again"
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usable, alreadyAdded, mode, startDate, endDate, nameQuery, randomCount, randomSeed, albumPhotoIds]);
+  }, [narrowed, sort, albumPhotoIds]);
 
   const shown = useMemo(() => {
     const folderQ = folderFilter.trim().toLowerCase();
@@ -129,6 +145,14 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
       );
     });
   }, [sorted, folderFilter, fileFilter, showPickedOnly, picked]);
+
+  // Random: a fresh sample (not counting ones already in the section).
+  const randomPick = useMemo(
+    () => (mode === 'random' ? sampleRandom(usable.filter((p) => !alreadyAdded.has(p.id)), Math.max(1, randomCount)) : []),
+    // randomSeed: re-shuffles on "Shuffle again"
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode, usable, alreadyAdded, randomCount, randomSeed]
+  );
 
   const folders = useMemo(
     () =>
@@ -160,8 +184,16 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
       return next;
     });
 
-  // Grid picks are added in the grid's sort order; the other modes in their match order.
-  const toAdd = mode === 'manual' ? sorted.filter((p) => picked.has(p.id)).map((p) => p.id) : matches.map((p) => p.id);
+  // Grid picks are added in the current sort order (then any picked under another mode or album
+  // before switching, oldest first — so one group can mix them). Random adds its sample.
+  const toAdd = useMemo(() => {
+    if (!gridMode) return randomPick.map((p) => p.id);
+    const order = new Map(sorted.map((p, i) => [p.id, i]));
+    return (photos ?? [])
+      .filter((p) => picked.has(p.id) && passesQualityFilter(p, quality))
+      .sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity) || a.taken_at.localeCompare(b.taken_at))
+      .map((p) => p.id);
+  }, [gridMode, randomPick, sorted, photos, picked, quality]);
 
   const tile = (p: PhotoDetail, interactive: boolean) => {
     const added = alreadyAdded.has(p.id);
@@ -181,7 +213,7 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
     );
   };
 
-  const list = mode === 'manual' ? shown : matches;
+  const list = gridMode ? shown : randomPick;
 
   return (
     <div className="modal-overlay photo-picker__overlay">
@@ -236,10 +268,23 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
               </div>
             )}
 
-            {mode === 'manual' && (
+            <PhotoQualityOptions value={quality} onChange={setQuality} />
+
+            {!ready && (
+              <p className="hint">
+                {mode === 'date-range'
+                  ? 'Pick both dates to see the photos taken then.'
+                  : mode === 'name'
+                    ? 'Type part of a folder or filename to see the matching photos.'
+                    : 'Pick an album to see its photos.'}
+              </p>
+            )}
+
+            {gridMode && ready && (
               <>
                 <div className="task-form__row">
                   <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort photos">
+                    {mode === 'album' && <option value="album">Album order</option>}
                     <option value="date-desc">Date taken (newest first)</option>
                     <option value="date-asc">Date taken (oldest first)</option>
                     <option value="name-asc">Folder / filename (A–Z)</option>
@@ -266,7 +311,7 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
                 </div>
                 <div className="task-form__row">
                   <button type="button" className="secondary" onClick={selectAllShown} disabled={shown.length === 0}>
-                    Select all shown ({shown.length})
+                    Select all shown ({shown.filter((p) => !alreadyAdded.has(p.id)).length})
                   </button>
                   <button type="button" className="secondary" onClick={() => setPicked(new Set())} disabled={picked.size === 0}>
                     Clear selection
@@ -279,30 +324,25 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
               </>
             )}
 
-            <PhotoQualityOptions value={quality} onChange={setQuality} />
-
-            {mode !== 'manual' && (
+            {mode === 'random' && (
               <p className="hint">
-                {mode === 'date-range' && (!startDate || !endDate)
-                  ? 'Pick both dates.'
-                  : mode === 'album' && !albumId
-                    ? 'Pick an album.'
-                  : mode === 'name' && !nameQuery.trim()
-                    ? 'Type part of a folder or filename.'
-                    : `${matches.length} photo${matches.length === 1 ? '' : 's'} match${matches.length === 1 ? 'es' : ''}${alreadyAdded.size ? ' (not counting ones already in this section)' : ''}.`}
+                {randomPick.length} random photo{randomPick.length === 1 ? '' : 's'}
+                {alreadyAdded.size ? ' (not counting ones already in this section)' : ''}.
               </p>
             )}
 
-            {list.length > 0 && (
-              <div className="movie-maker__photo-grid">{list.slice(0, visibleCount).map((p) => tile(p, mode === 'manual'))}</div>
+            {ready && list.length > 0 && (
+              <div className="movie-maker__photo-grid">{list.slice(0, visibleCount).map((p) => tile(p, gridMode))}</div>
             )}
-            {mode === 'manual' && shown.length === 0 && <p className="hint">No photos match that filter.</p>}
-            {visibleCount < list.length && (
+            {gridMode && ready && shown.length === 0 && <p className="hint">No photos match.</p>}
+            {ready && visibleCount < list.length && (
               <button type="button" className="secondary" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
                 Show more ({list.length - visibleCount} left)
               </button>
             )}
-            {mode === 'manual' && <p className="hint">Picked photos are added in the order shown by the sort above.</p>}
+            {gridMode && picked.size > 0 && (
+              <p className="hint">{picked.size} picked — added in the order shown by the sort above.</p>
+            )}
           </>
         )}
         <div className="task-form__row">

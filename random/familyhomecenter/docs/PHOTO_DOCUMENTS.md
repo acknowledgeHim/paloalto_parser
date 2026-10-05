@@ -10,15 +10,12 @@ Tap **+** next to Documents, give it a **title**, then build it out of **section
 - an optional **heading** (e.g. "Day at the beach")
 - optional **text** — blank lines start a new paragraph
 - a group of **pictures**, added with **＋ Add pictures**, which has the same ways to pick as the
-  movie maker:
-  - **By date taken** — everything between two dates, oldest first
-  - **By folder or filename** — anything with that text in its folder path or filename
-  - **Random** — a number of random pictures (**Shuffle again** for a different set)
-  - **Choose from the grid** — sort by date taken or folder/filename, separate folder and filename
-    filters, **Select all shown**, **Clear selection**, and **Show only picked**; picks are added in
-    the grid's sort order
-
-  Pictures already in the section are left out of the matches, so adding twice doesn't duplicate.
+  movie maker. **By date taken**, **By folder or filename**, and **From an album** each narrow the
+  photo grid down — then tap the ones you want or **Select all shown** — and **Choose from the grid**
+  shows everything. All of them have the grid's sort, folder/filename filters, **Show only picked**,
+  and the blurry/duplicate options; picks stay picked when you switch between them, so one group
+  can mix an album with a date range. **Random** picks for you (**Shuffle again** for another set).
+  Pictures already in the section show as "Already added", so adding twice doesn't duplicate.
 - a **caption** under any picture (optional), and ◀ ▶ ✕ to reorder or remove pictures
 - a **layout**: Large (1 per row), 2 per row, or 3 per row
 
