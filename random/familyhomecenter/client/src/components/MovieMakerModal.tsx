@@ -18,6 +18,11 @@ type Selection = (
 /** Mirrors server/src/services/movieRender.ts — with music, the video runs this long past the last
  *  photo while the music fades out. */
 const MUSIC_TAIL_SECONDS = 4;
+/** Mirrors TITLE_CARD_SECONDS in server/src/services/movieRender.ts. */
+const TITLE_CARD_SECONDS = 4;
+
+type Transition = 'cut' | 'crossfade';
+type Motion = 'none' | 'kenburns';
 
 function fmtDuration(totalSeconds: number): string {
   const s = Math.round(totalSeconds);
@@ -36,6 +41,9 @@ interface MovieSource {
   photo_ids: string[];
   missing_photos: number;
   tracks: Array<{ file: string; title: string; artist: string | null; duration: number | null }>;
+  style: { transition: Transition; motion: Motion; title_card: boolean; subtitle: string };
+  /** photo id → caption */
+  captions: Record<string, string>;
 }
 
 /** The whole form, as auto-saved to a draft (server/src/routes/movies.ts's /drafts). */
@@ -55,6 +63,11 @@ interface DraftState {
   // Added later — optional so older drafts still load.
   albumId?: string;
   quality?: PhotoQualityFilter;
+  transition?: Transition;
+  motion?: Motion;
+  titleCard?: boolean;
+  subtitle?: string;
+  captions?: Record<string, string>;
 }
 
 const AUTOSAVE_MS = 30_000;
@@ -115,6 +128,13 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   // Editing: the movie's own photo order, which the grid's "Movie order" sort follows (so an
   // unchanged movie re-renders in the same order), and how many of its photos are gone now.
   const [movieOrder, setMovieOrder] = useState<string[]>([]);
+  // Optional style — all off by default (plain cuts, no title card, no captions).
+  const [transition, setTransition] = useState<Transition>('cut');
+  const [motion, setMotion] = useState<Motion>('none');
+  const [titleCard, setTitleCard] = useState(false);
+  const [subtitle, setSubtitle] = useState('');
+  const [captions, setCaptions] = useState<Record<string, string>>({});
+  const [showCaptions, setShowCaptions] = useState(false);
   const [missingPhotos, setMissingPhotos] = useState(0);
   const [sourceLoading, setSourceLoading] = useState(Boolean(editing || initialDraftId));
 
@@ -137,6 +157,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     setMusicTracks(st.musicTracks);
     setMovieOrder(st.movieOrder);
     setMissingPhotos(st.missingPhotos);
+    setTransition(st.transition ?? 'cut');
+    setMotion(st.motion ?? 'none');
+    setTitleCard(st.titleCard ?? false);
+    setSubtitle(st.subtitle ?? '');
+    setCaptions(st.captions ?? {});
     setGridSort(st.gridSort);
     setAlbumId(st.albumId ?? '');
     setQuality(st.quality ?? NO_QUALITY_FILTER);
@@ -155,6 +180,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
         setMovieOrder(src.photo_ids);
         setMissingPhotos(src.missing_photos);
         setGridSort('movie');
+        setTransition(src.style.transition);
+        setMotion(src.style.motion);
+        setTitleCard(src.style.title_card);
+        setSubtitle(src.style.subtitle);
+        setCaptions(src.captions);
       })
       .catch((err) => setError(`Couldn't load this movie's photos and songs: ${(err as Error).message}`))
       .finally(() => setSourceLoading(false));
@@ -262,6 +292,11 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
     movieOrder,
     missingPhotos,
     gridSort,
+    transition,
+    motion,
+    titleCard,
+    subtitle,
+    captions,
     albumId,
     quality,
   };
@@ -440,16 +475,23 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   // Running totals so it's easy to add just enough music to cover the whole slideshow. The movie's
   // length is only known once the photo count is (manual/preview); a track with no duration in
   // the library index just can't be counted.
+  const titleSeconds = titleCard ? TITLE_CARD_SECONDS : 0;
   const movieSeconds =
     previewCount !== null && previewCount > 0
-      ? previewCount * secondsPerPhoto + (musicTracks.length > 0 ? MUSIC_TAIL_SECONDS : 0)
+      ? titleSeconds + previewCount * secondsPerPhoto + (musicTracks.length > 0 ? MUSIC_TAIL_SECONDS : 0)
       : null;
   const musicSeconds = musicTracks.reduce((sum, t) => sum + (t.duration ?? 0), 0);
   const unknownDurationCount = musicTracks.filter((t) => t.duration == null).length;
   // Remaining once the music would be added — the 4s tail only applies once there's music at all.
   const musicShortBy =
     previewCount !== null && previewCount > 0
-      ? previewCount * secondsPerPhoto + MUSIC_TAIL_SECONDS - musicSeconds
+      ? titleSeconds + previewCount * secondsPerPhoto + MUSIC_TAIL_SECONDS - musicSeconds
+      : null;
+  // "Fit photos to the music": the seconds per photo that makes the photos (plus title card and
+  // closing fade) last as long as the songs. Only when every song's length is known.
+  const fittedSeconds =
+    previewCount && musicTracks.length > 0 && unknownDurationCount === 0
+      ? Math.max(1, Math.round(((musicSeconds - MUSIC_TAIL_SECONDS - titleSeconds) / previewCount) * 10) / 10)
       : null;
 
   const toggleSelected = (id: string) => {
@@ -472,6 +514,9 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
       seconds_per_photo: secondsPerPhoto,
       music_tracks: musicTracks.map((t) => t.file),
       music_track_details: musicTracks.map((t) => ({ file: t.file, title: t.title, artist: t.artist, duration: t.duration })),
+      style: { transition, motion, title_card: titleCard, subtitle },
+      // Only captions for photos actually in the movie (the server matches them up by photo id).
+      captions: Object.fromEntries(Object.entries(captions).filter(([id, c]) => c.trim() && selectedIds.has(id))),
       created_by_id: activeProfile?.id ?? null,
     };
     try {
@@ -661,9 +706,67 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
         {movieSeconds !== null && (
           <p className="hint movie-maker__length">
             Movie length: <strong>{fmtDuration(movieSeconds)}</strong>
-            {' '}({previewCount} × {secondsPerPhoto}s{musicTracks.length > 0 ? ` + ${MUSIC_TAIL_SECONDS}s fade-out` : ''})
+            {' '}({titleCard ? `${TITLE_CARD_SECONDS}s title + ` : ''}{previewCount} × {secondsPerPhoto}s{musicTracks.length > 0 ? ` + ${MUSIC_TAIL_SECONDS}s fade-out` : ''})
           </p>
         )}
+        {fittedSeconds !== null && Math.abs(fittedSeconds - secondsPerPhoto) >= 0.1 && (
+          <button type="button" className="secondary movie-maker__fit" onClick={() => setSecondsPerPhoto(fittedSeconds)}>
+            ♫ Fit photos to the music ({fittedSeconds}s each)
+          </button>
+        )}
+
+        <div className="movie-maker__style">
+          <label className="member-form__label">Style (optional)</label>
+          <div className="task-form__row">
+            <label className="member-form__label member-form__label--inline">
+              Between photos
+              <select value={transition} onChange={(e) => setTransition(e.target.value as Transition)}>
+                <option value="cut">Straight cut</option>
+                <option value="crossfade">Crossfade</option>
+              </select>
+            </label>
+            <label className="member-form__label member-form__label--inline">
+              Motion
+              <select value={motion} onChange={(e) => setMotion(e.target.value as Motion)}>
+                <option value="none">None (still photos)</option>
+                <option value="kenburns">Slow pan &amp; zoom</option>
+              </select>
+            </label>
+          </div>
+          {motion === 'kenburns' && <p className="hint">Pan &amp; zoom takes noticeably longer to render on a Pi.</p>}
+          <label className="member-form__label member-form__label--inline movie-maker__check">
+            <input type="checkbox" checked={titleCard} onChange={(e) => setTitleCard(e.target.checked)} />
+            Opening title card (shows the title for {TITLE_CARD_SECONDS}s)
+          </label>
+          {titleCard && (
+            <input placeholder="Subtitle under the title (optional, e.g. July 2026)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
+          )}
+          {mode === 'manual' ? (
+            selectedIds.size > 0 && (
+              <button type="button" className="secondary" onClick={() => setShowCaptions((v) => !v)}>
+                ✎ Captions ({Object.entries(captions).filter(([id, c]) => c.trim() && selectedIds.has(id)).length} of {selectedIds.size})
+              </button>
+            )
+          ) : (
+            <p className="hint">To caption photos, pick them with "Choose from the grid" (or caption them later with Edit).</p>
+          )}
+          {mode === 'manual' && showCaptions && (
+            <div className="movie-maker__captions">
+              {(gridPhotos ? pickedGridIds : [...selectedIds]).map((id, i) => (
+                <div key={id} className="movie-maker__caption-row">
+                  <span className="movie-maker__caption-n">{i + 1}</span>
+                  <img src={`/api/photos/${id}/image`} alt="" loading="lazy" />
+                  <input
+                    placeholder="Caption (optional)"
+                    value={captions[id] ?? ''}
+                    maxLength={200}
+                    onChange={(e) => setCaptions((cur) => ({ ...cur, [id]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div>
           <label className="member-form__label">Music (optional)</label>

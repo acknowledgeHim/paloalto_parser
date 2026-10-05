@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { NavBar } from './components/NavBar.js';
-import { Slideshow } from './components/Slideshow.js';
+import { Screensaver } from './components/Screensaver.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { TasksPage } from './pages/TasksPage.js';
@@ -54,7 +54,7 @@ export function App() {
   }, [idle]);
 
   if (showSlideshow) {
-    return <Slideshow intervalSeconds={slideshowIntervalSec} onExit={() => setDismissed(true)} />;
+    return <Screensaver intervalSeconds={slideshowIntervalSec} onExit={() => setDismissed(true)} />;
   }
 
   return (

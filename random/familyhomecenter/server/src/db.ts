@@ -575,7 +575,9 @@ try {
 // What a movie was made from, so it can be edited and re-rendered later: photo_paths is a JSON
 // array of photo paths relative to PHOTOS_DIR (in play order), music_track_details a JSON array of
 // the tracks' {file, title, artist, duration} as picked. NULL for movies made before this existed.
-for (const column of ['photo_paths TEXT', 'music_track_details TEXT']) {
+// options: the movie's style (services/movieRender.ts's MovieStyle, as stored by routes/movies.ts);
+// photo_captions: { relative photo path: caption }. NULL on older movies = plain cuts, no captions.
+for (const column of ['photo_paths TEXT', 'music_track_details TEXT', 'options TEXT', 'photo_captions TEXT']) {
   try {
     db.exec(`ALTER TABLE movies ADD COLUMN ${column}`);
   } catch (err) {

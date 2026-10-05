@@ -45,6 +45,29 @@ you'd need to cover the whole thing. Hit **Create movie** — it starts
 rendering in the background and shows up in the list right away as "Rendering…"; the page checks in
 every few seconds and the entry switches to a **▶ Watch** button once it's done.
 
+## Style options (all optional)
+
+Under **Style** in the movie maker — all off by default, all changeable later with **✎ Edit**:
+
+- **Between photos: Straight cut / Crossfade** — a one-second blend from each photo into the next
+  (doesn't change the movie's length).
+- **Motion: None / Slow pan & zoom** — each photo slowly zooms in or out, some panning sideways
+  (the "Ken Burns" look). Takes noticeably longer to render on a Pi.
+- **Opening title card** — the movie's title (plus an optional subtitle, e.g. "July 2026") on its
+  own for 4 seconds at the start.
+- **Captions** — with "Choose from the grid", tap **✎ Captions** to write a line under any picked
+  photo. (With the other pick modes, pick first, then use Edit to caption.)
+- **♫ Fit photos to the music** — appears once songs with known lengths are added; sets seconds
+  per photo so the photos (plus title card and closing fade) last as long as the music.
+
+## Screensaver movie (parents only)
+
+A parent can tap **📺 Screensaver** on a finished movie to play it as the idle screensaver instead of
+the photo slideshow — **Today**, **For a week**, or **Until I turn it off**, optionally **With
+sound** (some browsers only allow sound once someone has tapped the screen; otherwise it plays
+silently). The movie shows "📺 On the screensaver through …" with a **Stop** button. Tapping the
+screen exits the screensaver as usual.
+
 ## Drafts (auto-save)
 
 While making a **new** movie, the movie maker auto-saves what you've picked — title, photos,

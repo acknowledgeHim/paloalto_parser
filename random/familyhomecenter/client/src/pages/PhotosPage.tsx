@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Movie, type Photo } from '../api/client.js';
+import { api, type Movie, type Photo, type ScreensaverMovie } from '../api/client.js';
 import { Slideshow } from '../components/Slideshow.js';
 import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
@@ -9,8 +9,27 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
 function fmtMovieLength(m: Movie): string {
-  const total = Math.round(m.photo_count * m.seconds_per_photo + (m.music_tracks.length > 0 ? 4 : 0));
+  const total = Math.round(
+    (m.style?.title_card ? 4 : 0) + m.photo_count * m.seconds_per_photo + (m.music_tracks.length > 0 ? 4 : 0)
+  );
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** "Crossfade · Pan & zoom · Title card" — just the options that are on. */
+function fmtMovieStyle(m: Movie): string {
+  const parts: string[] = [];
+  if (m.style?.transition === 'crossfade') parts.push('Crossfade');
+  if (m.style?.motion === 'kenburns') parts.push('Pan & zoom');
+  if (m.style?.title_card) parts.push('Title card');
+  return parts.join(' · ');
+}
+
+function fmtUntil(iso: string | null): string {
+  if (!iso) return 'until turned off';
+  const d = new Date(iso);
+  return d.toDateString() === new Date().toDateString()
+    ? 'through tonight'
+    : `through ${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}`;
 }
 
 /** The saved file is named after the movie's title rather than its internal id — minus characters
@@ -161,6 +180,9 @@ function MoviesSection() {
   const [drafts, setDrafts] = useState<MovieDraft[]>([]);
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<Movie | null>(null);
+  const [screensaver, setScreensaver] = useState<ScreensaverMovie | null>(null);
+  const [screensaverMenu, setScreensaverMenu] = useState<string | null>(null); // movie id
+  const [screensaverSound, setScreensaverSound] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const canManage = useCanManageOwned();
@@ -185,6 +207,29 @@ function MoviesSection() {
     }
     load();
   };
+  // Putting a movie on the screensaver is a parent-only call (the server enforces it via the same
+  // gate as Settings); with no parent set up yet, anyone can, like the rest of the app.
+  const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
+  const setOnScreensaver = async (movieId: string, days: 1 | 7 | null) => {
+    setActionError(null);
+    try {
+      await api.put('/movies/screensaver', { movie_id: movieId, days, sound: screensaverSound });
+      setScreensaverMenu(null);
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+    load();
+  };
+  const stopScreensaver = async () => {
+    setActionError(null);
+    try {
+      await api.delete('/movies/screensaver');
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+    load();
+  };
+
   const closeMaker = () => {
     setShowMaker(false);
     setEditing(null);
@@ -196,6 +241,7 @@ function MoviesSection() {
   const load = () => {
     api.get<Movie[]>('/movies').then(setMovies).catch(console.error);
     api.get<MovieDraft[]>('/movies/drafts').then(setDrafts).catch(console.error);
+    api.get<ScreensaverMovie | null>('/movies/screensaver').then(setScreensaver).catch(() => setScreensaver(null));
   };
   useEffect(load, []);
 
@@ -285,8 +331,17 @@ function MoviesSection() {
                       ? ` · ${m.music_tracks.length} song${m.music_tracks.length === 1 ? '' : 's'}`
                       : ''}
                     {creatorName(m) && ` · by ${creatorName(m)}`}
+                    {fmtMovieStyle(m) && ` · ${fmtMovieStyle(m)}`}
                     {m.status === 'failed' && ' · Failed'}
                   </span>
+                  {screensaver?.movie_id === m.id && (
+                    <span className="movie-maker__screensaver-badge">
+                      📺 On the screensaver {fmtUntil(screensaver.until)}{screensaver.sound ? ' (with sound)' : ''}
+                      {isParent && (
+                        <button type="button" className="link-button" onClick={stopScreensaver}>Stop</button>
+                      )}
+                    </span>
+                  )}
                 </div>
                 <div className="task-form__row">
                   {m.status === 'ready' && (
@@ -300,6 +355,11 @@ function MoviesSection() {
                     >
                       ⬇ Download
                     </a>
+                  )}
+                  {isParent && m.status === 'ready' && screensaver?.movie_id !== m.id && (
+                    <button type="button" className="secondary" onClick={() => setScreensaverMenu(screensaverMenu === m.id ? null : m.id)}>
+                      📺 Screensaver
+                    </button>
                   )}
                   {canManage(m) && m.has_source && m.status !== 'rendering' && (
                     <button
@@ -325,6 +385,19 @@ function MoviesSection() {
                   )}
                 </div>
               </div>
+              {screensaverMenu === m.id && (
+                <div className="movie-maker__screensaver-menu">
+                  <span>Play "{m.title}" as the screensaver:</span>
+                  <button type="button" onClick={() => setOnScreensaver(m.id, 1)}>Today</button>
+                  <button type="button" onClick={() => setOnScreensaver(m.id, 7)}>For a week</button>
+                  <button type="button" onClick={() => setOnScreensaver(m.id, null)}>Until I turn it off</button>
+                  <label className="movie-maker__check">
+                    <input type="checkbox" checked={screensaverSound} onChange={(e) => setScreensaverSound(e.target.checked)} />
+                    With sound
+                  </label>
+                  <button type="button" className="secondary" onClick={() => setScreensaverMenu(null)}>Cancel</button>
+                </div>
+              )}
               {m.status === 'rendering' && (
                 <div className="movie-maker__movie-progress">
                   <div className="progress-bar">

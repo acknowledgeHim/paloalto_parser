@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'node:path';
-import { db } from '../db.js';
+import { db, getSetting, setSetting } from '../db.js';
 import { config } from '../config.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { resolveMovieSelection, type MovieSelection } from '../services/movieSelection.js';
-import { renderMovie, deleteMovieFile } from '../services/movieRender.js';
+import { renderMovie, deleteMovieFile, type MovieStyle } from '../services/movieRender.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 import { listPhotos, photoIdFor } from '../services/photos.js';
 import { canManageMember, canManageOwnedItem, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
-import type { Movie } from '../types.js';
+import type { Movie, MovieStyleOptions } from '../types.js';
 
 // Open to everyone, same household-trust default as Photos/Music — this is a fun family feature,
 // not configuration. Read-only against the source photos/music throughout (see
@@ -54,10 +55,12 @@ function parseSelectionMode(selection: Record<string, unknown>): MovieSelection 
   return null;
 }
 
-type MovieRow = Omit<Movie, 'music_tracks' | 'has_source'> & {
+type MovieRow = Omit<Movie, 'music_tracks' | 'has_source' | 'style'> & {
   music_tracks: string | null;
   photo_paths: string | null;
   music_track_details: string | null;
+  options: string | null;
+  photo_captions: string | null;
 };
 
 function parseJsonArray<T>(raw: string | null): T[] | null {
@@ -70,11 +73,30 @@ function parseJsonArray<T>(raw: string | null): T[] | null {
   }
 }
 
+const DEFAULT_OPTIONS: MovieStyleOptions = { transition: 'cut', motion: 'none', title_card: false, subtitle: '' };
+
+function parseOptions(raw: string | null): MovieStyleOptions {
+  try {
+    return { ...DEFAULT_OPTIONS, ...(raw ? (JSON.parse(raw) as Partial<MovieStyleOptions>) : {}) };
+  } catch {
+    return DEFAULT_OPTIONS;
+  }
+}
+
+function parseCaptions(raw: string | null): Record<string, string> {
+  try {
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function rowToMovie(row: MovieRow): Movie {
-  const { photo_paths, music_track_details: _details, ...rest } = row;
+  const { photo_paths, music_track_details: _details, options, photo_captions: _captions, ...rest } = row;
   let tracks = parseJsonArray<string>(row.music_tracks) ?? [];
   if (tracks.length === 0 && row.music_track) tracks = [row.music_track];
-  return { ...rest, music_tracks: tracks, has_source: Boolean(parseJsonArray<string>(photo_paths)?.length) };
+  return { ...rest, music_tracks: tracks, has_source: Boolean(parseJsonArray<string>(photo_paths)?.length), style: parseOptions(options) };
 }
 
 function getMovieRow(id: string): MovieRow | undefined {
@@ -100,6 +122,9 @@ interface MovieInput {
   tracks: string[];
   musicPaths: string[];
   trackDetails: TrackDetail[];
+  options: MovieStyleOptions;
+  /** Caption per photo, parallel to photoPaths. */
+  captions: Array<string | null>;
 }
 
 /** Validates/resolves a create or update request body. Returns an error message on bad input. */
@@ -146,7 +171,22 @@ async function parseMovieInput(body: Record<string, unknown>): Promise<MovieInpu
     };
   });
 
-  return { title: title.trim(), secondsPerPhoto, photoPaths, tracks, musicPaths, trackDetails };
+  // Style: each option falls back to the plain default if missing/invalid.
+  const rawStyle = (body.style ?? {}) as Partial<Record<keyof MovieStyleOptions, unknown>>;
+  const options: MovieStyleOptions = {
+    transition: rawStyle.transition === 'crossfade' ? 'crossfade' : 'cut',
+    motion: rawStyle.motion === 'kenburns' ? 'kenburns' : 'none',
+    title_card: rawStyle.title_card === true,
+    subtitle: typeof rawStyle.subtitle === 'string' ? rawStyle.subtitle.trim().slice(0, 120) : '',
+  };
+  // Captions come keyed by photo id (what the client works with).
+  const rawCaptions = (body.captions && typeof body.captions === 'object' ? body.captions : {}) as Record<string, unknown>;
+  const captions = photoPaths.map((abs) => {
+    const c = rawCaptions[photoIdFor(abs)];
+    return typeof c === 'string' && c.trim() ? c.trim().slice(0, 200) : null;
+  });
+
+  return { title: title.trim(), secondsPerPhoto, photoPaths, tracks, musicPaths, trackDetails, options, captions };
 }
 
 /**
@@ -162,10 +202,17 @@ async function parseMovieInput(body: Record<string, unknown>): Promise<MovieInpu
 function startRender(movieId: string, title: string, input: MovieInput, previousFileName: string | null): void {
   const updateProgress = db.prepare('UPDATE movies SET progress_percent = ? WHERE id = ?');
   let lastReported = -1;
+  const style: MovieStyle = {
+    transition: input.options.transition,
+    motion: input.options.motion,
+    titleCard: input.options.title_card ? { title: input.title, subtitle: input.options.subtitle } : null,
+  };
   renderMovie({
     photoPaths: input.photoPaths,
     secondsPerPhoto: input.secondsPerPhoto,
     musicPaths: input.musicPaths,
+    captions: input.captions,
+    style,
     onProgress: (percent) => {
       const rounded = Math.floor(percent);
       if (rounded === lastReported) return;
@@ -188,14 +235,23 @@ function startRender(movieId: string, title: string, input: MovieInput, previous
     });
 }
 
-/** A Movie minus the fields that aren't table columns. */
-function movieColumns(movie: Movie): Omit<Movie, 'has_source'> {
-  const { has_source: _hasSource, ...columns } = movie;
+/** A Movie minus the fields that aren't (directly) table columns. */
+function movieColumns(movie: Movie): Omit<Movie, 'has_source' | 'style'> {
+  const { has_source: _hasSource, style: _style, ...columns } = movie;
   return columns;
 }
 
 function relativePhotoPaths(absolutePaths: string[]): string {
   return JSON.stringify(absolutePaths.map((p) => path.relative(config.photosDir, p)));
+}
+
+/** Captions as stored: { relative photo path: caption } for the photos that have one. */
+function captionsJson(input: MovieInput): string {
+  const out: Record<string, string> = {};
+  input.photoPaths.forEach((abs, i) => {
+    if (input.captions[i]) out[path.relative(config.photosDir, abs)] = input.captions[i]!;
+  });
+  return JSON.stringify(out);
 }
 
 moviesRouter.get('/', (_req, res) => {
@@ -214,6 +270,68 @@ moviesRouter.post(
     res.json({ count: photoPaths.length });
   })
 );
+
+// ---- Screensaver movie (parents only) ----
+// A finished movie can play as the idle screensaver instead of the photo slideshow, for today, a
+// week, or until turned off. Stored as a setting: { movie_id, until (ISO, or null = until turned
+// off), sound }. Anyone can ask what's on; only a parent can change it (requireAdmin — same gate
+// as Settings).
+
+const SCREENSAVER_KEY = 'screensaver_movie';
+
+interface ScreensaverSetting {
+  movie_id: string;
+  until: string | null;
+  sound: boolean;
+}
+
+function readScreensaver(): ScreensaverSetting | null {
+  try {
+    const raw = getSetting(SCREENSAVER_KEY, '');
+    return raw ? (JSON.parse(raw) as ScreensaverSetting) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** GET /screensaver — the movie to play as the screensaver right now, or null (none set, it's
+ *  expired, or the movie's gone / not ready). */
+moviesRouter.get('/screensaver', (_req, res) => {
+  const current = readScreensaver();
+  if (!current) return res.json(null);
+  if (current.until && new Date(current.until) <= new Date()) {
+    setSetting(SCREENSAVER_KEY, '');
+    return res.json(null);
+  }
+  const row = getMovieRow(current.movie_id);
+  if (!row || row.status !== 'ready' || !row.file_name) return res.json(null);
+  res.json({ ...current, title: row.title, file_name: row.file_name });
+});
+
+/** PUT /screensaver { movie_id, days: 1 | 7 | null, sound } — days 1 = through tonight, 7 = a week
+ *  (to the end of that day), null = until turned off. */
+moviesRouter.put('/screensaver', requireAdmin, (req, res) => {
+  const { movie_id, days, sound } = req.body as { movie_id?: string; days?: number | null; sound?: boolean };
+  const row = movie_id ? getMovieRow(movie_id) : undefined;
+  if (!row || row.status !== 'ready') return res.status(400).json({ error: 'Pick a finished movie' });
+  let until: string | null = null;
+  if (days === 1 || days === 7) {
+    const end = new Date();
+    end.setDate(end.getDate() + days - 1);
+    end.setHours(23, 59, 59, 999);
+    until = end.toISOString();
+  } else if (days !== null && days !== undefined) {
+    return res.status(400).json({ error: 'days must be 1, 7, or null' });
+  }
+  const setting: ScreensaverSetting = { movie_id: row.id, until, sound: sound === true };
+  setSetting(SCREENSAVER_KEY, JSON.stringify(setting));
+  res.json(setting);
+});
+
+moviesRouter.delete('/screensaver', requireAdmin, (_req, res) => {
+  setSetting(SCREENSAVER_KEY, '');
+  res.status(204).end();
+});
 
 // ---- Drafts (auto-saved movie maker forms) ----
 
@@ -346,6 +464,13 @@ moviesRouter.get(
       photo_ids: photoIds,
       missing_photos: missing,
       tracks,
+      style: parseOptions(row.options),
+      // Keyed by photo id, for the editor.
+      captions: Object.fromEntries(
+        Object.entries(parseCaptions(row.photo_captions))
+          .filter(([rel]) => existing.has(path.join(config.photosDir, rel)))
+          .map(([rel, caption]) => [photoIdFor(path.join(config.photosDir, rel)), caption])
+      ),
     });
   })
 );
@@ -371,17 +496,20 @@ moviesRouter.post(
       music_track: input.tracks[0] ?? null,
       music_tracks: input.tracks,
       has_source: true,
+      style: input.options,
       progress_percent: 0,
       created_by_id: createdBy,
       created_at: new Date().toISOString(),
     };
     db.prepare(
       `INSERT INTO movies (id, title, status, file_name, error, photo_count, seconds_per_photo, music_track, music_tracks,
-                           photo_paths, music_track_details, progress_percent, created_by_id, created_at)
+                           photo_paths, music_track_details, options, photo_captions, progress_percent, created_by_id, created_at)
        VALUES (@id, @title, @status, @file_name, @error, @photo_count, @seconds_per_photo, @music_track, @music_tracks,
-               @photo_paths, @music_track_details, @progress_percent, @created_by_id, @created_at)`
+               @photo_paths, @music_track_details, @options, @photo_captions, @progress_percent, @created_by_id, @created_at)`
     ).run({
       ...movieColumns(movie),
+      options: JSON.stringify(input.options),
+      photo_captions: captionsJson(input),
       music_tracks: JSON.stringify(input.tracks),
       photo_paths: relativePhotoPaths(input.photoPaths),
       music_track_details: JSON.stringify(input.trackDetails),
@@ -407,10 +535,13 @@ moviesRouter.put(
     db.prepare(
       `UPDATE movies SET title = @title, status = 'rendering', error = NULL, progress_percent = 0,
          photo_count = @photo_count, seconds_per_photo = @seconds_per_photo, music_track = @music_track,
-         music_tracks = @music_tracks, photo_paths = @photo_paths, music_track_details = @music_track_details
+         music_tracks = @music_tracks, photo_paths = @photo_paths, music_track_details = @music_track_details,
+         options = @options, photo_captions = @photo_captions
        WHERE id = @id`
     ).run({
       id: row.id,
+      options: JSON.stringify(input.options),
+      photo_captions: captionsJson(input),
       title: input.title,
       photo_count: input.photoPaths.length,
       seconds_per_photo: input.secondsPerPhoto,

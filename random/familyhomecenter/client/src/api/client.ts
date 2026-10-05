@@ -415,6 +415,16 @@ export interface PhotoDetail {
 
 /** A rendered photo-slideshow-with-music video. Read-only against the source photos/music that
  *  made it — this is always a brand new file, nothing about the originals is ever touched. */
+/** GET /movies/screensaver — the movie playing as the idle screensaver, if any. */
+export interface ScreensaverMovie {
+  movie_id: string;
+  title: string;
+  file_name: string;
+  /** null = until a parent turns it off */
+  until: string | null;
+  sound: boolean;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -430,6 +440,8 @@ export interface Movie {
   music_tracks: string[];
   /** Whether the photos/songs it was made from are saved, so it can be edited and re-rendered. */
   has_source: boolean;
+  /** Optional style — plain cuts / still photos / no title card unless chosen. */
+  style: { transition: 'cut' | 'crossfade'; motion: 'none' | 'kenburns'; title_card: boolean; subtitle: string };
   /** Live render progress (0-100) — only meaningful while status is 'rendering'. */
   progress_percent: number | null;
   created_by_id: string | null;

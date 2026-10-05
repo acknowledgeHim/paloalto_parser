@@ -244,6 +244,14 @@ export interface Contact {
 
 /** A rendered photo-slideshow-with-music video — see routes/movies.ts and services/movieRender.ts.
  *  Only ever reads the source photos/music; never deletes or modifies them. */
+/** A movie's optional style, as stored and sent to the client. */
+export interface MovieStyleOptions {
+  transition: 'cut' | 'crossfade';
+  motion: 'none' | 'kenburns';
+  title_card: boolean;
+  subtitle: string;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -263,6 +271,8 @@ export interface Movie {
   /** Whether the photos/songs it was made from are saved (movies made before that was tracked
    *  can't be edited, only deleted). */
   has_source: boolean;
+  /** Style choices (all optional — defaults are plain cuts, no title card). */
+  style: MovieStyleOptions;
   /** Live render progress (0-100), parsed from ffmpeg's own -progress output — only meaningful
    *  while status is 'rendering'; null before the first update or once no longer rendering. */
   progress_percent: number | null;
