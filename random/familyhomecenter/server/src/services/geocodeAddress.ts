@@ -1,4 +1,11 @@
 import { config } from '../config.js';
+import { getSetting } from '../db.js';
+
+/** Off unless a parent turns it on in Settings → Privacy: looking up a contact's distance sends
+ *  their street address to OpenStreetMap's servers. */
+export function contactDistanceLookupEnabled(): boolean {
+  return getSetting('contacts_distance_lookup', '') === '1';
+}
 
 // OpenStreetMap's free Nominatim API — no key needed. Unlike services/weather.ts's geocode()
 // (Open-Meteo, place names/cities only — fine for "set home location" but returns nothing for a
@@ -55,6 +62,7 @@ export function haversineMiles(a: { lat: number; lon: number }, b: { lat: number
 /** Geocodes `address` and returns its straight-line distance in miles from home (config.weather.lat/lon —
  *  the same "home location" Settings' weather widget uses) — null if geocoding failed. */
 export async function distanceFromHomeMiles(address: string): Promise<number | null> {
+  if (!contactDistanceLookupEnabled()) return null; // nothing leaves the network unless it's on
   const coords = await geocodeAddress(address);
   if (!coords) return null;
   return haversineMiles({ lat: config.weather.lat, lon: config.weather.lon }, coords);

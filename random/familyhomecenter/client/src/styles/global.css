@@ -1535,3 +1535,7 @@ textarea {
 .photo-faces__face button { min-height: 30px; padding: 0 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); color: #fff; }
 .photo-faces__face form { display: flex; gap: 4px; }
 .photo-faces__face input { min-height: 30px; width: 130px; padding: 0 8px; color: var(--text); }
+
+/* ---- Privacy settings ---- */
+.settings-page label.privacy-toggle { display: flex; align-items: flex-start; justify-content: flex-start; gap: 10px; }
+.privacy-toggle input { width: 22px; height: 22px; min-height: 0; padding: 0; margin-top: 2px; flex-shrink: 0; }

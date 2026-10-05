@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { fetchRecipeImage, localizeRecipeImage, localRecipeImagePath, proxiedRecipeImage, remoteRecipeImage } from '../services/recipeImages.js';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -105,7 +106,8 @@ function normalizeTheMealDb(meal: TheMealDbMeal) {
     source_id: meal.idMeal,
     title: meal.strMeal,
     instructions: meal.strInstructions,
-    thumbnail_url: meal.strMealThumb,
+    // Shown through the Pi (not straight from TheMealDB) — see services/recipeImages.ts.
+    thumbnail_url: proxiedRecipeImage(meal.strMealThumb),
     category: meal.strCategory?.trim() || null,
     ingredients,
   };
@@ -130,8 +132,30 @@ recipesRouter.get(
   })
 );
 
+/** GET /online-image?u=… — a TheMealDB picture for a search result, fetched by the Pi so the
+ *  browser never contacts TheMealDB itself. Only TheMealDB's own image host is allowed. */
+recipesRouter.get(
+  '/online-image',
+  asyncHandler(async (req, res) => {
+    const remote = remoteRecipeImage(String(req.query.u ?? ''));
+    if (!remote) return res.status(400).end();
+    try {
+      res.type('image/jpeg').set('Cache-Control', 'private, max-age=86400').send(await fetchRecipeImage(remote));
+    } catch {
+      res.status(502).end();
+    }
+  })
+);
+
+/** GET /:id/image — a saved recipe's picture, stored on the Pi. */
+recipesRouter.get('/:id/image', (req, res) => {
+  res.sendFile(localRecipeImagePath(req.params.id), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+});
+
 /** POST /api/recipes/import — saves a search-online result (or any freeform recipe) into the local library. */
-recipesRouter.post('/import', (req, res) => {
+recipesRouter.post('/import', asyncHandler(async (req, res) => {
   const { title, instructions, thumbnail_url, source, source_id, servings, category, ingredients, created_by_id } = req.body as {
     title?: string;
     instructions?: string | null;
@@ -151,7 +175,8 @@ recipesRouter.post('/import', (req, res) => {
     source: source === 'themealdb' ? 'themealdb' : 'local',
     source_id: source_id ?? null,
     instructions: instructions?.trim() || null,
-    thumbnail_url: thumbnail_url ?? null,
+    // The picture is downloaded onto the Pi just below (only from TheMealDB) — never hot-linked.
+    thumbnail_url: null,
     // TheMealDB's free API doesn't reliably report a serving size — 4 is a reasonable default,
     // editable afterward like any local recipe.
     servings: Number(servings) > 0 ? Math.round(Number(servings)) : 4,
@@ -164,5 +189,7 @@ recipesRouter.post('/import', (req, res) => {
      VALUES (@id, @title, @source, @source_id, @instructions, @thumbnail_url, @servings, @category, @created_by_id, @created_at)`
   ).run(recipe);
   setIngredients(recipe.id, ingredients ?? []);
+  const remote = remoteRecipeImage(thumbnail_url);
+  if (remote) recipe.thumbnail_url = await localizeRecipeImage(recipe.id, remote);
   res.status(201).json({ ...recipe, ingredients: ingredientsFor(recipe.id) });
-});
+}));

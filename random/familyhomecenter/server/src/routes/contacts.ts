@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { distanceFromHomeMiles } from '../services/geocodeAddress.js';
+import { contactDistanceLookupEnabled, distanceFromHomeMiles } from '../services/geocodeAddress.js';
 import { sendContactText } from '../services/contactText.js';
 import { isEmailConfigured } from '../services/email.js';
 import type { Contact } from '../types.js';
@@ -124,6 +124,9 @@ contactsRouter.post(
     const existing = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id) as Contact | undefined;
     if (!existing) return res.status(404).json({ error: 'not found' });
     if (!existing.address) return res.status(400).json({ error: 'This contact has no address to look up' });
+    if (!contactDistanceLookupEnabled()) {
+      return res.status(400).json({ error: 'Distance lookup is off (Settings → Privacy) — it sends the address to OpenStreetMap' });
+    }
 
     const distance_miles = await distanceFromHomeMiles(existing.address);
     db.prepare('UPDATE contacts SET distance_miles = ? WHERE id = ?').run(distance_miles, existing.id);

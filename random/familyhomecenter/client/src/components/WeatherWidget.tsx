@@ -5,13 +5,19 @@ import { iconForWeatherCode } from '../utils/weatherIcons.js';
 export function WeatherWidget() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [error, setError] = useState(false);
+  // Weather turned off in Settings → Privacy (the server answers with no content).
+  const [off, setOff] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const load = () => {
       api
-        .get<WeatherData>('/weather')
-        .then((d) => !cancelled && setWeather(d))
+        .get<WeatherData | undefined>('/weather')
+        .then((d) => {
+          if (cancelled) return;
+          if (!d) setOff(true);
+          else setWeather(d);
+        })
         .catch(() => !cancelled && setError(true));
     };
     load();
@@ -22,6 +28,7 @@ export function WeatherWidget() {
     };
   }, []);
 
+  if (off) return null;
   if (error) return <div className="weather-widget weather-widget--error">Weather unavailable</div>;
   if (!weather) return <div className="weather-widget">Loading weather…</div>;
 

@@ -72,12 +72,20 @@ work as direct URLs:
 
 ```bash
 chromium-browser --kiosk --noerrdialogs --disable-infobars \
+  --disable-background-networking --disable-component-update --disable-sync \
+  --disable-domain-reliability --no-pings --metrics-recording-only --no-first-run \
+  --disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication \
+  --autoplay-policy=no-user-gesture-required \
   --disable-session-crashed-bubble --incognito \
   --user-data-dir=/home/pi/.chromium-screen1 \
   --window-position=0,0 \
   "http://localhost:3000/#/board" &
 
 chromium-browser --kiosk --noerrdialogs --disable-infobars \
+  --disable-background-networking --disable-component-update --disable-sync \
+  --disable-domain-reliability --no-pings --metrics-recording-only --no-first-run \
+  --disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication \
+  --autoplay-policy=no-user-gesture-required \
   --disable-session-crashed-bubble --incognito \
   --user-data-dir=/home/pi/.chromium-screen2 \
   --window-position=1920,0 \
@@ -104,6 +112,10 @@ xinput map-to-output "First Touchscreen Device Name" HDMI-1
 xinput map-to-output "Second Touchscreen Device Name" HDMI-2
 
 chromium-browser --kiosk --noerrdialogs --disable-infobars \
+  --disable-background-networking --disable-component-update --disable-sync \
+  --disable-domain-reliability --no-pings --metrics-recording-only --no-first-run \
+  --disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication \
+  --autoplay-policy=no-user-gesture-required \
   --disable-session-crashed-bubble --incognito \
   --check-for-update-interval=31536000 \
   --user-data-dir=/home/pi/.chromium-screen1 \
@@ -111,6 +123,10 @@ chromium-browser --kiosk --noerrdialogs --disable-infobars \
   "http://localhost:3000/#/board" &
 
 chromium-browser --kiosk --noerrdialogs --disable-infobars \
+  --disable-background-networking --disable-component-update --disable-sync \
+  --disable-domain-reliability --no-pings --metrics-recording-only --no-first-run \
+  --disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication \
+  --autoplay-policy=no-user-gesture-required \
   --disable-session-crashed-bubble --incognito \
   --check-for-update-interval=31536000 \
   --user-data-dir=/home/pi/.chromium-screen2 \

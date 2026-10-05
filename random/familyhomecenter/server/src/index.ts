@@ -33,6 +33,7 @@ import { startThumbnailWarmSchedule } from './services/photos.js';
 import { startGroceryEmailSchedule } from './services/groceryEmail.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 import { startInternetSchedule } from './services/internetControl.js';
+import { localizeExistingRecipeImages } from './services/recipeImages.js';
 
 const app = express();
 app.use(cors());
@@ -96,4 +97,5 @@ server.listen(config.port, config.host, () => {
   startThumbnailWarmSchedule();
   startGroceryEmailSchedule();
   startInternetSchedule();
+  localizeExistingRecipeImages().catch((err) => console.warn('[recipes] picture migration failed', err));
 });

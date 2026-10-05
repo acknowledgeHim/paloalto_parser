@@ -22,8 +22,10 @@ export async function getWeather(): Promise<unknown> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_MS) return cache.data;
 
   const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.set('latitude', String(config.weather.lat));
-  url.searchParams.set('longitude', String(config.weather.lon));
+  // Rounded to 0.1° (~7 miles): the forecast is the same, but Open-Meteo never gets the home's exact
+  // location.
+  url.searchParams.set('latitude', (Math.round(config.weather.lat * 10) / 10).toFixed(1));
+  url.searchParams.set('longitude', (Math.round(config.weather.lon * 10) / 10).toFixed(1));
   url.searchParams.set('current', 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m');
   url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
   url.searchParams.set('temperature_unit', 'fahrenheit');

@@ -180,6 +180,8 @@ Optional integrations, each with its own guide:
   Word document)
 - [docs/PIHOLE_SETUP.md](docs/PIHOLE_SETUP.md) (Pi-hole install, Linksys router DNS setup, and
   per-kid internet controls)
+- [docs/PRIVACY.md](docs/PRIVACY.md) (exactly what can leave the Pi, and how it was verified — by
+  default, nothing beyond the weather, which can be switched off)
 - [docs/BACKUP.md](docs/BACKUP.md) (`npm run backup` in `server/` — safe to run while the server's
   up; covers automating it with cron and restoring)
 

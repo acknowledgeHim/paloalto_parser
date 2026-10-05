@@ -52,7 +52,10 @@ export function BrowserCallButton({ phone, callerLabel }: { phone: string; calle
     setState('connecting');
     try {
       const { token } = await api.get<{ token: string }>(`/calling/token?identity=${encodeURIComponent(callerLabel)}`);
-      const device = new Device(token, { logLevel: 'error' });
+      // publishEvents: false — don't send Twilio's call-quality statistics ("Voice Insights"). The SDK
+      // honors it but leaves it off its public options type, hence the separate object.
+      const deviceOptions = { logLevel: 'error' as const, publishEvents: false };
+      const device = new Device(token, deviceOptions);
       deviceRef.current = device;
       const call = await device.connect({ params: { To: phone } });
       callRef.current = call;

@@ -84,11 +84,21 @@ mkdir -p ~/.config/labwc
 cat >> ~/.config/labwc/autostart <<'AUTOSTART'
 unclutter -idle 1 &
 chromium-browser --kiosk --noerrdialogs --disable-infobars \
+  --disable-background-networking --disable-component-update --disable-sync \
+  --disable-domain-reliability --no-pings --metrics-recording-only --no-first-run \
+  --disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication \
+  --autoplay-policy=no-user-gesture-required \
   --disable-session-crashed-bubble --incognito \
   --check-for-update-interval=31536000 \
   http://localhost:3000 &
 AUTOSTART
 ```
+
+The second-to-fourth lines of flags stop Chromium's own background traffic to Google (component
+and update downloads, sync, usage reporting, link-audit "pings", translate and suggestion
+services) — none of it is needed for a kiosk that only ever shows the dashboard on this Pi. See
+[PRIVACY.md](PRIVACY.md). The autoplay flag lets the screensaver movie play with sound if a parent
+chose that.
 
 If you're on the older X11 desktop instead, use `~/.config/autostart/familyhomecenter.desktop`
 with an `Exec=` line running the same `chromium-browser --kiosk ...` command, and
