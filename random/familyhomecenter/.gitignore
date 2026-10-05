@@ -4,14 +4,9 @@ build/
 *.log
 .env
 .env.local
-server/data/*.db
-server/data/*.db-journal
-server/data/*.db-wal
-server/data/*.db-shm
-server/data/thumbs/
-server/data/avatars/
-server/data/sounds/
-server/data/backups/
+# Everything the app stores at runtime — the database, uploads, movies, thumbnails, face models and
+# crops, backups. Family data; never commit it.
+server/data/
 client/dist/
 .DS_Store
 *.tsbuildinfo
