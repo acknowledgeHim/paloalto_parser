@@ -585,6 +585,20 @@ moviesRouter.put(
   })
 );
 
+/** PATCH /:id/owner { created_by_id } — a parent hands a movie to someone else (e.g. one they
+ *  helped a kid make while logged in as themselves), so that person can edit/delete it too.
+ *  Parents keep their own access regardless. Parent-only (requireAdmin, same gate as Settings). */
+moviesRouter.patch('/:id/owner', requireAdmin, (req, res) => {
+  const row = getMovieRow(req.params.id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  const owner = (req.body as { created_by_id?: string | null }).created_by_id ?? null;
+  if (owner && !db.prepare('SELECT 1 FROM family_members WHERE id = ?').get(owner)) {
+    return res.status(400).json({ error: 'Unknown family member' });
+  }
+  db.prepare('UPDATE movies SET created_by_id = ? WHERE id = ?').run(owner, row.id);
+  res.json(rowToMovie(getMovieRow(row.id)!));
+});
+
 moviesRouter.delete(
   '/:id',
   asyncHandler(async (req, res) => {

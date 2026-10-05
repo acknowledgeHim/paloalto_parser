@@ -208,6 +208,7 @@ function MoviesSection() {
   const [screensaver, setScreensaver] = useState<ScreensaverMovie | null>(null);
   const [screensaverMenu, setScreensaverMenu] = useState<string | null>(null); // movie id
   const [screensaverSound, setScreensaverSound] = useState(false);
+  const [changingOwner, setChangingOwner] = useState<string | null>(null); // movie id
   const [actionError, setActionError] = useState<string | null>(null);
 
   const canManage = useCanManageOwned();
@@ -245,6 +246,17 @@ function MoviesSection() {
     }
     load();
   };
+  const changeOwner = async (movieId: string, ownerId: string) => {
+    setActionError(null);
+    try {
+      await api.patch(`/movies/${movieId}/owner`, { created_by_id: ownerId || null });
+      setChangingOwner(null);
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+    load();
+  };
+
   const stopScreensaver = async () => {
     setActionError(null);
     try {
@@ -381,6 +393,11 @@ function MoviesSection() {
                       ⬇ Download
                     </a>
                   )}
+                  {isParent && (
+                    <button type="button" className="secondary" onClick={() => setChangingOwner(changingOwner === m.id ? null : m.id)}>
+                      👤 Owner
+                    </button>
+                  )}
                   {isParent && m.status === 'ready' && screensaver?.movie_id !== m.id && (
                     <button type="button" className="secondary" onClick={() => setScreensaverMenu(screensaverMenu === m.id ? null : m.id)}>
                       📺 Screensaver
@@ -410,6 +427,21 @@ function MoviesSection() {
                   )}
                 </div>
               </div>
+              {changingOwner === m.id && (
+                <div className="movie-maker__screensaver-menu">
+                  <label className="member-form__label member-form__label--inline">
+                    Belongs to
+                    <select defaultValue={m.created_by_id ?? ''} onChange={(e) => changeOwner(m.id, e.target.value)}>
+                      <option value="">Nobody in particular (parents only)</option>
+                      {members.map((x) => (
+                        <option key={x.id} value={x.id}>{x.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="hint">They'll be able to edit and delete it; parents always can.</span>
+                  <button type="button" className="secondary" onClick={() => setChangingOwner(null)}>Done</button>
+                </div>
+              )}
               {screensaverMenu === m.id && (
                 <div className="movie-maker__screensaver-menu">
                   <span>Play "{m.title}" as the screensaver:</span>

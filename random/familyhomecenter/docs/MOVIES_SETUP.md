@@ -101,6 +101,10 @@ logged in) or a parent — the list shows "by <name>". Like profile edits, this 
 that person or a parent has a password set (see [SETTINGS_LOGIN.md](SETTINGS_LOGIN.md)); before
 then it's on the honor system, with the buttons only shown to the creator or a parent.
 
+**Changing who a movie belongs to (parents):** tap **👤 Owner** on a movie and pick someone — handy
+when a parent helps a kid make one while logged in as themselves. The new owner can then edit and
+delete it; parents always can either way.
+
 ## What to expect
 
 - **It's not instant.** A Raspberry Pi encodes video in software (no shortcuts here — this app
