@@ -1,6 +1,8 @@
 import cron from 'node-cron';
 import { db, getSetting, setSetting } from '../db.js';
 import * as pihole from './pihole.js';
+import { trackUsageMinute } from './internetUsage.js';
+import { sendWeeklyReport } from './internetReport.js';
 
 /**
  * Per-person internet rules (pause, bedtime schedules, kid web filter), enforced by Pi-hole.
@@ -95,6 +97,14 @@ interface MemberRow {
   approved_only: number;
   paused_until: string | null;
   allowed_until: string | null;
+  /** Daily allowance in minutes, Mon–Fri / Sat–Sun; null = no limit. */
+  daily_minutes: number | null;
+  weekend_minutes: number | null;
+  /** Bonus minutes per chore/to-do this person finishes today (0 = off). */
+  minutes_per_chore: number;
+  /** A parent's one-off extra minutes, only counted on extra_minutes_day. */
+  extra_minutes: number;
+  extra_minutes_day: string | null;
 }
 
 export interface InternetSchedule {
@@ -121,17 +131,27 @@ export function getMemberRow(memberId: string): MemberRow {
       approved_only: 0,
       paused_until: null,
       allowed_until: null,
+      daily_minutes: null,
+      weekend_minutes: null,
+      minutes_per_chore: 0,
+      extra_minutes: 0,
+      extra_minutes_day: null,
     }
   );
 }
 
 export function saveMemberRow(row: MemberRow): void {
   db.prepare(
-    `INSERT INTO internet_members (family_member_id, filtered, approved_only, paused_until, allowed_until)
-     VALUES (@family_member_id, @filtered, @approved_only, @paused_until, @allowed_until)
+    `INSERT INTO internet_members (family_member_id, filtered, approved_only, paused_until, allowed_until,
+       daily_minutes, weekend_minutes, minutes_per_chore, extra_minutes, extra_minutes_day)
+     VALUES (@family_member_id, @filtered, @approved_only, @paused_until, @allowed_until,
+       @daily_minutes, @weekend_minutes, @minutes_per_chore, @extra_minutes, @extra_minutes_day)
      ON CONFLICT(family_member_id) DO UPDATE SET
        filtered = excluded.filtered, approved_only = excluded.approved_only,
-       paused_until = excluded.paused_until, allowed_until = excluded.allowed_until`
+       paused_until = excluded.paused_until, allowed_until = excluded.allowed_until,
+       daily_minutes = excluded.daily_minutes, weekend_minutes = excluded.weekend_minutes,
+       minutes_per_chore = excluded.minutes_per_chore, extra_minutes = excluded.extra_minutes,
+       extra_minutes_day = excluded.extra_minutes_day`
   ).run(row);
 }
 
@@ -166,16 +186,80 @@ export function activeScheduleEnd(schedules: InternetSchedule[], now: Date): { e
   return result;
 }
 
+/** Local calendar day as YYYY-MM-DD (server TZ, like everything time-of-day in this app). */
+export function localDay(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function endOfDay(d = new Date()): Date {
+  const end = new Date(d);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+/** Chores/to-dos this person has checked off today. */
+export function choresDoneToday(memberId: string, now = new Date()): number {
+  return (
+    db.prepare('SELECT COUNT(*) AS n FROM task_completions WHERE completed_by_id = ? AND completed_on = ?').get(memberId, localDay(now)) as {
+      n: number;
+    }
+  ).n;
+}
+
+export function minutesUsedToday(memberId: string, now = new Date()): number {
+  return (
+    (db.prepare('SELECT minutes FROM internet_usage WHERE family_member_id = ? AND day = ?').get(memberId, localDay(now)) as
+      | { minutes: number }
+      | undefined)?.minutes ?? 0
+  );
+}
+
+export interface DailyAllowance {
+  /** Base minutes for today (weekday or weekend). */
+  base: number;
+  /** Earned from chores today. */
+  earned: number;
+  /** A parent's extra minutes for today. */
+  extra: number;
+  total: number;
+  used: number;
+  remaining: number;
+}
+
+/** Today's allowance for someone with a limit set for this kind of day; null = no limit today. */
+export function allowanceToday(memberId: string, now = new Date(), row = getMemberRow(memberId)): DailyAllowance | null {
+  const weekend = now.getDay() === 0 || now.getDay() === 6;
+  const base = weekend ? row.weekend_minutes : row.daily_minutes;
+  if (base === null || base === undefined) return null;
+  const earned = row.minutes_per_chore > 0 ? choresDoneToday(memberId, now) * row.minutes_per_chore : 0;
+  const extra = row.extra_minutes_day === localDay(now) ? row.extra_minutes : 0;
+  const total = base + earned + extra;
+  const used = minutesUsedToday(memberId, now);
+  return { base, earned, extra, total, used, remaining: Math.max(0, total - used) };
+}
+
+/** A parent's "+N minutes today" (or an approved request for more time). */
+export function addExtraMinutes(memberId: string, minutes: number): void {
+  const row = getMemberRow(memberId);
+  const today = localDay();
+  row.extra_minutes = (row.extra_minutes_day === today ? row.extra_minutes : 0) + minutes;
+  row.extra_minutes_day = today;
+  saveMemberRow(row);
+}
+
 export interface MemberInternetState {
   paused: boolean;
-  /** Why — a parent paused it, a schedule is blocking, or a parent allowed it through a schedule. */
-  reason: 'paused' | 'schedule' | 'allowed' | null;
+  /** Why — a parent paused it, a schedule is blocking, today's time allowance is used up, or a
+   *  parent allowed it through a schedule/limit. */
+  reason: 'paused' | 'schedule' | 'limit' | 'allowed' | null;
   /** When the current pause/schedule/allowance ends; null = until a parent changes it. */
   until: string | null;
   schedule_label: string | null;
   /** Only true in 'filtered' mode. */
   filtered: boolean;
   mode: InternetMode;
+  /** Today's time allowance, if this person has one. */
+  allowance: DailyAllowance | null;
 }
 
 function rowMode(row: MemberRow): InternetMode {
@@ -190,29 +274,31 @@ export function setMemberMode(memberId: string, mode: InternetMode): void {
   saveMemberRow(row);
 }
 
+/** Precedence: a parent's pause, then a parent's "allowed until", then schedules, then the daily
+ *  allowance running out (which lasts until midnight). */
 export function memberState(memberId: string, now = new Date()): MemberInternetState {
   const row = getMemberRow(memberId);
   const mode = rowMode(row);
   const filtered = mode === 'filtered';
+  const allowance = allowanceToday(memberId, now, row);
+  const base = { filtered, mode, allowance, schedule_label: null as string | null };
   if (row.paused_until && new Date(row.paused_until) > now) {
-    return {
-      paused: true,
-      reason: 'paused',
-      until: row.paused_until === FOREVER ? null : row.paused_until,
-      schedule_label: null,
-      filtered,
-      mode,
-    };
+    return { ...base, paused: true, reason: 'paused', until: row.paused_until === FOREVER ? null : row.paused_until };
   }
   const schedules = db.prepare('SELECT * FROM internet_schedules WHERE family_member_id = ?').all(memberId) as InternetSchedule[];
   const active = activeScheduleEnd(schedules, now);
+  const limitReached = Boolean(allowance && allowance.remaining <= 0);
   if (row.allowed_until && new Date(row.allowed_until) > now) {
-    return { paused: false, reason: active ? 'allowed' : null, until: active ? row.allowed_until : null, schedule_label: null, filtered, mode };
+    const overriding = active || limitReached;
+    return { ...base, paused: false, reason: overriding ? 'allowed' : null, until: overriding ? row.allowed_until : null };
   }
   if (active) {
-    return { paused: true, reason: 'schedule', until: active.end.toISOString(), schedule_label: active.label || null, filtered, mode };
+    return { ...base, paused: true, reason: 'schedule', until: active.end.toISOString(), schedule_label: active.label || null };
   }
-  return { paused: false, reason: null, until: null, schedule_label: null, filtered, mode };
+  if (limitReached) {
+    return { ...base, paused: true, reason: 'limit', until: endOfDay(now).toISOString() };
+  }
+  return { ...base, paused: false, reason: null, until: null };
 }
 
 /** Pauses for `minutes`, or until resumed if null. Overrides any allowance in effect. */
@@ -231,8 +317,12 @@ export function resumeMember(memberId: string, minutes: number | null): void {
   if (minutes !== null) {
     row.allowed_until = new Date(Date.now() + minutes * 60_000).toISOString();
   } else {
+    // Until the current schedule window ends, or — if it's the daily allowance that's run out — for
+    // the rest of today.
     const schedules = db.prepare('SELECT * FROM internet_schedules WHERE family_member_id = ?').all(memberId) as InternetSchedule[];
-    row.allowed_until = activeScheduleEnd(schedules, new Date())?.end.toISOString() ?? null;
+    const scheduleEnd = activeScheduleEnd(schedules, new Date())?.end ?? null;
+    const allowance = allowanceToday(memberId, new Date(), row);
+    row.allowed_until = scheduleEnd?.toISOString() ?? (allowance && allowance.remaining <= 0 ? endOfDay().toISOString() : null);
   }
   saveMemberRow(row);
 }
@@ -448,7 +538,10 @@ async function doSync(): Promise<void> {
 
   // Every group this app manages — including approved groups of kids no longer in that mode, so
   // their devices get taken back out.
-  const approvedMembers = (db.prepare('SELECT family_member_id FROM internet_members WHERE approved_only = 1').all() as Array<{
+  const approvedMembers = (db.prepare(
+    `SELECT family_member_id FROM internet_members m
+     WHERE approved_only = 1 OR (filtered = 1 AND EXISTS (SELECT 1 FROM internet_member_sites s WHERE s.family_member_id = m.family_member_id))`
+  ).all() as Array<{
     family_member_id: string;
   }>).map((r) => r.family_member_id);
   const approvedIds = await approvedGroupIds(approvedMembers);
@@ -465,9 +558,10 @@ async function doSync(): Promise<void> {
       }
       if (state.paused || state.mode === 'approved') want.push(paused);
       if (state.mode === 'filtered') want.push(filtered);
-      // An actual pause/schedule wins over approved sites — drop the approved group then.
+      // A kid's own allowed sites: the whole list in approved-only mode, and exceptions to the web
+      // filter in filtered mode. An actual pause/schedule/limit wins — drop the group then.
       const approvedGroup = approvedIds.get(device.family_member_id);
-      if (state.mode === 'approved' && !state.paused && approvedGroup !== undefined) want.push(approvedGroup);
+      if (state.mode !== 'open' && !state.paused && approvedGroup !== undefined) want.push(approvedGroup);
     }
     const existing = clients.find((c) => sameClient(c.client, device.client));
     if (!existing) {
@@ -494,15 +588,26 @@ export function syncSoon(): void {
   syncDevices().catch((err) => console.error('[internet] Pi-hole sync failed:', (err as Error).message));
 }
 
-/** Every minute (so schedules and timed pauses start/end on time), plus once at startup with a
- *  full repair so a fresh or reset Pi-hole gets everything it needs. */
+/** Every minute (so schedules, timed pauses, and allowances start/end on time — counting the last
+ *  minute's usage first), plus once at startup with a full repair so a fresh or reset Pi-hole gets
+ *  everything it needs. */
 export function startInternetSchedule(): void {
   if (!pihole.isPiholeConfigured()) return;
   repairSetup().catch((err) => {
     lastSync.error = (err as Error).message;
     console.error('[internet] Initial Pi-hole setup failed:', (err as Error).message);
   });
-  cron.schedule('* * * * *', syncSoon);
+  cron.schedule('* * * * *', () => {
+    trackUsageMinute()
+      .catch((err) => console.error('[internet] Usage tracking failed:', (err as Error).message))
+      .finally(syncSoon);
+  });
+  // The weekly parent report — Sunday 6pm local time.
+  cron.schedule('0 18 * * 0', () => {
+    sendWeeklyReport()
+      .then((n) => console.log(`[internet] Sent weekly report to ${n} parent(s).`))
+      .catch((err) => console.log('[internet] Weekly report not sent:', (err as Error).message));
+  });
 }
 
 // ---- Validation helpers for the routes ----
@@ -532,7 +637,7 @@ export function isValidTime(t: string): boolean {
 // ---- "What's being blocked?" ----
 
 /** Pi-hole v6 query statuses that mean the lookup was blocked. */
-const BLOCKED_STATUSES = new Set([
+export const BLOCKED_STATUSES = new Set([
   'GRAVITY',
   'REGEX',
   'DENYLIST',

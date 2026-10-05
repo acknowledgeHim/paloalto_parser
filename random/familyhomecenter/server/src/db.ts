@@ -708,6 +708,54 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// Internet: daily time allowance, earning time from chores, and requests (services/internetControl.ts,
+// services/internetUsage.ts). daily_minutes/weekend_minutes NULL = no limit that day type;
+// minutes_per_chore = bonus minutes per chore/to-do finished today; extra_minutes applies only on
+// extra_minutes_day (a parent's "+30 min today").
+for (const column of [
+  'daily_minutes INTEGER',
+  'weekend_minutes INTEGER',
+  'minutes_per_chore INTEGER NOT NULL DEFAULT 0',
+  'extra_minutes INTEGER NOT NULL DEFAULT 0',
+  'extra_minutes_day TEXT',
+]) {
+  try {
+    db.exec(`ALTER TABLE internet_members ADD COLUMN ${column}`);
+  } catch (err) {
+    if (!(err as Error).message.includes('duplicate column')) throw err;
+  }
+}
+db.exec(`
+  -- Minutes a member was actually online, per local day (YYYY-MM-DD).
+  CREATE TABLE IF NOT EXISTS internet_usage (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    minutes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day)
+  );
+  -- Lookups per site per member per day, for the weekly report (pruned after 60 days).
+  CREATE TABLE IF NOT EXISTS internet_site_counts (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    site TEXT NOT NULL,
+    lookups INTEGER NOT NULL DEFAULT 0,
+    blocked INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day, site)
+  );
+  -- A kid asking a parent for more time or for a website.
+  CREATE TABLE IF NOT EXISTS internet_requests (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('time', 'site')),
+    minutes INTEGER,
+    domain TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+    created_at TEXT NOT NULL,
+    decided_at TEXT
+  );
+`);
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

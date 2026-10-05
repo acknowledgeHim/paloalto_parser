@@ -153,6 +153,39 @@ what their devices tried to reach in the last little while, grouped by site, eac
 Pausing and schedules still apply on top: a paused approved-only kid is fully offline, apart from
 the household **Always allowed** list (which works for every kid in every mode).
 
+## Daily time limits (optional)
+
+On a kid's card, **⏱ Daily time limit…** sets how long they can be online — separately for
+Mon–Fri and Sat–Sun (or No limit). The card then shows "⏱ 35m of 1h today" with a bar; when the
+time's used up, their internet pauses until midnight ("Time's up for today"). Parents can tap
+**+30 min today** / **+1 hr today**, or **Resume** to lift it for the rest of the day.
+
+**Earning time:** "Each chore/to-do done today adds N minutes" — checking chores off on the
+dashboard (the same ones the Prize Bank pays for) adds to that day's allowance.
+
+**How time is counted:** once a minute, the app looks at the website lookups each kid's devices
+made. A minute counts if there were a few real ones — blocked lookups and the background chatter
+phones do even when idle (notifications, clock sync) don't count. It's an estimate: an hour-long
+video can count for less than an hour, and an app syncing in the background occasionally counts.
+Close enough to tell 30 minutes from 3 hours.
+
+## Asking a parent
+
+When a kid is picked in the switcher, the Internet page shows **🙋 Ask a parent**: ask for 15 / 30
+/ 60 more minutes, or for a website, with an optional reason. Parents see a red count on the
+**Internet** tab and a **Requests** list at the top of the page with **Approve** / **Deny**:
+
+- **More time** — added to today's allowance if that's what ran out; otherwise internet on for that long.
+- **A website** — allowed for that kid only (their own list on their card), in both Kid web filter
+  and Approved sites only modes.
+
+## Weekly report
+
+**📊 This week** on the Internet page shows each kid's time online per day, most-used sites, and
+most-blocked sites. Every Sunday at 6pm it's also emailed to every parent with an email address
+(same email setup as the grocery list — see [GROCERY_EMAIL_SETUP.md](GROCERY_EMAIL_SETUP.md)), or
+tap **📧 Send it now**.
+
 ## Closing the gaps (optional)
 
 - **Cellular data** — use the phone's own parental controls (Screen Time / Family Link), which work

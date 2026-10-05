@@ -1447,3 +1447,27 @@ textarea {
 .doc-editor__cover-row img, .doc-editor__cover-row .doc-editor__missing { width: 220px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; }
 .doc-editor__cover-fields { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 200px; }
 .doc-editor__cover-add { align-self: flex-start; }
+
+/* ---- Internet: allowance, requests, report ---- */
+.internet-allowance { display: flex; flex-direction: column; gap: 4px; }
+.internet-allowance__label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 0.9em; }
+.internet-allowance__fill--out { background: #d64545 !important; }
+.internet-allowance .link-button, .internet-person > .link-button { align-self: flex-start; }
+.internet-limit-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--bg); }
+.internet-requests { border-left: 6px solid var(--accent); }
+.internet-requests ul, .internet-ask__mine { list-style: none; margin: 0; padding: 0; }
+.internet-requests li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.internet-requests li:last-child { border-bottom: none; }
+.internet-requests__actions { display: flex; gap: 6px; }
+.internet-requests__actions button { min-height: 40px; padding: 0 14px; }
+.internet-ask { display: flex; flex-direction: column; gap: 8px; }
+.internet-ask__label { flex: initial !important; align-self: center; }
+.internet-ask__mine li { padding: 2px 0; font-size: 0.9em; }
+.internet-ask__status--approved { color: #157347; }
+.internet-ask__status--denied { color: #9b1c1c; }
+.internet-ask__status--pending { color: var(--text-muted); }
+.internet-report__kid { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.internet-report__kid:last-of-type { border-bottom: none; }
+.internet-report__days { display: flex; flex-wrap: wrap; gap: 14px; margin: 6px 0; }
+.internet-report__days > span { display: flex; flex-direction: column; align-items: center; font-size: 0.9em; }
+.navbar__badge { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: 999px; background: #d64545; color: #fff; font-size: 0.75em; line-height: 20px; text-align: center; vertical-align: middle; }

@@ -16,6 +16,7 @@ import {
   setMemberMode,
   syncAllowEntries,
   recentBlockedSites,
+  addExtraMinutes,
   pauseMember,
   resumeMember,
   normalizeClient,
@@ -32,6 +33,8 @@ import {
   type InternetMode,
   type MemberSite,
 } from '../services/internetControl.js';
+import { buildWeeklyReport, sendWeeklyReport } from '../services/internetReport.js';
+import { sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. Viewing
 // is open to everyone (a kid can see "paused until 7:00 AM" and why); every change is parent-only
@@ -92,6 +95,14 @@ internetRouter.get(
       schedules: db.prepare('SELECT * FROM internet_schedules ORDER BY start_time').all(),
       sites: db.prepare('SELECT id, domain, kind FROM internet_sites ORDER BY domain').all(),
       member_sites: db.prepare('SELECT id, family_member_id, domain FROM internet_member_sites ORDER BY domain').all(),
+      member_settings: db
+        .prepare('SELECT family_member_id, daily_minutes, weekend_minutes, minutes_per_chore FROM internet_members')
+        .all(),
+      requests: db
+        .prepare(
+          `SELECT * FROM internet_requests WHERE status = 'pending' OR decided_at > datetime('now', '-1 day') ORDER BY created_at DESC`
+        )
+        .all(),
       filter_categories: FILTER_CATEGORIES.map((c) => ({ key: c.key, label: c.label })),
       enabled_filter_categories: getEnabledFilterCategories(),
     });
@@ -223,7 +234,36 @@ internetRouter.patch(
   requireAdmin,
   asyncHandler(async (req, res) => {
     if (!memberExists(req.params.memberId)) return res.status(404).json({ error: 'not found' });
-    const { mode, filtered } = req.body as { mode?: string; filtered?: boolean };
+    const { mode, filtered, daily_minutes, weekend_minutes, minutes_per_chore } = req.body as {
+      mode?: string;
+      filtered?: boolean;
+      daily_minutes?: number | null;
+      weekend_minutes?: number | null;
+      minutes_per_chore?: number;
+    };
+    // Time allowance: null/blank = no limit; otherwise whole minutes up to a full day.
+    const allowance = (v: unknown): number | null | undefined => {
+      if (v === undefined) return undefined;
+      if (v === null || v === '') return null;
+      const n = Math.round(Number(v));
+      return Number.isFinite(n) && n >= 0 && n <= 1440 ? n : undefined;
+    };
+    if (daily_minutes !== undefined || weekend_minutes !== undefined || minutes_per_chore !== undefined) {
+      const row = getMemberRow(req.params.memberId);
+      const d = allowance(daily_minutes);
+      const w = allowance(weekend_minutes);
+      if ((daily_minutes !== undefined && d === undefined) || (weekend_minutes !== undefined && w === undefined)) {
+        return res.status(400).json({ error: 'Allowance must be 0–1440 minutes, or blank for no limit' });
+      }
+      if (d !== undefined) row.daily_minutes = d;
+      if (w !== undefined) row.weekend_minutes = w;
+      if (minutes_per_chore !== undefined) {
+        const n = Math.round(Number(minutes_per_chore));
+        if (!Number.isFinite(n) || n < 0 || n > 240) return res.status(400).json({ error: 'Minutes per chore must be 0–240' });
+        row.minutes_per_chore = n;
+      }
+      saveMemberRow(row);
+    }
     if (mode !== undefined) {
       if (!MODES.includes(mode as InternetMode)) return res.status(400).json({ error: 'Invalid mode' });
       setMemberMode(req.params.memberId, mode as InternetMode);
@@ -233,6 +273,134 @@ internetRouter.patch(
       saveMemberRow(row);
     }
     res.json({ state: memberState(req.params.memberId), warning: await syncAfterChange() });
+  })
+);
+
+/** POST /members/:memberId/extra { minutes } — "+N minutes today" on top of the daily allowance. */
+internetRouter.post(
+  '/members/:memberId/extra',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    if (!memberExists(req.params.memberId)) return res.status(404).json({ error: 'not found' });
+    const minutes = parseMinutes((req.body as { minutes?: unknown }).minutes);
+    if (!minutes) return res.status(400).json({ error: 'Invalid minutes' });
+    addExtraMinutes(req.params.memberId, minutes);
+    res.json({ state: memberState(req.params.memberId), warning: await syncAfterChange() });
+  })
+);
+
+// ---- Requests: a kid asking for more time or a website ----
+// Asking is open to everyone (it changes nothing by itself); deciding is parent-only.
+
+internetRouter.post('/requests', (req, res) => {
+  const body = req.body as { family_member_id?: string; kind?: string; minutes?: number; domain?: string; note?: string };
+  // Asking for yourself: a verified login wins over whoever the client says is asking.
+  const memberId = sessionMemberId(req.cookies?.[SESSION_COOKIE_NAME]) ?? body.family_member_id ?? '';
+  if (!memberExists(memberId)) return res.status(400).json({ error: 'Pick who you are in the switcher at the top first' });
+  if (body.kind !== 'time' && body.kind !== 'site') return res.status(400).json({ error: 'kind must be time or site' });
+  const pending = (db.prepare("SELECT COUNT(*) AS n FROM internet_requests WHERE family_member_id = ? AND status = 'pending'").get(memberId) as {
+    n: number;
+  }).n;
+  if (pending >= 5) return res.status(400).json({ error: 'You already have 5 requests waiting — wait for a parent to answer those' });
+  let minutes: number | null = null;
+  let domain: string | null = null;
+  if (body.kind === 'time') {
+    minutes = [15, 30, 60].includes(Number(body.minutes)) ? Number(body.minutes) : null;
+    if (!minutes) return res.status(400).json({ error: 'Ask for 15, 30, or 60 minutes' });
+  } else {
+    domain = body.domain ? normalizeDomain(body.domain) : null;
+    if (!domain) return res.status(400).json({ error: 'Enter a website like example.com' });
+  }
+  const request = {
+    id: uuidv4(),
+    family_member_id: memberId,
+    kind: body.kind,
+    minutes,
+    domain,
+    note: String(body.note ?? '').trim().slice(0, 200),
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    decided_at: null,
+  };
+  db.prepare(
+    `INSERT INTO internet_requests (id, family_member_id, kind, minutes, domain, note, status, created_at, decided_at)
+     VALUES (@id, @family_member_id, @kind, @minutes, @domain, @note, @status, @created_at, @decided_at)`
+  ).run(request);
+  res.status(201).json(request);
+});
+
+/** GET /requests/pending-count — for the badge on the Internet tab. */
+internetRouter.get('/requests/pending-count', (_req, res) => {
+  res.json((db.prepare("SELECT COUNT(*) AS n FROM internet_requests WHERE status = 'pending'").get() as { n: number }).n);
+});
+
+interface RequestRow {
+  id: string;
+  family_member_id: string;
+  kind: 'time' | 'site';
+  minutes: number | null;
+  domain: string | null;
+  status: string;
+}
+
+/** POST /requests/:id/approve — more time: added to today's allowance if that's what ran out,
+ *  otherwise internet on now for that long; a site: allowed for that kid (their own list, which
+ *  works in both filtered and approved-only modes). */
+internetRouter.post(
+  '/requests/:id/approve',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const request = db.prepare('SELECT * FROM internet_requests WHERE id = ?').get(req.params.id) as RequestRow | undefined;
+    if (!request) return res.status(404).json({ error: 'not found' });
+    if (request.status !== 'pending') return res.status(400).json({ error: 'Already answered' });
+    let warning: string | null = null;
+    if (request.kind === 'time') {
+      if (memberState(request.family_member_id).reason === 'limit') addExtraMinutes(request.family_member_id, request.minutes!);
+      else resumeMember(request.family_member_id, request.minutes!);
+      warning = await syncAfterChange();
+    } else {
+      db.prepare('INSERT OR IGNORE INTO internet_member_sites (id, family_member_id, domain) VALUES (?, ?, ?)').run(
+        uuidv4(),
+        request.family_member_id,
+        request.domain
+      );
+      try {
+        await syncAllowEntries();
+        await syncDevices();
+      } catch (err) {
+        warning = (err as Error).message;
+      }
+    }
+    db.prepare("UPDATE internet_requests SET status = 'approved', decided_at = datetime('now') WHERE id = ?").run(request.id);
+    res.json({ warning });
+  })
+);
+
+internetRouter.post('/requests/:id/deny', requireAdmin, (req, res) => {
+  const result = db
+    .prepare("UPDATE internet_requests SET status = 'denied', decided_at = datetime('now') WHERE id = ? AND status = 'pending'")
+    .run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Not found or already answered' });
+  res.json({ warning: null });
+});
+
+// ---- Weekly report ----
+
+internetRouter.get('/report', requireAdmin, (_req, res) => {
+  res.json(buildWeeklyReport());
+});
+
+/** POST /report/email — send the weekly report now (it also goes out by itself Sunday 6pm). */
+internetRouter.post(
+  '/report/email',
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    try {
+      const sentTo = await sendWeeklyReport();
+      res.json({ sent_to: sentTo });
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
   })
 );
 
