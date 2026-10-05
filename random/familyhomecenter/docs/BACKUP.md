@@ -12,11 +12,13 @@ it to a timestamped folder.
 | Photo albums & favorites, photo documents (all their text, captions, pictures picked) | the database | always |
 | Movies' details — photos, songs, captions, style — plus drafts and the screensaver choice | the database | always |
 | Internet controls — devices, modes, schedules, sites, time limits, usage history, requests | the database | always |
+| People (face recognition) — names, which faces are who, confirmations | the database | always |
 | Avatar photos, completion-sound MP3s, Knowledge Base pictures/videos | `avatars/`, `sounds/`, `kb-media/` | always |
 | Passwords and setup (Pi-hole, email, Spotify, calendars, …) | `.env` | always |
 | Rendered movie videos | `movies/` | only with `--with-movies` |
 
-Not included because they rebuild themselves: photo thumbnails and the blurry/duplicate analysis.
+Not included because they rebuild themselves: photo thumbnails, the blurry/duplicate analysis, face
+thumbnails, and the face models (re-downloaded when needed).
 Not included because they belong to something else: your photos and music themselves (they live on
 PHOTOS_DIR / MUSIC_LIBRARY_DIR — back those up wherever they live), and Pi-hole's own setup (its
 password and your router settings — everything *this app* put into Pi-hole can be rebuilt with

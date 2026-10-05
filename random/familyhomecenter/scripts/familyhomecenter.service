@@ -8,6 +8,9 @@ Type=simple
 User=pi
 WorkingDirectory=/home/pi/paloalto_parser/random/familyhomecenter/server
 EnvironmentFile=/home/pi/paloalto_parser/random/familyhomecenter/.env
+# Belt and braces: the app also sets this itself before loading the face recognition library —
+# keeps ONNX Runtime from trying to send Microsoft usage telemetry.
+Environment=ORT_DISABLE_TELEMETRY=1
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5

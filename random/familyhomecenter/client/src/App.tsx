@@ -17,6 +17,7 @@ import { PhotosPage } from './pages/PhotosPage.js';
 import { IntercomPage } from './pages/IntercomPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { InternetPage } from './pages/InternetPage.js';
+import { PeoplePage } from './pages/PeoplePage.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
@@ -76,6 +77,7 @@ export function App() {
           <Route path="/person/:id/bank" element={<SectionGate section="prizes"><BankPage /></SectionGate>} />
           <Route path="/music" element={<SectionGate section="music"><MusicPage /></SectionGate>} />
           <Route path="/photos" element={<SectionGate section="photos"><PhotosPage /></SectionGate>} />
+          <Route path="/photos/people" element={<SectionGate section="photos"><PeoplePage /></SectionGate>} />
           <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />
           <Route path="/internet" element={<SectionGate section="internet"><InternetPage /></SectionGate>} />
           <Route path="/settings" element={<SettingsPage />} />

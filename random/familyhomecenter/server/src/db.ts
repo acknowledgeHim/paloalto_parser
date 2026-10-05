@@ -655,6 +655,43 @@ db.exec(`
   );
 `);
 
+// Face recognition (services/faces/) — opt-in (setting faces_enabled), all on this machine.
+//   people:          named people (not necessarily family members — grandparents, friends…)
+//   faces:           every face found in a photo: box (fractions of the upright image), the 128-number
+//                    "faceprint" (embedding, float32 BLOB), and who it is — person_id with confirmed = 1
+//                    once someone's said so; suggestions are worked out on the fly, never stored.
+//   face_rejections: "that's not Sam" — keeps a suggestion from coming back.
+//   face_scans:      which photos have been looked at (mtime_ms re-scans a replaced photo).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS people (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS faces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    x REAL NOT NULL, y REAL NOT NULL, w REAL NOT NULL, h REAL NOT NULL,
+    score REAL NOT NULL,
+    embedding BLOB NOT NULL,
+    person_id TEXT REFERENCES people(id) ON DELETE SET NULL,
+    confirmed INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS faces_path ON faces(path);
+  CREATE INDEX IF NOT EXISTS faces_person ON faces(person_id);
+  CREATE TABLE IF NOT EXISTS face_rejections (
+    face_id INTEGER NOT NULL REFERENCES faces(id) ON DELETE CASCADE,
+    person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    PRIMARY KEY (face_id, person_id)
+  );
+  CREATE TABLE IF NOT EXISTS face_scans (
+    path TEXT PRIMARY KEY,
+    mtime_ms REAL NOT NULL,
+    faces INTEGER NOT NULL,
+    scanned_at TEXT NOT NULL
+  );
+`);
+
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
 // the result (which of this app's groups each device should be in) every minute.

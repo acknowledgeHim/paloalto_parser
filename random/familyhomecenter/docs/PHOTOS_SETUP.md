@@ -176,3 +176,42 @@ see **Possibly blurry** / **Duplicate** tags and these options:
 It's a heuristic: a deliberately soft photo (fog, a plain sky) can be flagged, which is why the
 default is to include everything. Photos not checked yet are always included. A large library takes
 a while to analyze the first time; after that only new or changed photos are checked.
+
+## People (face recognition) — optional
+
+**Photos → 👥 People** finds faces in your photos and suggests who's who once you've named a few.
+
+1. A parent taps **Turn on face recognition**. The Pi downloads two small face models once (~40 MB,
+   from OpenCV's official model collection) and starts looking through your photos in the
+   background — the first pass over a big library can take hours on a Pi; after that, only new
+   photos are checked. The People page shows how far it's got.
+2. Under **Who's this?**, faces nobody's named yet are grouped by who they probably are. Tap any
+   face that doesn't belong (to leave it out), type a name, **Save**.
+3. Once someone has a name, their other photos show up as suggestions: open them on the People
+   page (**Is this Sam?** ✓ / ✗ / **Yes to all**), or in the photo viewer, where faces show along the
+   bottom — a name, a "Sam?" to ✓ or ✗, or **Who's this?** to name it right there.
+4. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
+   **With a person** as a way to pick photos for movies and documents.
+
+Nothing is ever tagged without someone confirming it. Kids are the hardest case (faces change a lot
+year to year) — confirming a few photos of each child from different ages helps a lot.
+
+**Privacy — nothing leaves the Pi.** Finding and comparing faces happens entirely on the Pi; no
+photo, face, or faceprint is sent anywhere. The only internet use is that one-time model download.
+The face library (ONNX Runtime) includes Microsoft usage telemetry; the app switches it off
+(`ORT_DISABLE_TELEMETRY=1`, also set in the service file) — verified by running the server with every
+internet connection and hostname lookup logged and blocked at the operating-system level: zero
+attempts while scanning faces (and 10 attempts to Microsoft's telemetry server without the switch).
+
+**Never downloading anything:** put the two model files in `server/data/models/` yourself before
+turning it on, and the Pi won't fetch them:
+
+- `face_detection_yunet_2023mar.onnx` (232,589 bytes) — from
+  https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet
+- `face_recognition_sface_2021dec.onnx` (38,696,353 bytes) — from
+  https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface
+
+**Turning it off** stops scanning; names and tags are kept (turn it back on to carry on). **Forget
+this person** on someone's page removes the name only — their faces go back to unnamed. Photos
+themselves are never changed. Everything is in the app's database, so `npm run backup` covers it
+(face thumbnails and models rebuild/re-download on their own).

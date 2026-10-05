@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { api, type Movie, type PhotoAlbum, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
+import { api, type Movie, type Person, type PhotoAlbum, type PhotoDetail, type Track, type LibraryStatus } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { LibraryBrowser } from './LibraryBrowser.js';
 import { fmtTakenDate, NO_QUALITY_FILTER, passesQualityFilter, splitPhotoPath, type PhotoQualityFilter } from '../utils/photoDetails.js';
 import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js';
 
-type SelectionMode = 'date-range' | 'name' | 'album' | 'random' | 'manual';
+type SelectionMode = 'date-range' | 'name' | 'album' | 'person' | 'random' | 'manual';
 type GridSort = 'movie' | 'album' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 type Selection = (
   | { mode: 'manual'; photoIds: string[] }
@@ -110,6 +110,10 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   const [quality, setQuality] = useState<PhotoQualityFilter>(NO_QUALITY_FILTER);
   // "From an album" is the photo grid narrowed to one album — pick some or Select all.
   const [albumPhotoIds, setAlbumPhotoIds] = useState<string[] | null>(null);
+  // "With a person" (face recognition): the grid narrowed to photos with them in it.
+  const [people, setPeople] = useState<Person[]>([]);
+  const [personId, setPersonId] = useState('');
+  const [personPhotoIds, setPersonPhotoIds] = useState<string[] | null>(null);
   const [secondsPerPhoto, setSecondsPerPhoto] = useState(4);
   const [musicQuery, setMusicQuery] = useState('');
   const [musicResults, setMusicResults] = useState<Track[]>([]);
@@ -226,8 +230,18 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   const gridReady =
     mode === 'manual' ||
     (mode === 'album' && Boolean(albumId)) ||
+    (mode === 'person' && Boolean(personId)) ||
     (mode === 'date-range' && Boolean(startDate && endDate)) ||
     (mode === 'name' && nameQuery.trim() !== '');
+
+  useEffect(() => {
+    api.get<Person[]>('/faces/people').then(setPeople).catch(() => setPeople([]));
+  }, []);
+  useEffect(() => {
+    setPersonPhotoIds(null);
+    if (!personId) return;
+    api.get<string[]>(`/faces/people/${personId}/photos`).then(setPersonPhotoIds).catch(() => setPersonPhotoIds([]));
+  }, [personId]);
 
   useEffect(() => {
     setAlbumPhotoIds(null);
@@ -239,7 +253,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   // photos were added, a date range oldest first, a folder/filename search by folder and name.
   useEffect(() => {
     if (mode === 'album' && albumId) setGridSort('album');
-    else if (mode === 'date-range') setGridSort('date-asc');
+    else if (mode === 'date-range' || mode === 'person') setGridSort('date-asc');
     else if (mode === 'name') setGridSort('name-asc');
     else if (mode === 'manual' && gridSort === 'album') setGridSort(editing ? 'movie' : 'date-desc');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -283,7 +297,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
   const shownGridPhotos = useMemo(() => {
     const folderQ = folderFilter.trim().toLowerCase();
     const fileQ = fileFilter.trim().toLowerCase();
-    const inAlbum = mode === 'album' ? new Set(albumPhotoIds ?? []) : null;
+    const inAlbum = mode === 'album' ? new Set(albumPhotoIds ?? []) : mode === 'person' ? new Set(personPhotoIds ?? []) : null;
     const nameQ = nameQuery.trim().toLowerCase();
     if (!gridReady) return [];
     return sortedGridPhotos.filter((p) => {
@@ -303,7 +317,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
         passesQualityFilter(p, quality)
       );
     });
-  }, [sortedGridPhotos, folderFilter, fileFilter, showSelectedOnly, selectedIds, quality, mode, albumPhotoIds, gridReady, startDate, endDate, nameQuery]);
+  }, [sortedGridPhotos, folderFilter, fileFilter, showSelectedOnly, selectedIds, quality, mode, albumPhotoIds, personPhotoIds, gridReady, startDate, endDate, nameQuery]);
 
   // Every distinct folder, offered as suggestions in the folder filter box.
   const gridFolders = useMemo(
@@ -631,6 +645,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
               <option value="date-range">By date taken</option>
               <option value="name">By folder or filename</option>
               <option value="album">From an album</option>
+              {people.length > 0 && <option value="person">With a person</option>}
               <option value="random">Random</option>
               <option value="manual">Choose from the grid</option>
             </select>
@@ -656,6 +671,14 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
               ))}
             </select>
           )}
+          {mode === 'person' && (
+            <select value={personId} onChange={(e) => setPersonId(e.target.value)} aria-label="Person">
+              <option value="">Pick a person…</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.photo_count})</option>
+              ))}
+            </select>
+          )}
           <PhotoQualityOptions value={quality} onChange={setQuality} />
           {mode === 'name' && (
             <>
@@ -669,12 +692,18 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
           )}
           {gridMode && !gridReady && (
             <p className="hint">
-              {mode === 'date-range' ? 'Pick both dates to see the photos taken then.' : mode === 'name' ? 'Type part of a folder or filename to see the matching photos.' : 'Pick an album to see its photos.'}
+              {mode === 'date-range'
+                ? 'Pick both dates to see the photos taken then.'
+                : mode === 'name'
+                  ? 'Type part of a folder or filename to see the matching photos.'
+                  : mode === 'person'
+                    ? 'Pick a person to see the photos they’re in.'
+                    : 'Pick an album to see its photos.'}
             </p>
           )}
           {gridMode && gridReady && (
             <>
-              {(!gridPhotos || (mode === 'album' && !albumPhotoIds)) && !gridError && <p className="hint">Loading photos…</p>}
+              {(!gridPhotos || (mode === 'album' && !albumPhotoIds) || (mode === 'person' && !personPhotoIds)) && !gridError && <p className="hint">Loading photos…</p>}
               {gridError && (
                 <p className="hint">
                   Couldn't load the photo list.{' '}

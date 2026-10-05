@@ -451,3 +451,37 @@ export interface Movie {
   created_by_id: string | null;
   created_at: string;
 }
+
+/** Face recognition (server/src/routes/faces.ts) — opt-in, entirely on the Pi. */
+export interface FaceStatus {
+  enabled: boolean;
+  models_present: boolean;
+  preparing: boolean;
+  scanned: number;
+  total: number;
+  faces: number;
+  people: number;
+  error: string | null;
+}
+
+export interface Person {
+  id: string;
+  name: string;
+  cover_face_id: number | null;
+  confirmed_count: number;
+  suggested_count: number;
+  photo_count: number;
+}
+
+export interface Face {
+  id: number;
+  photo_id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  person_id: string | null;
+  confirmed: boolean;
+  suggested_person_id: string | null;
+  similarity: number | null;
+}

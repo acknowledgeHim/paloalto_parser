@@ -7,6 +7,7 @@ import { config } from '../config.js';
 import { db } from '../db.js';
 import { getPhotoDate } from './photoDates.js';
 import { analyzePhoto } from './photoAnalysis.js';
+import { scanPhotoFaces } from './faces/index.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const THUMB_WIDTH = 1920; // downsized for smooth slideshow playback on the Pi's GPU
@@ -47,6 +48,9 @@ function thumbIdFor(absolutePath: string): string {
 }
 
 /** Returns the path to a cached, downsized JPEG for the given absolute photo path, generating it if needed. */
+/** Thumbnails being made right now, so two requests for the same photo share one job. */
+const inFlight = new Map<string, Promise<string>>();
+
 export async function getOrCreateThumbnail(absolutePath: string): Promise<string> {
   await fs.mkdir(config.thumbsDir, { recursive: true });
   const thumbPath = path.join(config.thumbsDir, `${thumbIdFor(absolutePath)}.jpg`);
@@ -56,12 +60,30 @@ export async function getOrCreateThumbnail(absolutePath: string): Promise<string
   } catch {
     // not cached yet
   }
-  await sharp(absolutePath)
-    .rotate() // respect EXIF orientation
-    .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
-    .jpeg({ quality: 82 })
-    .toFile(thumbPath);
-  return thumbPath;
+  const pending = inFlight.get(thumbPath);
+  if (pending) return pending;
+  // Written to a temp file and renamed into place, so nothing can ever read a half-written thumbnail
+  // (the background warm-up and a browser asking for the same photo used to race: the reader saw a
+  // partial file and failed with "unsupported image format").
+  const job = (async () => {
+    const tmp = `${thumbPath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      await sharp(absolutePath)
+        .rotate() // respect EXIF orientation
+        .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toFile(tmp);
+      await fs.rename(tmp, thumbPath);
+      return thumbPath;
+    } catch (err) {
+      await fs.rm(tmp, { force: true });
+      throw err;
+    } finally {
+      inFlight.delete(thumbPath);
+    }
+  })();
+  inFlight.set(thumbPath, job);
+  return job;
 }
 
 export function photoIdFor(absolutePath: string): string {
@@ -97,6 +119,8 @@ export async function warmThumbnailCache(): Promise<{ processed: number; failed:
         await getPhotoDate(file);
         // …and the duplicate/blur analysis (from the thumbnail just made — cheap once it exists).
         await analyzePhoto(file);
+        // …and, if face recognition is turned on, look for faces (from the same thumbnail).
+        await scanPhotoFaces(file);
         processed++;
       } catch (err) {
         failed++;

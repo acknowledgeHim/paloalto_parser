@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type PhotoAlbum, type PhotoDetail } from '../api/client.js';
+import { api, type Person, type PhotoAlbum, type PhotoDetail } from '../api/client.js';
 import { fmtTakenDate, NO_QUALITY_FILTER, passesQualityFilter, splitPhotoPath, type PhotoQualityFilter } from '../utils/photoDetails.js';
 import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js';
 
 /** The same ways to pick photos as the movie maker, in the same order. */
-type Mode = 'date-range' | 'name' | 'album' | 'random' | 'manual';
+type Mode = 'date-range' | 'name' | 'album' | 'person' | 'random' | 'manual';
 type Sort = 'album' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 
 const PAGE_SIZE = 90;
@@ -55,6 +55,9 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
   const [albums, setAlbums] = useState<PhotoAlbum[]>([]);
   const [albumId, setAlbumId] = useState('');
   const [albumPhotoIds, setAlbumPhotoIds] = useState<string[] | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [personId, setPersonId] = useState('');
+  const [personPhotoIds, setPersonPhotoIds] = useState<string[] | null>(null);
   const [quality, setQuality] = useState<PhotoQualityFilter>(NO_QUALITY_FILTER);
   // Grid
   const [sort, setSort] = useState<Sort>('date-desc');
@@ -73,6 +76,14 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
     api.get<PhotoAlbum[]>('/albums').then(setAlbums).catch(() => setAlbums([]));
   }, []);
   useEffect(() => {
+    api.get<Person[]>('/faces/people').then(setPeople).catch(() => setPeople([]));
+  }, []);
+  useEffect(() => {
+    setPersonPhotoIds(null);
+    if (!personId) return;
+    api.get<string[]>(`/faces/people/${personId}/photos`).then(setPersonPhotoIds).catch(() => setPersonPhotoIds([]));
+  }, [personId]);
+  useEffect(() => {
     setAlbumPhotoIds(null);
     if (!albumId) return;
     api.get<string[]>(`/albums/${albumId}/photos`).then(setAlbumPhotoIds).catch(() => setAlbumPhotoIds([]));
@@ -84,13 +95,14 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
     mode === 'manual' ||
     mode === 'random' ||
     (mode === 'album' && Boolean(albumId) && albumPhotoIds !== null) ||
+    (mode === 'person' && Boolean(personId) && personPhotoIds !== null) ||
     (mode === 'date-range' && Boolean(startDate && endDate)) ||
     (mode === 'name' && nameQuery.trim() !== '');
 
   // Each way of picking starts in its natural order (still re-sortable).
   useEffect(() => {
     if (mode === 'album') setSort('album');
-    else if (mode === 'date-range') setSort('date-asc');
+    else if (mode === 'date-range' || mode === 'person') setSort('date-asc');
     else if (mode === 'name') setSort('name-asc');
     else if (sort === 'album') setSort('date-desc');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,8 +129,12 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
       const inAlbum = new Set(albumPhotoIds ?? []);
       return usable.filter((p) => inAlbum.has(p.id));
     }
+    if (mode === 'person') {
+      const withThem = new Set(personPhotoIds ?? []);
+      return usable.filter((p) => withThem.has(p.id));
+    }
     return usable;
-  }, [usable, ready, mode, startDate, endDate, nameQuery, albumPhotoIds]);
+  }, [usable, ready, mode, startDate, endDate, nameQuery, albumPhotoIds, personPhotoIds]);
 
   const sorted = useMemo(() => {
     const list = [...narrowed];
@@ -233,6 +249,7 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
                 <option value="date-range">By date taken</option>
                 <option value="name">By folder or filename</option>
                 <option value="album">From an album</option>
+                {people.length > 0 && <option value="person">With a person</option>}
                 <option value="random">Random</option>
                 <option value="manual">Choose from the grid</option>
               </select>
@@ -259,6 +276,14 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
                 ))}
               </select>
             )}
+            {mode === 'person' && (
+              <select value={personId} onChange={(e) => setPersonId(e.target.value)} aria-label="Person">
+                <option value="">Pick a person…</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.photo_count})</option>
+                ))}
+              </select>
+            )}
             {mode === 'random' && (
               <div className="task-form__row">
                 <label className="member-form__label member-form__label--inline">
@@ -277,7 +302,9 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
                   ? 'Pick both dates to see the photos taken then.'
                   : mode === 'name'
                     ? 'Type part of a folder or filename to see the matching photos.'
-                    : 'Pick an album to see its photos.'}
+                    : mode === 'person'
+                      ? 'Pick a person to see the photos they’re in.'
+                      : 'Pick an album to see its photos.'}
               </p>
             )}
 

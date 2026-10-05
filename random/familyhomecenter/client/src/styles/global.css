@@ -1504,3 +1504,34 @@ textarea {
 .photos-page__check { display: flex; align-items: center; gap: 6px; }
 .photos-page__check input { width: 22px; height: 22px; min-height: 0; padding: 0; }
 .photo-lightbox__badge { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.6); color: #fff; padding: 6px 14px; border-radius: 999px; }
+
+/* ---- People (face recognition) ---- */
+.people-page { display: flex; flex-direction: column; gap: 14px; }
+.people-page__status { margin: 0; }
+.people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.people-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); color: var(--text); min-height: 0; }
+.people-card img, .people-card__blank { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
+.people-card__blank { display: flex; align-items: center; justify-content: center; background: var(--panel); font-size: 2em; color: var(--text-muted); }
+.people-card__check { background: #fef3c7; color: #92610a; font-size: 0.75em; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.people-faces { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.people-face { position: relative; width: 96px; height: 96px; padding: 0; border-radius: 10px; overflow: hidden; border: 3px solid transparent; background: var(--bg); min-height: 0; }
+.people-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.people-face--off { opacity: 0.3; }
+.people-face--suggested { border-color: #f5c542; }
+.people-face__actions { position: absolute; left: 0; right: 0; bottom: 0; display: flex; }
+.people-face__actions button { flex: 1; min-height: 30px; padding: 0; border-radius: 0; font-size: 1em; background: rgba(0, 0, 0, 0.6); color: #fff; }
+.people-group { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.people-group:last-child { border-bottom: none; }
+.people-group__name { max-width: 520px; }
+.people-detail__head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.people-detail__head h2 { margin: 0; }
+.people-detail__actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ---- Faces in the photo viewer ---- */
+.photo-faces { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: calc(100vw - 180px); z-index: 2; }
+.photo-faces__face { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 0.9em; }
+.photo-faces__face img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+.photo-faces__face--suggested { box-shadow: 0 0 0 2px #f5c542 inset; }
+.photo-faces__face button { min-height: 30px; padding: 0 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); color: #fff; }
+.photo-faces__face form { display: flex; gap: 4px; }
+.photo-faces__face input { min-height: 30px; width: 130px; padding: 0 8px; color: var(--text); }

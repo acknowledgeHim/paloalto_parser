@@ -6,6 +6,9 @@ import { ConfirmButton } from '../components/ConfirmButton.js';
 import { DocumentEditorModal } from '../components/DocumentEditorModal.js';
 import { AlbumChecklist, FAVORITES_ID, useAlbums } from '../components/PhotoAlbums.js';
 import { useSectionAccess } from '../state/SectionAccess.js';
+import { Link, useSearchParams } from 'react-router-dom';
+import { PhotoFaces } from '../components/PhotoFaces.js';
+import type { Person } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
@@ -517,6 +520,20 @@ export function PhotosPage() {
   const [sortBy, setSortBy] = useState<'library' | 'date-desc' | 'date-asc' | 'name'>('library');
   const [albumStatus, setAlbumStatus] = useState<'all' | 'none' | 'some'>('all');
   const [showHidden, setShowHidden] = useState(false);
+  // People (face recognition): the filter can come from the People page's "See their photos" link.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const personFilter = searchParams.get('person') ?? '';
+  const [people, setPeople] = useState<Person[]>([]);
+  const [personPhotoIds, setPersonPhotoIds] = useState<Set<string> | null>(null);
+  const loadPeople = () => api.get<Person[]>('/faces/people').then(setPeople).catch(() => setPeople([]));
+  useEffect(() => {
+    loadPeople();
+  }, []);
+  useEffect(() => {
+    setPersonPhotoIds(null);
+    if (!personFilter) return;
+    api.get<string[]>(`/faces/people/${personFilter}/photos`).then((ids) => setPersonPhotoIds(new Set(ids))).catch(() => setPersonPhotoIds(new Set()));
+  }, [personFilter, people]);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   // '' = all photos; otherwise an album id.
   const [albumFilter, setAlbumFilter] = useState('');
@@ -555,6 +572,7 @@ export function PhotosPage() {
       list = albumPhotoIds.map((id) => byId.get(id)).filter((p): p is Photo => Boolean(p));
     }
     if (!showHidden) list = list.filter((p) => !p.hidden);
+    if (personFilter) list = personPhotoIds ? list.filter((p) => personPhotoIds.has(p.id)) : [];
     if (excludeBlurry) list = list.filter((p) => !p.blurry);
     if (albumStatus === 'none') list = list.filter((p) => !inAnyAlbum(p.id));
     if (albumStatus === 'some') list = list.filter((p) => inAnyAlbum(p.id));
@@ -576,7 +594,7 @@ export function PhotosPage() {
 
   // Reset paging whenever what's shown changes size (refresh, new photos, another album) so stale
   // indexes don't leave the grid showing fewer than PAGE_SIZE.
-  useEffect(() => setVisibleCount(PAGE_SIZE), [albumFilter, albumStatus, sortBy, showHidden, excludeBlurry]);
+  useEffect(() => setVisibleCount(PAGE_SIZE), [albumFilter, albumStatus, sortBy, showHidden, excludeBlurry, personFilter]);
 
   const activeAlbum = albumsApi.albums.find((a) => a.id === albumFilter);
   const viewing = viewingId ? photos.find((p) => p.id === viewingId) : undefined;
@@ -628,6 +646,7 @@ export function PhotosPage() {
       <div className="photos-page__toolbar">
         <h1>Photos</h1>
         <div className="task-form__row">
+          <Link to="/photos/people" className="movie-maker__download">👥 People</Link>
           <button className="secondary" onClick={load}>Refresh</button>
           <button onClick={() => setSlideshowOn(true)} disabled={photos.length === 0}>▶ Start slideshow</button>
         </div>
@@ -726,6 +745,20 @@ export function PhotosPage() {
             <option value="some">In an album</option>
           </select>
         </label>
+        {people.length > 0 && (
+          <label className="member-form__label member-form__label--inline">
+            Person
+            <select
+              value={personFilter}
+              onChange={(e) => setSearchParams(e.target.value ? { person: e.target.value } : {})}
+            >
+              <option value="">Anyone</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.photo_count})</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="member-form__label member-form__label--inline photos-page__check">
           <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
           Show hidden photos ({photos.filter((p) => p.hidden).length})
@@ -874,6 +907,7 @@ export function PhotosPage() {
             {albumPanel === 'viewer' && <AlbumChecklist albumsApi={albumsApi} photoIds={[viewing.id]} onDone={() => setAlbumPanel(null)} />}
           </div>
           {viewing.hidden && <div className="photo-lightbox__badge">🙈 Hidden</div>}
+          <PhotoFaces photoId={viewing.id} people={people} onChange={loadPeople} />
           <button className="photo-lightbox__close" onClick={(e) => { e.stopPropagation(); closeViewer(); }}>
             ✕
           </button>

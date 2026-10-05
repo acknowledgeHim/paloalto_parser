@@ -24,6 +24,7 @@
     "ical.js": "^2.1.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^9.1.1",
+    "onnxruntime-node": "^1.30.0",
     "sharp": "^0.33.5",
     "tsdav": "^2.1.3",
     "twilio": "^5.13.1",
