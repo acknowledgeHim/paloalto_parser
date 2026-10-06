@@ -198,15 +198,26 @@ a while to analyze the first time; after that only new or changed photos are che
 3. **Name faces photo by photo** goes through every photo with unnamed faces (busiest photos first):
    each face gets a numbered box on the photo and a row beside it — type a name, ✓ / ✗ a suggestion,
    or 🚫 Ignore — then **Next photo**. A few names here is the best way to teach it someone.
-4. Once someone has a name, their other photos show up as suggestions: open them on the People
-   page (**Is this Sam?** ✓ / ✗ / **Yes to all**), or in the photo viewer, where faces show along the
-   bottom — a name, a "Sam?" to ✓ or ✗, **Who's this?** to name it right there, or 🚫 to ignore it.
+4. Once someone has a name, their other photos show up as suggestions. Each person's card shows
+   how many faces are **confirmed** and how many are **to check**; tap the card to see both —
+   **To check — is this Sam?** (yellow border: ✓ / ✗, or **Yes to all shown**) and then
+   **Confirmed Sam** (60 at a time, **Show more** for the rest). Or in the photo viewer, or in the photo viewer, where faces show along the
+   where faces show along the bottom — a name, a "Sam?" to ✓ or ✗, **Who's this?** to name it right there, or 🚫 to ignore it.
    A suggestion is only made when one person is a clear match — if two people (say, siblings) look
    about equally likely, it doesn't guess.
    To choose someone's picture on the People page, open them and tap ⭐ on one of their faces
    (otherwise the clearest, biggest one is used).
 5. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
    **With a person** as a way to pick photos for movies and documents.
+
+**Photos that can't be read** (damaged, empty, or e.g. an iPhone HEIC saved as `.jpg`) are skipped
+and counted as looked at — the People page shows *N couldn't be read*; tap it for the list and a
+**Try them all again** button. A photo that takes more than 3 minutes to read (a stuck network share)
+is skipped too, so one bad file can't stall the rest.
+
+**Speed with a big library:** after a server restart the Pi works out everyone's suggestions once
+in the background (a few seconds to a minute or so, depending on library size); after that, naming
+or confirming only re-checks what changed.
 
 Nothing is ever tagged without someone confirming it. Kids are the hardest case (faces change a lot
 year to year) — confirming a few photos of each child from different ages helps a lot.

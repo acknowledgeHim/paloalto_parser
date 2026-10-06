@@ -13,6 +13,7 @@ export function PeoplePage() {
   const [groups, setGroups] = useState<Face[][]>([]);
   const [openPerson, setOpenPerson] = useState<string | null>(null);
   const [tab, setTab] = useState<'groups' | 'photos'>('groups');
+  const [showUnreadable, setShowUnreadable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -77,6 +78,17 @@ export function PeoplePage() {
         <p className="hint people-page__status">
           Looked at {status.scanned.toLocaleString()} of {status.total.toLocaleString()} photos
           {status.scanned < status.total ? ' (still going, in the background)' : ''} · {status.faces.toLocaleString()} faces found
+          {status.scanned < status.total && status.working && status.last_progress_at && Date.now() - Date.parse(status.last_progress_at) > 10 * 60_000 && (
+            <span className="internet-page__bad"> (no progress for {Math.round((Date.now() - Date.parse(status.last_progress_at)) / 60_000)} min — one photo may be slow to read)</span>
+          )}
+          {status.unreadable > 0 && (
+            <>
+              {' · '}
+              <button type="button" className="link-button" onClick={() => setShowUnreadable((v) => !v)}>
+                {status.unreadable.toLocaleString()} couldn't be read
+              </button>
+            </>
+          )}
           {status.rescoring && (
             <> · Updating face scores: {status.rescoring.done.toLocaleString()} of {status.rescoring.total.toLocaleString()} photos</>
           )}
@@ -92,6 +104,7 @@ export function PeoplePage() {
           {status.error && <span className="internet-page__bad"> · Last problem: {status.error}</span>}
         </p>
       )}
+      {status?.enabled && showUnreadable && <UnreadableList onRetry={() => act(() => api.post('/faces/retry-unreadable')).then(() => setShowUnreadable(false))} />}
 
       {status.enabled && person && (
         <PersonDetail person={person} people={people} onClose={() => setOpenPerson(null)} act={act} />
@@ -107,7 +120,7 @@ export function PeoplePage() {
                   <button key={p.id} type="button" className="people-card" onClick={() => setOpenPerson(p.id)}>
                     {p.cover_face_id ? <img src={`/api/faces/${p.cover_face_id}/image`} alt="" /> : <div className="people-card__blank">?</div>}
                     <strong>{p.name}</strong>
-                    <span className="hint">{p.photo_count} photo{p.photo_count === 1 ? '' : 's'}</span>
+                    <span className="hint">{p.confirmed_count.toLocaleString()} confirmed</span>
                     {p.suggested_count > 0 && <span className="people-card__check">{p.suggested_count} to check</span>}
                   </button>
                 ))}
@@ -149,6 +162,28 @@ export function PeoplePage() {
 }
 
 type Act = (fn: () => Promise<unknown>) => Promise<void>;
+
+function UnreadableList({ onRetry }: { onRetry: () => void }) {
+  const [rows, setRows] = useState<Array<{ path: string; error: string }> | null>(null);
+  useEffect(() => {
+    api.get<Array<{ path: string; error: string }>>('/faces/unreadable').then(setRows).catch(() => setRows([]));
+  }, []);
+  return (
+    <section className="panel">
+      <h3>Photos that couldn't be read</h3>
+      <p className="hint">
+        Usually a damaged or empty file, or a different kind of picture saved with a .jpg name (e.g. an iPhone HEIC).
+        They're skipped (and count as looked at); fix or replace a file and it's read again on its own.
+      </p>
+      <button type="button" className="secondary" onClick={onRetry}>Try them all again</button>
+      <ul className="people-unreadable">
+        {rows?.map((r) => (
+          <li key={r.path}><code>{r.path}</code> <span className="hint">— {r.error}</span></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function NameGroup({ faces, people, act }: { faces: Face[]; people: Person[]; act: Act }) {
   // Which faces this name applies to — all to start; tap to take one out (or back in).
@@ -345,9 +380,14 @@ function PhotoByPhoto({ people, onChange }: { people: Person[]; onChange: () => 
   );
 }
 
+const PAGE = 60;
+
 function PersonDetail({ person, people, onClose, act }: { person: Person; people: Person[]; onClose: () => void; act: Act }) {
   const [detail, setDetail] = useState<{ confirmed: Face[]; suggested: Face[] } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  // Long lists are shown a page at a time (each face is a picture to load).
+  const [showSuggested, setShowSuggested] = useState(PAGE);
+  const [showConfirmed, setShowConfirmed] = useState(PAGE);
   const load = () => api.get<{ confirmed: Face[]; suggested: Face[] }>(`/faces/people/${person.id}`).then(setDetail).catch(() => {});
   useEffect(() => {
     load();
@@ -390,16 +430,22 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
         </span>
       </div>
 
+      {!detail && <p className="hint">Loading {person.name}'s faces…</p>}
+
       {detail && detail.suggested.length > 0 && (
         <>
-          <h3>Is this {person.name}? ({detail.suggested.length})</h3>
+          <h3>To check — is this {person.name}? ({detail.suggested.length.toLocaleString()})</h3>
+          <p className="hint">
+            Faces that look like {person.name} but nobody has confirmed yet (yellow border). ✓ if it's {person.name}, ✗ if not —
+            each answer also sharpens the next suggestions.
+          </p>
           <div className="task-form__row">
-            <button type="button" onClick={() => run(() => api.post('/faces/assign', { face_ids: detail.suggested.map((f) => f.id), person_id: person.id }))}>
-              ✓ Yes to all
+            <button type="button" onClick={() => run(() => api.post('/faces/assign', { face_ids: detail.suggested.slice(0, showSuggested).map((f) => f.id), person_id: person.id }))}>
+              ✓ Yes to all {Math.min(showSuggested, detail.suggested.length)} shown
             </button>
           </div>
           <div className="people-faces">
-            {detail.suggested.map((f) => (
+            {detail.suggested.slice(0, showSuggested).map((f) => (
               <div key={f.id} className="people-face people-face--suggested">
                 <img src={`/api/faces/${f.id}/image`} alt="" loading="lazy" />
                 <span className="people-face__actions">
@@ -412,13 +458,23 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
         </>
       )}
 
-      <h3>{person.name} ({detail?.confirmed.length ?? 0})</h3>
+      {detail && detail.suggested.length > showSuggested && (
+        <button type="button" className="secondary" onClick={() => setShowSuggested((n) => n + PAGE)}>
+          Show more ({(detail.suggested.length - showSuggested).toLocaleString()} left)
+        </button>
+      )}
+
+      {detail && (
+        <h3>
+          Confirmed {person.name} ({detail.confirmed.length.toLocaleString()})
+        </h3>
+      )}
       <p className="hint">
         The more photos of {person.name} you confirm — especially from different ages — the better the suggestions.
         Tap ⭐ on a face to make it {person.name}'s picture.
       </p>
       <div className="people-faces">
-        {detail?.confirmed.map((f) => (
+        {detail?.confirmed.slice(0, showConfirmed).map((f) => (
           <div key={f.id} className={`people-face ${f.id === person.cover_face_id ? 'people-face--cover' : ''}`}>
             <img src={`/api/faces/${f.id}/image`} alt="" loading="lazy" />
             {f.id === person.cover_face_id && <span className="people-face__tick" title={`${person.name}'s picture`}>⭐</span>}
@@ -431,6 +487,11 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
           </div>
         ))}
       </div>
+      {detail && detail.confirmed.length > showConfirmed && (
+        <button type="button" className="secondary" onClick={() => setShowConfirmed((n) => n + PAGE)}>
+          Show more ({(detail.confirmed.length - showConfirmed).toLocaleString()} left)
+        </button>
+      )}
     </section>
   );
 }

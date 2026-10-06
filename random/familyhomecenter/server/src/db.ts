@@ -807,6 +807,25 @@ db.exec(`
 // Faces: quality = how straight-on (0–1; NULL for faces found before it was recorded); ignored = "not
 // a face / a stranger" — left out of everything; no_group = "different people" — named one at a time
 // rather than grouped.
+// face_changes: a log of which face rows changed (by triggers, so nothing can miss it) — lets the
+// face matcher re-read just those instead of every face after each click. Read and emptied by
+// services/faces/index.ts.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS face_changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, face_id INTEGER NOT NULL);
+  CREATE TRIGGER IF NOT EXISTS faces_changed_update AFTER UPDATE ON faces BEGIN
+    INSERT INTO face_changes (face_id) VALUES (NEW.id);
+  END;
+  CREATE TRIGGER IF NOT EXISTS faces_changed_delete AFTER DELETE ON faces BEGIN
+    INSERT INTO face_changes (face_id) VALUES (OLD.id);
+  END;
+`);
+// face_scans.error = this photo couldn't be read (it still counts as looked at, and is tried again
+// only once the file changes — or when someone taps "Try again").
+try {
+  db.exec('ALTER TABLE face_scans ADD COLUMN error TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 // people.cover_face_id = the face picked as their picture (NULL = choose automatically).
 try {
   db.exec('ALTER TABLE people ADD COLUMN cover_face_id INTEGER');

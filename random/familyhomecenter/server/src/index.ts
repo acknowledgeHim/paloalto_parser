@@ -30,6 +30,7 @@ import { facesRouter } from './routes/faces.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
+import { allFaces, facesEnabled } from './services/faces/index.js';
 import { startGroceryEmailSchedule } from './services/groceryEmail.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 import { startInternetSchedule } from './services/internetControl.js';
@@ -95,6 +96,8 @@ server.listen(config.port, config.host, () => {
   console.log(`Family Home Center server listening on http://${config.host}:${config.port}`);
   startCalendarSyncSchedule();
   startThumbnailWarmSchedule();
+  // Face suggestions take a few seconds to work out for a big library — do it now, not on first visit.
+  if (facesEnabled()) allFaces().catch((e) => console.warn('[faces] warm-up failed', e));
   startGroceryEmailSchedule();
   startInternetSchedule();
   localizeExistingRecipeImages().catch((err) => console.warn('[recipes] picture migration failed', err));

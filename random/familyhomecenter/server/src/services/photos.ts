@@ -7,7 +7,7 @@ import { config } from '../config.js';
 import { db } from '../db.js';
 import { getPhotoDate } from './photoDates.js';
 import { analyzePhoto } from './photoAnalysis.js';
-import { backfillFaceQuality, scanPhotoFaces } from './faces/index.js';
+import { backfillFaceQuality, recordFaceScanFailure, scanPhotoFaces, scanProgress } from './faces/index.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const THUMB_WIDTH = 1920; // downsized for smooth slideshow playback on the Pi's GPU
@@ -90,6 +90,27 @@ export function photoIdFor(absolutePath: string): string {
   return thumbIdFor(absolutePath);
 }
 
+/** Relative path → photo id for the whole library, worked out once per listing (not per request). */
+let idMapCache: { files: string[]; map: Map<string, string>; reverse: Map<string, string> } | null = null;
+
+async function idMaps() {
+  const files = await listPhotos();
+  if (idMapCache?.files !== files) {
+    const map = new Map(files.map((abs) => [path.relative(config.photosDir, abs), thumbIdFor(abs)]));
+    idMapCache = { files, map, reverse: new Map([...map].map(([rel, id]) => [id, rel])) };
+  }
+  return idMapCache;
+}
+
+export async function photoIdsByPath(): Promise<Map<string, string>> {
+  return (await idMaps()).map;
+}
+
+/** Photo id → relative path. */
+export async function photoPathsById(): Promise<Map<string, string>> {
+  return (await idMaps()).reverse;
+}
+
 export async function findPhotoById(id: string): Promise<string | null> {
   const files = await listPhotos();
   return files.find((f) => thumbIdFor(f) === id) ?? null;
@@ -104,31 +125,63 @@ export async function findPhotoById(id: string): Promise<string | null> {
 // cheap fs.access check via getOrCreateThumbnail, not re-read).
 let warming = false;
 
+/** One photo should take seconds; anything past this (a file that hangs being read over the share)
+ *  is given up on so it can't stall the whole library behind it. */
+const PHOTO_TIMEOUT_MS = 3 * 60_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`took longer than ${Math.round(ms / 60_000)} minutes — skipped`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/** Photos that couldn't be made into a thumbnail, by path → mtime: not re-read every pass, only
+ *  once the file changes (or the server restarts). */
+const unreadable = new Map<string, number>();
+
 export async function warmThumbnailCache(): Promise<{ processed: number; failed: number }> {
   if (warming) return { processed: 0, failed: 0 };
   warming = true;
+  scanProgress.running = true;
   let processed = 0;
   let failed = 0;
   try {
     const files = await listPhotos();
     for (const file of files) {
+      const mtime = unreadable.has(file) ? await fs.stat(file).then((s) => s.mtimeMs, () => -1) : null;
+      if (mtime !== null && unreadable.get(file) === mtime) continue;
       try {
-        await getOrCreateThumbnail(file);
-        // Also warm the date-taken cache, so sorting the movie maker's photo grid by date (and
-        // date-range movie selections) doesn't have to read every photo's EXIF on first use.
-        await getPhotoDate(file);
-        // …and the duplicate/blur analysis (from the thumbnail just made — cheap once it exists).
-        await analyzePhoto(file);
-        // …and, if face recognition is turned on, look for faces (from the same thumbnail).
-        await scanPhotoFaces(file);
+        await withTimeout(
+          (async () => {
+            await getOrCreateThumbnail(file);
+            // Also warm the date-taken cache, so sorting the movie maker's photo grid by date (and
+            // date-range movie selections) doesn't have to read every photo's EXIF on first use.
+            await getPhotoDate(file);
+            // …and the duplicate/blur analysis (from the thumbnail just made — cheap once it exists).
+            await analyzePhoto(file);
+            // …and, if face recognition is turned on, look for faces (from the same thumbnail).
+            await scanPhotoFaces(file);
+          })(),
+          PHOTO_TIMEOUT_MS
+        );
+        unreadable.delete(file);
         processed++;
       } catch (err) {
         failed++;
         console.warn(`[photos] failed to warm thumbnail for "${file}":`, (err as Error).message);
+        unreadable.set(file, await fs.stat(file).then((s) => s.mtimeMs, () => -1));
+        // Counts as looked at for faces (with the reason), instead of holding the count short forever.
+        await recordFaceScanFailure(file, err as Error);
       }
+      scanProgress.lastAt = new Date().toISOString();
     }
   } finally {
     warming = false;
+    scanProgress.running = false;
   }
   // Faces found before the "facing the camera" score existed get it filled in (once, in the background).
   backfillFaceQuality().catch((e) => console.warn('[faces] re-scoring failed', e));

@@ -465,6 +465,10 @@ export interface FaceStatus {
   people: number;
   /** Filling in the "facing the camera" score for faces found before it existed. */
   rescoring: { done: number; total: number } | null;
+  /** Photos that couldn't be read (counted as looked at). */
+  unreadable: number;
+  working: boolean;
+  last_progress_at: string | null;
   error: string | null;
 }
 

@@ -1566,3 +1566,4 @@ textarea {
 .people-pbp__name input { flex: 1; min-width: 0; min-height: 36px; }
 .people-face--cover { border-color: #f5c542; }
 .people-face--cover .people-face__tick { background: rgba(0, 0, 0, 0.6); }
+.people-unreadable { max-height: 300px; overflow-y: auto; font-size: 0.85em; padding-left: 18px; word-break: break-all; }

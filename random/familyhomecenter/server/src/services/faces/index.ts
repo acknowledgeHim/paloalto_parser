@@ -4,7 +4,8 @@ import sharp from 'sharp';
 import { db, getSetting, setSetting } from '../../db.js';
 import { config } from '../../config.js';
 import { getOrCreateThumbnail, listPhotos } from '../photos.js';
-import { cosineSimilarity, detectFaces, ensureModels, modelsPresent } from './engine.js';
+import { detectFaces, ensureModels, modelsPresent } from './engine.js';
+import { addFaceprints, faceIndex, forgetPeopleExcept, personColumn, similarityRows } from './matcher.js';
 
 /**
  * Face recognition for the Photos section — opt-in, entirely on this machine (see engine.ts; no
@@ -85,9 +86,16 @@ function isGoodFace(r: Pick<FaceRow, 'score' | 'w' | 'quality'>): boolean {
 }
 
 let version = 0; // bumped on any change to faces/people, to invalidate the suggestion cache
+let userVersion = 0; // the version of the last change someone made (naming, confirming…) — not a scan
 
-export function facesChanged(): void {
+/** Call after any change; `scan` for new photos scanned (which only add faces). */
+export function facesChanged(kind: 'user' | 'scan' = 'user'): void {
   version++;
+  if (kind === 'user') userVersion = version;
+}
+
+function userChangedSince(v: number): boolean {
+  return userVersion > v;
 }
 
 /** Scans one photo for faces if faces are on and it's new or changed. Never throws. */
@@ -113,11 +121,40 @@ export async function scanPhotoFaces(absolutePath: string): Promise<void> {
          ON CONFLICT(path) DO UPDATE SET mtime_ms = excluded.mtime_ms, faces = excluded.faces, scanned_at = excluded.scanned_at`
       ).run(rel, mtimeMs, found.length, new Date().toISOString());
     })();
-    if (found.length) facesChanged();
+    if (found.length) facesChanged('scan');
   } catch (err) {
-    lastError = (err as Error).message;
-    console.warn(`[faces] couldn't scan "${absolutePath}":`, (err as Error).message);
+    recordFaceScanFailure(absolutePath, err as Error);
   }
+}
+
+/**
+ * Marks a photo that couldn't be read (corrupt, empty, not really an image, timed out over the
+ * share…) as looked at, with the reason — otherwise it'd hold the progress count short forever and
+ * be re-read over the network on every pass. Tried again once the file changes.
+ */
+export async function recordFaceScanFailure(absolutePath: string, err: Error): Promise<void> {
+  if (!facesEnabled()) return;
+  console.warn(`[faces] couldn't scan "${absolutePath}":`, err.message);
+  try {
+    const rel = path.relative(config.photosDir, absolutePath);
+    const mtimeMs = await fs.stat(absolutePath).then((s) => s.mtimeMs, () => 0);
+    db.prepare(
+      `INSERT INTO face_scans (path, mtime_ms, faces, scanned_at, error) VALUES (?, ?, 0, ?, ?)
+       ON CONFLICT(path) DO UPDATE SET mtime_ms = excluded.mtime_ms, faces = 0, scanned_at = excluded.scanned_at, error = excluded.error`
+    ).run(rel, mtimeMs, new Date().toISOString(), err.message.slice(0, 300));
+  } catch {
+    // best effort
+  }
+}
+
+/** Photos that couldn't be read, for the People page's "which ones?" list. */
+export function unreadablePhotos(limit = 500): Array<{ path: string; error: string }> {
+  return db.prepare('SELECT path, error FROM face_scans WHERE error IS NOT NULL ORDER BY path LIMIT ?').all(limit) as Array<{ path: string; error: string }>;
+}
+
+/** "Try again": forget the failures so the next pass reads those photos again. */
+export function retryUnreadable(): number {
+  return db.prepare('DELETE FROM face_scans WHERE error IS NOT NULL').run().changes;
 }
 
 /**
@@ -127,6 +164,9 @@ export async function scanPhotoFaces(absolutePath: string): Promise<void> {
  * Resumable: it simply picks up whatever is still NULL next time.
  */
 let rescoring: { done: number; total: number } | null = null;
+
+/** Set by the photo warm-up loop (services/photos.ts) so the People page can tell "busy" from "stuck". */
+export const scanProgress: { running: boolean; lastAt: string | null } = { running: false, lastAt: null };
 
 export async function backfillFaceQuality(): Promise<void> {
   if (rescoring || !facesEnabled() || !modelsPresent()) return;
@@ -164,7 +204,7 @@ export async function backfillFaceQuality(): Promise<void> {
         console.warn(`[faces] couldn't re-score "${rel}":`, (err as Error).message);
       }
       rescoring.done++;
-      if (rescoring.done % 500 === 0) facesChanged();
+      if (rescoring.done % 500 === 0) facesChanged('scan');
     }
   } finally {
     rescoring = null;
@@ -175,6 +215,7 @@ export async function backfillFaceQuality(): Promise<void> {
 export async function faceStatus() {
   const total = (await listPhotos()).length;
   const scanned = (db.prepare('SELECT COUNT(*) AS n FROM face_scans').get() as { n: number }).n;
+  const unreadable = (db.prepare('SELECT COUNT(*) AS n FROM face_scans WHERE error IS NOT NULL').get() as { n: number }).n;
   return {
     enabled: facesEnabled(),
     models_present: modelsPresent(),
@@ -185,6 +226,10 @@ export async function faceStatus() {
     ignored: (db.prepare('SELECT COUNT(*) AS n FROM faces WHERE ignored = 1').get() as { n: number }).n,
     people: (db.prepare('SELECT COUNT(*) AS n FROM people').get() as { n: number }).n,
     rescoring,
+    unreadable,
+    /** The background pass is running right now, and when it last finished a photo. */
+    working: scanProgress.running,
+    last_progress_at: scanProgress.lastAt,
     error: lastError,
   };
 }
@@ -211,46 +256,133 @@ export interface FaceInfo {
   no_group: boolean;
 }
 
-let cache: { version: number; faces: FaceInfo[]; vectors: Map<number, Float32Array> } | null = null;
+let loadedUpToId = 0;
 
-/** Every (not ignored) face with its current suggestion. Each unconfirmed face is compared with
- *  every confirmed face — best match per person, skipping "not this person" rejections — and is
- *  suggested only if one person clearly wins (see the thresholds above). Cached until anything
- *  changes. */
-export function allFaces(): { faces: FaceInfo[]; vectors: Map<number, Float32Array> } {
-  if (cache && cache.version === version) return cache;
-  const rows = db.prepare('SELECT * FROM faces WHERE ignored = 0').all() as FaceRow[];
-  const rejected = new Set(
-    (db.prepare('SELECT face_id, person_id FROM face_rejections').all() as Array<{ face_id: number; person_id: string }>).map(
-      (r) => `${r.face_id}:${r.person_id}`
-    )
-  );
-  const vectors = new Map(rows.map((r) => [r.id, toVector(r.embedding)]));
-  const confirmed = rows.filter((r) => r.confirmed && r.person_id);
-  const faces = rows.map((r): FaceInfo => {
-    const good = isGoodFace(r);
-    const base = {
-      id: r.id, path: r.path, x: r.x, y: r.y, w: r.w, h: r.h, person_id: r.person_id, confirmed: Boolean(r.confirmed),
-      good, no_group: Boolean(r.no_group),
-    };
-    if (r.confirmed) return { ...base, suggested_person_id: null, similarity: null };
-    // Best match per person.
-    const perPerson = new Map<string, number>();
-    const v = vectors.get(r.id)!;
-    for (const c of confirmed) {
-      if (rejected.has(`${r.id}:${c.person_id}`)) continue;
-      const sim = cosineSimilarity(v, vectors.get(c.id)!);
-      if (sim > (perPerson.get(c.person_id!) ?? -1)) perPerson.set(c.person_id!, sim);
+/** Reads faceprints added since last time into the matcher (a face's faceprint never changes — a
+ *  re-scanned photo gets new face rows). */
+function loadNewFaceprints(): void {
+  const rows = db.prepare('SELECT id, embedding FROM faces WHERE id > ? ORDER BY id').all(loadedUpToId) as Array<{ id: number; embedding: Buffer }>;
+  if (!rows.length) return;
+  addFaceprints(rows.map((r) => ({ id: r.id, vector: toVector(r.embedding) })));
+  loadedUpToId = rows[rows.length - 1].id;
+}
+
+let cache: { version: number; faces: FaceInfo[] } | null = null;
+let building: Promise<{ faces: FaceInfo[] }> | null = null;
+
+/** Every (not ignored) face with its current suggestion: the person whose confirmed faces it best
+ *  matches — skipping "not this person" rejections — but only if one person clearly wins (see the
+ *  thresholds above). Cached until anything changes; one refresh at a time. */
+export async function allFaces(): Promise<{ faces: FaceInfo[] }> {
+  // Only new photos scanned since: answer right away with what we have, and catch up in the background.
+  if (cache && cache.version !== version && !userChangedSince(cache.version)) {
+    if (!building) {
+      building = buildAllFaces().finally(() => {
+        building = null;
+      });
+      building.catch((e) => console.warn('[faces] refresh failed', e));
     }
-    const ranked = [...perPerson.entries()].sort((a, b) => b[1] - a[1]);
-    const [best, second] = ranked;
-    const needed = good ? SUGGEST_THRESHOLD : SUGGEST_THRESHOLD_LOW_QUALITY;
-    const clearWinner = best && best[1] >= needed && (!second || best[1] - second[1] >= SUGGEST_MARGIN);
-    return clearWinner
-      ? { ...base, suggested_person_id: best[0], similarity: best[1] }
-      : { ...base, suggested_person_id: null, similarity: best?.[1] ?? null };
-  });
-  cache = { version, faces, vectors };
+    return cache;
+  }
+  while (!cache || cache.version !== version) {
+    if (!building) {
+      building = buildAllFaces().finally(() => {
+        building = null;
+      });
+    }
+    const result = await building;
+    // Something changed while it was being worked out: use it anyway if it's only new scans.
+    if (cache && cache.version !== version && !userChangedSince(cache.version)) return result;
+  }
+  return cache;
+}
+
+type FaceMeta = Omit<FaceRow, 'embedding'>;
+const META_COLUMNS = 'id, path, x, y, w, h, score, quality, person_id, confirmed, ignored, no_group';
+
+/** Every face's details, kept in memory; refreshed from the face_changes log (see db.ts) rather
+ *  than re-reading every face each time. */
+const meta = new Map<number, FaceInfo & { ignored: boolean }>();
+let metaUpToId = 0;
+let metaLoaded = false;
+
+function toInfo(r: FaceMeta): FaceInfo & { ignored: boolean } {
+  return {
+    id: r.id, path: r.path, x: r.x, y: r.y, w: r.w, h: r.h, person_id: r.person_id, confirmed: Boolean(r.confirmed),
+    good: isGoodFace(r), no_group: Boolean(r.no_group), ignored: Boolean(r.ignored),
+    suggested_person_id: null, similarity: null,
+  };
+}
+
+function syncMeta(): void {
+  const lastChange = (db.prepare('SELECT MAX(seq) AS s FROM face_changes').get() as { s: number | null }).s ?? 0;
+  if (!metaLoaded) {
+    for (const r of db.prepare(`SELECT ${META_COLUMNS} FROM faces`).all() as FaceMeta[]) meta.set(r.id, toInfo(r));
+    metaLoaded = true;
+  } else {
+    const changed = (db.prepare('SELECT DISTINCT face_id FROM face_changes WHERE seq <= ?').all(lastChange) as Array<{ face_id: number }>).map((r) => r.face_id);
+    const one = db.prepare(`SELECT ${META_COLUMNS} FROM faces WHERE id = ?`);
+    for (const id of changed) {
+      if (id > metaUpToId) continue; // a new face — read below
+      const r = one.get(id) as FaceMeta | undefined;
+      if (r) meta.set(id, toInfo(r));
+      else meta.delete(id);
+    }
+    for (const r of db.prepare(`SELECT ${META_COLUMNS} FROM faces WHERE id > ?`).all(metaUpToId) as FaceMeta[]) meta.set(r.id, toInfo(r));
+  }
+  db.prepare('DELETE FROM face_changes WHERE seq <= ?').run(lastChange);
+  for (const id of meta.keys()) if (id > metaUpToId) metaUpToId = id;
+}
+
+async function buildAllFaces(): Promise<{ faces: FaceInfo[] }> {
+  const seenVersion = version;
+  loadNewFaceprints();
+  syncMeta();
+  const rejectedFor = new Map<number, Set<string>>();
+  for (const r of db.prepare('SELECT face_id, person_id FROM face_rejections').all() as Array<{ face_id: number; person_id: string }>) {
+    if (!rejectedFor.has(r.face_id)) rejectedFor.set(r.face_id, new Set());
+    rejectedFor.get(r.face_id)!.add(r.person_id);
+  }
+  const membersOf = new Map<string, number[]>();
+  for (const f of meta.values()) {
+    if (f.confirmed && f.person_id && !f.ignored) {
+      const list = membersOf.get(f.person_id) ?? [];
+      list.push(f.id);
+      membersOf.set(f.person_id, list);
+    }
+  }
+  forgetPeopleExcept(new Set(membersOf.keys()));
+  const people: Array<{ id: string; best: Float32Array }> = [];
+  for (const [id, members] of membersOf) people.push({ id, best: await personColumn(id, members) });
+
+  // Suggestions, updated in place on the kept face objects.
+  const faces: FaceInfo[] = [];
+  for (const f of meta.values()) {
+    if (f.ignored) continue;
+    faces.push(f);
+    f.suggested_person_id = null;
+    f.similarity = null;
+    const i = faceIndex(f.id);
+    if (f.confirmed || i === undefined) continue;
+    const rejected = rejectedFor.get(f.id);
+    let firstId: string | null = null;
+    let first = -2;
+    let second = -2;
+    for (const p of people) {
+      const sim = p.best[i];
+      if (sim <= -2 || rejected?.has(p.id)) continue;
+      if (sim > first) {
+        second = first;
+        first = sim;
+        firstId = p.id;
+      } else if (sim > second) second = sim;
+    }
+    if (firstId === null) continue;
+    f.similarity = first;
+    const needed = f.good ? SUGGEST_THRESHOLD : SUGGEST_THRESHOLD_LOW_QUALITY;
+    if (first >= needed && first - second >= SUGGEST_MARGIN) f.suggested_person_id = firstId;
+  }
+  cache = { version: seenVersion, faces };
   return cache;
 }
 
@@ -262,8 +394,24 @@ export function allFaces(): { faces: FaceInfo[]; vectors: Map<number, Float32Arr
  * against up to 12 members) — pairwise rather than against a running average, which drifts toward
  * a generic face and pulls different people together.
  */
-export function unnamedGroups(limit = 30, perGroup = 24): FaceInfo[][] {
-  const { faces, vectors } = allFaces();
+let groupsCache: { version: number; at: number; groups: FaceInfo[][] } | null = null;
+
+export async function unnamedGroups(limit = 30, perGroup = 24): Promise<FaceInfo[][]> {
+  // Regrouped after anyone names/ignores something; while photos are being scanned, at most every
+  // 10 minutes (it's the slowest thing on the page).
+  const fresh = groupsCache && (groupsCache.version === version || (!userChangedSince(groupsCache.version) && Date.now() - groupsCache.at < 10 * 60_000));
+  if (!fresh) groupsCache = null;
+  const { faces } = await allFaces();
+  if (groupsCache) {
+    // Drop anyone named/suggested since.
+    const current = new Map(faces.map((f) => [f.id, f]));
+    return groupsCache.groups
+      .map((g) => g.map((f) => current.get(f.id)).filter((f): f is FaceInfo => Boolean(f && !f.confirmed && !f.suggested_person_id)))
+      .filter((g) => g.length)
+      .slice(0, limit)
+      .map((g) => g.slice(0, perGroup));
+  }
+  const seenVersion = version;
   const quality = new Map(
     (db.prepare('SELECT id, score, w, quality FROM faces WHERE ignored = 0').all() as Array<{ id: number; score: number; w: number; quality: number | null }>).map(
       (r) => [r.id, r.score * Math.min(1, r.w * 10) * (r.quality ?? 0.8)]
@@ -273,30 +421,33 @@ export function unnamedGroups(limit = 30, perGroup = 24): FaceInfo[][] {
     .filter((f) => !f.confirmed && !f.suggested_person_id && f.good && !f.no_group)
     .sort((a, b) => (quality.get(b.id) ?? 0) - (quality.get(a.id) ?? 0))
     .slice(0, GROUP_POOL);
+  // Each face's similarity to every other face in the pool, worked out a row at a time.
+  const rowFor = similarityRows(pool.map((f) => f.id));
+  const position = new Map(pool.map((f, k) => [f.id, k]));
   const groups: FaceInfo[][] = [];
-  for (const f of pool) {
-    const v = vectors.get(f.id)!;
+  for (const [k, f] of pool.entries()) {
+    const row = rowFor(k);
+    const sim = (other: FaceInfo) => row[position.get(other.id)!];
     let best: { g: FaceInfo[]; avg: number } | null = null;
     for (const g of groups) {
-      if (cosineSimilarity(v, vectors.get(g[0].id)!) < GROUP_THRESHOLD) continue;
-      const sims = g.slice(0, 12).map((m) => cosineSimilarity(v, vectors.get(m.id)!));
+      if (sim(g[0]) < GROUP_THRESHOLD) continue;
+      const sims = g.slice(0, 12).map(sim);
       const avg = sims.reduce((a, b) => a + b, 0) / sims.length;
       if (avg >= GROUP_THRESHOLD && Math.min(...sims) >= GROUP_MIN_MEMBER && (!best || avg > best.avg)) best = { g, avg };
     }
     if (best) best.g.push(f);
     else groups.push([f]);
   }
-  return groups
-    .sort((a, b) => b.length - a.length)
-    .slice(0, limit)
-    .map((g) => g.slice(0, perGroup));
+  groups.sort((a, b) => b.length - a.length);
+  groupsCache = { version: seenVersion, at: Date.now(), groups: groups.slice(0, 100) };
+  return groupsCache.groups.slice(0, limit).map((g) => g.slice(0, perGroup));
 }
 
 /** Photos with faces still to name (not confirmed, not ignored), most faces first — the
  *  "photo by photo" queue. Includes the small/turned-away faces grouping leaves out. */
-export function photosToName(): Array<{ path: string; faces: number }> {
+export async function photosToName(): Promise<Array<{ path: string; faces: number }>> {
   const counts = new Map<string, number>();
-  for (const f of allFaces().faces) if (!f.confirmed) counts.set(f.path, (counts.get(f.path) ?? 0) + 1);
+  for (const f of (await allFaces()).faces) if (!f.confirmed) counts.set(f.path, (counts.get(f.path) ?? 0) + 1);
   return [...counts.entries()].map(([path, faces]) => ({ path, faces })).sort((a, b) => b.faces - a.faces || a.path.localeCompare(b.path));
 }
 

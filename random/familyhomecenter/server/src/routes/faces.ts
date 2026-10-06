@@ -1,12 +1,10 @@
 import { Router } from 'express';
-import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
-import { config } from '../config.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { listPhotos, photoIdFor, warmThumbnailCache } from '../services/photos.js';
-import { allFaces, faceCrop, facesChanged, faceStatus, photosToName, setFacesEnabled, unnamedGroups, type FaceInfo } from '../services/faces/index.js';
+import { photoIdsByPath, photoPathsById, warmThumbnailCache } from '../services/photos.js';
+import { allFaces, faceCrop, facesChanged, faceStatus, photosToName, retryUnreadable, setFacesEnabled, unnamedGroups, unreadablePhotos, type FaceInfo } from '../services/faces/index.js';
 
 // Face recognition — see services/faces/. Turning it on/off is parent-only (it's heavy work for a
 // Pi); naming people and confirming/rejecting suggestions is open to the household, like albums.
@@ -14,7 +12,7 @@ export const facesRouter = Router();
 
 /** Faces as the client sees them: the photo's id instead of its path. */
 async function withPhotoIds(faces: FaceInfo[]) {
-  const idFor = new Map((await listPhotos()).map((abs) => [path.relative(config.photosDir, abs), photoIdFor(abs)]));
+  const idFor = await photoIdsByPath();
   return faces
     .filter((f) => idFor.has(f.path))
     .map(({ path: p, ...f }) => ({ ...f, photo_id: idFor.get(p)! }));
@@ -26,6 +24,18 @@ facesRouter.get(
     res.json(await faceStatus());
   })
 );
+
+/** GET /unreadable — photos that couldn't be read (path + reason). */
+facesRouter.get('/unreadable', (_req, res) => {
+  res.json(unreadablePhotos());
+});
+
+/** POST /retry-unreadable — read those photos again (e.g. after fixing them), starting now. */
+facesRouter.post('/retry-unreadable', (_req, res) => {
+  const n = retryUnreadable();
+  warmThumbnailCache().catch((e) => console.warn('[faces] scan pass failed', e));
+  res.json({ retrying: n });
+});
 
 /** PUT /enabled { enabled } — turning on downloads the models (once) and starts scanning. */
 facesRouter.put(
@@ -49,11 +59,21 @@ facesRouter.get(
   '/people',
   asyncHandler(async (_req, res) => {
     const people = db.prepare('SELECT * FROM people ORDER BY name COLLATE NOCASE').all() as Array<{ id: string; name: string; cover_face_id: number | null }>;
-    const faces = await withPhotoIds(allFaces().faces);
+    // One pass over every face, tallying per person (only photos still in the library).
+    const inLibrary = await photoIdsByPath();
+    const confirmedOf = new Map<string, FaceInfo[]>();
+    const suggestedOf = new Map<string, FaceInfo[]>();
+    for (const f of (await allFaces()).faces) {
+      if (!inLibrary.has(f.path)) continue;
+      const [map, who] = f.confirmed ? [confirmedOf, f.person_id] : [suggestedOf, f.suggested_person_id];
+      if (!who) continue;
+      if (!map.has(who)) map.set(who, []);
+      map.get(who)!.push(f);
+    }
     res.json(
       people.map((p) => {
-        const confirmed = faces.filter((f) => f.confirmed && f.person_id === p.id);
-        const suggested = faces.filter((f) => !f.confirmed && f.suggested_person_id === p.id);
+        const confirmed = confirmedOf.get(p.id) ?? [];
+        const suggested = suggestedOf.get(p.id) ?? [];
         return {
           ...p,
           // Their chosen picture (if it's still one of their faces), else the clearest, biggest one.
@@ -63,7 +83,7 @@ facesRouter.get(
             null,
           confirmed_count: confirmed.length,
           suggested_count: suggested.length,
-          photo_count: new Set([...confirmed, ...suggested].map((f) => f.photo_id)).size,
+          photo_count: new Set([...confirmed, ...suggested].map((f) => f.path)).size,
         };
       })
     );
@@ -114,13 +134,13 @@ facesRouter.get(
   asyncHandler(async (req, res) => {
     const person = db.prepare('SELECT * FROM people WHERE id = ?').get(req.params.id);
     if (!person) return res.status(404).json({ error: 'not found' });
-    const faces = await withPhotoIds(allFaces().faces);
+    const all = (await allFaces()).faces;
     res.json({
       person,
-      confirmed: faces.filter((f) => f.confirmed && f.person_id === req.params.id),
-      suggested: faces
-        .filter((f) => !f.confirmed && f.suggested_person_id === req.params.id)
-        .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0)),
+      confirmed: await withPhotoIds(all.filter((f) => f.confirmed && f.person_id === req.params.id)),
+      suggested: (await withPhotoIds(all.filter((f) => !f.confirmed && f.suggested_person_id === req.params.id))).sort(
+        (a, b) => (b.similarity ?? 0) - (a.similarity ?? 0)
+      ),
     });
   })
 );
@@ -131,10 +151,12 @@ facesRouter.get(
   '/people/:id/photos',
   asyncHandler(async (req, res) => {
     const includeSuggested = req.query.suggested !== '0';
-    const faces = await withPhotoIds(allFaces().faces);
-    const ids = faces
-      .filter((f) => (f.confirmed && f.person_id === req.params.id) || (includeSuggested && !f.confirmed && f.suggested_person_id === req.params.id))
-      .map((f) => f.photo_id);
+    const faces = await withPhotoIds(
+      (await allFaces()).faces.filter(
+        (f) => (f.confirmed && f.person_id === req.params.id) || (includeSuggested && !f.confirmed && f.suggested_person_id === req.params.id)
+      )
+    );
+    const ids = faces.map((f) => f.photo_id);
     res.json([...new Set(ids)]);
   })
 );
@@ -143,7 +165,7 @@ facesRouter.get(
 facesRouter.get(
   '/groups',
   asyncHandler(async (_req, res) => {
-    const groups = unnamedGroups();
+    const groups = await unnamedGroups();
     const flat = await withPhotoIds(groups.flat());
     const byId = new Map(flat.map((f) => [f.id, f]));
     res.json(groups.map((g) => g.map((f) => byId.get(f.id)).filter(Boolean)).filter((g) => g.length));
@@ -154,9 +176,9 @@ facesRouter.get(
 facesRouter.get(
   '/queue',
   asyncHandler(async (_req, res) => {
-    const idFor = new Map((await listPhotos()).map((abs) => [path.relative(config.photosDir, abs), photoIdFor(abs)]));
+    const idFor = await photoIdsByPath();
     res.json(
-      photosToName()
+      (await photosToName())
         .filter((p) => idFor.has(p.path))
         .map((p) => ({ photo_id: idFor.get(p.path)!, faces: p.faces }))
     );
@@ -167,8 +189,9 @@ facesRouter.get(
 facesRouter.get(
   '/in-photo/:photoId',
   asyncHandler(async (req, res) => {
-    const faces = await withPhotoIds(allFaces().faces);
-    res.json(faces.filter((f) => f.photo_id === req.params.photoId).sort((a, b) => a.x - b.x));
+    const rel = (await photoPathsById()).get(req.params.photoId);
+    if (!rel) return res.json([]);
+    res.json((await withPhotoIds((await allFaces()).faces.filter((f) => f.path === rel))).sort((a, b) => a.x - b.x));
   })
 );
 
