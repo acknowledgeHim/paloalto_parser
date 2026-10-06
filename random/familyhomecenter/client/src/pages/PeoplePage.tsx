@@ -413,12 +413,19 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
       )}
 
       <h3>{person.name} ({detail?.confirmed.length ?? 0})</h3>
-      <p className="hint">The more photos of {person.name} you confirm — especially from different ages — the better the suggestions.</p>
+      <p className="hint">
+        The more photos of {person.name} you confirm — especially from different ages — the better the suggestions.
+        Tap ⭐ on a face to make it {person.name}'s picture.
+      </p>
       <div className="people-faces">
         {detail?.confirmed.map((f) => (
-          <div key={f.id} className="people-face">
+          <div key={f.id} className={`people-face ${f.id === person.cover_face_id ? 'people-face--cover' : ''}`}>
             <img src={`/api/faces/${f.id}/image`} alt="" loading="lazy" />
+            {f.id === person.cover_face_id && <span className="people-face__tick" title={`${person.name}'s picture`}>⭐</span>}
             <span className="people-face__actions">
+              {f.id !== person.cover_face_id && (
+                <button type="button" aria-label="Use as their picture" title={`Use as ${person.name}'s picture`} onClick={() => act(() => api.patch(`/faces/people/${person.id}`, { cover_face_id: f.id }))}>⭐</button>
+              )}
               <button type="button" aria-label="Not them" title={`Not ${person.name}`} onClick={() => run(() => api.post('/faces/reject', { face_ids: [f.id], person_id: person.id }))}>✗</button>
             </span>
           </div>

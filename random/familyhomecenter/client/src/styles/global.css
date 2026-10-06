@@ -1564,3 +1564,5 @@ textarea {
 .people-pbp__suggest button, .people-pbp__name button { min-height: 36px; padding: 0 12px; }
 .people-pbp__name { display: flex; gap: 6px; width: 100%; }
 .people-pbp__name input { flex: 1; min-width: 0; min-height: 36px; }
+.people-face--cover { border-color: #f5c542; }
+.people-face--cover .people-face__tick { background: rgba(0, 0, 0, 0.6); }

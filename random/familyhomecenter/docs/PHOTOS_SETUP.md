@@ -203,6 +203,8 @@ a while to analyze the first time; after that only new or changed photos are che
    bottom — a name, a "Sam?" to ✓ or ✗, **Who's this?** to name it right there, or 🚫 to ignore it.
    A suggestion is only made when one person is a clear match — if two people (say, siblings) look
    about equally likely, it doesn't guess.
+   To choose someone's picture on the People page, open them and tap ⭐ on one of their faces
+   (otherwise the clearest, biggest one is used).
 5. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
    **With a person** as a way to pick photos for movies and documents.
 

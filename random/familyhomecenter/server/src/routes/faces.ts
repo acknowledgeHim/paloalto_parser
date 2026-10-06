@@ -48,7 +48,7 @@ facesRouter.put(
 facesRouter.get(
   '/people',
   asyncHandler(async (_req, res) => {
-    const people = db.prepare('SELECT * FROM people ORDER BY name COLLATE NOCASE').all() as Array<{ id: string; name: string }>;
+    const people = db.prepare('SELECT * FROM people ORDER BY name COLLATE NOCASE').all() as Array<{ id: string; name: string; cover_face_id: number | null }>;
     const faces = await withPhotoIds(allFaces().faces);
     res.json(
       people.map((p) => {
@@ -56,7 +56,11 @@ facesRouter.get(
         const suggested = faces.filter((f) => !f.confirmed && f.suggested_person_id === p.id);
         return {
           ...p,
-          cover_face_id: confirmed[0]?.id ?? null,
+          // Their chosen picture (if it's still one of their faces), else the clearest, biggest one.
+          cover_face_id:
+            confirmed.find((f) => f.id === p.cover_face_id)?.id ??
+            [...confirmed].sort((a, b) => Number(b.good) - Number(a.good) || b.w - a.w)[0]?.id ??
+            null,
           confirmed_count: confirmed.length,
           suggested_count: suggested.length,
           photo_count: new Set([...confirmed, ...suggested].map((f) => f.photo_id)).size,
@@ -77,11 +81,22 @@ facesRouter.post('/people', (req, res) => {
   res.status(201).json(person);
 });
 
+/** PATCH /people/:id { name } and/or { cover_face_id } (one of their confirmed faces, or null for automatic). */
 facesRouter.patch('/people/:id', (req, res) => {
-  const name = String((req.body as { name?: string }).name ?? '').trim();
-  if (!name) return res.status(400).json({ error: 'Give them a name' });
-  const result = db.prepare('UPDATE people SET name = ? WHERE id = ?').run(name, req.params.id);
-  if (!result.changes) return res.status(404).json({ error: 'not found' });
+  const body = req.body as { name?: string; cover_face_id?: number | null };
+  if (!db.prepare('SELECT 1 FROM people WHERE id = ?').get(req.params.id)) return res.status(404).json({ error: 'not found' });
+  if (body.name !== undefined) {
+    const name = String(body.name).trim();
+    if (!name) return res.status(400).json({ error: 'Give them a name' });
+    db.prepare('UPDATE people SET name = ? WHERE id = ?').run(name, req.params.id);
+  }
+  if (body.cover_face_id !== undefined) {
+    const faceId = body.cover_face_id === null ? null : Number(body.cover_face_id);
+    if (faceId !== null && !db.prepare('SELECT 1 FROM faces WHERE id = ? AND person_id = ? AND confirmed = 1').get(faceId, req.params.id)) {
+      return res.status(400).json({ error: 'Pick one of their confirmed faces' });
+    }
+    db.prepare('UPDATE people SET cover_face_id = ? WHERE id = ?').run(faceId, req.params.id);
+  }
   res.json({ ok: true });
 });
 

@@ -807,6 +807,12 @@ db.exec(`
 // Faces: quality = how straight-on (0–1; NULL for faces found before it was recorded); ignored = "not
 // a face / a stranger" — left out of everything; no_group = "different people" — named one at a time
 // rather than grouped.
+// people.cover_face_id = the face picked as their picture (NULL = choose automatically).
+try {
+  db.exec('ALTER TABLE people ADD COLUMN cover_face_id INTEGER');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 for (const column of ['quality REAL', 'ignored INTEGER NOT NULL DEFAULT 0', 'no_group INTEGER NOT NULL DEFAULT 0']) {
   try {
     db.exec(`ALTER TABLE faces ADD COLUMN ${column}`);
