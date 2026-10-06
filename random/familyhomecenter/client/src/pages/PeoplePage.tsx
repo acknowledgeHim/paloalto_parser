@@ -76,7 +76,11 @@ export function PeoplePage() {
       ) : (
         <p className="hint people-page__status">
           Looked at {status.scanned.toLocaleString()} of {status.total.toLocaleString()} photos
-          {status.scanned < status.total ? ' (still going, in the background)' : ''} · {status.faces.toLocaleString()} faces found ·{' '}
+          {status.scanned < status.total ? ' (still going, in the background)' : ''} · {status.faces.toLocaleString()} faces found
+          {status.rescoring && (
+            <> · Updating face scores: {status.rescoring.done.toLocaleString()} of {status.rescoring.total.toLocaleString()} photos</>
+          )}
+          {' · '}
           <button type="button" className="link-button" onClick={() => toggleEnabled(false)} disabled={busy}>Turn off</button>
           {status.ignored > 0 && (
             <>

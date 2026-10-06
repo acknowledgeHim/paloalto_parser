@@ -120,6 +120,58 @@ export async function scanPhotoFaces(absolutePath: string): Promise<void> {
   }
 }
 
+/**
+ * Faces found before the "facing the camera" score existed have quality NULL. This fills it in, a
+ * photo at a time in the background, by running just the face finder on the cached thumbnail again
+ * and matching its boxes to the stored faces — names, confirmations, and faceprints are untouched.
+ * Resumable: it simply picks up whatever is still NULL next time.
+ */
+let rescoring: { done: number; total: number } | null = null;
+
+export async function backfillFaceQuality(): Promise<void> {
+  if (rescoring || !facesEnabled() || !modelsPresent()) return;
+  const paths = (db.prepare('SELECT DISTINCT path FROM faces WHERE quality IS NULL').all() as Array<{ path: string }>).map((r) => r.path);
+  if (!paths.length) return;
+  rescoring = { done: 0, total: paths.length };
+  const update = db.prepare('UPDATE faces SET quality = ? WHERE id = ?');
+  try {
+    for (const rel of paths) {
+      if (!facesEnabled()) break;
+      try {
+        const stored = db.prepare('SELECT id, x, y, w, h FROM faces WHERE path = ? AND quality IS NULL').all(rel) as Array<{ id: number; x: number; y: number; w: number; h: number }>;
+        const found = await detectFaces(await getOrCreateThumbnail(path.join(config.photosDir, rel)), { faceprints: false });
+        db.transaction(() => {
+          for (const s of stored) {
+            // Same thumbnail, same detector → the same box; match by overlap to be safe.
+            let best = 0;
+            let quality = 0.5; // not found again: call it borderline
+            for (const f of found) {
+              const ix = Math.max(0, Math.min(s.x + s.w, f.x + f.w) - Math.max(s.x, f.x));
+              const iy = Math.max(0, Math.min(s.y + s.h, f.y + f.h) - Math.max(s.y, f.y));
+              const inter = ix * iy;
+              const iou = inter / (s.w * s.h + f.w * f.h - inter || 1);
+              if (iou > best && iou > 0.5) {
+                best = iou;
+                quality = f.frontal;
+              }
+            }
+            update.run(quality, s.id);
+          }
+        })();
+      } catch (err) {
+        // Photo gone/unreadable: mark its faces borderline so this doesn't retry them forever.
+        db.prepare('UPDATE faces SET quality = 0.5 WHERE path = ? AND quality IS NULL').run(rel);
+        console.warn(`[faces] couldn't re-score "${rel}":`, (err as Error).message);
+      }
+      rescoring.done++;
+      if (rescoring.done % 500 === 0) facesChanged();
+    }
+  } finally {
+    rescoring = null;
+    facesChanged();
+  }
+}
+
 export async function faceStatus() {
   const total = (await listPhotos()).length;
   const scanned = (db.prepare('SELECT COUNT(*) AS n FROM face_scans').get() as { n: number }).n;
@@ -132,6 +184,7 @@ export async function faceStatus() {
     faces: (db.prepare('SELECT COUNT(*) AS n FROM faces WHERE ignored = 0').get() as { n: number }).n,
     ignored: (db.prepare('SELECT COUNT(*) AS n FROM faces WHERE ignored = 1').get() as { n: number }).n,
     people: (db.prepare('SELECT COUNT(*) AS n FROM people').get() as { n: number }).n,
+    rescoring,
     error: lastError,
   };
 }

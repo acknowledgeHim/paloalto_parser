@@ -192,6 +192,9 @@ a while to analyze the first time; after that only new or changed photos are che
    **Ignore picked** is for things that aren't faces, strangers in the background, posters, etc.
    (the count shows at the top, with **Bring back** if you change your mind).
    Only clear, front-on faces are grouped; the rest are left for photo by photo.
+   (Faces found before this "facing the camera" check existed get it filled in automatically in
+   the background — the People page shows *Updating face scores: X of Y photos* meanwhile. Names
+   aren't touched, and no rescan or turning off/on is needed.)
 3. **Name faces photo by photo** goes through every photo with unnamed faces (busiest photos first):
    each face gets a numbered box on the photo and a row beside it — type a name, ✓ / ✗ a suggestion,
    or 🚫 Ignore — then **Next photo**. A few names here is the best way to teach it someone.

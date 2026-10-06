@@ -257,7 +257,7 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
  * image as given — callers pass the photo's cached thumbnail, which is EXIF-rotated and modest in
  * size, so this is quick and never touches the original.
  */
-export async function detectFaces(imagePath: string): Promise<DetectedFace[]> {
+export async function detectFaces(imagePath: string, { faceprints = true } = {}): Promise<DetectedFace[]> {
   const { detector, recognizer } = await getSessions();
   const ort = await loadOrt();
 
@@ -286,9 +286,13 @@ export async function detectFaces(imagePath: string): Promise<DetectedFace[]> {
   for (const f of raw) {
     if (Math.min(f.box[2], f.box[3]) < MIN_FACE_PX) continue;
     const landmarks = [0, 1, 2, 3, 4].map((n) => [f.landmarks[n * 2] / scale, f.landmarks[n * 2 + 1] / scale]);
-    const aligned = alignedInput(rgb, width, height, landmarks);
-    const out = await recognizer.run({ data: new ort.Tensor('float32', aligned, [1, 3, 112, 112]) });
-    const embedding = normalize(out.fc1.data as Float32Array);
+    // (Skipped when only the boxes/scores are wanted — the faceprint is the slower half.)
+    let embedding: Float32Array = new Float32Array(0);
+    if (faceprints) {
+      const aligned = alignedInput(rgb, width, height, landmarks);
+      const out = await recognizer.run({ data: new ort.Tensor('float32', aligned, [1, 3, 112, 112]) });
+      embedding = normalize(out.fc1.data as Float32Array);
+    }
     const [x1, y1, w, h] = f.box.map((v) => v / scale);
     // Landmarks: [0] right eye, [1] left eye, [2] nose tip (from the face's own point of view).
     const eyeMidX = (landmarks[0][0] + landmarks[1][0]) / 2;

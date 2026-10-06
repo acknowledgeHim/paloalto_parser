@@ -463,6 +463,8 @@ export interface FaceStatus {
   /** Faces marked "not a face / don't name". */
   ignored: number;
   people: number;
+  /** Filling in the "facing the camera" score for faces found before it existed. */
+  rescoring: { done: number; total: number } | null;
   error: string | null;
 }
 
