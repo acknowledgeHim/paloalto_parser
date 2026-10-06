@@ -4,21 +4,28 @@ import { api, type Face, type Person } from '../api/client.js';
 /**
  * The faces in one photo, along the bottom of the photo viewer: a confirmed face shows its name; a
  * suggestion shows "Sam?" with ✓ / ✗; an unnamed face gets a quick "Who's this?" box. Tap a
- * confirmed name to change it (or "Not Sam" to un-name it). Shows nothing when face recognition is
- * off or the photo hasn't been looked at yet.
+ * confirmed name to change it (or "Not Sam" to un-name it). "+ Someone else" tags a person whose
+ * face wasn't found (back of the head, side view…) — shown as a chip with × to take it off. Shows
+ * nothing until there are faces here or people named somewhere.
  */
+const ADDING = -1; // `naming` value for the "+ Someone else" box
 export function PhotoFaces({ photoId, people, onChange }: { photoId: string; people: Person[]; onChange: () => void }) {
   const [faces, setFaces] = useState<Face[]>([]);
   const [naming, setNaming] = useState<number | null>(null);
   const [name, setName] = useState('');
-  const load = () => api.get<Face[]>(`/faces/in-photo/${photoId}`).then(setFaces).catch(() => setFaces([]));
+  const [tagged, setTagged] = useState<string[]>([]);
+  const load = () =>
+    Promise.all([
+      api.get<Face[]>(`/faces/in-photo/${photoId}`).then(setFaces).catch(() => setFaces([])),
+      api.get<string[]>(`/faces/tagged/${photoId}`).then(setTagged).catch(() => setTagged([])),
+    ]);
   useEffect(() => {
     setNaming(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoId]);
 
-  if (faces.length === 0) return null;
+  if (faces.length === 0 && tagged.length === 0 && people.length === 0) return null;
   const personName = (id: string | null) => people.find((p) => p.id === id)?.name ?? '?';
   const run = async (fn: () => Promise<unknown>) => {
     await fn().catch(() => {});
@@ -83,6 +90,42 @@ export function PhotoFaces({ photoId, people, onChange }: { photoId: string; peo
           )}
         </div>
       ))}
+      {tagged.map((id) => {
+        const p = people.find((x) => x.id === id);
+        return (
+          <div key={`tag-${id}`} className="photo-faces__face" title="Tagged by hand">
+            {p?.cover_face_id ? <img src={`/api/faces/${p.cover_face_id}/image`} alt="" /> : <span className="photo-faces__blank">👤</span>}
+            <span>{p?.name ?? '?'}</span>
+            <button type="button" aria-label={`Take ${p?.name ?? 'them'} off this photo`} onClick={() => run(() => api.post('/faces/untag', { photo_id: photoId, person_id: id }))}>×</button>
+          </div>
+        );
+      })}
+      {naming === ADDING ? (
+        <div className="photo-faces__face">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (name.trim()) run(() => api.post('/faces/tag', { photo_id: photoId, name: name.trim() })).then(() => setNaming(null));
+            }}
+          >
+            <input autoFocus list="photo-faces-people" value={name} onChange={(e) => setName(e.target.value)} placeholder="Who else is here?" />
+            <datalist id="photo-faces-people">
+              {people.map((p) => <option key={p.id} value={p.name} />)}
+            </datalist>
+            <button type="submit" disabled={!name.trim()}>✓</button>
+            <button type="button" aria-label="Cancel" onClick={() => setNaming(null)}>✕</button>
+          </form>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="photo-faces__add"
+          title="Add someone whose face wasn't found — back of the head, side view…"
+          onClick={() => { setNaming(ADDING); setName(''); }}
+        >
+          + Someone else
+        </button>
+      )}
     </div>
   );
 }

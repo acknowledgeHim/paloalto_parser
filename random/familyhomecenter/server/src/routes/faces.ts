@@ -59,6 +59,11 @@ facesRouter.get(
   '/people',
   asyncHandler(async (_req, res) => {
     const people = db.prepare('SELECT * FROM people ORDER BY name COLLATE NOCASE').all() as Array<{ id: string; name: string; cover_face_id: number | null }>;
+    const taggedOf = new Map<string, string[]>();
+    for (const t of db.prepare('SELECT path, person_id FROM photo_people').all() as Array<{ path: string; person_id: string }>) {
+      if (!taggedOf.has(t.person_id)) taggedOf.set(t.person_id, []);
+      taggedOf.get(t.person_id)!.push(t.path);
+    }
     // One pass over every face, tallying per person (only photos still in the library).
     const inLibrary = await photoIdsByPath();
     const confirmedOf = new Map<string, FaceInfo[]>();
@@ -83,7 +88,8 @@ facesRouter.get(
             null,
           confirmed_count: confirmed.length,
           suggested_count: suggested.length,
-          photo_count: new Set([...confirmed, ...suggested].map((f) => f.path)).size,
+          tagged_count: (taggedOf.get(p.id) ?? []).filter((path) => inLibrary.has(path)).length,
+          photo_count: new Set([...[...confirmed, ...suggested].map((f) => f.path), ...(taggedOf.get(p.id) ?? []).filter((path) => inLibrary.has(path))]).size,
         };
       })
     );
@@ -145,8 +151,8 @@ facesRouter.get(
   })
 );
 
-/** GET /people/:id/photos[?suggested=0] — photo ids with this person in them (confirmed, plus
- *  suggested unless turned off), for the Photos filter and "With a person" picking. */
+/** GET /people/:id/photos[?suggested=0] — photo ids with this person in them (confirmed, tagged by
+ *  hand, plus suggested unless turned off), for the Photos filter and "With a person" picking. */
 facesRouter.get(
   '/people/:id/photos',
   asyncHandler(async (req, res) => {
@@ -157,6 +163,11 @@ facesRouter.get(
       )
     );
     const ids = faces.map((f) => f.photo_id);
+    const idFor = await photoIdsByPath();
+    for (const t of db.prepare('SELECT path FROM photo_people WHERE person_id = ?').all(req.params.id) as Array<{ path: string }>) {
+      const id = idFor.get(t.path);
+      if (id) ids.push(id);
+    }
     res.json([...new Set(ids)]);
   })
 );
@@ -202,13 +213,10 @@ function faceIds(body: unknown): number[] {
   return Array.isArray(ids) ? ids.map(Number).filter((n) => Number.isInteger(n)) : [];
 }
 
-/** POST /assign { face_ids, person_id } or { face_ids, name } — "these are Sam" (creates the person
- *  by name if needed). Confirmed from then on. */
-facesRouter.post('/assign', (req, res) => {
-  const ids = faceIds(req.body);
-  if (!ids.length) return res.status(400).json({ error: 'No faces given' });
-  let personId = (req.body as { person_id?: string }).person_id;
-  const name = String((req.body as { name?: string }).name ?? '').trim();
+/** The person a request means: { person_id }, or { name } (creating them if new). Null if neither. */
+function personFrom(body: unknown): string | null {
+  let personId = (body as { person_id?: string }).person_id;
+  const name = String((body as { name?: string }).name ?? '').trim().slice(0, 80);
   if (!personId && name) {
     const existing = db.prepare('SELECT id FROM people WHERE name = ? COLLATE NOCASE').get(name) as { id: string } | undefined;
     personId = existing?.id;
@@ -217,7 +225,16 @@ facesRouter.post('/assign', (req, res) => {
       db.prepare('INSERT INTO people (id, name, created_at) VALUES (?, ?, ?)').run(personId, name, new Date().toISOString());
     }
   }
-  if (!personId || !db.prepare('SELECT 1 FROM people WHERE id = ?').get(personId)) return res.status(400).json({ error: 'Pick or type a name' });
+  return personId && db.prepare('SELECT 1 FROM people WHERE id = ?').get(personId) ? personId : null;
+}
+
+/** POST /assign { face_ids, person_id } or { face_ids, name } — "these are Sam" (creates the person
+ *  by name if needed). Confirmed from then on. */
+facesRouter.post('/assign', (req, res) => {
+  const ids = faceIds(req.body);
+  if (!ids.length) return res.status(400).json({ error: 'No faces given' });
+  const personId = personFrom(req.body);
+  if (!personId) return res.status(400).json({ error: 'Pick or type a name' });
   const assign = db.prepare('UPDATE faces SET person_id = ?, confirmed = 1 WHERE id = ?');
   const unreject = db.prepare('DELETE FROM face_rejections WHERE face_id = ? AND person_id = ?');
   db.transaction(() => {
@@ -276,6 +293,42 @@ facesRouter.post('/unignore-all', (_req, res) => {
 
 /** POST /separate { face_ids } — "these are different people": never group them; they're named one
  *  at a time (photo by photo), and still get suggestions once those people are named. */
+// ---- People tagged by hand (no face to name: back of the head, side view…) ----
+
+/** GET /tagged/:photoId — person ids tagged by hand in this photo. */
+facesRouter.get(
+  '/tagged/:photoId',
+  asyncHandler(async (req, res) => {
+    const rel = (await photoPathsById()).get(req.params.photoId);
+    if (!rel) return res.json([]);
+    res.json((db.prepare('SELECT person_id FROM photo_people WHERE path = ? ORDER BY created_at').all(rel) as Array<{ person_id: string }>).map((r) => r.person_id));
+  })
+);
+
+/** POST /tag { photo_id, person_id } or { photo_id, name } — "Sam's in this photo too". */
+facesRouter.post(
+  '/tag',
+  asyncHandler(async (req, res) => {
+    const rel = (await photoPathsById()).get(String((req.body as { photo_id?: string }).photo_id ?? ''));
+    if (!rel) return res.status(404).json({ error: 'Photo not found' });
+    const personId = personFrom(req.body);
+    if (!personId) return res.status(400).json({ error: 'Pick or type a name' });
+    db.prepare('INSERT OR IGNORE INTO photo_people (path, person_id, created_at) VALUES (?, ?, ?)').run(rel, personId, new Date().toISOString());
+    res.json({ person_id: personId });
+  })
+);
+
+/** POST /untag { photo_id, person_id } */
+facesRouter.post(
+  '/untag',
+  asyncHandler(async (req, res) => {
+    const body = req.body as { photo_id?: string; person_id?: string };
+    const rel = (await photoPathsById()).get(String(body.photo_id ?? ''));
+    if (rel) db.prepare('DELETE FROM photo_people WHERE path = ? AND person_id = ?').run(rel, String(body.person_id ?? ''));
+    res.json({ ok: true });
+  })
+);
+
 facesRouter.post('/separate', (req, res) => {
   const ids = faceIds(req.body);
   const stmt = db.prepare('UPDATE faces SET no_group = 1 WHERE id = ?');

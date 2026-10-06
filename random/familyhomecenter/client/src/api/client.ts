@@ -478,6 +478,8 @@ export interface Person {
   cover_face_id: number | null;
   confirmed_count: number;
   suggested_count: number;
+  /** Photos they're tagged in by hand (no face to name — back of the head, side view…). */
+  tagged_count: number;
   photo_count: number;
 }
 

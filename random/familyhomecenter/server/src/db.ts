@@ -691,6 +691,16 @@ db.exec(`
     faces INTEGER NOT NULL,
     scanned_at TEXT NOT NULL
   );
+  -- "Sam is in this photo" without a face to name (back of the head, side view, too small to be
+  -- found…): tagged by hand, no box or faceprint, so it never feeds suggestions. Kept apart from
+  -- faces so a re-scan of the photo leaves it alone.
+  CREATE TABLE IF NOT EXISTS photo_people (
+    path TEXT NOT NULL,
+    person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (path, person_id)
+  );
+  CREATE INDEX IF NOT EXISTS photo_people_person ON photo_people(person_id);
 `);
 
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app

@@ -120,7 +120,10 @@ export function PeoplePage() {
                   <button key={p.id} type="button" className="people-card" onClick={() => setOpenPerson(p.id)}>
                     {p.cover_face_id ? <img src={`/api/faces/${p.cover_face_id}/image`} alt="" /> : <div className="people-card__blank">?</div>}
                     <strong>{p.name}</strong>
-                    <span className="hint">{p.confirmed_count.toLocaleString()} confirmed</span>
+                    <span className="hint">
+                      {p.confirmed_count.toLocaleString()} confirmed
+                      {p.tagged_count > 0 && ` · ${p.tagged_count.toLocaleString()} tagged`}
+                    </span>
                     {p.suggested_count > 0 && <span className="people-card__check">{p.suggested_count} to check</span>}
                   </button>
                 ))}

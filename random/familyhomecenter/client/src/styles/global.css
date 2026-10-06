@@ -1534,6 +1534,8 @@ textarea {
 .photo-faces__face--suggested { box-shadow: 0 0 0 2px #f5c542 inset; }
 .photo-faces__face button { min-height: 30px; padding: 0 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); color: #fff; }
 .photo-faces__face form { display: flex; gap: 4px; }
+.photo-faces__blank { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.18); }
+.photo-faces__add { align-self: center; min-height: 34px; padding: 0 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; border: 1px dashed rgba(255, 255, 255, 0.6); }
 .photo-faces__face input { min-height: 30px; width: 130px; padding: 0 8px; color: var(--text); }
 
 /* ---- Privacy settings ---- */
