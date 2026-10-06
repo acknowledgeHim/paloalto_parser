@@ -41,6 +41,9 @@ export function PhotoFaces({ photoId, people, onChange }: { photoId: string; peo
           {!f.confirmed && !f.suggested_person_id && naming !== f.id && (
             <button type="button" className="photo-faces__who" onClick={() => { setNaming(f.id); setName(''); }}>Who's this?</button>
           )}
+          {!f.confirmed && naming !== f.id && (
+            <button type="button" aria-label="Ignore this face" title="Not a face / don't name" onClick={() => run(() => api.post('/faces/ignore', { face_ids: [f.id] }))}>🚫</button>
+          )}
           {naming === f.id && (
             <form
               onSubmit={(e) => {

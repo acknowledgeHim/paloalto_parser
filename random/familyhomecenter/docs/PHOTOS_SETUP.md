@@ -185,12 +185,22 @@ a while to analyze the first time; after that only new or changed photos are che
    from OpenCV's official model collection) and starts looking through your photos in the
    background — the first pass over a big library can take hours on a Pi; after that, only new
    photos are checked. The People page shows how far it's got.
-2. Under **Who's this?**, faces nobody's named yet are grouped by who they probably are. Tap any
-   face that doesn't belong (to leave it out), type a name, **Save**.
-3. Once someone has a name, their other photos show up as suggestions: open them on the People
+2. Under **Who's this? (groups)**, faces nobody's named yet are grouped by who they probably are.
+   Every face starts picked (✓); tap any that don't belong to un-pick them (or **None**, then tap
+   the right ones), type a name, **Name these**. If a group isn't one person at all, tap
+   **Different people** — those faces won't be grouped again and wait for you photo by photo.
+   **Ignore picked** is for things that aren't faces, strangers in the background, posters, etc.
+   (the count shows at the top, with **Bring back** if you change your mind).
+   Only clear, front-on faces are grouped; the rest are left for photo by photo.
+3. **Name faces photo by photo** goes through every photo with unnamed faces (busiest photos first):
+   each face gets a numbered box on the photo and a row beside it — type a name, ✓ / ✗ a suggestion,
+   or 🚫 Ignore — then **Next photo**. A few names here is the best way to teach it someone.
+4. Once someone has a name, their other photos show up as suggestions: open them on the People
    page (**Is this Sam?** ✓ / ✗ / **Yes to all**), or in the photo viewer, where faces show along the
-   bottom — a name, a "Sam?" to ✓ or ✗, or **Who's this?** to name it right there.
-4. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
+   bottom — a name, a "Sam?" to ✓ or ✗, **Who's this?** to name it right there, or 🚫 to ignore it.
+   A suggestion is only made when one person is a clear match — if two people (say, siblings) look
+   about equally likely, it doesn't guess.
+5. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
    **With a person** as a way to pick photos for movies and documents.
 
 Nothing is ever tagged without someone confirming it. Kids are the hardest case (faces change a lot

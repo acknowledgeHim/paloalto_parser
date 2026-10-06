@@ -460,6 +460,8 @@ export interface FaceStatus {
   scanned: number;
   total: number;
   faces: number;
+  /** Faces marked "not a face / don't name". */
+  ignored: number;
   people: number;
   error: string | null;
 }
@@ -484,4 +486,7 @@ export interface Face {
   confirmed: boolean;
   suggested_person_id: string | null;
   similarity: number | null;
+  /** Clear enough to be grouped/suggested automatically. */
+  good: boolean;
+  no_group: boolean;
 }

@@ -684,6 +684,7 @@ db.exec(`
     person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
     PRIMARY KEY (face_id, person_id)
   );
+  -- (faces.quality / ignored / no_group are added below, as migrations.)
   CREATE TABLE IF NOT EXISTS face_scans (
     path TEXT PRIMARY KEY,
     mtime_ms REAL NOT NULL,
@@ -802,6 +803,17 @@ db.exec(`
     decided_at TEXT
   );
 `);
+
+// Faces: quality = how straight-on (0–1; NULL for faces found before it was recorded); ignored = "not
+// a face / a stranger" — left out of everything; no_group = "different people" — named one at a time
+// rather than grouped.
+for (const column of ['quality REAL', 'ignored INTEGER NOT NULL DEFAULT 0', 'no_group INTEGER NOT NULL DEFAULT 0']) {
+  try {
+    db.exec(`ALTER TABLE faces ADD COLUMN ${column}`);
+  } catch (err) {
+    if (!(err as Error).message.includes('duplicate column')) throw err;
+  }
+}
 
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;

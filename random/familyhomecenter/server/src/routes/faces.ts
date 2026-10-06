@@ -6,7 +6,7 @@ import { config } from '../config.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { listPhotos, photoIdFor, warmThumbnailCache } from '../services/photos.js';
-import { allFaces, faceCrop, facesChanged, faceStatus, setFacesEnabled, unnamedGroups, type FaceInfo } from '../services/faces/index.js';
+import { allFaces, faceCrop, facesChanged, faceStatus, photosToName, setFacesEnabled, unnamedGroups, type FaceInfo } from '../services/faces/index.js';
 
 // Face recognition — see services/faces/. Turning it on/off is parent-only (it's heavy work for a
 // Pi); naming people and confirming/rejecting suggestions is open to the household, like albums.
@@ -135,6 +135,19 @@ facesRouter.get(
   })
 );
 
+/** GET /queue — photos with faces still to name, for going through them photo by photo. */
+facesRouter.get(
+  '/queue',
+  asyncHandler(async (_req, res) => {
+    const idFor = new Map((await listPhotos()).map((abs) => [path.relative(config.photosDir, abs), photoIdFor(abs)]));
+    res.json(
+      photosToName()
+        .filter((p) => idFor.has(p.path))
+        .map((p) => ({ photo_id: idFor.get(p.path)!, faces: p.faces }))
+    );
+  })
+);
+
 /** GET /in-photo/:photoId — the faces in one photo, with names/suggestions (for the photo viewer). */
 facesRouter.get(
   '/in-photo/:photoId',
@@ -201,6 +214,33 @@ facesRouter.post('/reject', (req, res) => {
 facesRouter.post('/unassign', (req, res) => {
   const ids = faceIds(req.body);
   const stmt = db.prepare('UPDATE faces SET person_id = NULL, confirmed = 0 WHERE id = ?');
+  db.transaction(() => ids.forEach((id) => stmt.run(id)))();
+  facesChanged();
+  res.json({ ok: true });
+});
+
+/** POST /ignore { face_ids } — "not a face / someone we don't need to name" (a stranger in the
+ *  background, a poster, a false detection): left out of groups, suggestions, and the queue. */
+facesRouter.post('/ignore', (req, res) => {
+  const ids = faceIds(req.body);
+  const stmt = db.prepare('UPDATE faces SET ignored = 1, person_id = NULL, confirmed = 0 WHERE id = ?');
+  db.transaction(() => ids.forEach((id) => stmt.run(id)))();
+  facesChanged();
+  res.json({ ok: true });
+});
+
+/** POST /unignore-all — bring every ignored face back. */
+facesRouter.post('/unignore-all', (_req, res) => {
+  db.prepare('UPDATE faces SET ignored = 0').run();
+  facesChanged();
+  res.json({ ok: true });
+});
+
+/** POST /separate { face_ids } — "these are different people": never group them; they're named one
+ *  at a time (photo by photo), and still get suggestions once those people are named. */
+facesRouter.post('/separate', (req, res) => {
+  const ids = faceIds(req.body);
+  const stmt = db.prepare('UPDATE faces SET no_group = 1 WHERE id = ?');
   db.transaction(() => ids.forEach((id) => stmt.run(id)))();
   facesChanged();
   res.json({ ok: true });

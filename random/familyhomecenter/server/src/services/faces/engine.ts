@@ -131,6 +131,9 @@ export interface DetectedFace {
   w: number;
   h: number;
   score: number;
+  /** 0–1: how straight-on the face is, from where the nose sits between the eyes (1 = facing the
+   *  camera). Turned-away faces give the least reliable faceprints. */
+  frontal: number;
   /** 128 numbers, unit length — compare with cosineSimilarity. */
   embedding: Float32Array;
 }
@@ -287,7 +290,12 @@ export async function detectFaces(imagePath: string): Promise<DetectedFace[]> {
     const out = await recognizer.run({ data: new ort.Tensor('float32', aligned, [1, 3, 112, 112]) });
     const embedding = normalize(out.fc1.data as Float32Array);
     const [x1, y1, w, h] = f.box.map((v) => v / scale);
+    // Landmarks: [0] right eye, [1] left eye, [2] nose tip (from the face's own point of view).
+    const eyeMidX = (landmarks[0][0] + landmarks[1][0]) / 2;
+    const eyeDist = Math.hypot(landmarks[1][0] - landmarks[0][0], landmarks[1][1] - landmarks[0][1]) || 1;
+    const frontal = Math.max(0, Math.min(1, 1 - Math.abs(landmarks[2][0] - eyeMidX) / eyeDist / 0.6));
     faces.push({
+      frontal,
       x: Math.max(0, x1 / width),
       y: Math.max(0, y1 / height),
       w: Math.min(1, w / width),
