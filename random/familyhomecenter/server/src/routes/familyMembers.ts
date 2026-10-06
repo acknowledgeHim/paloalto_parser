@@ -196,6 +196,8 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     todo_progress_bar_style,
     todo_adventure_start_icon,
     todo_adventure_end_icon,
+    chore_celebration,
+    todo_celebration,
     is_parent,
   } = req.body as Partial<FamilyMember>;
   if (!name || !name.trim()) {
@@ -215,6 +217,8 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     todo_progress_bar_style: todo_progress_bar_style ?? null,
     todo_adventure_start_icon: todo_adventure_start_icon ?? null,
     todo_adventure_end_icon: todo_adventure_end_icon ?? null,
+    chore_celebration: chore_celebration ?? null,
+    todo_celebration: todo_celebration ?? null,
     star_balance: 0,
     money_balance: 0,
     password_hash: null,
@@ -225,10 +229,10 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
   db.prepare(
     `INSERT INTO family_members (id, name, color, avatar, email, complete_sound, progress_bar_style,
      adventure_start_icon, adventure_end_icon, todo_progress_bar_style, todo_adventure_start_icon,
-     todo_adventure_end_icon, is_parent, sort_order, created_at)
+     todo_adventure_end_icon, chore_celebration, todo_celebration, is_parent, sort_order, created_at)
      VALUES (@id, @name, @color, @avatar, @email, @complete_sound, @progress_bar_style,
      @adventure_start_icon, @adventure_end_icon, @todo_progress_bar_style, @todo_adventure_start_icon,
-     @todo_adventure_end_icon, @is_parent, @sort_order, @created_at)`
+     @todo_adventure_end_icon, @chore_celebration, @todo_celebration, @is_parent, @sort_order, @created_at)`
   ).run(member);
   res.status(201).json(toPublic(member));
 });
@@ -263,6 +267,7 @@ familyMembersRouter.patch('/:id', requireSelfOrAdmin, (req, res) => {
      adventure_start_icon = @adventure_start_icon, adventure_end_icon = @adventure_end_icon,
      todo_progress_bar_style = @todo_progress_bar_style, todo_adventure_start_icon = @todo_adventure_start_icon,
      todo_adventure_end_icon = @todo_adventure_end_icon,
+     chore_celebration = @chore_celebration, todo_celebration = @todo_celebration,
      is_parent = @is_parent WHERE id = @id`
   ).run(updated);
   res.json(toPublic(updated));

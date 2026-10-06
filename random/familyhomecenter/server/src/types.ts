@@ -31,6 +31,10 @@ export interface FamilyMember {
   /** Same, independently, for the To-dos Adventure Map. */
   todo_adventure_start_icon: string | null;
   todo_adventure_end_icon: string | null;
+  /** Animation (client/src/utils/celebrations.ts) played when this person finishes all their
+   *  chores for the day / all their to-dos — each picked separately; null = the default, 'none' = off. */
+  chore_celebration: string | null;
+  todo_celebration: string | null;
 }
 
 export type TaskKind = 'chore' | 'todo';

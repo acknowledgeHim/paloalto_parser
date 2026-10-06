@@ -1,6 +1,7 @@
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { playCompletionSound } from '../utils/sounds.js';
+import { celebrateIfAllDone } from '../utils/celebrations.js';
 import { parseTimeOfDaySlots, timeOfDayIcon, timeOfDayLabel, isSlotWindowPassed } from '../utils/timeOfDay.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from './MemberAvatar.js';
@@ -47,6 +48,8 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
       const soundOwner = members.find((m) => m.id === effectiveViewerId);
       if (soundOwner) playCompletionSound(soundOwner.complete_sound, soundOwner.id);
       await api.post(`/tasks/${task.id}/complete`, body);
+      // Was that the last chore (or to-do) of their day? Then it's party time.
+      if (soundOwner) celebrateIfAllDone(soundOwner, task.kind).catch(() => {});
     }
     onChange();
   };

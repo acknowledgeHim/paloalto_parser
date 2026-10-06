@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { NavBar } from './components/NavBar.js';
 import { Screensaver } from './components/Screensaver.js';
+import { CelebrationHost } from './components/Celebration.js';
 import { Dashboard } from './pages/Dashboard.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { TasksPage } from './pages/TasksPage.js';
@@ -62,6 +63,7 @@ export function App() {
   return (
     <HashRouter>
       <NavBar />
+      <CelebrationHost />
       <main className="page-container">
         <Routes>
           <Route path="/" element={<Dashboard />} />

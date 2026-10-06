@@ -537,6 +537,15 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// The all-done celebrations (see types.ts's chore_celebration) — null = the default animation.
+for (const column of ['chore_celebration TEXT', 'todo_celebration TEXT']) {
+  try {
+    db.exec(`ALTER TABLE family_members ADD COLUMN ${column}`);
+  } catch (err) {
+    if (!(err as Error).message.includes('duplicate column')) throw err;
+  }
+}
+
 // A chore/to-do's own icon — the Adventure Map progress bar's per-task checkpoint marker (falls
 // back to a generic icon by kind client-side, see client/src/utils/taskIcons.ts, if unset).
 try {

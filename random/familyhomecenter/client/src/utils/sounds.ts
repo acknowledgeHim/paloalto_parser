@@ -136,3 +136,62 @@ export function playCompletionSound(soundId: string | null | undefined, memberId
     console.warn('[sounds] failed to play completion sound', err);
   }
 }
+
+/** A short tune for each all-done celebration (components/Celebration.tsx), a little longer and
+ *  bigger than a single task's sound. */
+const TUNES: Record<string, (ctx: AudioContext) => void> = {
+  confetti: (ctx) => {
+    const now = ctx.currentTime;
+    [392, 523.25, 659.25, 783.99].forEach((f, i) => tone(ctx, now + i * 0.11, f, 0.3, 0.18, 'square'));
+    [659.25, 783.99, 1046.5].forEach((f) => tone(ctx, now + 0.5, f, 0.9, 0.12, 'triangle'));
+  },
+  fireworks: (ctx) => {
+    const now = ctx.currentTime;
+    for (let i = 0; i < 5; i++) {
+      sweep(ctx, now + i * 0.4, 300, 1400, 0.35, 0.06, 'triangle');
+      tone(ctx, now + i * 0.4 + 0.38, 90, 0.25, 0.3, 'square');
+      [1568, 2093, 2637].forEach((f, k) => tone(ctx, now + i * 0.4 + 0.42 + k * 0.04, f, 0.2, 0.05, 'triangle'));
+    }
+  },
+  balloons: (ctx) => {
+    const now = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) => tone(ctx, now + i * 0.09, f, 0.35, 0.16, 'triangle'));
+  },
+  rocket: (ctx) => {
+    const now = ctx.currentTime;
+    [0, 0.25, 0.5].forEach((t) => tone(ctx, now + t, 440, 0.12, 0.15, 'square')); // 3, 2, 1…
+    sweep(ctx, now + 0.8, 120, 1600, 1.6, 0.14, 'sawtooth');
+  },
+  unicorn: (ctx) => {
+    const now = ctx.currentTime;
+    [1046.5, 1318.5, 1568, 2093, 1568, 1318.5, 1568, 2093, 2637].forEach((f, i) => tone(ctx, now + i * 0.08, f, 0.4, 0.1, 'sine'));
+  },
+  dino: (ctx) => {
+    const now = ctx.currentTime;
+    sweep(ctx, now, 180, 60, 0.9, 0.22, 'sawtooth');
+    for (let i = 0; i < 6; i++) tone(ctx, now + 0.9 + i * 0.48, 55, 0.25, 0.35, 'square');
+  },
+  dance: (ctx) => {
+    const now = ctx.currentTime;
+    const bass = [130.81, 130.81, 155.56, 174.61];
+    for (let i = 0; i < 16; i++) {
+      if (i % 2 === 0) tone(ctx, now + i * 0.21, 60, 0.12, 0.3, 'sine'); // kick
+      tone(ctx, now + i * 0.21, bass[Math.floor(i / 4) % bass.length], 0.18, 0.12, 'square');
+    }
+  },
+  trophy: (ctx) => {
+    const now = ctx.currentTime;
+    [[392, 0], [392, 0.15], [392, 0.3], [523.25, 0.45]].forEach(([f, t]) => tone(ctx, now + t, f, 0.3, 0.2, 'sawtooth'));
+    [523.25, 659.25, 783.99].forEach((f) => tone(ctx, now + 0.8, f, 1.1, 0.12, 'sawtooth'));
+  },
+};
+
+export function playCelebrationTune(id: string): void {
+  const tune = TUNES[id];
+  if (!tune) return;
+  try {
+    tune(getContext());
+  } catch (err) {
+    console.warn('[sounds] failed to play celebration tune', err);
+  }
+}

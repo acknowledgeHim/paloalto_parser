@@ -3,6 +3,7 @@ import { api, type FamilyMember } from '../api/client.js';
 import { downscaleImageToDataUrl } from '../utils/images.js';
 import { playAudioClip, playCompletionSound, SOUND_OPTIONS } from '../utils/sounds.js';
 import { PROGRESS_STYLES, progressFillFor } from '../utils/progressStyles.js';
+import { CELEBRATIONS, DEFAULT_CELEBRATION, celebrate, celebrationFor } from '../utils/celebrations.js';
 import { MemberAvatar } from './MemberAvatar.js';
 
 const COLOR_PRESETS = ['#5b8def', '#e2685a', '#3fae66', '#c96fd6', '#e0a638', '#33a3a3'];
@@ -100,6 +101,37 @@ function ProgressStylePicker({
   );
 }
 
+/** "When I finish all my chores/to-dos" — the animation picker, with a preview. */
+function CelebrationPicker({ label, kind, name, value, setValue }: { label: string; kind: 'chore' | 'todo'; name: string; value: string; setValue: (v: string) => void }) {
+  const playable = celebrationFor(value);
+  return (
+    <div>
+      <label className="member-form__label">{label}</label>
+      <div className="progress-style-picker">
+        {CELEBRATIONS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            className={`progress-style-picker__option ${value === c.id ? 'progress-style-picker__option--selected' : ''}`}
+            onClick={() => {
+              setValue(c.id);
+              const id = celebrationFor(c.id);
+              if (id) celebrate({ celebration: id, name: name || 'You', kind });
+            }}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {playable && (
+        <button type="button" className="link-button" onClick={() => celebrate({ celebration: playable, name: name || 'You', kind })}>
+          ▶ Watch it again
+        </button>
+      )}
+    </div>
+  );
+}
+
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -135,6 +167,9 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
   const [todoProgressStyle, setTodoProgressStyle] = useState(member?.todo_progress_bar_style ?? 'solid');
   const [todoStartIcon, setTodoStartIcon] = useState(member?.todo_adventure_start_icon ?? '');
   const [todoEndIcon, setTodoEndIcon] = useState(member?.todo_adventure_end_icon ?? '');
+
+  const [choreCelebration, setChoreCelebration] = useState(member?.chore_celebration ?? DEFAULT_CELEBRATION);
+  const [todoCelebration, setTodoCelebration] = useState(member?.todo_celebration ?? DEFAULT_CELEBRATION);
 
   const [completeSound, setCompleteSound] = useState(member?.complete_sound ?? 'none');
   const [hasCustomSound, setHasCustomSound] = useState(member?.complete_sound === 'custom');
@@ -198,6 +233,8 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
         todo_progress_bar_style: todoProgressStyle === 'solid' ? null : todoProgressStyle,
         todo_adventure_start_icon: todoStartIcon || null,
         todo_adventure_end_icon: todoEndIcon || null,
+        chore_celebration: choreCelebration,
+        todo_celebration: todoCelebration,
         // "custom" is applied via the dedicated /sound endpoint below; any preset is stored directly.
         complete_sound: completeSound === 'none' ? null : completeSound,
         // Custom-image state is applied via the dedicated avatar endpoints below; otherwise this
@@ -388,6 +425,9 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
           endIcon={todoEndIcon}
           setEndIcon={setTodoEndIcon}
         />
+
+        <CelebrationPicker label="When all my chores are done for the day" kind="chore" name={name.trim()} value={choreCelebration} setValue={setChoreCelebration} />
+        <CelebrationPicker label="When all my to-dos are done" kind="todo" name={name.trim()} value={todoCelebration} setValue={setTodoCelebration} />
 
         <div className="task-form__row">
           <button type="submit" disabled={saving}>{member ? 'Save' : 'Add'}</button>

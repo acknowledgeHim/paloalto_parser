@@ -53,6 +53,10 @@ export interface FamilyMember {
   /** Same, independently, for the To-dos Adventure Map. */
   todo_adventure_start_icon: string | null;
   todo_adventure_end_icon: string | null;
+  /** All-done animation id (see utils/celebrations.ts) for finishing every chore today / every
+   *  to-do — picked separately; null = the default, 'none' = off. */
+  chore_celebration: string | null;
+  todo_celebration: string | null;
 }
 
 export interface TaskCompletion {
