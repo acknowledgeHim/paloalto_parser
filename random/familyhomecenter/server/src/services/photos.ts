@@ -151,6 +151,12 @@ export async function warmThumbnailCache(): Promise<{ processed: number; failed:
   let failed = 0;
   try {
     const files = await listPhotos();
+    // Dates first, all of them, quickly: the per-photo work below (faces especially) can take hours
+    // on a big library, and sorting Photos by date shouldn't wait for it.
+    const queue = [...files];
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      for (let f = queue.shift(); f; f = queue.shift()) await getPhotoDate(f).catch(() => null);
+    }));
     for (const file of files) {
       const mtime = unreadable.has(file) ? await fs.stat(file).then((s) => s.mtimeMs, () => -1) : null;
       if (mtime !== null && unreadable.get(file) === mtime) continue;

@@ -517,6 +517,7 @@ export function PhotosPage() {
   const [slideshowOn, setSlideshowOn] = useState(false);
   // Dates/paths for sorting — loaded after the (quicker) plain photo list.
   const [details, setDetails] = useState<Map<string, PhotoDetail> | null>(null);
+  const [detailsFailed, setDetailsFailed] = useState(false);
   const [sortBy, setSortBy] = useState<'library' | 'date-desc' | 'date-asc' | 'name'>('library');
   const [albumStatus, setAlbumStatus] = useState<'all' | 'none' | 'some'>('all');
   const [showHidden, setShowHidden] = useState(false);
@@ -546,13 +547,19 @@ export function PhotosPage() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [albumError, setAlbumError] = useState<string | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    api.get<Photo[]>('/photos').then(setPhotos).catch(console.error).finally(() => setLoading(false));
+  // Dates/filenames for sorting — can take a while on a big library the first time (the server reads
+  // each photo's date once), so the sort can be picked straight away and applies when they arrive.
+  const loadDetails = () => {
+    setDetailsFailed(false);
     api
       .get<PhotoDetail[]>('/photos/details')
       .then((d) => setDetails(new Map(d.map((p) => [p.id, p]))))
-      .catch(() => setDetails(null));
+      .catch(() => setDetailsFailed(true));
+  };
+  const load = () => {
+    setLoading(true);
+    api.get<Photo[]>('/photos').then(setPhotos).catch(console.error).finally(() => setLoading(false));
+    loadDetails();
     albumsApi.reload();
   };
 
@@ -732,11 +739,17 @@ export function PhotosPage() {
           Sort
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}>
             <option value="library">Library order</option>
-            <option value="date-desc" disabled={!details}>Date taken (newest first)</option>
-            <option value="date-asc" disabled={!details}>Date taken (oldest first)</option>
-            <option value="name" disabled={!details}>Folder / filename</option>
+            <option value="date-desc">Date taken (newest first)</option>
+            <option value="date-asc">Date taken (oldest first)</option>
+            <option value="name">Folder / filename</option>
           </select>
         </label>
+        {sortBy !== 'library' && !details && !detailsFailed && <span className="hint">Reading photo dates… sorts as soon as they're in.</span>}
+        {sortBy !== 'library' && detailsFailed && (
+          <span className="hint">
+            Couldn't read photo dates. <button type="button" className="link-button" onClick={loadDetails}>Try again</button>
+          </span>
+        )}
         <label className="member-form__label member-form__label--inline">
           Albums
           <select value={albumStatus} onChange={(e) => setAlbumStatus(e.target.value as typeof albumStatus)}>

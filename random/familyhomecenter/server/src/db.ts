@@ -712,6 +712,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS photo_people_person ON photo_people(person_id);
 `);
 
+// photo_dates: each photo's date taken (from EXIF, else the file's mtime), by absolute path — see
+// services/photoDates.ts. Read once, ever, so sorting Photos by date is quick after a restart.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_dates (
+    path TEXT PRIMARY KEY,
+    taken_at TEXT NOT NULL
+  );
+`);
+
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
 // the result (which of this app's groups each device should be in) every minute.

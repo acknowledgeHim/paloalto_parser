@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import exifr from 'exifr';
+import { db } from '../db.js';
 
 // Preference order: DateTimeOriginal (when the shutter actually fired) beats CreateDate/ModifyDate
 // (which some cameras/phones/editors populate instead, or in addition) — any of them beats mtime,
@@ -11,7 +12,20 @@ const EXIF_DATE_FIELDS = ['DateTimeOriginal', 'CreateDate', 'ModifyDate', 'DateT
 // resolving a date-range selection re-parses EXIF for every photo in the library (over an SMB share,
 // for a library of thousands) on every keystroke/date-pick, which is slow enough that the movie
 // maker's "N photos match" preview can take a very long time to come back.
+// Also kept in the database (photo_dates), so a restart doesn't mean re-reading every photo's EXIF
+// over the share before Photos can sort by date.
 const dateCache = new Map<string, Date>();
+let loadedFromDb = false;
+const saveDate = db.prepare('INSERT OR REPLACE INTO photo_dates (path, taken_at) VALUES (?, ?)');
+
+function loadSavedDates(): void {
+  if (loadedFromDb) return;
+  loadedFromDb = true;
+  for (const r of db.prepare('SELECT path, taken_at FROM photo_dates').all() as Array<{ path: string; taken_at: string }>) {
+    const d = new Date(r.taken_at);
+    if (!Number.isNaN(d.getTime())) dateCache.set(r.path, d);
+  }
+}
 
 /**
  * Best-effort "when was this photo actually taken" — tries the file's own EXIF date fields first
@@ -20,6 +34,7 @@ const dateCache = new Map<string, Date>();
  * Read-only: never writes to or otherwise touches the photo file itself.
  */
 export async function getPhotoDate(absolutePath: string): Promise<Date> {
+  loadSavedDates();
   const cached = dateCache.get(absolutePath);
   if (cached) return cached;
 
@@ -34,5 +49,6 @@ export async function getPhotoDate(absolutePath: string): Promise<Date> {
     date = (await fs.stat(absolutePath)).mtime;
   }
   dateCache.set(absolutePath, date);
+  saveDate.run(absolutePath, date.toISOString());
   return date;
 }
