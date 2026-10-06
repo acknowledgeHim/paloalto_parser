@@ -144,7 +144,9 @@ Movies and photo documents can pick **From an album**.
 
 Above the Photos grid:
 
-- **Sort** — Library order, Date taken (newest / oldest first), or Folder / filename.
+- **Sort** — Library order, Date taken (newest / oldest first), or Folder / filename. Each photo's
+  date is read once and remembered (even across restarts); the very first time on a big library
+  that takes a while, and the page says *Reading photo dates…* until the sort can apply.
 - **Albums** — All photos, **Not in any album**, or **In an album** (Favorites counts).
 - **Show hidden photos** — off by default.
 
@@ -201,14 +203,30 @@ a while to analyze the first time; after that only new or changed photos are che
 4. Once someone has a name, their other photos show up as suggestions. Each person's card shows
    how many faces are **confirmed** and how many are **to check**; tap the card to see both —
    **To check — is this Sam?** (yellow border: ✓ / ✗, or **Yes to all shown**) and then
-   **Confirmed Sam** (60 at a time, **Show more** for the rest). Or in the photo viewer, or in the photo viewer, where faces show along the
-   where faces show along the bottom — a name, a "Sam?" to ✓ or ✗, **Who's this?** to name it right there, or 🚫 to ignore it.
+   **Confirmed Sam** (60 at a time, **Show more** for the rest).
    A suggestion is only made when one person is a clear match — if two people (say, siblings) look
    about equally likely, it doesn't guess.
    To choose someone's picture on the People page, open them and tap ⭐ on one of their faces
    (otherwise the clearest, biggest one is used).
-5. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
-   **With a person** as a way to pick photos for movies and documents.
+5. **Right in the photo viewer** (Photos → open any photo), the faces in that photo show along the
+   bottom — handy when you know who's in a particular photo:
+   - an unnamed face: **Who's this?** to name it (a new name adds that person), or 🚫 to ignore it;
+   - a suggestion ("Sam?"): ✓ or ✗;
+   - a named face: tap the name (✎) to change it to someone else, or **Not Sam** to un-name it
+     (either way it stops suggesting Sam for that face);
+   - **+ Someone else** — for people in the photo whose face wasn't found: the back of their head,
+     a side view, too small or blurry. Type or pick a name; they show as a chip with × to take it off.
+     There's no face to learn from, so this doesn't help suggestions — it just counts the photo as
+     theirs (and their People card shows *N tagged*). A face rescan never removes these.
+6. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
+   **With a person** as a way to pick photos for movies and documents — including photos they're
+   tagged in with **+ Someone else**.
+
+**Someone not showing up in the groups yet?** Groups only hold clear, front-on, not-too-small faces,
+and only the biggest groups are shown — so someone with fewer photos (or mostly in the background)
+can be missing. Start them yourself: open a photo of them in the viewer and tap **Who's this?** on
+their face (or find one under **Name faces photo by photo**). After 3–5 names from different ages,
+their other photos start showing up under **To check** on their card.
 
 **Photos that can't be read** (damaged, empty, or e.g. an iPhone HEIC saved as `.jpg`) are skipped
 and counted as looked at — the People page shows *N couldn't be read*; tap it for the list and a
