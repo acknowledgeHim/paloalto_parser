@@ -343,6 +343,10 @@ textarea {
   overflow-y: auto;
 }
 .modal-panel h2 { margin-top: 0; }
+/* A form in a modal scrolls as a whole — its parts must never shrink to fit instead. Without this,
+   anything with its own scroll area (a photo grid, a music list) gets squashed to a sliver whenever
+   the form is taller than the screen. */
+.modal-panel.task-form > * { flex-shrink: 0; }
 
 /* ---- Drag and drop (touch + mouse) ---- */
 .draggable-task { touch-action: none; }
