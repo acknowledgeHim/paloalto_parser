@@ -1591,3 +1591,21 @@ textarea {
 @keyframes celebration-in { from { opacity: 0; } }
 @keyframes celebration-pop { from { transform: scale(0.3); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .celebration, .celebration__message { animation: none; } }
+
+/* ---- Family member editor (FamilyMemberFormModal): tabs, each with its own color, made of
+   tinted cards so one setting group doesn't blend into the next. ---- */
+.member-form__head { display: flex; align-items: center; gap: 14px; }
+.member-form__head h2 { margin: 0; }
+.member-form__tabs { display: flex; gap: 4px; border-bottom: 3px solid var(--border); padding-bottom: 0; }
+.member-form__tab { --sec: var(--accent); flex: 1 1 0; min-width: 0; padding: 0 4px; white-space: nowrap; font-size: 0.95rem; min-height: 48px; border-radius: 12px 12px 0 0; margin-bottom: -3px; border: 0; border-bottom: 3px solid transparent; background: color-mix(in srgb, var(--sec) 10%, var(--panel)); color: var(--text); font-weight: 600; }
+.member-form__tab--active { background: color-mix(in srgb, var(--sec) 22%, var(--panel)); border-bottom-color: var(--sec); }
+.member-form__tab--profile, .member-form__body--profile { --sec: #4d8fe8; }
+.member-form__tab--chores, .member-form__body--chores { --sec: #35a86a; }
+.member-form__tab--todos, .member-form__body--todos { --sec: #e08a30; }
+.member-form__tab--sound, .member-form__body--sound { --sec: #a46be0; }
+.member-form__body { display: flex; flex-direction: column; gap: 12px; }
+.member-form__card { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; border: 1px solid color-mix(in srgb, var(--sec) 35%, var(--border)); border-left: 6px solid var(--sec); border-radius: 12px; background: color-mix(in srgb, var(--sec) 7%, var(--panel)); }
+.member-form__card-title { margin: 0; font-size: 1.05rem; color: color-mix(in srgb, var(--sec) 70%, var(--text)); }
+.member-form__actions { position: sticky; bottom: -1px; background: var(--panel); padding: 10px 0 4px; align-items: center; }
+.member-form__card .hint { margin: 0; }
+.member-form__card .task-form__row > button { flex: none; white-space: nowrap; }

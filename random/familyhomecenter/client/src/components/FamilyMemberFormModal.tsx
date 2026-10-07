@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, type FamilyMember } from '../api/client.js';
 import { downscaleImageToDataUrl } from '../utils/images.js';
 import { playAudioClip, playCompletionSound, SOUND_OPTIONS } from '../utils/sounds.js';
@@ -17,10 +17,27 @@ const EMOJI_PRESETS = [
   '🏠', '🏰', '🏝️', '⛰️', '🌋', '🎪', '🚩', '🏆',
 ] as const;
 
-/** The style picker + (when Adventure Map is picked) its start/end icon pickers — used once for
- *  Chores and once for To-dos, each with its own independent state. */
+/** One tinted card with a heading — the profile editor's tabs are made of these. */
+function Card({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="member-form__card">
+      <h3 className="member-form__card-title">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+const TABS = [
+  { id: 'profile', label: '👤 Profile' },
+  { id: 'chores', label: '🧹 Chores' },
+  { id: 'todos', label: '📝 To-dos' },
+  { id: 'sound', label: '🔔 Sound' },
+] as const;
+export type MemberFormTab = (typeof TABS)[number]['id'];
+
+/** The style picker + (when Adventure Map is picked) its start/end icon pickers — used once on the
+ *  Chores tab and once on To-dos, each with its own independent state. */
 function ProgressStylePicker({
-  label,
   color,
   style,
   setStyle,
@@ -29,7 +46,6 @@ function ProgressStylePicker({
   endIcon,
   setEndIcon,
 }: {
-  label: string;
   color: string;
   style: string;
   setStyle: (id: string) => void;
@@ -40,8 +56,7 @@ function ProgressStylePicker({
 }) {
   return (
     <>
-      <div>
-        <label className="member-form__label">{label} progress bar style</label>
+      <Card title="📊 Progress bar">
         <div className="progress-style-picker">
           {PROGRESS_STYLES.map((s) => (
             <button
@@ -59,12 +74,12 @@ function ProgressStylePicker({
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
       {style === 'adventure' && (
-        <>
+        <Card title="🗺️ Adventure Map">
           <div>
-            <label className="member-form__label">{label} Adventure Map — starting point</label>
+            <label className="member-form__label">Starting point</label>
             <div className="member-form__swatches">
               {EMOJI_PRESETS.map((em) => (
                 <button
@@ -80,7 +95,7 @@ function ProgressStylePicker({
             <p className="hint">Defaults to 🏠 if nothing's picked.</p>
           </div>
           <div>
-            <label className="member-form__label">{label} Adventure Map — destination (castle, treasure, etc.)</label>
+            <label className="member-form__label">Destination (castle, treasure, etc.)</label>
             <div className="member-form__swatches">
               {EMOJI_PRESETS.map((em) => (
                 <button
@@ -95,7 +110,7 @@ function ProgressStylePicker({
             </div>
             <p className="hint">Defaults to 🏰 if nothing's picked.</p>
           </div>
-        </>
+        </Card>
       )}
     </>
   );
@@ -105,8 +120,8 @@ function ProgressStylePicker({
 function CelebrationPicker({ label, kind, name, value, setValue }: { label: string; kind: 'chore' | 'todo'; name: string; value: string; setValue: (v: string) => void }) {
   const playable = celebrationFor(value);
   return (
-    <div>
-      <label className="member-form__label">{label}</label>
+    <Card title="🎉 All-done celebration">
+      <p className="hint">{label} Tap one to see it.</p>
       <div className="progress-style-picker">
         {CELEBRATIONS.map((c) => (
           <button
@@ -128,7 +143,7 @@ function CelebrationPicker({ label, kind, name, value, setValue }: { label: stri
           ▶ Watch it again
         </button>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -150,9 +165,12 @@ interface Props {
    *  editing their own profile can't self-promote. Defaults to true (Settings' admin-only usage);
    *  pass false when a non-parent is editing their own profile from their person page. */
   canChangeRole?: boolean;
+  /** Which tab to open on (default Profile). */
+  initialTab?: MemberFormTab;
 }
 
-export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole = true }: Props) {
+export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole = true, initialTab = 'profile' }: Props) {
+  const [tab, setTab] = useState<MemberFormTab>(initialTab);
   const [name, setName] = useState(member?.name ?? '');
   const [email, setEmail] = useState(member?.email ?? '');
   const [isParent, setIsParent] = useState(member?.is_parent === 1);
@@ -268,170 +286,174 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <form className="modal-panel task-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h2>{member ? 'Edit family member' : 'Add family member'}</h2>
-
-        <div className="member-form__preview">
-          <MemberAvatar member={previewMember} size={72} />
+      <form className="modal-panel task-form member-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="member-form__head">
+          <MemberAvatar member={previewMember} size={56} />
+          <h2>{member ? `Edit ${name.trim() || 'family member'}` : 'Add family member'}</h2>
         </div>
 
-        <input autoFocus placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input
-          type="email"
-          placeholder="Email (optional)"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        {isParent && <p className="hint">A parent's email gets the nightly grocery-list digest, if one's set up — see Meals.</p>}
-
-        {canChangeRole && (
-          <label className="checkbox">
-            <input type="checkbox" checked={isParent} onChange={(e) => setIsParent(e.target.checked)} />
-            Parent (can add recurring chores)
-          </label>
-        )}
-
-        <div>
-          <label className="member-form__label">Color</label>
-          <div className="member-form__swatches">
-            {COLOR_PRESETS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={`member-form__swatch ${color === c ? 'member-form__swatch--selected' : ''}`}
-                style={{ background: c }}
-                aria-label={`Color ${c}`}
-                onClick={() => setColor(c)}
-              />
-            ))}
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="member-form__color-input"
-              aria-label="Custom color"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="member-form__label">Avatar</label>
-          <div className="member-form__swatches">
-            {EMOJI_PRESETS.map((em) => (
-              <button
-                key={em}
-                type="button"
-                className={`member-form__emoji ${!pendingImage && !hasImage && emoji === em ? 'member-form__emoji--selected' : ''}`}
-                onClick={() => pickEmoji(em)}
-              >
-                {em}
-              </button>
-            ))}
-          </div>
-          <div className="task-form__row member-form__photo-row">
-            <button type="button" className="secondary" onClick={() => fileInput.current?.click()}>
-              Upload photo
-            </button>
-            {(pendingImage || hasImage || emoji) && (
-              <button type="button" className="secondary" onClick={clearAvatar}>
-                No avatar
-              </button>
-            )}
-          </div>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-          />
-        </div>
-
-        <div>
-          <label className="member-form__label">Sound when a task is completed</label>
-          <div className="task-form__row">
-            <select
-              value={completeSound}
-              onChange={(e) => {
-                setCompleteSound(e.target.value);
-                if (e.target.value !== 'custom') {
-                  setPendingSound(null);
-                  setPendingSoundName(null);
-                }
-              }}
+        <div className="member-form__tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`member-form__tab member-form__tab--${t.id} ${tab === t.id ? 'member-form__tab--active' : ''}`}
+              onClick={() => setTab(t.id)}
             >
-              {SOUND_OPTIONS.map((s) => (
-                <option key={s.id} value={s.id}>{s.label}</option>
-              ))}
-            </select>
-            {completeSound !== 'custom' && (
-              <button type="button" className="secondary" onClick={() => playCompletionSound(completeSound)}>
-                ▶ Preview
-              </button>
-            )}
-          </div>
-          {completeSound === 'custom' && (
-            <div className="member-form__custom-sound">
-              <p className="hint">Only the first ~4 seconds play, with a quick fade-out — never the whole file.</p>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className={`member-form__body member-form__body--${tab}`}>
+          {tab === 'profile' && (
+            <>
+              <Card title="✏️ Name">
+                <input autoFocus placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+                <input type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
+                {isParent && <p className="hint">A parent's email gets the nightly grocery-list digest, if one's set up — see Meals.</p>}
+                {canChangeRole && (
+                  <label className="checkbox">
+                    <input type="checkbox" checked={isParent} onChange={(e) => setIsParent(e.target.checked)} />
+                    Parent (can add recurring chores)
+                  </label>
+                )}
+              </Card>
+
+              <Card title="🎨 Color">
+                <div className="member-form__swatches">
+                  {COLOR_PRESETS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`member-form__swatch ${color === c ? 'member-form__swatch--selected' : ''}`}
+                      style={{ background: c }}
+                      aria-label={`Color ${c}`}
+                      onClick={() => setColor(c)}
+                    />
+                  ))}
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="member-form__color-input" aria-label="Custom color" />
+                </div>
+              </Card>
+
+              <Card title="😀 Avatar">
+                <div className="member-form__swatches">
+                  {EMOJI_PRESETS.map((em) => (
+                    <button
+                      key={em}
+                      type="button"
+                      className={`member-form__emoji ${!pendingImage && !hasImage && emoji === em ? 'member-form__emoji--selected' : ''}`}
+                      onClick={() => pickEmoji(em)}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+                <div className="task-form__row member-form__photo-row">
+                  <button type="button" className="secondary" onClick={() => fileInput.current?.click()}>
+                    Upload photo
+                  </button>
+                  {(pendingImage || hasImage || emoji) && (
+                    <button type="button" className="secondary" onClick={clearAvatar}>
+                      No avatar
+                    </button>
+                  )}
+                </div>
+                <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
+              </Card>
+            </>
+          )}
+
+          {tab === 'chores' && (
+            <>
+              <ProgressStylePicker
+                color={color}
+                style={progressStyle}
+                setStyle={setProgressStyle}
+                startIcon={startIcon}
+                setStartIcon={setStartIcon}
+                endIcon={endIcon}
+                setEndIcon={setEndIcon}
+              />
+              <CelebrationPicker label="Plays when all my chores are done for the day." kind="chore" name={name.trim()} value={choreCelebration} setValue={setChoreCelebration} />
+            </>
+          )}
+
+          {tab === 'todos' && (
+            <>
+              <ProgressStylePicker
+                color={color}
+                style={todoProgressStyle}
+                setStyle={setTodoProgressStyle}
+                startIcon={todoStartIcon}
+                setStartIcon={setTodoStartIcon}
+                endIcon={todoEndIcon}
+                setEndIcon={setTodoEndIcon}
+              />
+              <CelebrationPicker label="Plays when all my to-dos are done." kind="todo" name={name.trim()} value={todoCelebration} setValue={setTodoCelebration} />
+            </>
+          )}
+
+          {tab === 'sound' && (
+            <Card title="🔔 Sound when a task is checked off">
+              <p className="hint">Plays for every chore and to-do.</p>
               <div className="task-form__row">
-                <button type="button" className="secondary" onClick={() => soundInput.current?.click()}>
-                  {pendingSoundName ? `Chosen: ${pendingSoundName}` : hasCustomSound ? 'Replace MP3' : 'Choose MP3'}
-                </button>
-                {(pendingSound || hasCustomSound) && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      playAudioClip(pendingSound ?? `/api/family-members/${member?.id}/sound-file`)
+                <select
+                  value={completeSound}
+                  onChange={(e) => {
+                    setCompleteSound(e.target.value);
+                    if (e.target.value !== 'custom') {
+                      setPendingSound(null);
+                      setPendingSoundName(null);
                     }
-                  >
+                  }}
+                >
+                  {SOUND_OPTIONS.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+                {completeSound !== 'custom' && (
+                  <button type="button" className="secondary" onClick={() => playCompletionSound(completeSound)}>
                     ▶ Preview
                   </button>
                 )}
               </div>
-              {soundError && <div className="settings-login__error">{soundError}</div>}
-              <input
-                ref={soundInput}
-                type="file"
-                accept="audio/mpeg,audio/mp3"
-                hidden
-                onChange={(e) => {
-                  pickSoundFile(e.target.files?.[0] ?? null);
-                  setHasCustomSound(true);
-                }}
-              />
-            </div>
+              {completeSound === 'custom' && (
+                <div className="member-form__custom-sound">
+                  <p className="hint">Only the first ~4 seconds play, with a quick fade-out — never the whole file.</p>
+                  <div className="task-form__row">
+                    <button type="button" className="secondary" onClick={() => soundInput.current?.click()}>
+                      {pendingSoundName ? `Chosen: ${pendingSoundName}` : hasCustomSound ? 'Replace MP3' : 'Choose MP3'}
+                    </button>
+                    {(pendingSound || hasCustomSound) && (
+                      <button type="button" className="secondary" onClick={() => playAudioClip(pendingSound ?? `/api/family-members/${member?.id}/sound-file`)}>
+                        ▶ Preview
+                      </button>
+                    )}
+                  </div>
+                  {soundError && <div className="settings-login__error">{soundError}</div>}
+                  <input
+                    ref={soundInput}
+                    type="file"
+                    accept="audio/mpeg,audio/mp3"
+                    hidden
+                    onChange={(e) => {
+                      pickSoundFile(e.target.files?.[0] ?? null);
+                      setHasCustomSound(true);
+                    }}
+                  />
+                </div>
+              )}
+            </Card>
           )}
         </div>
 
-        <ProgressStylePicker
-          label="Chores"
-          color={color}
-          style={progressStyle}
-          setStyle={setProgressStyle}
-          startIcon={startIcon}
-          setStartIcon={setStartIcon}
-          endIcon={endIcon}
-          setEndIcon={setEndIcon}
-        />
-
-        <ProgressStylePicker
-          label="To-dos"
-          color={color}
-          style={todoProgressStyle}
-          setStyle={setTodoProgressStyle}
-          startIcon={todoStartIcon}
-          setStartIcon={setTodoStartIcon}
-          endIcon={todoEndIcon}
-          setEndIcon={setTodoEndIcon}
-        />
-
-        <CelebrationPicker label="When all my chores are done for the day" kind="chore" name={name.trim()} value={choreCelebration} setValue={setChoreCelebration} />
-        <CelebrationPicker label="When all my to-dos are done" kind="todo" name={name.trim()} value={todoCelebration} setValue={setTodoCelebration} />
-
-        <div className="task-form__row">
-          <button type="submit" disabled={saving}>{member ? 'Save' : 'Add'}</button>
+        <div className="task-form__row member-form__actions">
+          <button type="submit" disabled={saving || !name.trim()}>{member ? 'Save' : 'Add'}</button>
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+          <span className="hint">Saves every tab.</span>
         </div>
       </form>
     </div>
