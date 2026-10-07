@@ -638,8 +638,8 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
         )}
         <input autoFocus placeholder="Title (e.g. Summer 2024)" value={title} onChange={(e) => setTitle(e.target.value)} />
 
-        <div>
-          <label className="member-form__label">Pick photos</label>
+        <section className="movie-maker__section movie-maker__section--photos">
+          <h3 className="movie-maker__section-title">📷 Pick photos</h3>
           <div className="task-form__row">
             <select value={mode} onChange={(e) => setMode(e.target.value as SelectionMode)}>
               <option value="date-range">By date taken</option>
@@ -786,32 +786,35 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
           {previewCount !== null && (
             <p className="hint">{previewCount} photo{previewCount === 1 ? '' : 's'} {gridMode ? 'picked' : 'match'}.</p>
           )}
-        </div>
+        </section>
 
-        <label className="member-form__label member-form__label--inline">
-          Seconds per photo
-          <input
-            type="number"
-            min={1}
-            step={0.5}
-            value={secondsPerPhoto}
-            onChange={(e) => setSecondsPerPhoto(Number(e.target.value) || 1)}
-          />
-        </label>
-        {movieSeconds !== null && (
-          <p className="hint movie-maker__length">
-            Movie length: <strong>{fmtDuration(movieSeconds)}</strong>
-            {' '}({titleCard ? `${TITLE_CARD_SECONDS}s title + ` : ''}{previewCount} × {secondsPerPhoto}s{musicTracks.length > 0 ? ` + ${MUSIC_TAIL_SECONDS}s fade-out` : ''})
-          </p>
-        )}
-        {fittedSeconds !== null && Math.abs(fittedSeconds - secondsPerPhoto) >= 0.1 && (
-          <button type="button" className="secondary movie-maker__fit" onClick={() => setSecondsPerPhoto(fittedSeconds)}>
-            ♫ Fit photos to the music ({fittedSeconds}s each)
-          </button>
-        )}
+        <section className="movie-maker__section movie-maker__section--length">
+          <h3 className="movie-maker__section-title">⏱️ Length</h3>
+          <label className="member-form__label member-form__label--inline">
+            Seconds per photo
+            <input
+              type="number"
+              min={1}
+              step={0.5}
+              value={secondsPerPhoto}
+              onChange={(e) => setSecondsPerPhoto(Number(e.target.value) || 1)}
+            />
+          </label>
+          {movieSeconds !== null && (
+            <p className="hint movie-maker__length">
+              Movie length: <strong>{fmtDuration(movieSeconds)}</strong>
+              {' '}({titleCard ? `${TITLE_CARD_SECONDS}s title + ` : ''}{previewCount} × {secondsPerPhoto}s{musicTracks.length > 0 ? ` + ${MUSIC_TAIL_SECONDS}s fade-out` : ''})
+            </p>
+          )}
+          {fittedSeconds !== null && Math.abs(fittedSeconds - secondsPerPhoto) >= 0.1 && (
+            <button type="button" className="secondary movie-maker__fit" onClick={() => setSecondsPerPhoto(fittedSeconds)}>
+              ♫ Fit photos to the music ({fittedSeconds}s each)
+            </button>
+          )}
+        </section>
 
-        <div className="movie-maker__style">
-          <label className="member-form__label">Style (optional)</label>
+        <section className="movie-maker__section movie-maker__section--style">
+          <h3 className="movie-maker__section-title">🎨 Style <span className="hint">(optional)</span></h3>
           <div className="task-form__row">
             <label className="member-form__label member-form__label--inline">
               Between photos
@@ -861,10 +864,10 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        <div>
-          <label className="member-form__label">Music (optional)</label>
+        <section className="movie-maker__section movie-maker__section--music">
+          <h3 className="movie-maker__section-title">🎵 Music <span className="hint">(optional)</span></h3>
           {musicTracks.length > 0 && (
             <>
               <ol className="movie-maker__track-list">
@@ -939,7 +942,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
             Tracks play in order. The video ends {MUSIC_TAIL_SECONDS}s after the last photo, with the
             music fading out over the last 10 seconds — anything left over is cut.
           </p>
-        </div>
+        </section>
 
         {error && <div className="settings-login__error">{error}</div>}
         {confirmingMissing && (

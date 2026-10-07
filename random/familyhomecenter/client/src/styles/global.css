@@ -1435,7 +1435,15 @@ textarea {
 .on-this-day__caption { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0, 0, 0, 0.5); padding: 6px 14px; border-radius: 999px; }
 
 /* ---- Movie maker style options ---- */
-.movie-maker__style { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+/* Movie maker: each part (photos, length, style, music) is its own tinted card with a colored
+   stripe and heading, so it's easy to see where one ends and the next starts. */
+.movie-maker__section { --sec: var(--accent); display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; border: 1px solid color-mix(in srgb, var(--sec) 35%, var(--border)); border-left: 6px solid var(--sec); border-radius: 12px; background: color-mix(in srgb, var(--sec) 7%, var(--panel)); }
+.movie-maker__section--photos { --sec: #4d8fe8; }
+.movie-maker__section--length { --sec: #e0a030; }
+.movie-maker__section--style { --sec: #a46be0; }
+.movie-maker__section--music { --sec: #35a86a; }
+.movie-maker__section-title { margin: 0; font-size: 1.05rem; color: color-mix(in srgb, var(--sec) 70%, var(--text)); }
+.movie-maker__section-title .hint { font-size: 0.85rem; font-weight: normal; }
 .movie-maker__check { display: flex; align-items: center; gap: 8px; }
 .movie-maker__check input { width: 22px; height: 22px; min-height: 0 !important; }
 .movie-maker__fit { align-self: flex-start; }
