@@ -14,7 +14,7 @@ export const CELEBRATIONS = [
   { id: 'rocket', label: '🚀 Rocket launch' },
   { id: 'unicorn', label: '🦄 Unicorn rainbow' },
   { id: 'dino', label: '🦖 Dino stomp' },
-  { id: 'dance', label: '🪩 Dance party' },
+  { id: 'dance', label: '🕺 Dance party' },
   { id: 'trophy', label: '🏆 Trophy' },
   { id: 'none', label: 'None' },
 ] as const;

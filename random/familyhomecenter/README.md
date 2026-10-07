@@ -182,6 +182,8 @@ Optional integrations, each with its own guide:
   per-kid internet controls)
 - [docs/PRIVACY.md](docs/PRIVACY.md) (exactly what can leave the Pi, and how it was verified — by
   default, nothing beyond the weather, which can be switched off)
+- [docs/EMOJI_FONT.md](docs/EMOJI_FONT.md) (getting newer emoji to show on the Pi — avatars and
+  icons that appear as empty boxes)
 - [docs/BACKUP.md](docs/BACKUP.md) (`npm run backup` in `server/` — safe to run while the server's
   up; covers automating it with cron and restoring)
 

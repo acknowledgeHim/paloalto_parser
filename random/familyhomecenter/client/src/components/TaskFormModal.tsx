@@ -3,6 +3,7 @@ import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '../utils/timeOfDay.js';
 import { TASK_ICON_PRESETS, taskIcon } from '../utils/taskIcons.js';
+import { EmojiPicker } from './EmojiPicker.js';
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
@@ -203,26 +204,21 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
 
         <div>
           <label className="member-form__label">Checkpoint icon (for the Adventure Map progress bar)</label>
-          <div className="member-form__swatches">
-            <button
-              type="button"
-              className={`member-form__emoji ${icon === null ? 'member-form__emoji--selected' : ''}`}
-              onClick={() => setIcon(null)}
-              aria-label="Use the default icon"
-            >
-              {taskIcon({ icon: null, kind })}
-            </button>
-            {TASK_ICON_PRESETS.map((em) => (
+          <EmojiPicker
+            value={icon}
+            suggestions={TASK_ICON_PRESETS}
+            onPick={(em) => setIcon((cur) => (cur === em ? null : em))}
+            before={
               <button
-                key={em}
                 type="button"
-                className={`member-form__emoji ${icon === em ? 'member-form__emoji--selected' : ''}`}
-                onClick={() => setIcon((cur) => (cur === em ? null : em))}
+                className={`member-form__emoji ${icon === null ? 'member-form__emoji--selected' : ''}`}
+                onClick={() => setIcon(null)}
+                aria-label="Use the default icon"
               >
-                {em}
+                {taskIcon({ icon: null, kind })}
               </button>
-            ))}
-          </div>
+            }
+          />
           {isParent && title.trim() && (
             <div className="task-form__row">
               <button type="button" className="link-button" onClick={applyIconToAllNamed}>

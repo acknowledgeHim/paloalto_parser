@@ -56,7 +56,7 @@ const TITLES: Record<CelebrationId, string> = {
   rocket: 'Blast off! 🚀',
   unicorn: 'Magical! 🦄',
   dino: 'ROAR-some! 🦖',
-  dance: 'Party time! 🪩',
+  dance: 'Party time! 🕺',
   trophy: 'Champion! 🏆',
 };
 
@@ -266,10 +266,10 @@ const RECIPES: Record<CelebrationId, Recipe> = {
       ctx.restore();
     },
     frame: (s, dt) => {
-      if (every(s, dt, 99, 0)) s.add({ x: s.w / 2, y: s.h * 0.12, g: 0, shape: 'emoji', emoji: '🪩', size: Math.min(110, s.w * 0.12), vr: 1.5, life: 6 });
+      if (every(s, dt, 99, 0)) s.add({ x: s.w / 2, y: s.h * 0.12, g: 0, shape: 'emoji', emoji: '💿', size: Math.min(110, s.w * 0.12), vr: 1.5, life: 6 });
       // Dancers bounce up from the bottom on the beat; notes fall.
       if (every(s, dt, 0.42, 0.1, 4.6)) {
-        for (let i = 0; i < 3; i++) s.add({ x: rand(s.w * 0.08, s.w * 0.92), y: s.h + 40, vy: -rand(0.75, 0.95) * s.h, g: s.h * 1.1, shape: 'emoji', emoji: pick(['🕺', '💃', '🐧', '🦩', '🐸', '🤖']), size: rand(56, 90), vr: rand(-2, 2), life: 2.2 });
+        for (let i = 0; i < 3; i++) s.add({ x: rand(s.w * 0.08, s.w * 0.92), y: s.h + 40, vy: -rand(0.75, 0.95) * s.h, g: s.h * 1.1, shape: 'emoji', emoji: pick(['🕺', '💃', '🐧', '🦜', '🐸', '🤖']), size: rand(56, 90), vr: rand(-2, 2), life: 2.2 });
       }
       if (s.t < 4.8 && Math.random() < dt * 14) s.add({ x: rand(0, s.w), y: -30, vy: rand(120, 220), g: 0, shape: 'emoji', emoji: pick(['🎵', '🎶', '✨']), size: rand(24, 44), sway: 60, life: 5 });
     },

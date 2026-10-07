@@ -5,6 +5,7 @@ import { playAudioClip, playCompletionSound, SOUND_OPTIONS } from '../utils/soun
 import { PROGRESS_STYLES, progressFillFor } from '../utils/progressStyles.js';
 import { CELEBRATIONS, DEFAULT_CELEBRATION, celebrate, celebrationFor } from '../utils/celebrations.js';
 import { MemberAvatar } from './MemberAvatar.js';
+import { EmojiPicker } from './EmojiPicker.js';
 
 const COLOR_PRESETS = ['#5b8def', '#e2685a', '#3fae66', '#c96fd6', '#e0a638', '#33a3a3'];
 const EMOJI_PRESETS = [
@@ -80,34 +81,12 @@ function ProgressStylePicker({
         <Card title="🗺️ Adventure Map">
           <div>
             <label className="member-form__label">Starting point</label>
-            <div className="member-form__swatches">
-              {EMOJI_PRESETS.map((em) => (
-                <button
-                  key={em}
-                  type="button"
-                  className={`member-form__emoji ${startIcon === em ? 'member-form__emoji--selected' : ''}`}
-                  onClick={() => setStartIcon((cur) => (cur === em ? '' : em))}
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
+            <EmojiPicker value={startIcon} suggestions={EMOJI_PRESETS} onPick={(em) => setStartIcon((cur) => (cur === em ? '' : em))} />
             <p className="hint">Defaults to 🏠 if nothing's picked.</p>
           </div>
           <div>
             <label className="member-form__label">Destination (castle, treasure, etc.)</label>
-            <div className="member-form__swatches">
-              {EMOJI_PRESETS.map((em) => (
-                <button
-                  key={em}
-                  type="button"
-                  className={`member-form__emoji ${endIcon === em ? 'member-form__emoji--selected' : ''}`}
-                  onClick={() => setEndIcon((cur) => (cur === em ? '' : em))}
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
+            <EmojiPicker value={endIcon} suggestions={EMOJI_PRESETS} onPick={(em) => setEndIcon((cur) => (cur === em ? '' : em))} />
             <p className="hint">Defaults to 🏰 if nothing's picked.</p>
           </div>
         </Card>
@@ -339,18 +318,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
               </Card>
 
               <Card title="😀 Avatar">
-                <div className="member-form__swatches">
-                  {EMOJI_PRESETS.map((em) => (
-                    <button
-                      key={em}
-                      type="button"
-                      className={`member-form__emoji ${!pendingImage && !hasImage && emoji === em ? 'member-form__emoji--selected' : ''}`}
-                      onClick={() => pickEmoji(em)}
-                    >
-                      {em}
-                    </button>
-                  ))}
-                </div>
+                <EmojiPicker value={!pendingImage && !hasImage ? emoji : null} suggestions={EMOJI_PRESETS} onPick={pickEmoji} />
                 <div className="task-form__row member-form__photo-row">
                   <button type="button" className="secondary" onClick={() => fileInput.current?.click()}>
                     Upload photo
