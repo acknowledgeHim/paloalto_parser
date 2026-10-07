@@ -13,6 +13,7 @@ export function EmojiPicker({
   onPick,
   suggestions,
   before,
+  defaultCategory,
 }: {
   value: string | null | undefined;
   /** Called with the tapped emoji — the caller decides whether tapping the current one clears it. */
@@ -20,15 +21,21 @@ export function EmojiPicker({
   suggestions: readonly string[];
   /** Extra buttons ahead of the suggestions (e.g. a "default" choice). */
   before?: React.ReactNode;
+  /** Which category "More emoji…" opens on (e.g. 'tasks', 'faces', 'places'). */
+  defaultCategory?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState(EMOJI_CATEGORIES[0].id);
+  const [category, setCategory] = useState(defaultCategory ?? EMOJI_CATEGORIES[0].id);
   // Something picked from the catalog stays in view up front, so you can see (and un-pick) it.
   const front = value && !suggestions.includes(value) ? [value, ...suggestions] : suggestions;
+  // The open category as labeled groups (a category without groups is one unlabeled group), each
+  // without repeats and without emoji this screen can't draw.
   const shown = useMemo(() => {
     if (!open) return [];
-    const list = EMOJI_CATEGORIES.find((c) => c.id === category)?.emoji ?? [];
-    return [...new Set(list)].filter(canDraw);
+    const c = EMOJI_CATEGORIES.find((x) => x.id === category);
+    if (!c) return [];
+    const groups = c.groups ?? [{ label: '', emoji: c.emoji }];
+    return groups.map((g) => ({ label: g.label, emoji: [...new Set(g.emoji)].filter(canDraw) })).filter((g) => g.emoji.length);
   }, [open, category]);
 
   const button = (em: string) => (
@@ -65,7 +72,14 @@ export function EmojiPicker({
               </button>
             ))}
           </div>
-          <div className="member-form__swatches emoji-picker__grid">{shown.map(button)}</div>
+          <div className="emoji-picker__grid">
+            {shown.map((g) => (
+              <div key={g.label || 'all'} className="emoji-picker__group">
+                {g.label && <div className="emoji-picker__group-label">{g.label}</div>}
+                <div className="member-form__swatches">{g.emoji.map(button)}</div>
+              </div>
+            ))}
+          </div>
         </>
       )}
     </div>

@@ -81,12 +81,12 @@ function ProgressStylePicker({
         <Card title="🗺️ Adventure Map">
           <div>
             <label className="member-form__label">Starting point</label>
-            <EmojiPicker value={startIcon} suggestions={EMOJI_PRESETS} onPick={(em) => setStartIcon((cur) => (cur === em ? '' : em))} />
+            <EmojiPicker value={startIcon} suggestions={EMOJI_PRESETS} defaultCategory="places" onPick={(em) => setStartIcon((cur) => (cur === em ? '' : em))} />
             <p className="hint">Defaults to 🏠 if nothing's picked.</p>
           </div>
           <div>
             <label className="member-form__label">Destination (castle, treasure, etc.)</label>
-            <EmojiPicker value={endIcon} suggestions={EMOJI_PRESETS} onPick={(em) => setEndIcon((cur) => (cur === em ? '' : em))} />
+            <EmojiPicker value={endIcon} suggestions={EMOJI_PRESETS} defaultCategory="places" onPick={(em) => setEndIcon((cur) => (cur === em ? '' : em))} />
             <p className="hint">Defaults to 🏰 if nothing's picked.</p>
           </div>
         </Card>
@@ -318,7 +318,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
               </Card>
 
               <Card title="😀 Avatar">
-                <EmojiPicker value={!pendingImage && !hasImage ? emoji : null} suggestions={EMOJI_PRESETS} onPick={pickEmoji} />
+                <EmojiPicker value={!pendingImage && !hasImage ? emoji : null} suggestions={EMOJI_PRESETS} onPick={pickEmoji} defaultCategory="faces" />
                 <div className="task-form__row member-form__photo-row">
                   <button type="button" className="secondary" onClick={() => fileInput.current?.click()}>
                     Upload photo

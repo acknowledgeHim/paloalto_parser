@@ -207,6 +207,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
           <EmojiPicker
             value={icon}
             suggestions={TASK_ICON_PRESETS}
+            defaultCategory="tasks"
             onPick={(em) => setIcon((cur) => (cur === em ? null : em))}
             before={
               <button

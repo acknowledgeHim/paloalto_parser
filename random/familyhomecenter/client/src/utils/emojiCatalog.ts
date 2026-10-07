@@ -149,4 +149,33 @@ const BASE: ReadonlyArray<{ id: string; label: string; emoji: readonly string[] 
   },
 ];
 
-export const EMOJI_CATEGORIES = BASE.map((c) => ({ ...c, emoji: [...c.emoji, ...(NEWER[c.id] ?? [])] }));
+/**
+ * Chore and to-do icons, in labeled groups. Older emoji first in each group, then newer ones (the
+ * picker hides any the screen can't draw, like the rest of the catalog).
+ */
+const TASK_GROUPS: ReadonlyArray<{ label: string; emoji: readonly string[] }> = [
+  { label: 'Cleaning', emoji: ['🧹', '🧽', '🧼', '🧴', '🧻', '🗑️', '♻️', '🚮', '🧺', '🪣', '🫧', '✨', '💨', '🪟', '🪠', '🧤', '🚽', '🚿', '🛁', '🚰', '🛋️', '🪑', '🖼️', '🪞', '🚪', '🔑'] },
+  { label: 'Kitchen & meals', emoji: ['🍽️', '🥣', '🥄', '🍴', '🔪', '🥢', '🍳', '🥘', '🍲', '🥗', '🥪', '🌮', '🍕', '🍝', '🧁', '🍪', '🍰', '🥞', '🥛', '🍼', '☕', '🍵', '🧂', '🥫', '🥡', '🍱', '🧊', '🫖', '🧃'] },
+  { label: 'Laundry & clothes', emoji: ['🧺', '👕', '👖', '👗', '🧦', '🧥', '🧣', '🧤', '👔', '👚', '🩳', '🩲', '👟', '👞', '🥾', '👢', '🧢', '👒', '🎩', '👓', '🎒', '👜', '🧵', '🧶', '🪡', '🧷'] },
+  { label: 'Bedroom & tidying', emoji: ['🛏️', '🛌', '🧸', '🪀', '🧩', '🎲', '🧱', '📦', '🗃️', '🗄️', '🗂️', '📁', '🧳', '💡', '🕯️', '🪴'] },
+  { label: 'Pets & animals', emoji: ['🐶', '🐕', '🐩', '🐱', '🐈', '🐰', '🐹', '🐭', '🐟', '🐠', '🐢', '🦎', '🐍', '🐦', '🦜', '🐔', '🐓', '🐣', '🥚', '🐴', '🐮', '🐷', '🐐', '🐑', '🐾', '🦴', '🥕', '🌾', '🦮'] },
+  { label: 'Yard & garden', emoji: ['🌱', '🌿', '🌳', '🌲', '🌻', '🌷', '🌹', '🌼', '🍂', '🍁', '🍃', '💧', '🌧️', '❄️', '⛄', '☀️', '🐝', '🐛', '🍅', '🥕', '🥒', '🌽', '🥔', '🍓', '🍎', '🚜', '⛏️', '🔨', '🪓', '🪴', '🪵'] },
+  { label: 'Fixing & building', emoji: ['🔧', '🔨', '🪛', '🔩', '⚙️', '🧰', '🪚', '🪜', '📏', '📐', '🧲', '🔌', '🔋', '💡', '🔦', '🖌️', '🎨', '🧯', '🏗️', '🧱'] },
+  { label: 'Car & errands', emoji: ['🚗', '🚙', '🚐', '🚌', '🚲', '🛴', '⛽', '🧽', '🛒', '🛍️', '🏪', '🏬', '🏦', '🏥', '🏫', '⛪', '📮', '📬', '📦', '✉️', '💌', '🎁', '🏷️', '🧾'] },
+  { label: 'School & homework', emoji: ['📚', '📖', '📕', '📗', '📘', '📙', '📓', '📔', '📒', '📝', '✏️', '🖍️', '🖊️', '✒️', '📏', '📐', '✂️', '📎', '📌', '🗒️', '📋', '🏫', '🎓', '🎒', '🖥️', '💻', '⌨️', '🧮', '🔢', '🔤', '🔡', '🔠', '➕', '➖', '✖️', '➗', '🟰', '💯', '🅰️', '🔬', '🔭', '🧪', '🧫', '🧬', '🧲', '🌍', '🌎', '🗺️', '🧭', '🏛️', '📜', '🗿', '🦕'] },
+  { label: 'Reading & faith', emoji: ['📖', '📚', '🔖', '📰', '🗞️', '🙏', '⛪', '✝️', '🕊️', '🛐', '🕯️', '📿', '💒', '❤️', '😇'] },
+  { label: 'Music & practice', emoji: ['🎵', '🎶', '🎼', '🎹', '🎸', '🎻', '🎺', '🎷', '🥁', '🪘', '🪗', '🎤', '🎧', '🎨', '🖌️', '✏️', '🎭', '🩰', '💃', '🕺', '📷'] },
+  { label: 'Sports & exercise', emoji: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🏓', '🏸', '🏒', '🥍', '⛳', '🏊', '🚴', '🏃', '🤸', '🧘', '🏋️', '🤾', '⛷️', '🏂', '⛸️', '🛹', '🥋', '🥊', '🎯', '🏆', '🥇', '🛼', '🤿'] },
+  { label: 'Getting ready & hygiene', emoji: ['🪥', '🦷', '🧼', '🚿', '🛁', '🧴', '💇', '💈', '🪒', '🪮', '💅', '👓', '👕', '👟', '🎒', '💊', '🩹', '🌡️', '😷', '🤧', '💧', '🥤'] },
+  { label: 'Morning & bedtime', emoji: ['🌅', '🌄', '☀️', '⏰', '🥣', '🌙', '🌛', '⭐', '🌟', '🛏️', '😴', '💤', '🧸', '📖', '🪥', '🕯️', '🦉'] },
+  { label: 'Helping & kindness', emoji: ['🤝', '🙌', '👏', '💪', '❤️', '💝', '🎁', '💌', '📞', '☎️', '👵', '👴', '👶', '🍼', '🧒', '👪', '🫶', '🫂'] },
+  { label: 'Money & screens', emoji: ['💰', '💵', '🪙', '🐷', '🏦', '💳', '📱', '💻', '🖥️', '🎮', '🕹️', '📺', '⏱️', '⌛', '⏳', '🔇', '📵'] },
+  { label: 'Check-offs & rewards', emoji: ['✅', '☑️', '✔️', '❌', '⭐', '🌟', '✨', '🏅', '🎖️', '🏆', '🥇', '🎉', '🎊', '🍭', '🍦', '🎈', '🎯', '📅', '📆', '🗓️', '⏰', '🔔', '📌', '🚩', '❗', '❓', '💯'] },
+];
+
+const TASKS_CATEGORY = { id: 'tasks', label: '🧹 Chores & to-dos', emoji: TASK_GROUPS.flatMap((g) => g.emoji), groups: TASK_GROUPS };
+
+export const EMOJI_CATEGORIES: ReadonlyArray<{ id: string; label: string; emoji: readonly string[]; groups?: typeof TASK_GROUPS }> = [
+  TASKS_CATEGORY,
+  ...BASE.map((c) => ({ ...c, emoji: [...c.emoji, ...(NEWER[c.id] ?? [])] })),
+];
