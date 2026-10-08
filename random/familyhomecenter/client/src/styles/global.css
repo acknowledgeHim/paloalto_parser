@@ -1436,6 +1436,7 @@ textarea {
 .on-this-day__photo { position: relative; flex: 0 0 160px; height: 120px; padding: 0; border: none; border-radius: 10px; overflow: hidden; background: var(--bg); }
 .on-this-day__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .on-this-day__photo span { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px; font-size: 0.75rem; color: #fff; background: rgba(0, 0, 0, 0.55); }
+.on-this-day__hide { position: absolute; top: 20px; left: 20px; min-height: 48px; padding: 0 16px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; border: 1px solid rgba(255, 255, 255, 0.4); }
 .on-this-day__caption { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0, 0, 0, 0.5); padding: 6px 14px; border-radius: 999px; }
 
 /* ---- Movie maker style options ---- */

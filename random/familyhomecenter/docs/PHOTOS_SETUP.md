@@ -163,7 +163,10 @@ drops out of the list, so what's left is only what still needs sorting.
 ## On this day
 
 When there are photos taken on today's date in past years, the Dashboard shows an **On this day**
-strip ("3 years ago"). Tap one to see it full size.
+strip ("3 years ago"). Tap one to see it full size; **🙈 Hide** there hides it (same as hiding it on
+the Photos page). Hidden photos never show here — nor do near-identical copies of them (see
+*Blurry photos and duplicates*), and of a set of copies only one shows. The strip refreshes every
+few minutes, so a photo hidden on another screen drops out on its own.
 
 ## Blurry photos and duplicates
 

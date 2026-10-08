@@ -53,15 +53,34 @@ photosRouter.get(
   })
 );
 
-/** GET /on-this-day — photos taken on today's month/day in earlier years, newest year first. */
+/** GET /on-this-day — photos taken on today's month/day in earlier years, newest year first.
+ *  Leaves out hidden photos — and their near-identical copies (photoAnalysis.ts duplicates), so
+ *  hiding a picture also hides a second copy of it — and shows just one of each set of copies. */
 photosRouter.get(
   '/on-this-day',
   asyncHandler(async (_req, res) => {
-    const files = await listVisiblePhotos();
+    const hidden = hiddenPhotoPaths();
+    const quality = getPhotoQuality();
+    const rel = (abs: string) => path.relative(config.photosDir, abs);
+    const hiddenGroups = new Set([...hidden].map((p) => quality.get(p)?.dup_group).filter((g) => g != null));
+    const files = (await listPhotos()).filter((f) => {
+      const group = quality.get(rel(f))?.dup_group;
+      return !hidden.has(rel(f)) && !(group != null && hiddenGroups.has(group));
+    });
     const now = new Date();
     const dated = await mapWithConcurrency(files, 8, async (f) => ({ f, date: await getPhotoDate(f) }));
-    const matches = dated
-      .filter(({ date }) => date.getMonth() === now.getMonth() && date.getDate() === now.getDate() && date.getFullYear() < now.getFullYear())
+    const today = dated.filter(({ date }) => date.getMonth() === now.getMonth() && date.getDate() === now.getDate() && date.getFullYear() < now.getFullYear());
+    // One per set of copies: the best copy first, then everything else in date order.
+    const seenGroups = new Set<unknown>();
+    const matches = today
+      .sort((a, b) => Number(quality.get(rel(b.f))?.dup_best ?? false) - Number(quality.get(rel(a.f))?.dup_best ?? false))
+      .filter(({ f }) => {
+        const group = quality.get(rel(f))?.dup_group;
+        if (group == null) return true;
+        if (seenGroups.has(group)) return false;
+        seenGroups.add(group);
+        return true;
+      })
       .sort((a, b) => b.date.getTime() - a.date.getTime())
       .slice(0, 30)
       .map(({ f, date }) => ({ id: photoIdFor(f), year: date.getFullYear(), taken_at: date.toISOString() }));
