@@ -151,6 +151,17 @@ facesRouter.get(
   })
 );
 
+/** GET /nobody-photos — photo ids with nobody in them yet: no confirmed name on any face, and
+ *  nobody tagged by hand (suggestions don't count). For the Photos page's Person → Nobody filter. */
+facesRouter.get(
+  '/nobody-photos',
+  asyncHandler(async (_req, res) => {
+    const named = new Set((await allFaces()).faces.filter((f) => f.confirmed && f.person_id).map((f) => f.path));
+    for (const t of db.prepare('SELECT path FROM photo_people').all() as Array<{ path: string }>) named.add(t.path);
+    res.json([...(await photoIdsByPath()).entries()].filter(([p]) => !named.has(p)).map(([, id]) => id));
+  })
+);
+
 /** GET /people/:id/photos[?suggested=0] — photo ids with this person in them (confirmed, tagged by
  *  hand, plus suggested unless turned off), for the Photos filter and "With a person" picking. */
 facesRouter.get(

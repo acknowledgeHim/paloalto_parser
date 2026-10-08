@@ -11,6 +11,9 @@ import { PhotoFaces } from '../components/PhotoFaces.js';
 import type { Person } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
+/** The Person filter's "Nobody" choice (not a person id). */
+const NOBODY = 'nobody';
+
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
 function fmtMovieLength(m: Movie): string {
   const total = Math.round(
@@ -533,7 +536,9 @@ export function PhotosPage() {
   useEffect(() => {
     setPersonPhotoIds(null);
     if (!personFilter) return;
-    api.get<string[]>(`/faces/people/${personFilter}/photos`).then((ids) => setPersonPhotoIds(new Set(ids))).catch(() => setPersonPhotoIds(new Set()));
+    // 'nobody' = photos with no one named or tagged in them yet.
+    const url = personFilter === NOBODY ? '/faces/nobody-photos' : `/faces/people/${personFilter}/photos`;
+    api.get<string[]>(url).then((ids) => setPersonPhotoIds(new Set(ids))).catch(() => setPersonPhotoIds(new Set()));
   }, [personFilter, people]);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   // '' = all photos; otherwise an album id.
@@ -766,6 +771,7 @@ export function PhotosPage() {
               onChange={(e) => setSearchParams(e.target.value ? { person: e.target.value } : {})}
             >
               <option value="">Anyone</option>
+              <option value={NOBODY}>Nobody (no one named or tagged)</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>{p.name} ({p.photo_count})</option>
               ))}

@@ -224,6 +224,8 @@ a while to analyze the first time; after that only new or changed photos are che
 6. Then: **Person** filter on the Photos page, **See their photos** on someone's People card, and
    **With a person** as a way to pick photos for movies and documents — including photos they're
    tagged in with **+ Someone else**.
+   **Person → Nobody** shows the photos with no one named or tagged in them yet (an unconfirmed
+   "Sam?" suggestion doesn't count) — handy for finding who's left to add.
 
 **Someone not showing up in the groups yet?** Groups only hold clear, front-on, not-too-small faces,
 and only the biggest groups are shown — so someone with fewer photos (or mostly in the background)
