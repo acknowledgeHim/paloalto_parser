@@ -529,16 +529,25 @@ export function PhotosPage() {
   const personFilter = searchParams.get('person') ?? '';
   const [people, setPeople] = useState<Person[]>([]);
   const [personPhotoIds, setPersonPhotoIds] = useState<Set<string> | null>(null);
+  const [personFailed, setPersonFailed] = useState(false);
   const loadPeople = () => api.get<Person[]>('/faces/people').then(setPeople).catch(() => setPeople([]));
   useEffect(() => {
     loadPeople();
   }, []);
   useEffect(() => {
     setPersonPhotoIds(null);
+    setPersonFailed(false);
     if (!personFilter) return;
     // 'nobody' = photos with no one named or tagged in them yet.
     const url = personFilter === NOBODY ? '/faces/nobody-photos' : `/faces/people/${personFilter}/photos`;
-    api.get<string[]>(url).then((ids) => setPersonPhotoIds(new Set(ids))).catch(() => setPersonPhotoIds(new Set()));
+    let stale = false;
+    api
+      .get<string[]>(url)
+      .then((ids) => !stale && setPersonPhotoIds(new Set(ids)))
+      .catch(() => !stale && setPersonFailed(true));
+    return () => {
+      stale = true;
+    };
   }, [personFilter, people]);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   // '' = all photos; otherwise an album id.
@@ -859,7 +868,18 @@ export function PhotosPage() {
           docs/PHOTOS_SETUP.md) and tap Refresh.
         </div>
       )}
-      {!loading && photos.length > 0 && visible.length === 0 && (
+      {!loading && photos.length > 0 && personFilter && personFailed && (
+        <div className="empty-state">
+          Couldn't load that Person filter — the server may need restarting after an update.{' '}
+          <button type="button" className="link-button" onClick={() => setPeople((cur) => [...cur])}>
+            Try again
+          </button>
+        </div>
+      )}
+      {!loading && photos.length > 0 && personFilter && !personFailed && !personPhotoIds && (
+        <div className="empty-state">Finding those photos…</div>
+      )}
+      {!loading && photos.length > 0 && visible.length === 0 && !(personFilter && (personFailed || !personPhotoIds)) && (
         <div className="empty-state">{albumFilter ? 'No photos in this album yet — select some from All photos and add them.' : 'No photos to show.'}</div>
       )}
 
