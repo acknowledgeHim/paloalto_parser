@@ -854,6 +854,13 @@ try {
 } catch (err) {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
+// face_scans.detector = which way faces were found (services/faces/engine.ts DETECTOR_VERSION;
+// NULL = the first, whole-photo-only way) — older scans get a top-up for the small faces they missed.
+try {
+  db.exec('ALTER TABLE face_scans ADD COLUMN detector INTEGER');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 // people.cover_face_id = the face picked as their picture (NULL = choose automatically).
 try {
   db.exec('ALTER TABLE people ADD COLUMN cover_face_id INTEGER');

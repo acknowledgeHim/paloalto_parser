@@ -262,6 +262,15 @@ turning it on, and the Pi won't fetch them:
 
 **Turning it off** stops scanning; names and tags are kept (turn it back on to carry on).
 
+**How it finds faces:** each photo is looked at whole, and big photos also in four overlapping
+quarters, so small faces in group shots are found too (photos scanned before this get a one-time
+top-up in the background — the People page shows its progress; names already given are kept).
+Overnight (11pm–6am) scanning uses all four cores, so it goes faster when nobody's using the screen.
+Someone is only suggested once per photo, and never for a face in a photo where they're already
+named. **Duplicate copies** of a photo (a resized copy, a re-save, a burst) share names: naming,
+ignoring, or "Not them" on one copy applies to the same face in the others, and the extra copies'
+faces don't show up in the naming lists.
+
 **Managing people** — tap someone on the People page, then:
 - **✏️ Rename** — fix or change their name (a name someone else already has is refused; combine instead).
 - **🔗 Combine with someone…** — the same person named twice ("Sam" and "Samuel"): pick the other

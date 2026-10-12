@@ -90,6 +90,17 @@ export function faceIndex(faceId: number): number | undefined {
   return indexOf.get(faceId);
 }
 
+/** Cosine similarity of two stored faceprints (both unit length), or null if either isn't loaded. */
+export function faceSimilarity(a: number, b: number): number | null {
+  const i = indexOf.get(a);
+  const j = indexOf.get(b);
+  if (i === undefined || j === undefined) return null;
+  const f = new Float32Array(memory.buffer);
+  let dot = 0;
+  for (let k = 0; k < D; k++) dot += f[i * D + k] * f[j * D + k];
+  return dot;
+}
+
 export function faceprintCount(): number {
   return count;
 }

@@ -89,6 +89,10 @@ export function PeoplePage() {
               </button>
             </>
           )}
+          {status.upgrading && (
+            <> · Looking again for small faces in group photos: {status.upgrading.done.toLocaleString()} of {status.upgrading.total.toLocaleString()} ({status.upgrading.added.toLocaleString()} more found)</>
+          )}
+          {(status.working || status.upgrading) && status.night && ' · 🌙 night speed'}
           {status.rescoring && (
             <> · Updating face scores: {status.rescoring.done.toLocaleString()} of {status.rescoring.total.toLocaleString()} photos</>
           )}

@@ -4,8 +4,9 @@ import sharp from 'sharp';
 import { db, getSetting, setSetting } from '../../db.js';
 import { config } from '../../config.js';
 import { getOrCreateThumbnail, listPhotos } from '../photos.js';
-import { detectFaces, ensureModels, modelsPresent } from './engine.js';
-import { addFaceprints, faceIndex, forgetPeopleExcept, personColumn, similarityRows } from './matcher.js';
+import { DETECTOR_VERSION, detectFaces, ensureModels, isNight, modelsPresent } from './engine.js';
+import { addFaceprints, faceIndex, faceSimilarity, forgetPeopleExcept, personColumn, similarityRows } from './matcher.js';
+import { getPhotoQuality } from '../photoAnalysis.js';
 
 /**
  * Face recognition for the Photos section — opt-in, entirely on this machine (see engine.ts; no
@@ -34,6 +35,11 @@ const GROUP_THRESHOLD = 0.55;
 const GROUP_MIN_MEMBER = 0.4;
 /** Group at most this many (best-quality) unnamed faces at once — keeps grouping quick on a Pi. */
 const GROUP_POOL = 2500;
+/** The same face in two copies of a photo (near-duplicates — services/photoAnalysis.ts): boxes
+ *  overlapping at least this much (fractions of the photo, so a resized copy lines up)… */
+const TWIN_MIN_OVERLAP = 0.5;
+/** …and faceprints at least this alike (same face, slightly different pixels: typically 0.8+). */
+const TWIN_MIN_SIMILARITY = 0.6;
 
 const SETTING_KEY = 'faces_enabled';
 
@@ -117,9 +123,10 @@ export async function scanPhotoFaces(absolutePath: string): Promise<void> {
         insert.run({ path: rel, x: f.x, y: f.y, w: f.w, h: f.h, score: f.score, quality: f.frontal, embedding: Buffer.from(f.embedding.buffer) });
       }
       db.prepare(
-        `INSERT INTO face_scans (path, mtime_ms, faces, scanned_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT(path) DO UPDATE SET mtime_ms = excluded.mtime_ms, faces = excluded.faces, scanned_at = excluded.scanned_at`
-      ).run(rel, mtimeMs, found.length, new Date().toISOString());
+        `INSERT INTO face_scans (path, mtime_ms, faces, scanned_at, detector) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(path) DO UPDATE SET mtime_ms = excluded.mtime_ms, faces = excluded.faces, scanned_at = excluded.scanned_at,
+           detector = excluded.detector`
+      ).run(rel, mtimeMs, found.length, new Date().toISOString(), DETECTOR_VERSION);
     })();
     if (found.length) facesChanged('scan');
   } catch (err) {
@@ -212,6 +219,63 @@ export async function backfillFaceQuality(): Promise<void> {
   }
 }
 
+/**
+ * Photos scanned before small faces were looked for (face_scans.detector older than
+ * DETECTOR_VERSION): looks again and adds only the faces that weren't found before — every face
+ * already there keeps its name, confirmation, and faceprint. A photo at a time in the background,
+ * pausing whenever the regular scan is running (new photos come first); resumable, since each
+ * photo is marked as it's done.
+ */
+let upgrading: { done: number; total: number; added: number } | null = null;
+
+export async function upgradeFaceScans(): Promise<void> {
+  if (upgrading || !facesEnabled() || !modelsPresent()) return;
+  const paths = (
+    db.prepare('SELECT path FROM face_scans WHERE error IS NULL AND (detector IS NULL OR detector < ?) ORDER BY path').all(DETECTOR_VERSION) as Array<{ path: string }>
+  ).map((r) => r.path);
+  if (!paths.length) return;
+  upgrading = { done: 0, total: paths.length, added: 0 };
+  const insert = db.prepare(
+    'INSERT INTO faces (path, x, y, w, h, score, quality, embedding) VALUES (@path, @x, @y, @w, @h, @score, @quality, @embedding)'
+  );
+  const mark = db.prepare('UPDATE face_scans SET detector = ?, faces = (SELECT COUNT(*) FROM faces WHERE path = ?) WHERE path = ?');
+  try {
+    for (const rel of paths) {
+      if (!facesEnabled()) break;
+      while (scanProgress.running) await new Promise((r) => setTimeout(r, 30_000));
+      try {
+        const stored = db.prepare('SELECT x, y, w, h FROM faces WHERE path = ?').all(rel) as Array<{ x: number; y: number; w: number; h: number }>;
+        const found = await detectFaces(await getOrCreateThumbnail(path.join(config.photosDir, rel)));
+        // New = not overlapping any face already there (named, ignored, or not).
+        const fresh = found.filter((f) =>
+          stored.every((s) => {
+            const ix = Math.max(0, Math.min(s.x + s.w, f.x + f.w) - Math.max(s.x, f.x));
+            const iy = Math.max(0, Math.min(s.y + s.h, f.y + f.h) - Math.max(s.y, f.y));
+            return ix * iy < 0.3 * Math.min(s.w * s.h, f.w * f.h);
+          })
+        );
+        db.transaction(() => {
+          for (const f of fresh) {
+            insert.run({ path: rel, x: f.x, y: f.y, w: f.w, h: f.h, score: f.score, quality: f.frontal, embedding: Buffer.from(f.embedding.buffer) });
+          }
+          mark.run(DETECTOR_VERSION, rel, rel);
+        })();
+        upgrading.added += fresh.length;
+      } catch (err) {
+        // Gone or unreadable now: don't keep retrying it (a changed file is re-scanned in full anyway).
+        mark.run(DETECTOR_VERSION, rel, rel);
+        console.warn(`[faces] couldn't look again at "${rel}":`, (err as Error).message);
+      }
+      upgrading.done++;
+      if (upgrading.done % 200 === 0) facesChanged('scan');
+    }
+  } finally {
+    if (upgrading?.added) console.log(`[faces] small-face pass: ${upgrading.added} more faces in ${upgrading.done} photos`);
+    upgrading = null;
+    facesChanged('scan');
+  }
+}
+
 export async function faceStatus() {
   const total = (await listPhotos()).length;
   const scanned = (db.prepare('SELECT COUNT(*) AS n FROM face_scans').get() as { n: number }).n;
@@ -226,6 +290,10 @@ export async function faceStatus() {
     ignored: (db.prepare('SELECT COUNT(*) AS n FROM faces WHERE ignored = 1').get() as { n: number }).n,
     people: (db.prepare('SELECT COUNT(*) AS n FROM people').get() as { n: number }).n,
     rescoring,
+    /** The small-faces top-up of older scans (upgradeFaceScans), while it runs. */
+    upgrading,
+    /** Overnight the scan uses all four cores. */
+    night: isNight(),
     unreadable,
     /** The background pass is running right now, and when it last finished a photo. */
     working: scanProgress.running,
@@ -338,6 +406,7 @@ async function buildAllFaces(): Promise<{ faces: FaceInfo[] }> {
   const seenVersion = version;
   loadNewFaceprints();
   syncMeta();
+  if (syncDuplicateCopies()) syncMeta();
   const rejectedFor = new Map<number, Set<string>>();
   for (const r of db.prepare('SELECT face_id, person_id FROM face_rejections').all() as Array<{ face_id: number; person_id: string }>) {
     if (!rejectedFor.has(r.face_id)) rejectedFor.set(r.face_id, new Set());
@@ -355,6 +424,14 @@ async function buildAllFaces(): Promise<{ faces: FaceInfo[] }> {
   const people: Array<{ id: string; best: Float32Array }> = [];
   for (const [id, members] of membersOf) people.push({ id, best: await personColumn(id, members) });
 
+  // Someone appears once per photo: whoever's confirmed in a photo isn't suggested for its other faces.
+  const namedIn = new Map<string, Set<string>>();
+  for (const f of meta.values()) {
+    if (!f.confirmed || !f.person_id || f.ignored) continue;
+    if (!namedIn.has(f.path)) namedIn.set(f.path, new Set());
+    namedIn.get(f.path)!.add(f.person_id);
+  }
+
   // Suggestions, updated in place on the kept face objects.
   const faces: FaceInfo[] = [];
   for (const f of meta.values()) {
@@ -365,12 +442,13 @@ async function buildAllFaces(): Promise<{ faces: FaceInfo[] }> {
     const i = faceIndex(f.id);
     if (f.confirmed || i === undefined) continue;
     const rejected = rejectedFor.get(f.id);
+    const taken = namedIn.get(f.path);
     let firstId: string | null = null;
     let first = -2;
     let second = -2;
     for (const p of people) {
       const sim = p.best[i];
-      if (sim <= -2 || rejected?.has(p.id)) continue;
+      if (sim <= -2 || rejected?.has(p.id) || taken?.has(p.id)) continue;
       if (sim > first) {
         second = first;
         first = sim;
@@ -381,6 +459,19 @@ async function buildAllFaces(): Promise<{ faces: FaceInfo[] }> {
     f.similarity = first;
     const needed = f.good ? SUGGEST_THRESHOLD : SUGGEST_THRESHOLD_LOW_QUALITY;
     if (first >= needed && first - second >= SUGGEST_MARGIN) f.suggested_person_id = firstId;
+  }
+  // …and two unnamed faces in one photo can't both be them: only the closer match keeps the guess.
+  const bestGuess = new Map<string, FaceInfo>();
+  for (const f of faces) {
+    if (!f.suggested_person_id) continue;
+    const key = `${f.path}\n${f.suggested_person_id}`;
+    const other = bestGuess.get(key);
+    if (!other) bestGuess.set(key, f);
+    else {
+      const [keep, drop] = (f.similarity ?? 0) > (other.similarity ?? 0) ? [f, other] : [other, f];
+      drop.suggested_person_id = null;
+      bestGuess.set(key, keep);
+    }
   }
   cache = { version: seenVersion, faces };
   return cache;
@@ -396,6 +487,91 @@ async function buildAllFaces(): Promise<{ faces: FaceInfo[] }> {
  */
 let groupsCache: { version: number; at: number; groups: FaceInfo[][] } | null = null;
 
+// ---- Duplicate copies ----
+
+/** Each face → the same face in the photo's other copies (from the last sweep). */
+let twins = new Map<number, number[]>();
+/** Faces in a lesser copy whose twin is in the best copy: named along with it, so left out of the
+ *  groups and the photo-by-photo queue (no naming the same face twice). */
+let shadowed = new Set<number>();
+
+/** The given faces plus their twins in duplicate copies — so "not Sam" holds on every copy. */
+export function withTwins(faceIds: number[]): number[] {
+  return [...new Set(faceIds.flatMap((id) => [id, ...(twins.get(id) ?? [])]))];
+}
+
+function overlap(a: FaceInfo, b: FaceInfo): number {
+  const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  const inter = ix * iy;
+  return inter / (a.w * a.h + b.w * b.h - inter || 1);
+}
+
+/**
+ * Near-duplicate copies of a photo (the same shot saved twice, a resized copy, a burst) have the same
+ * faces: a name (or 🚫 ignore) given on one copy is copied onto the same face in the others — unless
+ * someone said "not them" for that face — and the lesser copies' faces are kept out of the naming
+ * lists. Returns whether anything was changed.
+ */
+function syncDuplicateCopies(): boolean {
+  const pathsOf = new Map<string, string[]>();
+  for (const [p, q] of getPhotoQuality()) {
+    if (!q.dup_group) continue;
+    if (!pathsOf.has(q.dup_group)) pathsOf.set(q.dup_group, []);
+    pathsOf.get(q.dup_group)!.push(p);
+  }
+  const facesIn = new Map<string, FaceInfo[]>();
+  for (const f of meta.values()) {
+    if (!facesIn.has(f.path)) facesIn.set(f.path, []);
+    facesIn.get(f.path)!.push(f);
+  }
+  const rejected = new Set(
+    (db.prepare('SELECT face_id, person_id FROM face_rejections').all() as Array<{ face_id: number; person_id: string }>).map((r) => `${r.face_id}:${r.person_id}`)
+  );
+  const nextTwins = new Map<number, number[]>();
+  const nextShadowed = new Set<number>();
+  const confirm = db.prepare('UPDATE faces SET person_id = ?, confirmed = 1 WHERE id = ? AND confirmed = 0 AND ignored = 0');
+  const ignore = db.prepare('UPDATE faces SET ignored = 1, person_id = NULL, confirmed = 0 WHERE id = ? AND confirmed = 0 AND ignored = 0');
+  let changed = 0;
+  // Copies a's name/ignore onto its twin b, if b hasn't been decided yet.
+  const copy = (a: FaceInfo & { ignored: boolean }, b: FaceInfo & { ignored: boolean }) => {
+    if (b.confirmed || b.ignored) return;
+    if (a.confirmed && a.person_id && !rejected.has(`${b.id}:${a.person_id}`)) changed += confirm.run(a.person_id, b.id).changes;
+    else if (a.ignored) changed += ignore.run(b.id).changes;
+  };
+  db.transaction(() => {
+    for (const [bestPath, paths] of pathsOf) {
+      const withFaces = paths.filter((p) => facesIn.has(p));
+      for (let i = 0; i < withFaces.length; i++) {
+        for (let j = i + 1; j < withFaces.length; j++) {
+          for (const a of facesIn.get(withFaces[i])! as Array<FaceInfo & { ignored: boolean }>) {
+            // a's twin in the other copy: the best-overlapping face, if it's close enough and alike.
+            let twin: (FaceInfo & { ignored: boolean }) | null = null;
+            let most = TWIN_MIN_OVERLAP;
+            for (const b of facesIn.get(withFaces[j])! as Array<FaceInfo & { ignored: boolean }>) {
+              const o = overlap(a, b);
+              if (o >= most) {
+                most = o;
+                twin = b;
+              }
+            }
+            if (!twin || (faceSimilarity(a.id, twin.id) ?? 0) < TWIN_MIN_SIMILARITY) continue;
+            nextTwins.set(a.id, [...(nextTwins.get(a.id) ?? []), twin.id]);
+            nextTwins.set(twin.id, [...(nextTwins.get(twin.id) ?? []), a.id]);
+            if (a.path === bestPath) nextShadowed.add(twin.id);
+            else if (twin.path === bestPath) nextShadowed.add(a.id);
+            copy(a, twin);
+            copy(twin, a);
+          }
+        }
+      }
+    }
+  })();
+  twins = nextTwins;
+  shadowed = nextShadowed;
+  return changed > 0;
+}
+
 export async function unnamedGroups(limit = 30, perGroup = 24): Promise<FaceInfo[][]> {
   // Regrouped after anyone names/ignores something; while photos are being scanned, at most every
   // 10 minutes (it's the slowest thing on the page).
@@ -406,7 +582,7 @@ export async function unnamedGroups(limit = 30, perGroup = 24): Promise<FaceInfo
     // Drop anyone named/suggested since.
     const current = new Map(faces.map((f) => [f.id, f]));
     return groupsCache.groups
-      .map((g) => g.map((f) => current.get(f.id)).filter((f): f is FaceInfo => Boolean(f && !f.confirmed && !f.suggested_person_id)))
+      .map((g) => g.map((f) => current.get(f.id)).filter((f): f is FaceInfo => Boolean(f && !f.confirmed && !f.suggested_person_id && !shadowed.has(f.id))))
       .filter((g) => g.length)
       .slice(0, limit)
       .map((g) => g.slice(0, perGroup));
@@ -418,7 +594,7 @@ export async function unnamedGroups(limit = 30, perGroup = 24): Promise<FaceInfo
     )
   );
   const pool = faces
-    .filter((f) => !f.confirmed && !f.suggested_person_id && f.good && !f.no_group)
+    .filter((f) => !f.confirmed && !f.suggested_person_id && f.good && !f.no_group && !shadowed.has(f.id))
     .sort((a, b) => (quality.get(b.id) ?? 0) - (quality.get(a.id) ?? 0))
     .slice(0, GROUP_POOL);
   // Each face's similarity to every other face in the pool, worked out a row at a time.
@@ -447,7 +623,7 @@ export async function unnamedGroups(limit = 30, perGroup = 24): Promise<FaceInfo
  *  "photo by photo" queue. Includes the small/turned-away faces grouping leaves out. */
 export async function photosToName(): Promise<Array<{ path: string; faces: number }>> {
   const counts = new Map<string, number>();
-  for (const f of (await allFaces()).faces) if (!f.confirmed) counts.set(f.path, (counts.get(f.path) ?? 0) + 1);
+  for (const f of (await allFaces()).faces) if (!f.confirmed && !shadowed.has(f.id)) counts.set(f.path, (counts.get(f.path) ?? 0) + 1);
   return [...counts.entries()].map(([path, faces]) => ({ path, faces })).sort((a, b) => b.faces - a.faces || a.path.localeCompare(b.path));
 }
 

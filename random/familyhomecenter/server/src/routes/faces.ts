@@ -4,7 +4,7 @@ import { db } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { photoIdsByPath, photoPathsById, warmThumbnailCache } from '../services/photos.js';
-import { allFaces, faceCrop, facesChanged, faceStatus, photosToName, retryUnreadable, setFacesEnabled, unnamedGroups, unreadablePhotos, type FaceInfo } from '../services/faces/index.js';
+import { allFaces, faceCrop, facesChanged, faceStatus, photosToName, retryUnreadable, withTwins, setFacesEnabled, unnamedGroups, unreadablePhotos, type FaceInfo } from '../services/faces/index.js';
 
 // Face recognition — see services/faces/. Turning it on/off is parent-only (it's heavy work for a
 // Pi); naming people and confirming/rejecting suggestions is open to the household, like albums.
@@ -299,7 +299,8 @@ facesRouter.post('/assign', (req, res) => {
 /** POST /reject { face_ids, person_id } — "that's not Sam": stops suggesting it (and un-tags it if
  *  it had been confirmed as them). */
 facesRouter.post('/reject', (req, res) => {
-  const ids = faceIds(req.body);
+  // On every copy of the photo, so a duplicate doesn't bring the name straight back.
+  const ids = withTwins(faceIds(req.body));
   const personId = String((req.body as { person_id?: string }).person_id ?? '');
   if (!ids.length || !personId) return res.status(400).json({ error: 'face_ids and person_id are required' });
   const reject = db.prepare('INSERT OR IGNORE INTO face_rejections (face_id, person_id) VALUES (?, ?)');

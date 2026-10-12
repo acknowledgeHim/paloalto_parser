@@ -7,7 +7,7 @@ import { config } from '../config.js';
 import { db } from '../db.js';
 import { getPhotoDate } from './photoDates.js';
 import { analyzePhoto } from './photoAnalysis.js';
-import { backfillFaceQuality, recordFaceScanFailure, scanPhotoFaces, scanProgress } from './faces/index.js';
+import { backfillFaceQuality, recordFaceScanFailure, scanPhotoFaces, scanProgress, upgradeFaceScans } from './faces/index.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const THUMB_WIDTH = 1920; // downsized for smooth slideshow playback on the Pi's GPU
@@ -190,7 +190,9 @@ export async function warmThumbnailCache(): Promise<{ processed: number; failed:
     scanProgress.running = false;
   }
   // Faces found before the "facing the camera" score existed get it filled in (once, in the background).
-  backfillFaceQuality().catch((e) => console.warn('[faces] re-scoring failed', e));
+  backfillFaceQuality()
+    .then(() => upgradeFaceScans())
+    .catch((e) => console.warn('[faces] re-scoring failed', e));
   if (processed || failed) {
     console.log(`[photos] thumbnail warm-up: ${processed} ok${failed ? `, ${failed} failed` : ''}`);
   }

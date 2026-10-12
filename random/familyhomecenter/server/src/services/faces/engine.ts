@@ -40,6 +40,16 @@ const SCORE_THRESHOLD = 0.85;
 const NMS_THRESHOLD = 0.3;
 /** Faces smaller than this (in the detection image's pixels) are too small to recognize well. */
 const MIN_FACE_PX = 24;
+/**
+ * Small faces in group shots: the whole photo shrunk to 640px loses faces under ~70px (in a 1920px
+ * thumbnail), so a photo at least this big is also looked at in four overlapping quarters, each
+ * shrunk less (faces down to ~40px are found). Costs four more (quick) detector runs per photo.
+ */
+const TILE_MIN_SIDE = 1200;
+const TILE_FRACTION = 0.6; // each quarter is 60% of the width/height, so neighbours overlap by 20%
+/** Bumped when the way faces are found changes; photos scanned the old way get a top-up pass
+ *  (index.ts — upgradeFaceScans) that adds just the faces it missed. 2 = the quarters above. */
+export const DETECTOR_VERSION = 2;
 /** SFace's standard landmark positions in its 112x112 input (from OpenCV's face_recognize.cpp). */
 const ALIGNED = [
   [38.2946, 51.6963],
@@ -103,25 +113,33 @@ async function loadOrt(): Promise<typeof import('onnxruntime-node')> {
   return mod.InferenceSession ? mod : mod.default!;
 }
 
-let sessions: Promise<{ detector: InferenceSessionType; recognizer: InferenceSessionType }> | null = null;
+type Sessions = { detector: InferenceSessionType; recognizer: InferenceSessionType };
+const sessions = new Map<number, Promise<Sessions>>();
 
-async function getSessions() {
-  if (!sessions) {
-    sessions = (async () => {
+/** Overnight (11pm–6am) nobody's using the dashboard, so the scan gets all four cores. */
+export function isNight(now = new Date()): boolean {
+  const h = now.getHours();
+  return h >= 23 || h < 6;
+}
+
+async function getSessions(): Promise<Sessions> {
+  // Two threads by day: leave the rest of a Pi's CPU for everything else the dashboard is doing.
+  const threads = isNight() ? 4 : 2;
+  let s = sessions.get(threads);
+  if (!s) {
+    s = (async () => {
       await ensureModels();
       const ort = await loadOrt();
-      // Two threads: leave the rest of a Pi's CPU for everything else the dashboard is doing.
-      const opts = { logSeverityLevel: 3 as const, intraOpNumThreads: 2, interOpNumThreads: 1 };
+      const opts = { logSeverityLevel: 3 as const, intraOpNumThreads: threads, interOpNumThreads: 1 };
       return {
         detector: await ort.InferenceSession.create(path.join(modelsDir(), MODELS.detector.file), opts),
         recognizer: await ort.InferenceSession.create(path.join(modelsDir(), MODELS.recognizer.file), opts),
       };
     })();
-    sessions.catch(() => {
-      sessions = null;
-    });
+    sessions.set(threads, s);
+    s.catch(() => sessions.delete(threads));
   }
-  return sessions;
+  return s;
 }
 
 export interface DetectedFace {
@@ -225,12 +243,26 @@ function alignedInput(rgb: Buffer, width: number, height: number, landmarks: num
       const y0 = Math.floor(y);
       const fx = x - x0;
       const fy = y - y0;
+      // The four neighbouring pixels' weights, and where they start (-1 = outside the image → black).
+      const w00 = (1 - fx) * (1 - fy);
+      const w10 = fx * (1 - fy);
+      const w01 = (1 - fx) * fy;
+      const w11 = fx * fy;
+      const inX0 = x0 >= 0 && x0 < width;
+      const inX1 = x0 + 1 >= 0 && x0 + 1 < width;
+      const inY0 = y0 >= 0 && y0 < height;
+      const inY1 = y0 + 1 >= 0 && y0 + 1 < height;
+      const p00 = inX0 && inY0 ? (y0 * width + x0) * 3 : -1;
+      const p10 = inX1 && inY0 ? (y0 * width + x0 + 1) * 3 : -1;
+      const p01 = inX0 && inY1 ? ((y0 + 1) * width + x0) * 3 : -1;
+      const p11 = inX1 && inY1 ? ((y0 + 1) * width + x0 + 1) * 3 : -1;
+      const o = v * 112 + u;
       for (let ch = 0; ch < 3; ch++) {
-        const px = (xx: number, yy: number) =>
-          xx < 0 || yy < 0 || xx >= width || yy >= height ? 0 : rgb[(yy * width + xx) * 3 + ch];
-        const value =
-          px(x0, y0) * (1 - fx) * (1 - fy) + px(x0 + 1, y0) * fx * (1 - fy) + px(x0, y0 + 1) * (1 - fx) * fy + px(x0 + 1, y0 + 1) * fx * fy;
-        out[ch * 112 * 112 + v * 112 + u] = value;
+        out[ch * 12544 + o] =
+          (p00 < 0 ? 0 : rgb[p00 + ch] * w00) +
+          (p10 < 0 ? 0 : rgb[p10 + ch] * w10) +
+          (p01 < 0 ? 0 : rgb[p01 + ch] * w01) +
+          (p11 < 0 ? 0 : rgb[p11 + ch] * w11);
       }
     }
   }
@@ -252,6 +284,73 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return dot;
 }
 
+type Ort = Awaited<ReturnType<typeof loadOrt>>;
+
+/** Runs the detector on one region of the image (scaled to fit 640x640, padded at the right/bottom,
+ *  BGR) and returns its faces in whole-image pixels. */
+async function detectRegion(
+  detector: InferenceSessionType,
+  ort: Ort,
+  rgb: Buffer,
+  width: number,
+  height: number,
+  region: { left: number; top: number; width: number; height: number }
+): Promise<RawFace[]> {
+  const scale = INPUT / Math.max(region.width, region.height);
+  let img = sharp(rgb, { raw: { width, height, channels: 3 } });
+  if (region.width !== width || region.height !== height) img = img.extract(region);
+  const { data: small, info } = await img
+    .resize(Math.round(region.width * scale), Math.round(region.height * scale))
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const input = new Float32Array(3 * INPUT * INPUT);
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      const s = (y * info.width + x) * 3;
+      const d = y * INPUT + x;
+      input[d] = small[s + 2]; // B
+      input[INPUT * INPUT + d] = small[s + 1]; // G
+      input[2 * INPUT * INPUT + d] = small[s]; // R
+    }
+  }
+  return decode(await detector.run({ input: new ort.Tensor('float32', input, [1, 3, INPUT, INPUT]) }))
+    .filter((f) => Math.min(f.box[2], f.box[3]) >= MIN_FACE_PX)
+    .map((f) => ({
+      score: f.score,
+      box: [f.box[0] / scale + region.left, f.box[1] / scale + region.top, f.box[2] / scale, f.box[3] / scale],
+      landmarks: f.landmarks.map((v, i) => v / scale + (i % 2 === 0 ? region.left : region.top)),
+    }));
+}
+
+/** The whole photo, plus (if it's big enough) four overlapping quarters for small faces; a face
+ *  found more than once is kept once (the most confident), and one cut off at a quarter's inner
+ *  edge is left to the neighbouring quarter (or the whole-photo pass) that sees all of it. */
+async function findFaces(detector: InferenceSessionType, ort: Ort, rgb: Buffer, width: number, height: number): Promise<RawFace[]> {
+  const all = await detectRegion(detector, ort, rgb, width, height, { left: 0, top: 0, width, height });
+  if (Math.max(width, height) >= TILE_MIN_SIDE) {
+    const tw = Math.round(width * TILE_FRACTION);
+    const th = Math.round(height * TILE_FRACTION);
+    for (const left of [0, width - tw]) {
+      for (const top of [0, height - th]) {
+        const margin = 0.01 * Math.max(tw, th);
+        for (const f of await detectRegion(detector, ort, rgb, width, height, { left, top, width: tw, height: th })) {
+          const [x, y, w, h] = f.box;
+          const cut =
+            (left > 0 && x <= left + margin) ||
+            (top > 0 && y <= top + margin) ||
+            (left + tw < width && x + w >= left + tw - margin) ||
+            (top + th < height && y + h >= top + th - margin);
+          if (!cut) all.push(f);
+        }
+      }
+    }
+  }
+  all.sort((a, b) => b.score - a.score);
+  const kept: RawFace[] = [];
+  for (const f of all) if (kept.every((k) => iou(k.box, f.box) <= NMS_THRESHOLD)) kept.push(f);
+  return kept;
+}
+
 /**
  * Finds the faces in an (already upright) image file and computes each one's faceprint. Uses the
  * image as given — callers pass the photo's cached thumbnail, which is EXIF-rotated and modest in
@@ -264,28 +363,10 @@ export async function detectFaces(imagePath: string, { faceprints = true } = {})
   // The full image as raw RGB (for aligning faces) …
   const { data: rgb, info } = await sharp(imagePath).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width, height } = info;
-  // … and a 640x640 copy for the detector: scaled to fit, padded at the right/bottom, BGR.
-  const scale = INPUT / Math.max(width, height);
-  const { data: small, info: smallInfo } = await sharp(rgb, { raw: { width, height, channels: 3 } })
-    .resize(Math.round(width * scale), Math.round(height * scale))
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const input = new Float32Array(3 * INPUT * INPUT);
-  for (let y = 0; y < smallInfo.height; y++) {
-    for (let x = 0; x < smallInfo.width; x++) {
-      const s = (y * smallInfo.width + x) * 3;
-      const d = y * INPUT + x;
-      input[d] = small[s + 2]; // B
-      input[INPUT * INPUT + d] = small[s + 1]; // G
-      input[2 * INPUT * INPUT + d] = small[s]; // R
-    }
-  }
-  const raw = decode(await detector.run({ input: new ort.Tensor('float32', input, [1, 3, INPUT, INPUT]) }));
-
+  const raw = await findFaces(detector, ort, rgb, width, height);
   const faces: DetectedFace[] = [];
   for (const f of raw) {
-    if (Math.min(f.box[2], f.box[3]) < MIN_FACE_PX) continue;
-    const landmarks = [0, 1, 2, 3, 4].map((n) => [f.landmarks[n * 2] / scale, f.landmarks[n * 2 + 1] / scale]);
+    const landmarks = [0, 1, 2, 3, 4].map((n) => [f.landmarks[n * 2], f.landmarks[n * 2 + 1]]);
     // (Skipped when only the boxes/scores are wanted — the faceprint is the slower half.)
     let embedding: Float32Array = new Float32Array(0);
     if (faceprints) {
@@ -293,7 +374,7 @@ export async function detectFaces(imagePath: string, { faceprints = true } = {})
       const out = await recognizer.run({ data: new ort.Tensor('float32', aligned, [1, 3, 112, 112]) });
       embedding = normalize(out.fc1.data as Float32Array);
     }
-    const [x1, y1, w, h] = f.box.map((v) => v / scale);
+    const [x1, y1, w, h] = f.box;
     // Landmarks: [0] right eye, [1] left eye, [2] nose tip (from the face's own point of view).
     const eyeMidX = (landmarks[0][0] + landmarks[1][0]) / 2;
     const eyeDist = Math.hypot(landmarks[1][0] - landmarks[0][0], landmarks[1][1] - landmarks[0][1]) || 1;
