@@ -107,7 +107,7 @@ floorplansRouter.post(
   })
 );
 
-/** PATCH /:id { name?, imageDataUrl?, move?: -1 | 1, label_scale? } — rename, swap the picture (rooms
+/** PATCH /:id { name?, imageDataUrl?, move?: -1 | 1, label_scale?, avatar_scale?, job_scale?, default_zoom? } — rename, swap the picture (rooms
  *  stay where they are, as fractions of it), move it left/right in the tabs, or resize its room labels. */
 floorplansRouter.patch(
   '/:id',
@@ -115,9 +115,17 @@ floorplansRouter.patch(
   asyncHandler(async (req, res) => {
     const plan = db.prepare('SELECT * FROM floorplans WHERE id = ?').get(req.params.id) as PlanRow | undefined;
     if (!plan) return res.status(404).json({ error: 'not found' });
-    const body = req.body as { name?: unknown; imageDataUrl?: unknown; move?: unknown; label_scale?: unknown };
-    if (typeof body.label_scale === 'number' && Number.isFinite(body.label_scale)) {
-      db.prepare('UPDATE floorplans SET label_scale = ? WHERE id = ?').run(Math.min(3, Math.max(0.5, body.label_scale)), plan.id);
+    const body = req.body as Record<string, unknown>;
+    // Display settings: sizes 50%–300%; the starting zoom 50%–200%, or null for "fit".
+    for (const key of ['label_scale', 'avatar_scale', 'job_scale'] as const) {
+      const v = body[key];
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        db.prepare(`UPDATE floorplans SET ${key} = ? WHERE id = ?`).run(Math.min(3, Math.max(0.5, v)), plan.id);
+      }
+    }
+    if (body.default_zoom === null || (typeof body.default_zoom === 'number' && Number.isFinite(body.default_zoom))) {
+      const z = body.default_zoom === null ? null : Math.min(2, Math.max(0.5, body.default_zoom as number));
+      db.prepare('UPDATE floorplans SET default_zoom = ? WHERE id = ?').run(z, plan.id);
     }
     if (body.name !== undefined) {
       const name = cleanName(body.name);

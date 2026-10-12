@@ -925,6 +925,10 @@ for (const [table, column] of [
   ['tasks', 'needed_since TEXT'],
   // How big a plan's room labels are (1 = the default; a parent can make them bigger or smaller).
   ['floorplans', 'label_scale REAL NOT NULL DEFAULT 1'],
+  // …and its starting zoom (NULL = fit), avatar size and job-emoji size.
+  ['floorplans', 'default_zoom REAL'],
+  ['floorplans', 'avatar_scale REAL NOT NULL DEFAULT 1'],
+  ['floorplans', 'job_scale REAL NOT NULL DEFAULT 1'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);

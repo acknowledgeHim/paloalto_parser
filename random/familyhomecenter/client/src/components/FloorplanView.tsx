@@ -741,6 +741,40 @@ function NewPlanForm({ onDone, first = false }: { onDone: (plan: Floorplan) => v
   );
 }
 
+/** A size setting: − 75% ＋, in quarter steps between 50% and 300%. */
+function SizeStepper({ label, value, busy, onSet }: { label: string; value: number; busy: boolean; onSet: (v: number) => void }) {
+  const step = (by: number) => onSet(Math.round((value + by) * 100) / 100);
+  return (
+    <span className="fp-editor__size">
+      {label}
+      <button type="button" className="secondary" aria-label={`${label} smaller`} disabled={busy || value <= 0.5} onClick={() => step(-0.25)}>−</button>
+      <span className="fp-zoom__level">{Math.round(value * 100)}%</span>
+      <button type="button" className="secondary" aria-label={`${label} bigger`} disabled={busy || value >= 3} onClick={() => step(0.25)}>＋</button>
+    </span>
+  );
+}
+
+/** Parents: how this plan looks — starting zoom, and the size of room labels, avatars and job emoji. */
+function PlanDisplaySettings({ plan, act, busy }: { plan: Floorplan; act: (fn: () => Promise<unknown>) => Promise<void>; busy: boolean }) {
+  const set = (field: string, value: number | null) => act(() => api.patch(`/floorplans/${plan.id}`, { [field]: value }));
+  return (
+    <div className="fp-editor__display">
+      <label className="fp-editor__size">
+        Starting zoom
+        <select value={plan.default_zoom == null ? 'fit' : String(plan.default_zoom)} disabled={busy} onChange={(e) => set('default_zoom', e.target.value === 'fit' ? null : Number(e.target.value))}>
+          <option value="fit">Fit the screen</option>
+          {[0.5, 0.75, 1.25, 1.5, 1.75, 2].map((z) => (
+            <option key={z} value={String(z)}>{Math.round(z * 100)}%</option>
+          ))}
+        </select>
+      </label>
+      <SizeStepper label="Labels" value={plan.label_scale ?? 1} busy={busy} onSet={(v) => set('label_scale', v)} />
+      <SizeStepper label="Avatars" value={plan.avatar_scale ?? 1} busy={busy} onSet={(v) => set('avatar_scale', v)} />
+      <SizeStepper label="Job emoji" value={plan.job_scale ?? 1} busy={busy} onSet={(v) => set('job_scale', v)} />
+    </div>
+  );
+}
+
 /** Parents: rename/replace/reorder/delete the plan, and mark its rooms. */
 function PlanEditor({
   plan,
@@ -873,16 +907,7 @@ function PlanEditor({
             <button type="button" className="secondary" aria-label="Move right" disabled={busy || plans[plans.length - 1].id === plan.id} onClick={() => act(() => api.patch(`/floorplans/${plan.id}`, { move: 1 }))}>▶</button>
           </>
         )}
-        <span className="fp-editor__label-size">
-          Label size
-          <button type="button" className="secondary" aria-label="Smaller labels" disabled={busy || (plan.label_scale ?? 1) <= 0.5} onClick={() => act(() => api.patch(`/floorplans/${plan.id}`, { label_scale: Math.round(((plan.label_scale ?? 1) - 0.25) * 100) / 100 }))}>
-            −
-          </button>
-          <span className="fp-zoom__level">{Math.round((plan.label_scale ?? 1) * 100)}%</span>
-          <button type="button" className="secondary" aria-label="Bigger labels" disabled={busy || (plan.label_scale ?? 1) >= 3} onClick={() => act(() => api.patch(`/floorplans/${plan.id}`, { label_scale: Math.round(((plan.label_scale ?? 1) + 0.25) * 100) / 100 }))}>
-            ＋
-          </button>
-        </span>
+        <PlanDisplaySettings plan={plan} act={act} busy={busy} />
         <ConfirmButton
           label="🗑️ Delete plan"
           confirmLabel={`Delete "${plan.name}" and its rooms? (Jobs in them stay, just without a room.)`}

@@ -16,7 +16,7 @@ import { MemberAvatar } from './MemberAvatar.js';
 const WALK_MS = 2200;
 /** The 3-D view's tilt. */
 const TILT_DEG = 52;
-const MIN_ZOOM = 1;
+const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 6;
 
 export interface WalkerSpot {
@@ -127,7 +127,7 @@ function WalkPath({ spot, planId }: { spot: WalkerSpot; planId: string }) {
   );
 }
 
-function Walker({ spot, x, y, dx, threeD, onClick }: { spot: WalkerSpot; x: number; y: number; dx: number; threeD: boolean; onClick?: () => void }) {
+function Walker({ spot, x, y, dx, threeD, scale, onClick }: { spot: WalkerSpot; x: number; y: number; dx: number; threeD: boolean; scale: number; onClick?: () => void }) {
   const [walking, setWalking] = useState(false);
   const last = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
@@ -149,7 +149,7 @@ function Walker({ spot, x, y, dx, threeD, onClick }: { spot: WalkerSpot; x: numb
     >
       <div className="fp-walker__shadow" />
       <div className="fp-walker__body" style={{ borderColor: spot.member.color }}>
-        <MemberAvatar member={spot.member} size={threeD ? 54 : 44} />
+        <MemberAvatar member={spot.member} size={Math.round((threeD ? 54 : 44) * scale)} />
         {/* What they're on: smaller than them, so it's still clearly them. */}
         <span className="fp-walker__job" aria-hidden="true">{taskIcon(spot.task)}</span>
       </div>
@@ -200,6 +200,7 @@ export function FloorplanStage({
   children?: ReactNode;
 }) {
   const aspect = plan.width / plan.height;
+  const avatarScale = plan.avatar_scale ?? 1;
   // Tilted back, the plan takes up much less height than it did flat — measure it so the page
   // doesn't keep a big empty gap where its top used to be.
   const plane = useRef<HTMLDivElement>(null);
@@ -254,9 +255,11 @@ export function FloorplanStage({
     el.scrollTop = p.offsetTop + a.fy * p.offsetHeight - a.py;
   }, [zoom]);
   useEffect(() => {
-    zoomRef.current = 1;
-    setZoomState(1);
-  }, [plan.id, threeD]);
+    // Each plan starts at its own zoom (set in ✏️ Edit plans), or fitting the screen.
+    const start = threeD ? 1 : plan.default_zoom ?? 1;
+    zoomRef.current = start;
+    setZoomState(start);
+  }, [plan.id, threeD, plan.default_zoom]);
   useEffect(() => {
     const el = scroller.current;
     if (!el || threeD) return;
@@ -312,7 +315,7 @@ export function FloorplanStage({
           <button type="button" className="secondary" aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom(zoom / 1.5)}>−</button>
           <span className="fp-zoom__level">{Math.round(zoom * 100)}%</span>
           <button type="button" className="secondary" aria-label="Zoom in" disabled={zoom >= MAX_ZOOM} onClick={() => setZoom(zoom * 1.5)}>＋</button>
-          {zoom > 1 && <button type="button" className="secondary" onClick={() => setZoom(1)}>Fit</button>}
+          {zoom !== 1 && <button type="button" className="secondary" onClick={() => setZoom(1)}>Fit</button>}
         </div>
       )}
     <div
@@ -330,6 +333,8 @@ export function FloorplanStage({
           maxWidth: zoom > 1 ? 'none' : undefined,
           ['--tilt' as string]: `${TILT_DEG}deg`,
           ['--label-scale' as string]: String(plan.label_scale ?? 1),
+          ['--avatar-scale' as string]: String(avatarScale),
+          ['--job-scale' as string]: String(plan.job_scale ?? 1),
         }}
       >
         <img className="fp-stage__img" src={floorplanImage(plan)} alt={plan.name} draggable={false} />
@@ -372,7 +377,7 @@ export function FloorplanStage({
           const room = roomsById.get(t.room_id!)!;
           const [x, y] = jobSpot(t, room, threeD);
           const row = rowIndex.get(t.id);
-          const dx = row ? (row.i - (row.n - 1) / 2) * 30 : 0;
+          const dx = row ? (row.i - (row.n - 1) / 2) * 30 * (plan.job_scale ?? 1) : 0;
           return (
             <button
               key={t.id}
@@ -394,8 +399,8 @@ export function FloorplanStage({
             const i = group.indexOf(s);
             const [cx, y] = s.at;
             // Side by side, a body's width apart.
-            const dx = (i - (group.length - 1) / 2) * (threeD ? 66 : 58);
-            return <Walker key={s.member.id} spot={s} x={cx} y={y} dx={dx} threeD={threeD} onClick={onWalkerClick ? () => onWalkerClick(s) : undefined} />;
+            const dx = (i - (group.length - 1) / 2) * (threeD ? 66 : 58) * avatarScale;
+            return <Walker key={s.member.id} spot={s} x={cx} y={y} dx={dx} threeD={threeD} scale={avatarScale} onClick={onWalkerClick ? () => onWalkerClick(s) : undefined} />;
           })}
         {children}
       </div>

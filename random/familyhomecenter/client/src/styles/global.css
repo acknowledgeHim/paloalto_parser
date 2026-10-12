@@ -1851,12 +1851,13 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 }
 .fp-walker--walking .fp-walker__body { animation: fp-walk 0.42s ease-in-out infinite; }
 .fp-walker__job {
-  position: absolute; right: -12px; bottom: -6px; width: 26px; height: 26px; border-radius: 50%;
-  background: #fff; display: grid; place-items: center; font-size: 15px; line-height: 1;
+  position: absolute; right: calc(-12px * var(--job-scale, 1)); bottom: calc(-6px * var(--job-scale, 1));
+  width: calc(26px * var(--job-scale, 1)); height: calc(26px * var(--job-scale, 1)); border-radius: 50%;
+  background: #fff; display: grid; place-items: center; font-size: calc(15px * var(--job-scale, 1)); line-height: 1;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 .fp-walker--walking .fp-walker__job { animation: fp-job 0.42s ease-in-out infinite; }
-.fp-walker__name { margin-top: 3px; padding: 0 7px; border-radius: 999px; color: #fff; font-size: 0.72em; font-weight: 700; line-height: 1.5; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4); }
+.fp-walker__name { margin-top: 3px; padding: 0 7px; border-radius: 999px; color: #fff; font-size: calc(0.72em * min(1.6, max(0.7, var(--avatar-scale, 1)))); font-weight: 700; line-height: 1.5; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4); }
 .fp-walker__shadow { position: absolute; bottom: 14px; width: 34px; height: 9px; border-radius: 50%; background: rgba(0, 0, 0, 0.25); filter: blur(2px); z-index: -1; }
 @keyframes fp-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 @keyframes fp-walk {
@@ -1932,9 +1933,10 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 /* Jobs as pins at their spot */
 .fp-pin {
   position: absolute; z-index: 2; transform: translate(-50%, -100%);
-  min-height: 0; width: 30px; height: 30px; padding: 0; border-radius: 50% 50% 50% 0; rotate: -45deg;
+  min-height: 0; width: calc(30px * var(--job-scale, 1)); height: calc(30px * var(--job-scale, 1)); padding: 0;
+  border-radius: 50% 50% 50% 0; rotate: -45deg;
   background: #fff; border: 2px solid #c0392b; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
-  display: grid; place-items: center; font-size: 15px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; font-size: calc(15px * var(--job-scale, 1)); line-height: 1; cursor: pointer;
 }
 .fp-pin__icon { rotate: 45deg; }
 .fp-pin--done { opacity: 0.45; filter: grayscale(0.6); }
@@ -2013,5 +2015,7 @@ body.fp-full-open { overflow: hidden; }
 }
 .family-board__tab--active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .family-board__everyone { margin-top: 16px; }
-.fp-editor__label-size { display: inline-flex; align-items: center; gap: 6px; }
-.fp-editor__label-size button { min-height: 40px; width: 40px; padding: 0; }
+.fp-editor__display { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; }
+.fp-editor__size { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.fp-editor__size button { min-height: 38px; width: 38px; padding: 0; }
+.fp-editor__size select { min-height: 38px; }

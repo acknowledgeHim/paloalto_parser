@@ -126,6 +126,11 @@ export interface Floorplan {
   sort_order: number;
   /** Room label size on this plan: 1 = the default, 0.5–3. */
   label_scale?: number;
+  /** How zoomed in it starts (0.5–2, 1 = fits the screen); null = fit. */
+  default_zoom?: number | null;
+  /** Avatar size and job-emoji size on this plan: 1 = the default, 0.5–3. */
+  avatar_scale?: number;
+  job_scale?: number;
   updated_at: string;
   created_at: string;
   rooms: FloorplanRoom[];
