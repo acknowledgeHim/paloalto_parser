@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type Face, type FaceStatus, type Person } from '../api/client.js';
+import { api, type Face, type FaceStatus, type Person, type PhotoDetail } from '../api/client.js';
 
 /**
  * Photos → 👥 People: face recognition (server/src/services/faces/). Name a few faces, and the app
@@ -390,6 +390,32 @@ function PhotoByPhoto({ people, onChange }: { people: Person[]; onChange: () => 
 
 const PAGE = 60;
 
+/** How a person's confirmed faces can be ordered — the Photos page's sorts, plus by face size. */
+type FaceSort = 'library' | 'date-desc' | 'date-asc' | 'name' | 'big' | 'small';
+const FACE_SORTS: Array<{ id: FaceSort; label: string }> = [
+  { id: 'library', label: 'Library order' },
+  { id: 'date-desc', label: 'Date taken (newest first)' },
+  { id: 'date-asc', label: 'Date taken (oldest first)' },
+  { id: 'name', label: 'Folder / filename' },
+  { id: 'big', label: 'Biggest face first' },
+  { id: 'small', label: 'Smallest face first' },
+];
+const FACE_SORT_KEY = 'familyhomecenter.people.faceSort';
+const needsDetails = (s: FaceSort) => s === 'date-desc' || s === 'date-asc' || s === 'name';
+
+function sortFaces(faces: Face[], sort: FaceSort, details: Map<string, PhotoDetail> | null): Face[] {
+  if (sort === 'library' || (needsDetails(sort) && !details)) return faces;
+  const area = (f: Face) => f.w * f.h;
+  const d = (f: Face) => details?.get(f.photo_id);
+  return [...faces].sort((a, b) => {
+    if (sort === 'big') return area(b) - area(a);
+    if (sort === 'small') return area(a) - area(b);
+    if (sort === 'name') return (d(a)?.path ?? '').localeCompare(d(b)?.path ?? '', undefined, { numeric: true, sensitivity: 'base' });
+    const cmp = (d(a)?.taken_at ?? '').localeCompare(d(b)?.taken_at ?? '');
+    return sort === 'date-asc' ? cmp : -cmp;
+  });
+}
+
 function PersonDetail({ person, people, onClose, act }: { person: Person; people: Person[]; onClose: () => void; act: Act }) {
   const [detail, setDetail] = useState<{ confirmed: Face[]; suggested: Face[] } | null>(null);
   // Rename / combine / delete: one panel open at a time.
@@ -407,6 +433,36 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
   // Long lists are shown a page at a time (each face is a picture to load).
   const [showSuggested, setShowSuggested] = useState(PAGE);
   const [showConfirmed, setShowConfirmed] = useState(PAGE);
+  const [faceSort, setFaceSortState] = useState<FaceSort>(() => {
+    try {
+      const saved = localStorage.getItem(FACE_SORT_KEY) as FaceSort | null;
+      return saved && FACE_SORTS.some((o) => o.id === saved) ? saved : 'library';
+    } catch {
+      return 'library';
+    }
+  });
+  const setFaceSort = (s: FaceSort) => {
+    setFaceSortState(s);
+    setShowConfirmed(PAGE);
+    try {
+      localStorage.setItem(FACE_SORT_KEY, s);
+    } catch {
+      // not remembered — fine
+    }
+  };
+  // Dates and filenames, only fetched once a sort needs them.
+  const [photoDetails, setPhotoDetails] = useState<Map<string, PhotoDetail> | null>(null);
+  const [detailsFailed, setDetailsFailed] = useState(false);
+  const [detailsTry, setDetailsTry] = useState(0);
+  useEffect(() => {
+    if (!needsDetails(faceSort) || photoDetails) return;
+    setDetailsFailed(false);
+    api
+      .get<PhotoDetail[]>('/photos/details')
+      .then((all) => setPhotoDetails(new Map(all.map((x) => [x.id, x]))))
+      .catch(() => setDetailsFailed(true));
+  }, [faceSort, photoDetails, detailsTry]);
+  const confirmed = useMemo(() => (detail ? sortFaces(detail.confirmed, faceSort, photoDetails) : []), [detail, faceSort, photoDetails]);
   const load = () => api.get<{ confirmed: Face[]; suggested: Face[] }>(`/faces/people/${person.id}`).then(setDetail).catch(() => {});
   useEffect(() => {
     load();
@@ -549,8 +605,27 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
         The more photos of {person.name} you confirm — especially from different ages — the better the suggestions.
         Tap ⭐ on a face to make it {person.name}'s picture.
       </p>
+      {detail && detail.confirmed.length > 1 && (
+        <div className="photos-page__grid-tools">
+          <label className="member-form__label member-form__label--inline">
+            Sort
+            <select value={faceSort} onChange={(e) => setFaceSort(e.target.value as FaceSort)}>
+              {FACE_SORTS.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          {needsDetails(faceSort) && !photoDetails && !detailsFailed && <span className="hint">Reading photo dates… sorts as soon as they're in.</span>}
+          {needsDetails(faceSort) && detailsFailed && (
+            <span className="hint">
+              Couldn't read the photo dates.{' '}
+              <button type="button" className="link-button" onClick={() => setDetailsTry((n) => n + 1)}>Try again</button>
+            </span>
+          )}
+        </div>
+      )}
       <div className="people-faces">
-        {detail?.confirmed.slice(0, showConfirmed).map((f) => (
+        {confirmed.slice(0, showConfirmed).map((f) => (
           <div key={f.id} className={`people-face ${f.id === person.cover_face_id ? 'people-face--cover' : ''}`}>
             <img src={`/api/faces/${f.id}/image`} alt="" loading="lazy" />
             {f.id === person.cover_face_id && <span className="people-face__tick" title={`${person.name}'s picture`}>⭐</span>}
