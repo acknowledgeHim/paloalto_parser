@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { playCompletionSound } from '../utils/sounds.js';
@@ -6,6 +7,8 @@ import { parseTimeOfDaySlots, timeOfDayIcon, timeOfDayLabel, isSlotWindowPassed 
 import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from './MemberAvatar.js';
 import { findRoom, useFloorplans } from '../utils/floorplans.js';
+import { canEditTask } from '../utils/tasks.js';
+import { TaskFormModal } from './TaskFormModal.js';
 
 interface Props {
   task: Task;
@@ -13,7 +16,8 @@ interface Props {
   /** Suppress the "assigned to" line for the column's own person — used in per-person column views,
    *  where the column itself already says whose task it is. Co-assignees still show. */
   hideAssignee?: boolean;
-  /** When provided, shows an edit icon that hands this task back to the caller (e.g. to open an edit modal). */
+  /** Hands this task to the caller to edit (e.g. its own edit modal). Without it, the card opens the
+   *  edit form itself — ✎ shows on every card the person picked up top may edit either way. */
   onEdit?: (task: Task) => void;
   /** Whose copy of this task to show/toggle — the column this card is rendered in. Defaults to activeProfile. */
   viewerId?: string;
@@ -62,6 +66,11 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
     onChange();
   };
 
+  // ✎ wherever this person may change it (parents: everything; kids: their own) — same rule as checking it off.
+  const [editingHere, setEditingHere] = useState(false);
+  const mayEdit = Boolean(onEdit) || canEditTask(task, activeProfile);
+  const edit = () => (onEdit ? onEdit(task) : setEditingHere(true));
+
   const allDone = multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
   const visibleAssignees = hideAssignee ? assignees.filter((m) => m.id !== effectiveViewerId) : assignees;
 
@@ -95,13 +104,8 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
           )}
           {task.reward_type === 'stars' && <span className="badge badge--reward">⭐ {task.reward_amount}</span>}
           {task.reward_type === 'money' && <span className="badge badge--reward">${task.reward_amount?.toFixed(2)}</span>}
-          {onEdit && (
-            <button
-              type="button"
-              className="task-card__edit"
-              aria-label="Edit"
-              onClick={() => onEdit(task)}
-            >
+          {mayEdit && (
+            <button type="button" className="task-card__edit" aria-label="Edit" onClick={edit}>
               ✎
             </button>
           )}
@@ -145,6 +149,16 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
           </div>
         )}
       </div>
+      {editingHere && (
+        <TaskFormModal
+          task={task}
+          onClose={() => setEditingHere(false)}
+          onSaved={() => {
+            setEditingHere(false);
+            onChange();
+          }}
+        />
+      )}
     </div>
   );
 }

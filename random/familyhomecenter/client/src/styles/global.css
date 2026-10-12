@@ -2019,3 +2019,14 @@ body.fp-full-open { overflow: hidden; }
 .fp-editor__size { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .fp-editor__size button { min-height: 38px; width: 38px; padding: 0; }
 .fp-editor__size select { min-height: 38px; }
+
+/* Task cards in the person columns (Chores & Tasks, Family Board): 75% size, and their badges wrap
+   instead of running under the next person's column. */
+.task-card__body { flex: 1; min-width: 0; }
+.task-card__meta { flex-wrap: wrap; row-gap: 4px; }
+.family-board__columns > *, .tasks-page__columns > * { min-width: 0; }
+.person-column .task-card { font-size: 0.75em; gap: 10px; padding: 9px 2px; }
+.person-column .task-card__check { min-width: calc(var(--tap-min) * 0.75); width: calc(var(--tap-min) * 0.75); height: calc(var(--tap-min) * 0.75); min-height: 0; }
+.person-column .task-card__edit { min-height: 26px; width: 26px; }
+.person-column .task-card__slot { min-height: 32px; padding: 0 10px; }
+.person-column .task-card__claim { min-height: 0; }
