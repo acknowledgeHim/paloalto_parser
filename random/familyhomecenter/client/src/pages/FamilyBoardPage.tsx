@@ -207,25 +207,22 @@ export function FamilyBoardPage() {
 
   return (
     <div className="family-board">
+      <div className="family-board__head">
       <h1>Family Board</h1>
-      <div className="photos-tabs family-board__tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === 'board'} className={`photos-tabs__tab ${tab === 'board' ? 'photos-tabs__tab--active' : ''}`} onClick={() => setTab('board')}>
+      <div className="family-board__tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'board'} className={`family-board__tab ${tab === 'board' ? 'family-board__tab--active' : ''}`} onClick={() => setTab('board')}>
           📋 Board
         </button>
-        <button type="button" role="tab" aria-selected={tab === 'house'} className={`photos-tabs__tab ${tab === 'house' ? 'photos-tabs__tab--active' : ''}`} onClick={() => setTab('house')}>
+        <button type="button" role="tab" aria-selected={tab === 'house'} className={`family-board__tab ${tab === 'house' ? 'family-board__tab--active' : ''}`} onClick={() => setTab('house')}>
           🏠 House (3-D)
         </button>
+      </div>
       </div>
 
       {tab === 'house' && <FloorplanView tasks={tasks} onChange={loadTasks} onEdit={setModalTask} defaultThreeD />}
 
       {tab === 'board' && (
       <>
-
-      <section className="panel">
-        <h2>Coming up for everyone</h2>
-        <CalendarAgenda events={familyEvents} days={5} />
-      </section>
 
       <div className="family-board__columns">
         {members.map((member) => {
@@ -317,6 +314,12 @@ export function FamilyBoardPage() {
           ))}
         </section>
       </div>
+
+      {/* Below everyone's cards, so the people come first on the screen. */}
+      <section className="panel family-board__everyone">
+        <h2>Coming up for everyone</h2>
+        <CalendarAgenda events={familyEvents} days={5} />
+      </section>
 
       <p className="hint">
         Only local calendar events can be "for" a specific person — Google/Apple calendar events

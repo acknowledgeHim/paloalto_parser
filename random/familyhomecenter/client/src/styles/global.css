@@ -1907,7 +1907,6 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 .fp-editor__colors { display: inline-flex; gap: 4px; }
 .fp-editor__color { width: 30px; min-height: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
 .fp-editor__color--on { border-color: var(--text); box-shadow: 0 0 0 2px var(--panel) inset; }
-.family-board__tabs { margin-top: 4px; }
 @media (max-width: 640px) {
   .fp-room-panel__row { grid-template-columns: 1fr; }
 }
@@ -1980,7 +1979,7 @@ body.fp-full-open { overflow: hidden; }
   .fp-view--full .fp-place { grid-template-columns: 1fr; }
 }
 /* Tilted (3-D), the plan's box reaches up over the buttons above it — keep those on top so taps reach them. */
-.fp-view__bar, .fp-zoom, .family-board__tabs, .fp-view > .settings-login__error { position: relative; z-index: 6; }
+.fp-view__bar, .fp-zoom, .family-board__head, .fp-view > .settings-login__error { position: relative; z-index: 6; }
 /* Full screen, round two: just the plan — controls float small in the corners. */
 .fp-view--full { padding: 6px; }
 .fp-view--full .fp-view__hint { display: none; }
@@ -2002,3 +2001,14 @@ body.fp-full-open { overflow: hidden; }
 .fp-view--full .fp-place { grid-template-columns: minmax(0, 1fr) minmax(200px, 260px); }
 .fp-view--full .fp-place .fp-unplaced { max-height: calc(100vh - 70px); margin-top: 50px; }
 .fp-view__bar--float .fp-view__full-toggle { order: 99; }
+
+/* Family Board: title and small Board/House tabs on one line. */
+.family-board__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+.family-board__head h1 { margin: 0; }
+.family-board__tabs { display: flex; gap: 6px; }
+.family-board__tab {
+  min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 0.9em;
+  background: transparent; color: var(--text-muted); border: 1px solid var(--border);
+}
+.family-board__tab--active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.family-board__everyone { margin-top: 16px; }
