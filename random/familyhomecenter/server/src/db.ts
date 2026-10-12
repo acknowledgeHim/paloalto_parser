@@ -883,6 +883,35 @@ for (const column of ['quality REAL', 'ignored INTEGER NOT NULL DEFAULT 0', 'no_
   }
 }
 
+// Floor plans (Chores & Tasks → 🏠 By room): a picture per floor / the yard, with rooms marked on
+// it as outlines (points 0–1 across/down the picture, JSON). A chore/to-do can say which room it's
+// in (tasks.room_id) — see routes/floorplans.ts.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS floorplans (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS floorplan_rooms (
+    id TEXT PRIMARY KEY,
+    floorplan_id TEXT NOT NULL REFERENCES floorplans(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    points TEXT NOT NULL,
+    color TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS floorplan_rooms_plan ON floorplan_rooms(floorplan_id);
+`);
+try {
+  db.exec('ALTER TABLE tasks ADD COLUMN room_id TEXT REFERENCES floorplan_rooms(id) ON DELETE SET NULL');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

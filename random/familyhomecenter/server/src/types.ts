@@ -80,6 +80,31 @@ export interface Task {
   /** This task's checkpoint icon on the "Adventure Map" progress_bar_style — null falls back to a
    *  generic icon by kind client-side (client/src/utils/taskIcons.ts). Irrelevant for any other style. */
   icon: string | null;
+  /** Where in the house this is (a room on a floor plan — routes/floorplans.ts); null = nowhere in particular. */
+  room_id: string | null;
+}
+
+/** A floor plan's room: its outline as points 0–1 across/down the plan's picture. */
+export interface FloorplanRoom {
+  id: string;
+  floorplan_id: string;
+  name: string;
+  points: Array<[number, number]>;
+  color: string;
+  created_at: string;
+}
+
+/** A picture of one floor (or the yard) with its rooms marked — Chores & Tasks → 🏠 By room. */
+export interface Floorplan {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  sort_order: number;
+  /** Changes when the picture is replaced (the client adds it to the image URL). */
+  updated_at: string;
+  created_at: string;
+  rooms: FloorplanRoom[];
 }
 
 /** Task as returned by the API — assignee_ids/completions are computed from the join tables, not columns. */

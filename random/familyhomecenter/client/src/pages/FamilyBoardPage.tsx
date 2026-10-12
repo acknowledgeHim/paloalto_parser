@@ -11,6 +11,7 @@ import { canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { isAdventureStyle, progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
 import { taskIcon } from '../utils/taskIcons.js';
+import { FloorplanView } from '../components/FloorplanView.js';
 
 // tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
 // recurring task the server only ever attaches completions where completed_on equals that date,
@@ -20,6 +21,8 @@ import { taskIcon } from '../utils/taskIcons.js';
 // drop that once-task's completion whenever it happened on an earlier day, undercounting this
 // log relative to the progress bars/task list (which just check "has any completion" — see
 // countProgress/isTaskDoneFor) even though the same task correctly shows as done everywhere else.
+const BOARD_TAB_KEY = 'familyhomecenter.board.tab';
+
 function completedToday(tasks: Task[], memberId: string) {
   return tasks
     .filter((t) => t.assignee_ids.includes(memberId))
@@ -167,6 +170,30 @@ export function FamilyBoardPage() {
   };
 
   const loadTasks = () => api.get<Task[]>('/tasks').then(setTasks).catch(console.error);
+  const [tab, setTabState] = useState<'board' | 'house'>(() => {
+    try {
+      return localStorage.getItem(BOARD_TAB_KEY) === 'house' ? 'house' : 'board';
+    } catch {
+      return 'board';
+    }
+  });
+  const setTab = (t: 'board' | 'house') => {
+    setTabState(t);
+    try {
+      localStorage.setItem(BOARD_TAB_KEY, t);
+    } catch {
+      // not remembered — fine
+    }
+  };
+  // The house view is something to leave up and watch: pick up check-offs made on other screens,
+  // so everyone's avatar walks on to their next job.
+  useEffect(() => {
+    if (tab !== 'house') return;
+    const timer = setInterval(() => {
+      if (!document.hidden) loadTasks();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [tab]);
 
   useEffect(() => {
     loadTasks();
@@ -181,6 +208,19 @@ export function FamilyBoardPage() {
   return (
     <div className="family-board">
       <h1>Family Board</h1>
+      <div className="photos-tabs family-board__tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'board'} className={`photos-tabs__tab ${tab === 'board' ? 'photos-tabs__tab--active' : ''}`} onClick={() => setTab('board')}>
+          📋 Board
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'house'} className={`photos-tabs__tab ${tab === 'house' ? 'photos-tabs__tab--active' : ''}`} onClick={() => setTab('house')}>
+          🏠 House (3-D)
+        </button>
+      </div>
+
+      {tab === 'house' && <FloorplanView tasks={tasks} onChange={loadTasks} onEdit={setModalTask} defaultThreeD />}
+
+      {tab === 'board' && (
+      <>
 
       <section className="panel">
         <h2>Coming up for everyone</h2>
@@ -282,6 +322,8 @@ export function FamilyBoardPage() {
         Only local calendar events can be "for" a specific person — Google/Apple calendar events
         aren't attributed to a family member, so they only show under "Coming up for everyone."
       </p>
+      </>
+      )}
 
       {logMemberId && (
         <CompletedTodayModal

@@ -27,6 +27,7 @@ import { photoDocumentsRouter } from './routes/photoDocuments.js';
 import { albumsRouter } from './routes/albums.js';
 import { accessRouter } from './routes/access.js';
 import { facesRouter } from './routes/faces.js';
+import { floorplansRouter } from './routes/floorplans.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
@@ -71,6 +72,7 @@ app.use('/api/photo-documents', photoDocumentsRouter);
 app.use('/api/albums', albumsRouter);
 app.use('/api/access', accessRouter);
 app.use('/api/faces', facesRouter);
+app.use('/api/floorplans', floorplansRouter);
 // Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
 // handles HTTP Range requests, which video playback/seeking needs.
 app.use('/api/kb-media', express.static(config.kbMediaDir));

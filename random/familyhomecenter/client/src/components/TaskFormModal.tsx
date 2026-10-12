@@ -4,6 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '../utils/timeOfDay.js';
 import { TASK_ICON_PRESETS, taskIcon } from '../utils/taskIcons.js';
 import { EmojiPicker } from './EmojiPicker.js';
+import { useFloorplans } from '../utils/floorplans.js';
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
@@ -73,11 +74,13 @@ interface Props {
   task: Task | null;
   /** Pre-select this assignee when creating a new task (e.g. opened from a specific column). Ignored for a non-parent, who can only assign to themselves. */
   defaultAssigneeId?: string | null;
+  /** Pre-pick this room when creating (e.g. "+ Add a job here" on a floor plan). */
+  defaultRoomId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Props) {
+export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose, onSaved }: Props) {
   const { members, activeProfile } = useFamilyMembers();
   const initialRecurrence = splitRecurrence(task?.recurrence ?? 'once');
   const isParent = activeProfile?.is_parent === 1;
@@ -101,6 +104,8 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
   const [rewardType, setRewardType] = useState<'stars' | 'money'>(task?.reward_type ?? 'stars');
   const [rewardAmount, setRewardAmount] = useState(task?.reward_amount ?? 1);
   const [bulkIconStatus, setBulkIconStatus] = useState<string | null>(null);
+  const plans = useFloorplans();
+  const [roomId, setRoomId] = useState<string>(task?.room_id ?? defaultRoomId ?? '');
 
   const toggleWeeklyDay = (code: string) => {
     setWeeklyDays((days) => (days.includes(code) ? days.filter((d) => d !== code) : [...days, code]));
@@ -152,6 +157,7 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
       recurrence: finalRecurrence,
       time_of_day: timeOfDaySlots.length > 0 ? timeOfDaySlots.join(',') : null,
       due_date: recurrence === 'once' ? dueDate || null : null,
+      room_id: roomId || null,
     };
     let taskId: string;
     if (task) {
@@ -270,6 +276,22 @@ export function TaskFormModal({ task, defaultAssigneeId, onClose, onSaved }: Pro
           <p className="hint">
             {activeProfile ? `Assigned to: you (${activeProfile.name})` : 'Pick your name up top first'}
           </p>
+        )}
+
+        {plans && plans.some((p) => p.rooms.length > 0) && (
+          <div>
+            <label className="member-form__label">Where (optional — shows it in that room on the floor plan)</label>
+            <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+              <option value="">Nowhere in particular</option>
+              {plans.filter((p) => p.rooms.length > 0).map((p) => (
+                <optgroup key={p.id} label={p.name}>
+                  {[...p.rooms].sort((a, b) => a.name.localeCompare(b.name)).map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
         )}
 
         <div className="task-form__row">

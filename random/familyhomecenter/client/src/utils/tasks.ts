@@ -52,3 +52,11 @@ export function isTaskDoneFor(task: Task, memberId: string): boolean {
   }
   return task.completions.some((c) => c.completed_by_id === memberId);
 }
+
+/** Done for today by everyone it's on — each assignee's copy, or (unassigned) anyone's. */
+export function isTaskDoneByAll(task: Task): boolean {
+  if (task.assignee_ids.length > 0) return task.assignee_ids.every((id) => isTaskDoneFor(task, id));
+  const slots = parseTimeOfDaySlots(task.time_of_day);
+  if (slots.length > 1) return slots.every((slot) => task.completions.some((c) => c.time_of_day === slot));
+  return task.completions.length > 0;
+}

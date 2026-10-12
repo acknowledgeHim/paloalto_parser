@@ -6,8 +6,10 @@ import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { canEditTask, sortForColumn } from '../utils/tasks.js';
+import { FloorplanView } from '../components/FloorplanView.js';
 
 const UNASSIGNED = 'unassigned';
+const VIEW_KEY = 'familyhomecenter.tasks.view';
 
 // How far the pointer has to move before a press counts as a drag rather than a tap — keeps
 // checkbox/claim taps on the card working normally.
@@ -17,6 +19,23 @@ export function TasksPage() {
   const { members, activeProfile } = useFamilyMembers();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [modalTask, setModalTask] = useState<Task | 'new' | null>(null);
+  // "+ Add a job here" on a floor plan room: the new task starts in that room.
+  const [newRoomId, setNewRoomId] = useState<string | null>(null);
+  const [view, setViewState] = useState<'people' | 'rooms'>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'rooms' ? 'rooms' : 'people';
+    } catch {
+      return 'people';
+    }
+  });
+  const setView = (v: 'people' | 'rooms') => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // not remembered — fine
+    }
+  };
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -97,8 +116,30 @@ export function TasksPage() {
           +
         </button>
         <h1>Chores &amp; To-dos</h1>
+        <div className="tasks-page__views" role="tablist">
+          <button type="button" role="tab" aria-selected={view === 'people'} className={view === 'people' ? '' : 'secondary'} onClick={() => setView('people')}>
+            👥 By person
+          </button>
+          <button type="button" role="tab" aria-selected={view === 'rooms'} className={view === 'rooms' ? '' : 'secondary'} onClick={() => setView('rooms')}>
+            🏠 By room
+          </button>
+        </div>
       </div>
 
+      {view === 'rooms' && (
+        <FloorplanView
+          tasks={tasks}
+          onChange={load}
+          onEdit={setModalTask}
+          onAdd={(roomId) => {
+            setNewRoomId(roomId);
+            setModalTask('new');
+          }}
+          allowEditing
+        />
+      )}
+
+      {view === 'people' && (
       <div className="tasks-page__columns">
         {members.map((member) => {
           const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id)));
@@ -132,6 +173,7 @@ export function TasksPage() {
           {unassigned.map((t) => renderTask(t))}
         </section>
       </div>
+      )}
 
       {draggedTask && dragPos && (
         <div className="drag-ghost" style={{ left: dragPos.x, top: dragPos.y }}>
@@ -142,9 +184,14 @@ export function TasksPage() {
       {modalTask && (
         <TaskFormModal
           task={modalTask === 'new' ? null : modalTask}
-          onClose={() => setModalTask(null)}
+          defaultRoomId={modalTask === 'new' ? newRoomId : null}
+          onClose={() => {
+            setModalTask(null);
+            setNewRoomId(null);
+          }}
           onSaved={() => {
             setModalTask(null);
+            setNewRoomId(null);
             load();
           }}
         />

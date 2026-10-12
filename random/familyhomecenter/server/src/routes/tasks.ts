@@ -16,6 +16,11 @@ function creditReward(memberId: string, rewardType: 'stars' | 'money', amount: n
   }
 }
 
+/** A task's room must be a real one (or none). */
+function roomExists(roomId: string | null | undefined): boolean {
+  return !roomId || Boolean(db.prepare('SELECT 1 FROM floorplan_rooms WHERE id = ?').get(roomId));
+}
+
 function setAssignees(taskId: string, memberIds: string[]) {
   db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
   const stmt = db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, family_member_id) VALUES (?, ?)');
@@ -54,11 +59,12 @@ tasksRouter.get('/', (req, res) => {
 });
 
 tasksRouter.post('/', (req, res) => {
-  const { kind, title, notes, assignee_ids, created_by_id, recurrence, due_date, time_of_day, icon } = req.body as Partial<Task> & {
+  const { kind, title, notes, assignee_ids, created_by_id, recurrence, due_date, time_of_day, icon, room_id } = req.body as Partial<Task> & {
     assignee_ids?: string[];
   };
   if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
   if (kind !== 'chore' && kind !== 'todo') return res.status(400).json({ error: 'kind must be chore or todo' });
+  if (!roomExists(room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
 
   const task: Task = {
     id: uuidv4(),
@@ -70,14 +76,15 @@ tasksRouter.post('/', (req, res) => {
     due_date: due_date ?? null,
     time_of_day: time_of_day ?? null,
     icon: icon ?? null,
+    room_id: room_id || null,
     reward_type: null,
     reward_amount: null,
     active: 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @active, @created_at)`
   ).run(task);
   setAssignees(task.id, assignee_ids ?? []);
   res.status(201).json({ ...task, assignee_ids: assignee_ids ?? [], completions: [] });
@@ -104,9 +111,11 @@ tasksRouter.patch('/:id', (req, res) => {
 
   const { assignee_ids, ...fields } = req.body as Partial<Task> & { assignee_ids?: string[] };
   const updated: Task = { ...existing, ...fields, id: existing.id };
+  updated.room_id = updated.room_id || null;
+  if (!roomExists(updated.room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
   db.prepare(
     `UPDATE tasks SET kind=@kind, title=@title, notes=@notes, recurrence=@recurrence,
-     due_date=@due_date, time_of_day=@time_of_day, icon=@icon, active=@active WHERE id=@id`
+     due_date=@due_date, time_of_day=@time_of_day, icon=@icon, room_id=@room_id, active=@active WHERE id=@id`
   ).run(updated);
   if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
   res.json({ ...updated, assignee_ids: assignee_ids ?? assigneesFor(req.params.id) });

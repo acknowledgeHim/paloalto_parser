@@ -5,6 +5,7 @@ import { celebrateIfAllDone } from '../utils/celebrations.js';
 import { parseTimeOfDaySlots, timeOfDayIcon, timeOfDayLabel, isSlotWindowPassed } from '../utils/timeOfDay.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from './MemberAvatar.js';
+import { findRoom, useFloorplans } from '../utils/floorplans.js';
 
 interface Props {
   task: Task;
@@ -20,6 +21,7 @@ interface Props {
 
 export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Props) {
   const { members, activeProfile } = useFamilyMembers();
+  const room = findRoom(useFloorplans(), task.room_id);
   const assignees = members.filter((m) => task.assignee_ids.includes(m.id));
   const effectiveViewerId = viewerId ?? activeProfile?.id;
   const slots = parseTimeOfDaySlots(task.time_of_day);
@@ -84,6 +86,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
         <div className="task-card__meta">
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
           {!multiSlot && slots[0] && <span className="badge badge--time">{timeOfDayIcon(slots[0])} {timeOfDayLabel(slots[0])}</span>}
+          {room && <span className="badge badge--time" title={room.plan.name}>📍 {room.room.name}</span>}
           {task.reward_type === 'stars' && <span className="badge badge--reward">⭐ {task.reward_amount}</span>}
           {task.reward_type === 'money' && <span className="badge badge--reward">${task.reward_amount?.toFixed(2)}</span>}
           {onEdit && (

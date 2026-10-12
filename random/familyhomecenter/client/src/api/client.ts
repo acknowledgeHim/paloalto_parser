@@ -92,6 +92,30 @@ export interface Task {
   /** This task's checkpoint icon on the "Adventure Map" progress bar style (see utils/taskIcons.ts
    *  for the preset picker and the fallback-by-kind used when this is null). */
   icon: string | null;
+  /** Which room it's in, on a floor plan (Chores & Tasks → 🏠 By room); null = nowhere in particular. */
+  room_id: string | null;
+}
+
+/** A room marked on a floor plan: its outline as points 0–1 across/down the plan's picture. */
+export interface FloorplanRoom {
+  id: string;
+  floorplan_id: string;
+  name: string;
+  points: Array<[number, number]>;
+  color: string;
+  created_at: string;
+}
+
+/** A picture of one floor (or the yard) with its rooms marked. */
+export interface Floorplan {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  sort_order: number;
+  updated_at: string;
+  created_at: string;
+  rooms: FloorplanRoom[];
 }
 
 // ---- Person detail page ----
