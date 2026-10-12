@@ -10,6 +10,10 @@ standing up in it. It's meant to be left up on a screen: it picks up check-offs 
 every 15 seconds, so you can watch everyone walk to their next job. **🗺️ Flat / 🧊 3-D**
 switches between the two looks on either page.
 
+**👣 Paths** (on either page) draws each person's walking route as a dotted trail in their
+color. It starts where they're standing and goes through the rooms of their next jobs, in order,
+up to the first job on another floor. The browser remembers whether it's on or off.
+
 ## Using it
 
 - **Tap a room** to see its jobs and who is on each. Each person can check off their own copy

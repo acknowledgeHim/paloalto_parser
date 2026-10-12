@@ -1911,3 +1911,12 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 @media (max-width: 640px) {
   .fp-room-panel__row { grid-template-columns: 1fr; }
 }
+/* 👣 Paths: each person's route to their next jobs, marching toward where they're headed. */
+.fp-path__trail {
+  fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 1 9;
+  vector-effect: non-scaling-stroke; opacity: 0.9; filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9));
+  animation: fp-march 1.2s linear infinite;
+}
+.fp-path__stop { fill: #fff; stroke: currentColor; stroke-width: 3; vector-effect: non-scaling-stroke; }
+@keyframes fp-march { to { stroke-dashoffset: -20; } }
+@media (prefers-reduced-motion: reduce) { .fp-path__trail { animation: none; } }

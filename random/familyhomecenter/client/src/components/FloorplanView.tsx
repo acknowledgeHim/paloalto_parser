@@ -21,6 +21,7 @@ const ROOM_SUGGESTIONS = [
 ];
 const PLAN_KEY = 'familyhomecenter.floorplan.active';
 const THREE_D_KEY = 'familyhomecenter.floorplan.3d';
+const PATHS_KEY = 'familyhomecenter.floorplan.paths';
 
 const remember = (key: string, value: string) => {
   try {
@@ -102,6 +103,11 @@ export function FloorplanView({
     setThreeDState(v);
     remember(THREE_D_KEY, v ? '1' : '0');
   };
+  const [showPaths, setShowPathsState] = useState(() => recall(PATHS_KEY) === '1');
+  const setShowPaths = (v: boolean) => {
+    setShowPathsState(v);
+    remember(PATHS_KEY, v ? '1' : '0');
+  };
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
   const stageBox = useRef<HTMLDivElement>(null);
@@ -179,6 +185,16 @@ export function FloorplanView({
           })}
         </div>
         <div className="fp-view__tools">
+          <button
+            type="button"
+            className={showPaths ? '' : 'secondary'}
+            onClick={() => setShowPaths(!showPaths)}
+            disabled={editing}
+            aria-pressed={showPaths}
+            title="Show each person's walking route through their next jobs"
+          >
+            👣 Paths
+          </button>
           <button type="button" className={threeD ? '' : 'secondary'} onClick={() => setThreeD(!threeD)} disabled={editing}>
             {threeD ? '🧊 3-D' : '🗺️ Flat'}
           </button>
@@ -202,6 +218,7 @@ export function FloorplanView({
               tasks={tasks}
               spots={spots}
               threeD={threeD}
+              showPaths={showPaths}
               selectedRoomId={selectedRoomId}
               onRoomClick={(r) => setSelectedRoomId(selectedRoomId === r.id ? null : r.id)}
               onWalkerClick={(s) => setPersonId(s.member.id)}

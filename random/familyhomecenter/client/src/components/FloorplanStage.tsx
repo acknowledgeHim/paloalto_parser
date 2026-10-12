@@ -22,6 +22,8 @@ export interface WalkerSpot {
   planId: string;
   room: FloorplanRoom;
   task: Task;
+  /** The rooms of their jobs after this one, in order (repeats of the same room dropped), on any plan. */
+  route: Array<{ planId: string; room: FloorplanRoom }>;
 }
 
 /**
@@ -34,10 +36,19 @@ export function walkerSpots(tasks: Task[], members: FamilyMember[], plans: Floor
   for (const p of plans) for (const r of p.rooms) rooms.set(r.id, { planId: p.id, room: r });
   const spots: WalkerSpot[] = [];
   for (const member of members) {
-    const next = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id) && !isTaskDoneFor(t, member.id))).find(
+    const located = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id) && !isTaskDoneFor(t, member.id))).filter(
       (t) => t.room_id && rooms.has(t.room_id)
     );
-    if (next) spots.push({ member, task: next, ...rooms.get(next.room_id!)! });
+    const next = located[0];
+    if (!next) continue;
+    const route: WalkerSpot['route'] = [];
+    let last = next.room_id;
+    for (const t of located.slice(1)) {
+      if (t.room_id === last) continue;
+      route.push(rooms.get(t.room_id!)!);
+      last = t.room_id;
+    }
+    spots.push({ member, task: next, route, ...rooms.get(next.room_id!)! });
   }
   return spots;
 }
@@ -65,6 +76,41 @@ function standSpot(room: FloorplanRoom, threeD: boolean): [number, number] {
   const [cx, cy] = roomCenter(room);
   const [top, bottom] = roomSpan(room);
   return [cx, Math.min(bottom - (bottom - top) * 0.06, cy + (bottom - top) * (threeD ? 0.32 : 0.24))];
+}
+
+/**
+ * A person's route as a dotted trail in their color: from where they stand, through each next
+ * room on this plan in order, gently curved so trails between the same rooms don't sit on top of
+ * each other, with a dot at each stop. A stop on another floor ends the trail there.
+ */
+function WalkPath({ spot, planId, threeD }: { spot: WalkerSpot; planId: string; threeD: boolean }) {
+  const stops: Array<[number, number]> = [standSpot(spot.room, threeD)];
+  for (const r of spot.route) {
+    if (r.planId !== planId) break;
+    stops.push(standSpot(r.room, threeD));
+  }
+  if (stops.length < 2) return null;
+  // Bend each leg a little to one side, by an amount that differs per person.
+  const bend = 0.06 + (parseInt(spot.member.id.replace(/[^0-9a-f]/gi, '').slice(-2) || '0', 16) % 5) * 0.025;
+  let d = `M ${stops[0][0]} ${stops[0][1]}`;
+  const heads: Array<{ x: number; y: number }> = [];
+  for (let i = 1; i < stops.length; i++) {
+    const [x1, y1] = stops[i - 1];
+    const [x2, y2] = stops[i];
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    const cx = (x1 + x2) / 2 - ((y2 - y1) / len) * len * bend;
+    const cy = (y1 + y2) / 2 + ((x2 - x1) / len) * len * bend;
+    d += ` Q ${cx} ${cy} ${x2} ${y2}`;
+    heads.push({ x: x2, y: y2 });
+  }
+  return (
+    <g className="fp-path" style={{ color: spot.member.color }}>
+      <path d={d} className="fp-path__trail" />
+      {heads.map((h, i) => (
+        <circle key={i} cx={h.x} cy={h.y} r={0.007} className="fp-path__stop" />
+      ))}
+    </g>
+  );
 }
 
 function Walker({ spot, x, y, dx, threeD, onClick }: { spot: WalkerSpot; x: number; y: number; dx: number; threeD: boolean; onClick?: () => void }) {
@@ -105,6 +151,7 @@ export function FloorplanStage({
   tasks,
   spots,
   threeD = false,
+  showPaths = false,
   selectedRoomId,
   onRoomClick,
   showWalkers = true,
@@ -115,6 +162,8 @@ export function FloorplanStage({
   tasks: Task[];
   spots: WalkerSpot[];
   threeD?: boolean;
+  /** 👣 Each person's walking route through the rooms of their next jobs. */
+  showPaths?: boolean;
   selectedRoomId?: string | null;
   onRoomClick?: (room: FloorplanRoom) => void;
   showWalkers?: boolean;
@@ -169,6 +218,7 @@ export function FloorplanStage({
               />
             );
           })}
+          {showPaths && showWalkers && here.map((s) => <WalkPath key={s.member.id} spot={s} planId={plan.id} threeD={threeD} />)}
         </svg>
         {plan.rooms.map((r) => {
           const [cx, cy] = labelSpot(r, threeD);
