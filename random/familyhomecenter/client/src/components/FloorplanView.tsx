@@ -873,6 +873,16 @@ function PlanEditor({
             <button type="button" className="secondary" aria-label="Move right" disabled={busy || plans[plans.length - 1].id === plan.id} onClick={() => act(() => api.patch(`/floorplans/${plan.id}`, { move: 1 }))}>▶</button>
           </>
         )}
+        <span className="fp-editor__label-size">
+          Label size
+          <button type="button" className="secondary" aria-label="Smaller labels" disabled={busy || (plan.label_scale ?? 1) <= 0.5} onClick={() => act(() => api.patch(`/floorplans/${plan.id}`, { label_scale: Math.round(((plan.label_scale ?? 1) - 0.25) * 100) / 100 }))}>
+            −
+          </button>
+          <span className="fp-zoom__level">{Math.round((plan.label_scale ?? 1) * 100)}%</span>
+          <button type="button" className="secondary" aria-label="Bigger labels" disabled={busy || (plan.label_scale ?? 1) >= 3} onClick={() => act(() => api.patch(`/floorplans/${plan.id}`, { label_scale: Math.round(((plan.label_scale ?? 1) + 0.25) * 100) / 100 }))}>
+            ＋
+          </button>
+        </span>
         <ConfirmButton
           label="🗑️ Delete plan"
           confirmLabel={`Delete "${plan.name}" and its rooms? (Jobs in them stay, just without a room.)`}

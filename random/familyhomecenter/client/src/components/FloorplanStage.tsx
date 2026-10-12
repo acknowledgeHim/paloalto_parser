@@ -329,6 +329,7 @@ export function FloorplanStage({
           width: `calc(min(100%, ${((threeD ? (big ? 135 : 95) : big ? 96 : 70) * aspect).toFixed(2)}vh) * ${zoom})`,
           maxWidth: zoom > 1 ? 'none' : undefined,
           ['--tilt' as string]: `${TILT_DEG}deg`,
+          ['--label-scale' as string]: String(plan.label_scale ?? 1),
         }}
       >
         <img className="fp-stage__img" src={floorplanImage(plan)} alt={plan.name} draggable={false} />

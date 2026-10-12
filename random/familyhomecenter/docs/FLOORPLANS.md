@@ -65,7 +65,9 @@ doesn't zoom.
    - **📐 Tap the corners** of an odd-shaped room or the yard, then tap the first corner again.
 
    Name the room (common names are offered).
-3. **Change rooms or plans.** Tap a room's name to rename, recolor, redraw or delete it.
+3. **Label size.** Room labels are small and borderless. **Label size − / ＋** in ✏️ Edit plans
+   makes them bigger or smaller, separately for each plan (50%–300%).
+4. **Change rooms or plans.** Tap a room's name to rename, recolor, redraw or delete it.
    **+ Another floor plan** adds one per floor or for the yard. ◀ ▶ reorders the tabs, and
    **🖼️ Replace picture** keeps the rooms where they are.
 

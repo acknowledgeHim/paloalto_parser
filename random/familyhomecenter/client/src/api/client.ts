@@ -124,6 +124,8 @@ export interface Floorplan {
   width: number;
   height: number;
   sort_order: number;
+  /** Room label size on this plan: 1 = the default, 0.5–3. */
+  label_scale?: number;
   updated_at: string;
   created_at: string;
   rooms: FloorplanRoom[];

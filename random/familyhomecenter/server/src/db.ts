@@ -923,6 +923,8 @@ for (const [table, column] of [
   ['tasks', 'rotation_start TEXT'],
   // A "when needed" chore (recurrence 'asneeded'): since when it needs doing; cleared when done.
   ['tasks', 'needed_since TEXT'],
+  // How big a plan's room labels are (1 = the default; a parent can make them bigger or smaller).
+  ['floorplans', 'label_scale REAL NOT NULL DEFAULT 1'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);

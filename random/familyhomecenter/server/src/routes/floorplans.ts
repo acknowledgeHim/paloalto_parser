@@ -107,15 +107,18 @@ floorplansRouter.post(
   })
 );
 
-/** PATCH /:id { name?, imageDataUrl?, move?: -1 | 1 } — rename, swap the picture (rooms stay where
- *  they are, as fractions of it), or move it left/right in the tabs. */
+/** PATCH /:id { name?, imageDataUrl?, move?: -1 | 1, label_scale? } — rename, swap the picture (rooms
+ *  stay where they are, as fractions of it), move it left/right in the tabs, or resize its room labels. */
 floorplansRouter.patch(
   '/:id',
   requireAdmin,
   asyncHandler(async (req, res) => {
     const plan = db.prepare('SELECT * FROM floorplans WHERE id = ?').get(req.params.id) as PlanRow | undefined;
     if (!plan) return res.status(404).json({ error: 'not found' });
-    const body = req.body as { name?: unknown; imageDataUrl?: unknown; move?: unknown };
+    const body = req.body as { name?: unknown; imageDataUrl?: unknown; move?: unknown; label_scale?: unknown };
+    if (typeof body.label_scale === 'number' && Number.isFinite(body.label_scale)) {
+      db.prepare('UPDATE floorplans SET label_scale = ? WHERE id = ?').run(Math.min(3, Math.max(0.5, body.label_scale)), plan.id);
+    }
     if (body.name !== undefined) {
       const name = cleanName(body.name);
       if (!name) return res.status(400).json({ error: 'The name can’t be empty' });
