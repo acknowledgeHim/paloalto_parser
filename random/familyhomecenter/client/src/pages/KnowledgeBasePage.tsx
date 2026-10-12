@@ -76,11 +76,15 @@ function MediaItem({ media, canManage, onDelete }: { media: KbMedia; canManage: 
 function ArticleCard({
   article,
   canManage,
+  expanded,
+  onToggle,
   onEdit,
   onChange,
 }: {
   article: KbArticle;
   canManage: boolean;
+  expanded: boolean;
+  onToggle: () => void;
   onEdit: () => void;
   onChange: () => void;
 }) {
@@ -147,30 +151,54 @@ function ArticleCard({
     }
   };
 
+  const photos = article.media.filter((m) => m.kind === 'image').length;
+  const videos = article.media.length - photos;
+  const preview = (article.body ?? '').trim().split('\n')[0];
+
   return (
-    <section className="panel kb-page__card">
+    <section className={`panel kb-page__card ${expanded ? 'kb-page__card--open' : 'kb-page__card--collapsed'}`}>
       <div className="contacts-page__card-header">
-        <div>
+        <button
+          type="button"
+          className="kb-page__summary"
+          aria-expanded={expanded}
+          onClick={onToggle}
+        >
           <h2>{article.title}</h2>
-          {article.category && <span className="badge">{article.category}</span>}
+          <span className="kb-page__meta">
+            {article.category && <span className="badge">{article.category}</span>}
+            {photos > 0 && <span className="hint">📷 {photos}</span>}
+            {videos > 0 && <span className="hint">🎬 {videos}</span>}
+          </span>
+          {!expanded && preview && <span className="kb-page__preview">{preview}</span>}
+        </button>
+        <div className="task-form__row kb-page__card-tools">
+          {expanded && canManage && (
+            <>
+              <button type="button" className="task-card__edit" aria-label="Edit" onClick={onEdit}>✎</button>
+              <ConfirmButton
+                label="✕"
+                ariaLabel={`Delete ${article.title}`}
+                confirmLabel={`Delete "${article.title}"?`}
+                onConfirm={remove}
+                className="task-card__edit"
+              />
+            </>
+          )}
+          <button
+            type="button"
+            className="person-column__expand"
+            aria-label={expanded ? `Collapse ${article.title}` : `Expand ${article.title}`}
+            onClick={onToggle}
+          >
+            {expanded ? '▲' : '▼'}
+          </button>
         </div>
-        {canManage && (
-          <div className="task-form__row">
-            <button type="button" className="task-card__edit" aria-label="Edit" onClick={onEdit}>✎</button>
-            <ConfirmButton
-              label="✕"
-              ariaLabel={`Delete ${article.title}`}
-              confirmLabel={`Delete "${article.title}"?`}
-              onConfirm={remove}
-              className="task-card__edit"
-            />
-          </div>
-        )}
       </div>
 
-      {article.body && <p className="kb-page__body">{article.body}</p>}
+      {expanded && article.body && <p className="kb-page__body">{article.body}</p>}
 
-      {article.media.length > 0 && (
+      {expanded && article.media.length > 0 && (
         <div className="kb-page__media-grid">
           {article.media.map((m) => (
             <MediaItem key={m.id} media={m} canManage={canManage} onDelete={() => removeMedia(m.id)} />
@@ -178,7 +206,7 @@ function ArticleCard({
         </div>
       )}
 
-      {canManage && (
+      {expanded && canManage && (
         <div className="kb-page__media-add">
           <div className="task-form__row">
             <button type="button" className="secondary" onClick={() => imageInput.current?.click()} disabled={busy}>
@@ -215,6 +243,15 @@ export function KnowledgeBasePage() {
   const { activeProfile } = useFamilyMembers();
   const [articles, setArticles] = useState<KbArticle[]>([]);
   const [modalArticle, setModalArticle] = useState<KbArticle | null | undefined>(undefined);
+  // Collapsed by default (like the Family Board) — titles at a glance, tap one to read it.
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setOpenIds((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const canManage = activeProfile?.is_parent === 1;
 
@@ -231,12 +268,24 @@ export function KnowledgeBasePage() {
         )}
         <h1>Knowledge Base</h1>
       </div>
-      <p className="hint">How-to guides for the house — everyone can read these, only a parent can add or change one.</p>
+      <p className="hint">How-to guides for the house — everyone can read these, only a parent can add or change one. Tap a guide to open it.</p>
+      {articles.length > 1 && (
+        <div className="kb-page__all">
+          <button type="button" className="link-button" onClick={() => setOpenIds(new Set(articles.map((a) => a.id)))}>Open all</button>
+          <button type="button" className="link-button" onClick={() => setOpenIds(new Set())} disabled={openIds.size === 0}>Close all</button>
+        </div>
+      )}
 
       {articles.length === 0 && <div className="empty-state">Nothing here yet{canManage ? ' — add one above.' : '.'}</div>}
       <div className="kb-page__grid">
         {articles.map((a) => (
-          <ArticleCard key={a.id} article={a} canManage={canManage} onEdit={() => setModalArticle(a)} onChange={load} />
+          <ArticleCard
+            key={a.id}
+            article={a}
+            canManage={canManage}
+            expanded={openIds.has(a.id)}
+            onToggle={() => toggle(a.id)}
+            onEdit={() => setModalArticle(a)} onChange={load} />
         ))}
       </div>
 

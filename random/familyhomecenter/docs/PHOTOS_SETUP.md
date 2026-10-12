@@ -260,7 +260,14 @@ turning it on, and the Pi won't fetch them:
 - `face_recognition_sface_2021dec.onnx` (38,696,353 bytes) — from
   https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface
 
-**Turning it off** stops scanning; names and tags are kept (turn it back on to carry on). **Forget
-this person** on someone's page removes the name only — their faces go back to unnamed. Photos
-themselves are never changed. Everything is in the app's database, so `npm run backup` covers it
+**Turning it off** stops scanning; names and tags are kept (turn it back on to carry on).
+
+**Managing people** — tap someone on the People page, then:
+- **✏️ Rename** — fix or change their name (a name someone else already has is refused; combine instead).
+- **🔗 Combine with someone…** — the same person named twice ("Sam" and "Samuel"): pick the other
+  one and which name should stay. Their confirmed faces, "+ Someone else" tags, and "not them"
+  answers all become one person.
+- **🗑️ Delete** — removes the name only: their faces go back to unnamed and their hand tags go away.
+
+Photos themselves are never changed. Everything is in the app's database, so `npm run backup` covers it
 (face thumbnails and models rebuild/re-download on their own).

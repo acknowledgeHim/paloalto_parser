@@ -114,6 +114,9 @@ facesRouter.patch('/people/:id', (req, res) => {
   if (body.name !== undefined) {
     const name = String(body.name).trim();
     if (!name) return res.status(400).json({ error: 'Give them a name' });
+    if (name.length > 80) return res.status(400).json({ error: 'That name is too long' });
+    const clash = db.prepare('SELECT name FROM people WHERE name = ? COLLATE NOCASE AND id != ?').get(name, req.params.id) as { name: string } | undefined;
+    if (clash) return res.status(409).json({ error: `There's already someone called ${clash.name} — use Combine to make them one person.` });
     db.prepare('UPDATE people SET name = ? WHERE id = ?').run(name, req.params.id);
   }
   if (body.cover_face_id !== undefined) {
@@ -123,6 +126,41 @@ facesRouter.patch('/people/:id', (req, res) => {
     }
     db.prepare('UPDATE people SET cover_face_id = ? WHERE id = ?').run(faceId, req.params.id);
   }
+  res.json({ ok: true });
+});
+
+/**
+ * POST /people/merge { keep_id, merge_id, name? } — two entries that are really one person (named
+ * twice, or "Sam" and "Samuel"): everything of merge_id's — confirmed faces, hand tags, "not them"
+ * answers — moves to keep_id, merge_id is removed, and keep_id takes `name` if given.
+ */
+facesRouter.post('/people/merge', (req, res) => {
+  const body = req.body as { keep_id?: string; merge_id?: string; name?: string };
+  const keep = String(body.keep_id ?? '');
+  const merge = String(body.merge_id ?? '');
+  const find = db.prepare('SELECT * FROM people WHERE id = ?');
+  const kept = find.get(keep) as { cover_face_id: number | null } | undefined;
+  const merged = find.get(merge) as { cover_face_id: number | null } | undefined;
+  if (!kept || !merged || keep === merge) return res.status(400).json({ error: 'Pick two different people' });
+  const name = body.name === undefined ? null : String(body.name).trim();
+  if (name !== null && (!name || name.length > 80)) return res.status(400).json({ error: 'Give them a name' });
+  db.transaction(() => {
+    db.prepare('UPDATE faces SET person_id = ? WHERE person_id = ?').run(keep, merge);
+    db.prepare('INSERT OR IGNORE INTO photo_people (path, person_id, created_at) SELECT path, ?, created_at FROM photo_people WHERE person_id = ?').run(keep, merge);
+    // "Not Sam" for one is "not Sam" for both — except on faces now confirmed as them.
+    db.prepare(
+      'INSERT OR IGNORE INTO face_rejections (face_id, person_id) SELECT face_id, ? FROM face_rejections WHERE person_id = ?'
+    ).run(keep, merge);
+    db.prepare(
+      'DELETE FROM face_rejections WHERE person_id = ? AND face_id IN (SELECT id FROM faces WHERE person_id = ? AND confirmed = 1)'
+    ).run(keep, keep);
+    if (kept.cover_face_id === null && merged.cover_face_id !== null) {
+      db.prepare('UPDATE people SET cover_face_id = ? WHERE id = ?').run(merged.cover_face_id, keep);
+    }
+    db.prepare('DELETE FROM people WHERE id = ?').run(merge);
+    if (name !== null) db.prepare('UPDATE people SET name = ? WHERE id = ?').run(name, keep);
+  })();
+  facesChanged();
   res.json({ ok: true });
 });
 

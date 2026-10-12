@@ -115,6 +115,7 @@ export function PeoplePage() {
           {people.length > 0 && (
             <section className="panel">
               <h2>People</h2>
+              <p className="hint">Tap someone to check their faces, or to rename, combine, or delete them.</p>
               <div className="people-grid">
                 {people.map((p) => (
                   <button key={p.id} type="button" className="people-card" onClick={() => setOpenPerson(p.id)}>
@@ -387,7 +388,18 @@ const PAGE = 60;
 
 function PersonDetail({ person, people, onClose, act }: { person: Person; people: Person[]; onClose: () => void; act: Act }) {
   const [detail, setDetail] = useState<{ confirmed: Face[]; suggested: Face[] } | null>(null);
-  const [renaming, setRenaming] = useState<string | null>(null);
+  // Rename / combine / delete: one panel open at a time.
+  const [manage, setManage] = useState<'rename' | 'combine' | 'delete' | null>(null);
+  const [renaming, setRenaming] = useState('');
+  const [otherId, setOtherId] = useState('');
+  const [keepName, setKeepName] = useState(person.name);
+  const others = people.filter((p) => p.id !== person.id);
+  const other = others.find((p) => p.id === otherId);
+  const toggleManage = (m: 'rename' | 'combine' | 'delete') => {
+    setManage((cur) => (cur === m ? null : m));
+    setRenaming(person.name);
+    setKeepName(person.name);
+  };
   // Long lists are shown a page at a time (each face is a picture to load).
   const [showSuggested, setShowSuggested] = useState(PAGE);
   const [showConfirmed, setShowConfirmed] = useState(PAGE);
@@ -402,36 +414,93 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
     <section className="panel">
       <div className="people-detail__head">
         <button type="button" className="secondary" onClick={onClose}>← All people</button>
-        {renaming === null ? (
-          <h2>{person.name}</h2>
-        ) : (
-          <form
-            className="task-form__row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (renaming.trim()) run(() => api.patch(`/faces/people/${person.id}`, { name: renaming.trim() })).then(() => setRenaming(null));
-            }}
-          >
-            <input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} />
-            <button type="submit">Save</button>
-          </form>
-        )}
+        <h2>{person.name}</h2>
         <span className="people-detail__actions">
-          <button type="button" className="link-button" onClick={() => setRenaming(person.name)}>Rename</button>
           <Link className="link-button" to={`/photos?person=${person.id}`}>See their photos</Link>
-          <button
-            type="button"
-            className="link-button"
-            onClick={() => {
-              if (window.confirm(`Forget "${person.name}"? Their faces go back to unnamed; photos aren't touched.`)) {
-                act(() => api.delete(`/faces/people/${person.id}`)).then(onClose);
-              }
-            }}
-          >
-            Forget this person
-          </button>
         </span>
       </div>
+
+      <div className="people-manage">
+        <button type="button" className={manage === 'rename' ? '' : 'secondary'} onClick={() => toggleManage('rename')}>✏️ Rename</button>
+        <button type="button" className={manage === 'combine' ? '' : 'secondary'} onClick={() => toggleManage('combine')} disabled={others.length === 0}>
+          🔗 Combine with someone…
+        </button>
+        <button type="button" className={manage === 'delete' ? 'danger' : 'secondary'} onClick={() => toggleManage('delete')}>🗑️ Delete</button>
+      </div>
+
+      {manage === 'rename' && (
+        <form
+          className="people-manage__panel task-form__row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (renaming.trim()) run(() => api.patch(`/faces/people/${person.id}`, { name: renaming.trim() })).then(() => setManage(null));
+          }}
+        >
+          <input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} aria-label="New name" />
+          <button type="submit" disabled={!renaming.trim() || renaming.trim() === person.name}>Save name</button>
+          <button type="button" className="secondary" onClick={() => setManage(null)}>Cancel</button>
+        </form>
+      )}
+
+      {manage === 'combine' && (
+        <div className="people-manage__panel">
+          <p className="hint">
+            Named the same person twice (say "Sam" and "Samuel")? Combine them: all their faces and tagged
+            photos become one person.
+          </p>
+          <label className="member-form__label member-form__label--inline">
+            Combine {person.name} with
+            <select value={otherId} onChange={(e) => setOtherId(e.target.value)}>
+              <option value="">Pick someone…</option>
+              {others.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.photo_count.toLocaleString()} photos)</option>
+              ))}
+            </select>
+          </label>
+          {other && (
+            <>
+              <p className="people-manage__q">Which name should stay?</p>
+              <div className="people-manage__names">
+                {[person.name, other.name].map((n) => (
+                  <label key={n} className={`people-manage__name ${keepName === n ? 'people-manage__name--on' : ''}`}>
+                    <input type="radio" name="keep-name" checked={keepName === n} onChange={() => setKeepName(n)} />
+                    {n}
+                  </label>
+                ))}
+              </div>
+              <div className="task-form__row">
+                <button
+                  type="button"
+                  onClick={() =>
+                    act(() => api.post('/faces/people/merge', { keep_id: person.id, merge_id: other.id, name: keepName })).then(() => {
+                      setManage(null);
+                      setOtherId('');
+                    })
+                  }
+                >
+                  🔗 Combine into "{keepName}"
+                </button>
+                <button type="button" className="secondary" onClick={() => setManage(null)}>Cancel</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {manage === 'delete' && (
+        <div className="people-manage__panel people-manage__panel--danger">
+          <p>
+            Delete <strong>{person.name}</strong>? Their faces go back to unnamed and their hand tags are removed.
+            The photos themselves aren't touched.
+          </p>
+          <div className="task-form__row">
+            <button type="button" className="danger" onClick={() => act(() => api.delete(`/faces/people/${person.id}`)).then(onClose)}>
+              🗑️ Delete {person.name}
+            </button>
+            <button type="button" className="secondary" onClick={() => setManage(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {!detail && <p className="hint">Loading {person.name}'s faces…</p>}
 
