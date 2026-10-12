@@ -741,15 +741,18 @@ function NewPlanForm({ onDone, first = false }: { onDone: (plan: Floorplan) => v
   );
 }
 
-/** A size setting: − 75% ＋, in quarter steps between 50% and 300%. */
-function SizeStepper({ label, value, busy, onSet }: { label: string; value: number; busy: boolean; onSet: (v: number) => void }) {
-  const step = (by: number) => onSet(Math.round((value + by) * 100) / 100);
+/** A size setting: − 75% ＋ — quarter steps up to 300%, tenth steps below 50% (down to `min`). */
+function SizeStepper({ label, value, busy, min = 0.5, onSet }: { label: string; value: number; busy: boolean; min?: number; onSet: (v: number) => void }) {
+  const step = (dir: -1 | 1) => {
+    const by = value < 0.5 || (value === 0.5 && dir < 0) ? 0.1 : 0.25;
+    onSet(Math.min(3, Math.max(min, Math.round((value + dir * by) * 100) / 100)));
+  };
   return (
     <span className="fp-editor__size">
       {label}
-      <button type="button" className="secondary" aria-label={`${label} smaller`} disabled={busy || value <= 0.5} onClick={() => step(-0.25)}>−</button>
+      <button type="button" className="secondary" aria-label={`${label} smaller`} disabled={busy || value <= min} onClick={() => step(-1)}>−</button>
       <span className="fp-zoom__level">{Math.round(value * 100)}%</span>
-      <button type="button" className="secondary" aria-label={`${label} bigger`} disabled={busy || value >= 3} onClick={() => step(0.25)}>＋</button>
+      <button type="button" className="secondary" aria-label={`${label} bigger`} disabled={busy || value >= 3} onClick={() => step(1)}>＋</button>
     </span>
   );
 }
@@ -769,8 +772,8 @@ function PlanDisplaySettings({ plan, act, busy }: { plan: Floorplan; act: (fn: (
         </select>
       </label>
       <SizeStepper label="Labels" value={plan.label_scale ?? 1} busy={busy} onSet={(v) => set('label_scale', v)} />
-      <SizeStepper label="Avatars" value={plan.avatar_scale ?? 1} busy={busy} onSet={(v) => set('avatar_scale', v)} />
-      <SizeStepper label="Job emoji" value={plan.job_scale ?? 1} busy={busy} onSet={(v) => set('job_scale', v)} />
+      <SizeStepper label="Avatars" value={plan.avatar_scale ?? 1} busy={busy} min={0.1} onSet={(v) => set('avatar_scale', v)} />
+      <SizeStepper label="Job emoji" value={plan.job_scale ?? 1} busy={busy} min={0.1} onSet={(v) => set('job_scale', v)} />
     </div>
   );
 }

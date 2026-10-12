@@ -117,10 +117,11 @@ floorplansRouter.patch(
     if (!plan) return res.status(404).json({ error: 'not found' });
     const body = req.body as Record<string, unknown>;
     // Display settings: sizes 50%–300%; the starting zoom 100% (fit) to 200%, or null for "fit".
-    for (const key of ['label_scale', 'avatar_scale', 'job_scale'] as const) {
+    // (avatars and job emoji can go all the way down to 10%).
+    for (const [key, min] of [['label_scale', 0.5], ['avatar_scale', 0.1], ['job_scale', 0.1]] as const) {
       const v = body[key];
       if (typeof v === 'number' && Number.isFinite(v)) {
-        db.prepare(`UPDATE floorplans SET ${key} = ? WHERE id = ?`).run(Math.min(3, Math.max(0.5, v)), plan.id);
+        db.prepare(`UPDATE floorplans SET ${key} = ? WHERE id = ?`).run(Math.min(3, Math.max(min, v)), plan.id);
       }
     }
     if (body.default_zoom === null || (typeof body.default_zoom === 'number' && Number.isFinite(body.default_zoom))) {

@@ -119,7 +119,7 @@ export interface Floorplan {
   label_scale: number;
   /** How zoomed in it starts (1–2, 1 = fits the screen); null = fit. */
   default_zoom: number | null;
-  /** Avatar size and job-emoji size on this plan: 1 = the default, 0.5–3. */
+  /** Avatar size and job-emoji size on this plan: 1 = the default, 0.1–3. */
   avatar_scale: number;
   job_scale: number;
   /** Changes when the picture is replaced (the client adds it to the image URL). */
