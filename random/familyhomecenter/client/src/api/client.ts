@@ -458,13 +458,15 @@ export interface Movie {
   created_at: string;
 }
 
-export type LivingEffect = 'zoom' | 'drift' | 'depth';
-export type LivingOverlay = 'none' | 'sparkles' | 'snow' | 'hearts' | 'bubbles' | 'petals';
+export type LivingEffect = 'zoom' | 'drift' | 'depth' | 'still';
+export type LivingOverlay = 'none' | 'sparkles' | 'snow' | 'rain' | 'hearts' | 'bubbles' | 'petals';
 export interface LivingOptions {
   photo_id: string;
   effect: LivingEffect;
   overlay: LivingOverlay;
   seconds: number;
+  /** Painted areas that move, and what each does. */
+  regions?: Array<{ effect: string; direction: string }>;
 }
 
 /** Face recognition (server/src/routes/faces.ts) — opt-in, entirely on the Pi. */

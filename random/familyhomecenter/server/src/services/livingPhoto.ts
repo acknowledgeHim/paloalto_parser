@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import sharp from 'sharp';
 import { config } from '../config.js';
+import { estimateDepth } from './depth.js';
 
 /**
  * "Living photos": one photo turned into a short video clip that loops seamlessly — a slow zoom
@@ -16,11 +17,25 @@ import { config } from '../config.js';
  * into the first — it can play on repeat (or as the screensaver) without a jump.
  */
 
-export const LIVING_EFFECTS = ['zoom', 'drift', 'depth'] as const;
-export const LIVING_OVERLAYS = ['none', 'sparkles', 'snow', 'hearts', 'bubbles', 'petals'] as const;
+export const LIVING_EFFECTS = ['zoom', 'drift', 'depth', 'still'] as const;
+export const LIVING_OVERLAYS = ['none', 'sparkles', 'snow', 'rain', 'hearts', 'bubbles', 'petals'] as const;
 export const LIVING_SECONDS = [5, 8, 12] as const;
+/** What a painted area does: water/clouds flow (in `direction`), flames lick upward and flicker,
+ *  sway rocks gently (leaves, grass), shimmer ripples (heat haze, a pool's surface), twinkle makes
+ *  bright spots glint (lights, sparkling water). */
+export const REGION_EFFECTS = ['water', 'flames', 'sway', 'shimmer', 'clouds', 'twinkle'] as const;
+export const DIRECTIONS = ['down', 'up', 'left', 'right'] as const;
 export type LivingEffect = (typeof LIVING_EFFECTS)[number];
 export type LivingOverlay = (typeof LIVING_OVERLAYS)[number];
+export type RegionEffect = (typeof REGION_EFFECTS)[number];
+export type Direction = (typeof DIRECTIONS)[number];
+
+/** A painted area: `mask` is a PNG the size/shape of the photo, painted where it should move. */
+export interface LivingRegion {
+  effect: RegionEffect;
+  direction: Direction;
+  mask: Buffer;
+}
 
 const W = 1920;
 const H = 1080;
@@ -131,12 +146,12 @@ interface Particle {
 
 function particlesFor(overlay: LivingOverlay): Particle[] {
   const rand = seeded(overlay.length * 7919);
-  const count = { none: 0, sparkles: 45, snow: 90, hearts: 26, bubbles: 30, petals: 34 }[overlay];
+  const count = { none: 0, sparkles: 45, snow: 90, rain: 140, hearts: 26, bubbles: 30, petals: 34 }[overlay];
   return Array.from({ length: count }, () => ({
     x: rand(),
     phase: rand(),
     size: rand(),
-    laps: 1 + Math.floor(rand() * 2),
+    laps: overlay === 'rain' ? 4 + Math.floor(rand() * 3) : 1 + Math.floor(rand() * 2),
     sway: rand() * Math.PI * 2,
     spin: rand() < 0.5 ? -1 : 1,
     hue: rand(),
@@ -199,6 +214,18 @@ function spritesFor(overlay: LivingOverlay, particles: Particle[], u: number): S
         x: p.x * W + wobble * 30,
         y: -20 + t * (H + 40),
         svg: () => wrap(r * 2 + 2, `<circle r="${r}" fill="white" opacity="${opacity}"/>`),
+      });
+    } else if (overlay === 'rain') {
+      // Thin slanted streaks, fast (several trips a clip).
+      const len = 30 + Math.round(q(p.size, 3) * 40);
+      const opacity = (0.25 + q(p.hue, 3) * 0.3).toFixed(2);
+      const side = len + 4;
+      out.push({
+        key: `r${len}:${opacity}`,
+        side,
+        x: p.x * (W + 200) - t * 160,
+        y: -60 + t * (H + 120),
+        svg: () => wrap(side, `<line x1="${len * 0.12}" y1="${-len / 2}" x2="${-len * 0.12}" y2="${len / 2}" stroke="#dfe9f5" stroke-width="2.2" stroke-linecap="round" opacity="${opacity}"/>`),
       });
     } else if (overlay === 'hearts') {
       const r = 18 + Math.round(q(p.size, 4) * 30);
@@ -299,6 +326,183 @@ async function cut(canvas: Buffer, channels: 3 | 4, r: Rect): Promise<Buffer> {
   return sharp(canvas, { raw: { width: CW, height: CH, channels } }).extract(r).resize(W, H, { kernel: 'cubic' }).raw().toBuffer();
 }
 
+// ---- Depth and painted areas: moving every pixel ----
+
+/** Depth maps and masks are kept at a quarter of the canvas — they're smooth anyway. */
+const DW = CW / 4;
+const DH = CH / 4;
+
+/** A painted area's mask on the canvas (DW × DH, 0–255), soft-edged. */
+async function regionMask(png: Buffer, r: Rect): Promise<Uint8Array> {
+  const w = Math.max(1, Math.round(r.width / 4));
+  const h = Math.max(1, Math.round(r.height / 4));
+  const left = Math.max(0, Math.min(DW - w, Math.round(r.left / 4)));
+  const top = Math.max(0, Math.min(DH - h, Math.round(r.top / 4)));
+  const alpha = await sharp(png).ensureAlpha().resize(w, h, { fit: 'fill' }).extractChannel(3).raw().toBuffer();
+  const placed = await sharp(alpha, { raw: { width: w, height: h, channels: 1 } })
+    .extend({ left, top, right: DW - w - left, bottom: DH - h - top, background: '#000000' })
+    .blur(2)
+    .extractChannel(0)
+    .raw()
+    .toBuffer();
+  return new Uint8Array(placed.buffer, placed.byteOffset, DW * DH);
+}
+
+/** Depth of the canvas (0 far … 1 near) from the depth model — or, if it can't be had (no internet
+ *  the first time), the old stand-in: the people (from their faces) near, everything else far. */
+async function depthMap(canvas: Buffer, faces: Rect[], photoRect: Rect): Promise<Float32Array> {
+  try {
+    return await estimateDepth(canvas, CW, CH, { width: DW, height: DH });
+  } catch (err) {
+    console.warn('[living] depth model unavailable, using faces instead:', (err as Error).message);
+    const mask = await sharp(await subjectMask(faces, photoRect), { raw: { width: CW, height: CH, channels: 1 } }).resize(DW, DH).extractChannel(0).raw().toBuffer();
+    return Float32Array.from(mask, (v) => v / 255);
+  }
+}
+
+const DIRECTION_VECTORS: Record<Direction, [number, number]> = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
+
+interface PreparedRegion {
+  effect: RegionEffect;
+  mask: Uint8Array;
+  dx: number;
+  dy: number;
+}
+
+/**
+ * One frame, every output pixel worked out on its own: where the camera looks (`v`), how far it
+ * has glided (`ease`/`swing`) — near pixels (depth) move and grow more than far ones — and, inside
+ * painted areas, the extra motion. Flowing motion samples the photo at two offsets half a cycle
+ * apart and cross-fades them, so it streams continuously and loops without a jump.
+ */
+function warpFrame(
+  canvas: Buffer,
+  out: Buffer,
+  v: Rect,
+  depth: Float32Array | null,
+  regions: PreparedRegion[],
+  u: number,
+  seconds: number,
+  center: { x: number; y: number }
+): void {
+  const TAU = Math.PI * 2;
+  const ease = (1 - Math.cos(TAU * u)) / 2;
+  const swing = Math.sin(TAU * u);
+  const sx = v.width / W;
+  const sy = v.height / H;
+  const maxX = CW - 1.001;
+  const maxY = CH - 1.001;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  // Bilinear sample of the canvas at (x, y) into r, g, b.
+  const sample = (x: number, y: number) => {
+    x = x < 0 ? 0 : x > maxX ? maxX : x;
+    y = y < 0 ? 0 : y > maxY ? maxY : y;
+    const x0 = x | 0;
+    const y0 = y | 0;
+    const fx = x - x0;
+    const fy = y - y0;
+    const i00 = (y0 * CW + x0) * 3;
+    const i10 = i00 + 3;
+    const i01 = i00 + CW * 3;
+    const i11 = i01 + 3;
+    const w00 = (1 - fx) * (1 - fy);
+    const w10 = fx * (1 - fy);
+    const w01 = (1 - fx) * fy;
+    const w11 = fx * fy;
+    r = canvas[i00] * w00 + canvas[i10] * w10 + canvas[i01] * w01 + canvas[i11] * w11;
+    g = canvas[i00 + 1] * w00 + canvas[i10 + 1] * w10 + canvas[i01 + 1] * w01 + canvas[i11 + 1] * w11;
+    b = canvas[i00 + 2] * w00 + canvas[i10 + 2] * w10 + canvas[i01 + 2] * w01 + canvas[i11 + 2] * w11;
+  };
+  // Flow phases (whole cycles per clip, so the loop is seamless): water ~1.5 cycles/s, flames faster.
+  // Short trips, often: the cross-fade between the two offsets is what you'd notice on a long one.
+  const waterLaps = Math.max(2, Math.round(seconds * 1.1));
+  const flameLaps = Math.max(2, Math.round(seconds * 1.6));
+  const phase = (laps: number) => (u * laps) % 1;
+  const zoomAt = 0.07; // how much nearer things grow, at full depth
+  const slide = 0.014 * CW; // how far nearer things slide sideways, at full depth
+  let o = 0;
+  for (let oy = 0; oy < H; oy++) {
+    const baseY = v.top + (oy + 0.5) * sy;
+    for (let ox = 0; ox < W; ox++) {
+      let X = v.left + (ox + 0.5) * sx;
+      let Y = baseY;
+      const di = ((Y / 4) | 0) * DW + ((X / 4) | 0);
+      if (depth) {
+        const d = depth[di];
+        const m = 1 + zoomAt * d * ease;
+        X = center.x + (X - center.x) / m - swing * slide * d;
+        Y = center.y + (Y - center.y) / m;
+      }
+      // The painted area that covers this pixel most (areas rarely overlap).
+      let reg: PreparedRegion | null = null;
+      let mw = 0;
+      if (regions.length) {
+        const mi = (((Y < 0 ? 0 : Y > maxY ? maxY : Y) / 4) | 0) * DW + (((X < 0 ? 0 : X > maxX ? maxX : X) / 4) | 0);
+        for (const rg of regions) {
+          const val = rg.mask[mi];
+          if (val > mw) {
+            mw = val;
+            reg = rg;
+          }
+        }
+        mw /= 255;
+      }
+      if (!reg || mw === 0) {
+        sample(X, Y);
+      } else if (reg.effect === 'water' || reg.effect === 'clouds' || reg.effect === 'flames') {
+        const laps = reg.effect === 'flames' ? flameLaps : reg.effect === 'water' ? waterLaps : 1;
+        const dist = (reg.effect === 'clouds' ? 22 * seconds : reg.effect === 'flames' ? 34 : 32) * S * mw;
+        const p1 = phase(laps);
+        const p2 = (p1 + 0.5) % 1;
+        const w1 = 1 - Math.abs(2 * p1 - 1);
+        // A little sideways wobble, so it doesn't look like a conveyor belt.
+        const along = reg.dx !== 0 ? Y : X;
+        const wob = (reg.effect === 'flames' ? 6 : 2) * S * mw * Math.sin(along * 0.02 + TAU * u * laps * 0.5 + X * 0.003);
+        const wx = reg.dy !== 0 ? wob : 0;
+        const wy = reg.dx !== 0 ? wob : 0;
+        sample(X - reg.dx * dist * p1 + wx, Y - reg.dy * dist * p1 + wy);
+        const r1 = r;
+        const g1 = g;
+        const b1 = b;
+        sample(X - reg.dx * dist * p2 + wx, Y - reg.dy * dist * p2 + wy);
+        r = r1 * w1 + r * (1 - w1);
+        g = g1 * w1 + g * (1 - w1);
+        b = b1 * w1 + b * (1 - w1);
+        if (reg.effect === 'flames') {
+          const flicker = 1 + mw * 0.16 * Math.sin(TAU * u * flameLaps * 1.5 + X * 0.011 + Y * 0.007) * Math.sin(TAU * u * flameLaps * 0.5 + Y * 0.004);
+          r *= flicker;
+          g *= flicker;
+          b *= flicker;
+        }
+      } else if (reg.effect === 'sway') {
+        const laps = Math.max(1, Math.round(seconds / 2.5));
+        sample(X + mw * 7 * S * Math.sin(TAU * u * laps + Y * 0.004 + X * 0.001), Y + mw * 1.5 * S * Math.sin(TAU * u * laps * 2 + X * 0.006));
+      } else if (reg.effect === 'shimmer') {
+        const laps = Math.max(2, Math.round(seconds));
+        sample(X + mw * 2.5 * S * Math.sin(Y * 0.045 + TAU * u * laps), Y + mw * 2 * S * Math.sin(X * 0.04 + TAU * u * (laps - 1)));
+      } else {
+        // twinkle: bright spots glint, each on its own beat.
+        sample(X, Y);
+        const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+        if (lum > 150) {
+          const cell = Math.sin(((X / 18) | 0) * 12.9898 + ((Y / 18) | 0) * 78.233) * 43758.5453;
+          const beat = cell - Math.floor(cell);
+          const glint = Math.max(0, Math.sin(TAU * (u * Math.max(2, Math.round(seconds / 2)) + beat)));
+          const boost = 1 + mw * ((lum - 150) / 105) * 0.6 * glint * glint;
+          r *= boost;
+          g *= boost;
+          b *= boost;
+        }
+      }
+      out[o++] = r > 255 ? 255 : r;
+      out[o++] = g > 255 ? 255 : g;
+      out[o++] = b > 255 ? 255 : b;
+    }
+  }
+}
+
 /**
  * Renders the clip and returns its file name (in config.moviesDir). `onProgress` gets 0–100.
  */
@@ -308,6 +512,7 @@ export async function renderLivingPhoto(params: {
   overlay: LivingOverlay;
   seconds: number;
   faces: FaceBox[];
+  regions?: LivingRegion[];
   onProgress?: (percent: number) => void;
 }): Promise<{ fileName: string }> {
   const { effect, overlay, seconds } = params;
@@ -323,14 +528,15 @@ export async function renderLivingPhoto(params: {
   const fy = focus ? focus.top + focus.height / 2 : photoRect.top + photoRect.height * 0.45;
   const maxZoom = focus ? Math.max(1.12, Math.min(1.3, CW / (focus.width * 2), CH / (focus.height * 2))) : 1.22;
 
-  // The 3-D effect: a blurred background, and the people cut out (soft edges) on top of it.
-  let background = canvas;
-  let foreground: Buffer | null = null;
-  if (effect === 'depth') {
-    background = await sharp(canvas, { raw: { width: CW, height: CH, channels: 3 } }).blur(5).raw().toBuffer();
-    const mask = await subjectMask(faces, photoRect);
-    foreground = await sharp(canvas, { raw: { width: CW, height: CH, channels: 3 } }).joinChannel(mask, { raw: { width: CW, height: CH, channels: 1 } }).raw().toBuffer();
+  // 3-D and painted areas move pixel by pixel (warpFrame); a plain zoom/drift is just a moving cut.
+  const depth = effect === 'depth' ? await depthMap(canvas, faces, photoRect) : null;
+  const regions: PreparedRegion[] = [];
+  for (const rg of params.regions ?? []) {
+    const [dx, dy] = DIRECTION_VECTORS[rg.direction];
+    regions.push({ effect: rg.effect, mask: await regionMask(rg.mask, photoRect), dx, dy });
   }
+  const perPixel = Boolean(depth) || regions.length > 0;
+  const warped = perPixel ? Buffer.alloc(W * H * 3) : null;
   const particles = particlesFor(overlay);
   const sprites = new Map<string, Buffer>();
 
@@ -357,26 +563,19 @@ export async function renderLivingPhoto(params: {
       const u = n / totalFrames;
       const ease = (1 - Math.cos(TAU * u)) / 2; // 0 → 1 → 0 over the clip
       const swing = Math.sin(TAU * u); // 0 → 1 → 0 → -1 → 0
+      // Where the camera looks this frame.
+      let v: Rect;
+      if (effect === 'zoom') v = view(CW / 2 + (fx - CW / 2) * ease, CH / 2 + (fy - CH / 2) * ease, 1 + (maxZoom - 1) * ease);
+      else if (effect === 'drift') v = view(CW / 2 + swing * (CW - CW / 1.12) * 0.5, CH / 2 + ease * (fy - CH / 2) * 0.3, 1.12);
+      // 3-D: the view stays put (a little zoomed, for room at the edges) and the pixels move instead.
+      else if (effect === 'depth') v = view(CW / 2 + (fx - CW / 2) * 0.3, CH / 2 + (fy - CH / 2) * 0.3, 1.1);
+      else v = view(CW / 2, CH / 2, regions.length ? 1.02 : 1);
       let frame: Buffer;
-      if (effect === 'zoom') {
-        const z = 1 + (maxZoom - 1) * ease;
-        frame = await cut(canvas, 3, view(CW / 2 + (fx - CW / 2) * ease, CH / 2 + (fy - CH / 2) * ease, z));
-      } else if (effect === 'drift') {
-        const z = 1.12;
-        frame = await cut(canvas, 3, view(CW / 2 + swing * (CW - CW / z) * 0.5, CH / 2 + ease * (fy - CH / 2) * 0.3, z));
+      if (warped) {
+        warpFrame(canvas, warped, v, depth, regions, u, seconds, { x: v.left + v.width / 2, y: v.top + v.height / 2 });
+        frame = Buffer.from(warped); // (ffmpeg may still be reading the last one)
       } else {
-        // Background and people move against each other, as if seen from a slowly swaying camera:
-        // lined up exactly at the start (no doubled outline), the people then drift the other way
-        // and grow toward you a little.
-        const cx = CW / 2 + (fx - CW / 2) * 0.5;
-        const cy = CH / 2 + (fy - CH / 2) * 0.5;
-        const bg = await cut(background, 3, view(cx + swing * CW * 0.01, cy, 1.08));
-        const fg = await cut(foreground!, 4, view(cx - swing * CW * 0.01, cy, 1.08 + 0.05 * ease));
-        frame = await sharp(bg, { raw: { width: W, height: H, channels: 3 } })
-          .composite([{ input: fg, raw: { width: W, height: H, channels: 4 } }])
-          .removeAlpha()
-          .raw()
-          .toBuffer();
+        frame = await cut(canvas, 3, v);
       }
       if (particles.length) frame = await addOverlay(frame, spritesFor(overlay, particles, u), sprites);
       if (!ffmpeg.stdin.write(frame)) await new Promise((r) => ffmpeg.stdin.once('drain', r));

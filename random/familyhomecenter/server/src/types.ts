@@ -288,9 +288,11 @@ export interface Movie {
 
 export interface LivingOptions {
   photo_id: string;
-  effect: 'zoom' | 'drift' | 'depth';
-  overlay: 'none' | 'sparkles' | 'snow' | 'hearts' | 'bubbles' | 'petals';
+  effect: 'zoom' | 'drift' | 'depth' | 'still';
+  overlay: 'none' | 'sparkles' | 'snow' | 'rain' | 'hearts' | 'bubbles' | 'petals';
   seconds: number;
+  /** Painted areas that move (their masks aren't kept — only what each one does, for the label). */
+  regions?: Array<{ effect: 'water' | 'flames' | 'sway' | 'shimmer' | 'clouds' | 'twinkle'; direction: 'down' | 'up' | 'left' | 'right' }>;
 }
 
 /** A grocery-list entry — see routes/grocery.ts. Getting checked off deletes it (no purchased

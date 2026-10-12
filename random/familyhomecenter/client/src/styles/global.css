@@ -1756,3 +1756,25 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 @media (prefers-reduced-motion: reduce) {
   .living-preview img, .living-preview__particles span { animation: none; }
 }
+
+/* ---- Painting animated areas ---- */
+.area-painter { display: flex; flex-direction: column; gap: 10px; }
+.area-painter__add { min-height: 44px; }
+.area-painter__stage { position: relative; width: 100%; max-width: 720px; border-radius: 10px; overflow: hidden; background: #000; }
+.area-painter__stage img { display: block; width: 100%; height: 100%; object-fit: fill; user-select: none; }
+.area-painter__canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.area-painter__canvas--painting { cursor: crosshair; }
+.area-painter__tip {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 8px 14px; border-radius: 10px; background: rgba(0, 0, 0, 0.6); color: white; pointer-events: none;
+}
+.area-painter__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.area-painter__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.area-painter__list li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 6px 10px; border: 1px solid var(--border); border-left: 6px solid; border-radius: 10px;
+}
+.area-painter__item--active { background: color-mix(in srgb, #a46be0 10%, var(--panel)); }
+.area-painter__dirs { display: inline-flex; gap: 4px; }
+.area-painter__dirs button { min-height: 36px; min-width: 40px; padding: 0 6px; }
+.living-preview__particles--rain span { top: -10%; color: #dfe9f5; animation-name: living-fall; animation-duration: 0.9s; }

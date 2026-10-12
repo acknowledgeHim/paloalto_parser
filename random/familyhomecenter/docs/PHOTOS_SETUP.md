@@ -173,11 +173,21 @@ Bring one photo to life as a short clip that loops seamlessly: open a photo and 
 viewer (or **+** on the Animate tab), then pick:
 
 - **Movement** — 🔍 *Zoom to faces* (moves in on the people and back out), 🌊 *Gentle drift* (a
-  slow pan), or 🌄 *3-D depth* (the people float in front of a softly blurred background).
-- **Floating over it** — nothing, ✨ sparkles, ❄️ snow, 💖 hearts, 🫧 bubbles, or 🌸 petals.
+  slow pan), 🌄 *3-D depth* (glides into the scene — a depth map of the photo makes near things move
+  more than far ones), or 📷 *Still* (only painted areas and floating things move).
+- **Animated areas** (optional) — 🖌️ paint over part of the photo and pick what it is: 💧 flowing
+  water (choose which way it flows), 🔥 flames, 🌿 sway (leaves, grass), 🌫️ shimmer (heat haze, a
+  pool), ☁️ drifting clouds (paint the sky), or 💡 twinkle (lights, glints). Up to six areas; paint
+  just that part — anything painted moves. A brush-size slider and an eraser help.
+- **Floating over it** — nothing, ✨ sparkles, ❄️ snow, 🌧️ rain, 💖 hearts, 🫧 bubbles, or 🌸 petals.
 - **Length** — 5, 8, or 12 seconds.
 
-It's made on the Pi (one at a time, a minute or two each — the list shows progress) using the faces
+**The depth map** comes from *Depth Anything V2 Small* (Apache-2.0, 27 MB), downloaded once from
+Hugging Face the first time a 🌄 3-D clip is made (pinned to one version and checked by its hash),
+then run on the Pi like the face models — the photo never leaves it. Without internet that first
+time, 3-D falls back to lifting just the people (found by face recognition).
+
+It's made on the Pi (one at a time, a few minutes each — 3-D and painted areas take longest; the list shows progress) using the faces
 face recognition found, if it's on. A finished clip can be watched, downloaded, played as the
 **📺 screensaver**, or made someone's **🙂 avatar** — a small square cut around the faces that plays
 on the bigger avatar spots (Family Board, profile) and shows as a still in small ones. Needs ffmpeg,

@@ -4,6 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { PhotoPicker } from './PhotoPicker.js';
 import { fmtMadeOn, OwnedListControls, sortOwned, type OwnedSort } from './OwnedListControls.js';
+import { AreaPainter, isPainted, REGION_EFFECTS, type PaintedArea } from './AreaPainter.js';
 
 /**
  * Photos → ✨ Animate: "living photos" — one photo made into a short clip that loops, with a slow
@@ -16,13 +17,15 @@ import { fmtMadeOn, OwnedListControls, sortOwned, type OwnedSort } from './Owned
 export const EFFECTS: Array<{ id: LivingEffect; label: string; hint: string }> = [
   { id: 'zoom', label: '🔍 Zoom to faces', hint: 'Slowly moves in on the people, then back out' },
   { id: 'drift', label: '🌊 Gentle drift', hint: 'A slow side-to-side pan across the photo' },
-  { id: 'depth', label: '🌄 3-D depth', hint: 'The people float in front of a soft background' },
+  { id: 'depth', label: '🌄 3-D depth', hint: 'Glides into the scene: near things move more than far ones' },
+  { id: 'still', label: '📷 Still', hint: 'The photo stays put; only painted areas and floating things move' },
 ];
 
 export const OVERLAYS: Array<{ id: LivingOverlay; label: string }> = [
   { id: 'none', label: 'Nothing' },
   { id: 'sparkles', label: '✨ Sparkles' },
   { id: 'snow', label: '❄️ Snow' },
+  { id: 'rain', label: '🌧️ Rain' },
   { id: 'hearts', label: '💖 Hearts' },
   { id: 'bubbles', label: '🫧 Bubbles' },
   { id: 'petals', label: '🌸 Petals' },
@@ -31,13 +34,14 @@ export const OVERLAYS: Array<{ id: LivingOverlay; label: string }> = [
 const LENGTHS = [5, 8, 12];
 
 /** What floats across the little preview (just a hint of the real thing). */
-const PREVIEW_PARTICLE: Record<LivingOverlay, string> = { none: '', sparkles: '✨', snow: '❄️', hearts: '💖', bubbles: '○', petals: '🌸' };
+const PREVIEW_PARTICLE: Record<LivingOverlay, string> = { none: '', sparkles: '✨', snow: '❄️', rain: '╱', hearts: '💖', bubbles: '○', petals: '🌸' };
 
 export function livingLabel(m: Movie): string {
   if (!m.living) return '';
   const effect = EFFECTS.find((e) => e.id === m.living!.effect)?.label ?? '';
   const overlay = m.living.overlay !== 'none' ? ` + ${OVERLAYS.find((o) => o.id === m.living!.overlay)?.label ?? ''}` : '';
-  return effect + overlay;
+  const areas = (m.living.regions ?? []).map((r) => ` + ${REGION_EFFECTS.find((e) => e.id === r.effect)?.label ?? r.effect}`).join('');
+  return effect + areas + overlay;
 }
 
 /** The maker, as a pop-over: for the Animate tab's "+", and the ✨ button on a photo in the viewer. */
@@ -49,6 +53,8 @@ export function AnimateMakerModal({ photoId: initialPhotoId, onClose, onMade }: 
   const [overlay, setOverlay] = useState<LivingOverlay>('none');
   const [seconds, setSeconds] = useState(8);
   const [title, setTitle] = useState('');
+  const [areas, setAreas] = useState<PaintedArea[]>([]);
+  const [painting, setPainting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +63,13 @@ export function AnimateMakerModal({ photoId: initialPhotoId, onClose, onMade }: 
     setBusy(true);
     setError(null);
     try {
-      await api.post('/movies/living', { photo_id: photoId, effect, overlay, seconds, title: title.trim(), created_by_id: activeProfile?.id ?? null });
+      const regions = areas
+        .filter(isPainted)
+        .map((a) => ({ effect: a.effect, direction: a.direction, mask: a.mask.toDataURL('image/png') }));
+      if (effect === 'still' && !regions.length && overlay === 'none') {
+        throw new Error('With Still, paint an area to animate or pick something to float over it.');
+      }
+      await api.post('/movies/living', { photo_id: photoId, effect, overlay, seconds, regions, title: title.trim(), created_by_id: activeProfile?.id ?? null });
       onMade();
     } catch (err) {
       setError((err as Error).message);
@@ -100,6 +112,28 @@ export function AnimateMakerModal({ photoId: initialPhotoId, onClose, onMade }: 
           </div>
         </section>
 
+        {photoId && (
+          <section className="living-maker__section">
+            <h3>Animated areas (optional)</h3>
+            {!painting ? (
+              <>
+                <p className="hint">
+                  Make just part of it move: 💧 water, 🔥 flames, 🌿 leaves swaying, 🌫️ shimmer, ☁️ clouds, 💡 twinkling lights.
+                  {areas.length > 0 && ` ${areas.filter(isPainted).length} painted.`}
+                </p>
+                <button type="button" className="secondary" onClick={() => setPainting(true)}>
+                  🖌️ {areas.length ? 'Change painted areas' : 'Paint areas to animate'}
+                </button>
+              </>
+            ) : (
+              <>
+                <AreaPainter key={photoId} photoId={photoId} areas={areas} setAreas={setAreas} />
+                <button type="button" onClick={() => setPainting(false)}>Done painting</button>
+              </>
+            )}
+          </section>
+        )}
+
         <section className="living-maker__section">
           <h3>Floating over it</h3>
           <div className="living-maker__chips">
@@ -123,7 +157,7 @@ export function AnimateMakerModal({ photoId: initialPhotoId, onClose, onMade }: 
         </section>
 
         {error && <div className="settings-login__error">{error}</div>}
-        <p className="hint">Takes a minute or two on the Pi. Keep using the app; it shows up under ✨ Animate when it's ready.</p>
+        <p className="hint">Takes a few minutes on the Pi (3-D and painted areas take longest; the first 3-D one also downloads a 27 MB depth model once). Keep using the app; it shows up under ✨ Animate when it's ready.</p>
         <div className="task-form__row">
           <button type="button" onClick={make} disabled={!photoId || busy}>{busy ? 'Starting…' : '✨ Make it'}</button>
           <button type="button" className="secondary" onClick={onClose}>Cancel</button>
@@ -134,7 +168,10 @@ export function AnimateMakerModal({ photoId: initialPhotoId, onClose, onMade }: 
             title="Choose a photo to bring to life (the first one picked is used)"
             alreadyAdded={new Set()}
             onAdd={(ids) => {
-              if (ids[0]) setPhotoId(ids[0]);
+              if (ids[0] && ids[0] !== photoId) {
+                setPhotoId(ids[0]);
+                setAreas([]); // painted for the old photo
+              }
               setPicking(false);
             }}
             onClose={() => {

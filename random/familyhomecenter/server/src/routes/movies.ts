@@ -10,7 +10,7 @@ import { requireAdmin } from '../middleware/requireAdmin.js';
 import { findPhotoById, listPhotos, photoIdFor } from '../services/photos.js';
 import { canManageMember, canManageOwnedItem, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 import type { LivingOptions, Movie, MovieStyleOptions } from '../types.js';
-import { LIVING_EFFECTS, LIVING_OVERLAYS, LIVING_SECONDS, renderLivingPhoto, type FaceBox } from '../services/livingPhoto.js';
+import { DIRECTIONS, LIVING_EFFECTS, LIVING_OVERLAYS, LIVING_SECONDS, REGION_EFFECTS, renderLivingPhoto, type FaceBox, type LivingRegion } from '../services/livingPhoto.js';
 
 // Open to everyone, same household-trust default as Photos/Music — this is a fun family feature,
 // not configuration. Read-only against the source photos/music throughout (see
@@ -313,7 +313,24 @@ moviesRouter.post(
 /** One at a time — each is a lot of work for a Pi, and a queue keeps the rest of the app responsive. */
 let livingQueue: Promise<unknown> = Promise.resolve();
 
-/** POST /living { photo_id, title?, effect, overlay, seconds } — makes a looping clip of one photo
+/** Painted areas from the client: up to 6, each { effect, direction, mask: PNG data URL }. */
+function parseRegions(raw: unknown): LivingRegion[] | string {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > 6) return 'Up to 6 animated areas';
+  const out: LivingRegion[] = [];
+  for (const r of raw as Array<Record<string, unknown>>) {
+    const effect = REGION_EFFECTS.find((e) => e === r.effect);
+    const direction = DIRECTIONS.find((d) => d === r.direction) ?? 'down';
+    const match = /^data:image\/png;base64,(.+)$/.exec(String(r.mask ?? ''));
+    if (!effect || !match) return 'Each animated area needs an effect and a painted area';
+    const mask = Buffer.from(match[1], 'base64');
+    if (mask.length > 4_000_000) return 'That painted area is too big';
+    out.push({ effect, direction, mask });
+  }
+  return out;
+}
+
+/** POST /living { photo_id, title?, effect, overlay, seconds, regions? } — makes a looping clip of one photo
  *  (services/livingPhoto.ts), saved and shown like any movie (Watch, Download, Screensaver). */
 moviesRouter.post(
   '/living',
@@ -323,12 +340,21 @@ moviesRouter.post(
     const overlay = LIVING_OVERLAYS.find((o) => o === body.overlay) ?? 'none';
     const seconds = LIVING_SECONDS.find((s) => s === Number(body.seconds));
     if (!effect || !seconds) return res.status(400).json({ error: 'Pick an effect and a length' });
+    const regions = parseRegions((req.body as { regions?: unknown }).regions);
+    if (typeof regions === 'string') return res.status(400).json({ error: regions });
+    if (effect === 'still' && !regions.length && overlay === 'none') return res.status(400).json({ error: 'Paint an area to animate, or pick something to float over it' });
     const photoPath = body.photo_id ? await findPhotoById(String(body.photo_id)) : null;
     if (!photoPath) return res.status(400).json({ error: "That photo isn't in the library any more" });
     const rel = path.relative(config.photosDir, photoPath);
     const title = String(body.title ?? '').trim().slice(0, 120) || path.basename(rel).replace(/\.[^.]+$/, '');
     const token = req.cookies?.[SESSION_COOKIE_NAME];
-    const living: LivingOptions = { photo_id: String(body.photo_id), effect, overlay, seconds };
+    const living: LivingOptions = {
+      photo_id: String(body.photo_id),
+      effect,
+      overlay,
+      seconds,
+      regions: regions.map(({ effect: e, direction }) => ({ effect: e, direction })),
+    };
     const movie: Movie = {
       id: uuidv4(),
       title,
@@ -366,6 +392,7 @@ moviesRouter.post(
           overlay,
           seconds,
           faces,
+          regions,
           onProgress: (p) => {
             const rounded = Math.floor(p);
             if (rounded !== last) progress.run((last = rounded), movie.id);
