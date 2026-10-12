@@ -4,6 +4,8 @@ import { Slideshow } from '../components/Slideshow.js';
 import { MovieMakerModal } from '../components/MovieMakerModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { DocumentEditorModal } from '../components/DocumentEditorModal.js';
+import { AnimateMakerModal, AnimateSection } from '../components/AnimateSection.js';
+import { fmtMadeOn, OwnedListControls, sortOwned, type OwnedSort } from '../components/OwnedListControls.js';
 import { AlbumChecklist, FAVORITES_ID, useAlbums } from '../components/PhotoAlbums.js';
 import { useSectionAccess } from '../state/SectionAccess.js';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -11,14 +13,24 @@ import { PhotoFaces } from '../components/PhotoFaces.js';
 import type { Person } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
+type PhotoTab = 'photos' | 'movies' | 'documents' | 'animate';
+/** The page's tabs; `access` = the Settings → Kids' access switch that shows it. */
+const PHOTO_TABS: Array<{ id: PhotoTab; label: string; access: 'movies' | 'documents' }> = [
+  { id: 'photos', label: '📷 Photos', access: 'movies' },
+  { id: 'movies', label: '🎬 Movies', access: 'movies' },
+  { id: 'animate', label: '✨ Animate', access: 'movies' },
+  { id: 'documents', label: '📄 Documents', access: 'documents' },
+];
+
 /** The Person filter's "Nobody" choice (not a person id). */
 const NOBODY = 'nobody';
 
 /** Mirrors server/src/services/movieRender.ts — a movie with music runs 4s past its last photo. */
+function movieLengthSeconds(m: Movie): number {
+  return Math.round((m.style?.title_card ? 4 : 0) + m.photo_count * m.seconds_per_photo + (m.music_tracks.length > 0 ? 4 : 0));
+}
 function fmtMovieLength(m: Movie): string {
-  const total = Math.round(
-    (m.style?.title_card ? 4 : 0) + m.photo_count * m.seconds_per_photo + (m.music_tracks.length > 0 ? 4 : 0)
-  );
+  const total = movieLengthSeconds(m);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
@@ -83,6 +95,7 @@ interface PhotoDocumentSummary {
   id: string;
   title: string;
   created_by_id: string | null;
+  created_at: string;
   updated_at: string;
   section_count: number;
   photo_count: number;
@@ -92,6 +105,9 @@ function DocumentsSection() {
   const { members } = useFamilyMembers();
   const canManage = useCanManageOwned();
   const [docs, setDocs] = useState<PhotoDocumentSummary[]>([]);
+  const [sort, setSort] = useState<OwnedSort>('newest');
+  const [owner, setOwner] = useState('');
+  const docGroups = sortOwned(docs, { sort, owner, members, length: (d) => d.photo_count });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -153,16 +169,32 @@ function DocumentsSection() {
       {actionError && <div className="settings-login__error">{actionError}</div>}
       {docs.length === 0 && <div className="empty-state">No documents yet — make one above.</div>}
       {docs.length > 0 && (
+        <OwnedListControls
+          sort={sort}
+          onSort={setSort}
+          owner={owner}
+          onOwner={setOwner}
+          members={members}
+          lengthLabel={['Most pictures', 'Fewest pictures']}
+          count={docGroups.reduce((n, g) => n + g.items.length, 0)}
+          noun="document"
+        />
+      )}
+      {docGroups.map((g) => (
+        <div key={g.label ?? 'all'} className="owned-group">
+          {g.label && <h3 className="owned-group__label">{g.label} <span className="hint">({g.items.length})</span></h3>}
         <ul className="movie-maker__movie-list">
-          {docs.map((d) => (
+          {g.items.map((d) => (
             <li key={d.id}>
               <div className="movie-maker__movie-row">
                 <div className="movie-maker__movie-info">
                   <span className="movie-maker__movie-title">📄 {d.title}</span>
-                  <span className="hint">
-                    {d.section_count} section{d.section_count === 1 ? '' : 's'} · {d.photo_count} picture
-                    {d.photo_count === 1 ? '' : 's'}
-                    {creatorName(d) && ` · by ${creatorName(d)}`}
+                  <span className="owned-meta">
+                    <span>🖼️ {d.photo_count} picture{d.photo_count === 1 ? '' : 's'}</span>
+                    <span>📑 {d.section_count} section{d.section_count === 1 ? '' : 's'}</span>
+                    <span>📅 {fmtMadeOn(d.created_at)}</span>
+                    {d.updated_at.slice(0, 10) !== d.created_at.slice(0, 10) && <span>✎ {fmtMadeOn(d.updated_at)}</span>}
+                    <span>👤 {creatorName(d) ?? 'Nobody in particular'}</span>
                   </span>
                 </div>
                 <div className="task-form__row">
@@ -189,7 +221,8 @@ function DocumentsSection() {
             </li>
           ))}
         </ul>
-      )}
+        </div>
+      ))}
       {(creating || editingId) && (
         <DocumentEditorModal
           documentId={editingId ?? undefined}
@@ -207,6 +240,8 @@ function DocumentsSection() {
 function MoviesSection() {
   const { members, activeProfile } = useFamilyMembers();
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [sort, setSort] = useState<OwnedSort>('newest');
+  const [owner, setOwner] = useState('');
   const [showMaker, setShowMaker] = useState(false);
   const [editing, setEditing] = useState<Movie | null>(null);
   const [drafts, setDrafts] = useState<MovieDraft[]>([]);
@@ -220,6 +255,7 @@ function MoviesSection() {
 
   const canManage = useCanManageOwned();
   const creatorName = (m: Pick<Movie, 'created_by_id'>) => members.find((x) => x.id === m.created_by_id)?.name ?? null;
+  const movieGroups = sortOwned(movies, { sort, owner, members, length: movieLengthSeconds });
   // Your own drafts (or nobody's); a parent sees everyone's.
   const visibleDrafts = drafts.filter(
     (d) => activeProfile?.is_parent === 1 || !d.created_by_id || d.created_by_id === activeProfile?.id
@@ -283,7 +319,8 @@ function MoviesSection() {
   };
 
   const load = () => {
-    api.get<Movie[]>('/movies').then(setMovies).catch(console.error);
+    // Living photos have their own tab (✨ Animate).
+    api.get<Movie[]>('/movies').then((all) => setMovies(all.filter((m) => !m.living))).catch(console.error);
     api.get<MovieDraft[]>('/movies/drafts').then(setDrafts).catch(console.error);
     api.get<ScreensaverMovie | null>('/movies/screensaver').then(setScreensaver).catch(() => setScreensaver(null));
   };
@@ -362,22 +399,35 @@ function MoviesSection() {
       )}
       {movies.length === 0 && <div className="empty-state">No movies yet — make one above.</div>}
       {movies.length > 0 && (
+        <OwnedListControls
+          sort={sort}
+          onSort={setSort}
+          owner={owner}
+          onOwner={setOwner}
+          members={members}
+          lengthLabel={['Longest', 'Shortest']}
+          count={movieGroups.reduce((n, g) => n + g.items.length, 0)}
+          noun="movie"
+        />
+      )}
+      {movieGroups.map((g) => (
+        <div key={g.label ?? 'all'} className="owned-group">
+          {g.label && <h3 className="owned-group__label">{g.label} <span className="hint">({g.items.length})</span></h3>}
         <ul className="movie-maker__movie-list">
-          {movies.map((m) => (
+          {g.items.map((m) => (
             <li key={m.id}>
               <div className="movie-maker__movie-row">
                 <div className="movie-maker__movie-info">
-                  <span className="movie-maker__movie-title">{m.title}</span>
-                  <span className="hint">
-                    {m.photo_count} photo{m.photo_count === 1 ? '' : 's'}
-                    {' · '}{fmtMovieLength(m)}
-                    {m.music_tracks.length > 0
-                      ? ` · ${m.music_tracks.length} song${m.music_tracks.length === 1 ? '' : 's'}`
-                      : ''}
-                    {creatorName(m) && ` · by ${creatorName(m)}`}
-                    {fmtMovieStyle(m) && ` · ${fmtMovieStyle(m)}`}
-                    {m.status === 'failed' && ' · Failed'}
+                  <span className="movie-maker__movie-title">🎬 {m.title}</span>
+                  <span className="owned-meta">
+                    <span>⏱️ {fmtMovieLength(m)}</span>
+                    <span>📅 {fmtMadeOn(m.created_at)}</span>
+                    <span>👤 {creatorName(m) ?? 'Nobody in particular'}</span>
+                    <span>📷 {m.photo_count} photo{m.photo_count === 1 ? '' : 's'}</span>
+                    {m.music_tracks.length > 0 && <span>🎵 {m.music_tracks.length} song{m.music_tracks.length === 1 ? '' : 's'}</span>}
+                    {m.status === 'failed' && <span className="internet-page__bad">Failed</span>}
                   </span>
+                  {fmtMovieStyle(m) && <span className="hint">{fmtMovieStyle(m)}</span>}
                   {screensaver?.movie_id === m.id && (
                     <span className="movie-maker__screensaver-badge">
                       📺 On the screensaver {fmtUntil(screensaver.until)}{screensaver.sound ? ' (with sound)' : ''}
@@ -474,7 +524,8 @@ function MoviesSection() {
             </li>
           ))}
         </ul>
-      )}
+        </div>
+      ))}
 
       {(showMaker || editing) && (
         <MovieMakerModal
@@ -518,6 +569,8 @@ export function PhotosPage() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const viewPos = useRef(0);
   const [slideshowOn, setSlideshowOn] = useState(false);
+  // The ✨ button on a photo in the viewer: make a living photo from it.
+  const [animating, setAnimating] = useState<string | null>(null);
   // Dates/paths for sorting — loaded after the (quicker) plain photo list.
   const [details, setDetails] = useState<Map<string, PhotoDetail> | null>(null);
   const [detailsFailed, setDetailsFailed] = useState(false);
@@ -526,6 +579,15 @@ export function PhotosPage() {
   const [showHidden, setShowHidden] = useState(false);
   // People (face recognition): the filter can come from the People page's "See their photos" link.
   const [searchParams, setSearchParams] = useSearchParams();
+  // Photos · Movies · Documents · Animate — in the address (?tab=) so Back and links keep it.
+  const tabs = PHOTO_TABS.filter((t) => t.id === 'photos' || canSee(t.access));
+  const tab = tabs.find((t) => t.id === searchParams.get('tab'))?.id ?? 'photos';
+  const setTab = (id: PhotoTab) => {
+    const next = new URLSearchParams(searchParams);
+    if (id === 'photos') next.delete('tab');
+    else next.set('tab', id);
+    setSearchParams(next);
+  };
   const personFilter = searchParams.get('person') ?? '';
   const [people, setPeople] = useState<Person[]>([]);
   const [personPhotoIds, setPersonPhotoIds] = useState<Set<string> | null>(null);
@@ -666,16 +728,39 @@ export function PhotosPage() {
     <div className="photos-page">
       <div className="photos-page__toolbar">
         <h1>Photos</h1>
-        <div className="task-form__row">
-          <Link to="/photos/people" className="movie-maker__download">👥 People</Link>
-          <button className="secondary" onClick={load}>Refresh</button>
-          <button onClick={() => setSlideshowOn(true)} disabled={photos.length === 0}>▶ Start slideshow</button>
-        </div>
+        {tab === 'photos' && (
+          <div className="task-form__row">
+            <Link to="/photos/people" className="movie-maker__download">👥 People</Link>
+            <button className="secondary" onClick={load}>Refresh</button>
+            <button onClick={() => setSlideshowOn(true)} disabled={photos.length === 0}>▶ Start slideshow</button>
+          </div>
+        )}
       </div>
 
+      {tabs.length > 1 && (
+        <div className="photos-tabs" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`photos-tabs__tab photos-tabs__tab--${t.id} ${tab === t.id ? 'photos-tabs__tab--active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Movies and Documents each have their own switch in Settings → Kids' access. */}
-      {canSee('movies') && <MoviesSection />}
-      {canSee('documents') && <DocumentsSection />}
+      {tab === 'movies' && <MoviesSection />}
+      {tab === 'documents' && <DocumentsSection />}
+      {tab === 'animate' && <AnimateSection />}
+
+      {tab === 'photos' && (
+      <>
 
       {/* Albums — kept only in the app's database; the photos themselves never move. */}
       <div className="photo-albums-bar">
@@ -908,7 +993,22 @@ export function PhotosPage() {
         </button>
       )}
 
-      {viewing && (
+      </>
+      )}
+
+      {animating && (
+        <AnimateMakerModal
+          photoId={animating}
+          onClose={() => setAnimating(null)}
+          onMade={() => {
+            setAnimating(null);
+            closeViewer();
+            setTab('animate');
+          }}
+        />
+      )}
+
+      {viewing && !animating && (
         <div className="photo-lightbox" onClick={closeViewer}>
           <img src={`/api/photos/${viewing.id}/image`} alt="" />
           <div className="photo-lightbox__actions" onClick={(e) => e.stopPropagation()}>
@@ -927,6 +1027,11 @@ export function PhotosPage() {
             <button type="button" className="photo-lightbox__action" aria-label="Albums" onClick={() => setAlbumPanel(albumPanel === 'viewer' ? null : 'viewer')}>
               📁
             </button>
+            {canSee('movies') && (
+              <button type="button" className="photo-lightbox__action" aria-label="Make a living photo" title="Bring this photo to life" onClick={() => setAnimating(viewing.id)}>
+                ✨
+              </button>
+            )}
             <button
               type="button"
               className="photo-lightbox__action"

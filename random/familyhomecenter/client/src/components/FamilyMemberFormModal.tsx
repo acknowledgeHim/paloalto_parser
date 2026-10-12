@@ -154,8 +154,10 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
   const [email, setEmail] = useState(member?.email ?? '');
   const [isParent, setIsParent] = useState(member?.is_parent === 1);
   const [color, setColor] = useState(member?.color ?? COLOR_PRESETS[0]);
-  const [emoji, setEmoji] = useState(member && member.avatar !== 'image' ? member.avatar ?? '' : '');
-  const [hasImage, setHasImage] = useState(member?.avatar === 'image');
+  // An uploaded photo ('image') or a living photo ('video') — kept as whichever it is unless changed.
+  const savedPicture = member?.avatar === 'image' || member?.avatar === 'video' ? member.avatar : null;
+  const [emoji, setEmoji] = useState(member && !savedPicture ? member.avatar ?? '' : '');
+  const [hasImage, setHasImage] = useState(Boolean(savedPicture));
   const [pendingImage, setPendingImage] = useState<string | null>(null);
 
   const [progressStyle, setProgressStyle] = useState(member?.progress_bar_style ?? 'solid');
@@ -182,7 +184,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
     id: member?.id ?? 'preview',
     name: name || '?',
     color,
-    avatar: pendingImage ? 'image' : hasImage ? 'image' : emoji || null,
+    avatar: pendingImage ? 'image' : hasImage ? savedPicture ?? 'image' : emoji || null,
   };
 
   const pickEmoji = (e: string) => {
@@ -236,7 +238,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
         complete_sound: completeSound === 'none' ? null : completeSound,
         // Custom-image state is applied via the dedicated avatar endpoints below; otherwise this
         // is the emoji (or null for "no avatar").
-        avatar: pendingImage || hasImage ? 'image' : emoji || null,
+        avatar: pendingImage ? 'image' : hasImage ? savedPicture ?? 'image' : emoji || null,
       };
       // Omitted entirely (not just left unchecked) when this editor can't change roles, so a kid
       // editing their own profile can never even attempt to self-promote — the server enforces
@@ -248,7 +250,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
 
       if (pendingImage) {
         await api.post(`/family-members/${saved.id}/avatar`, { imageDataUrl: pendingImage });
-      } else if (member?.avatar === 'image' && !hasImage) {
+      } else if (savedPicture && !hasImage) {
         await api.delete(`/family-members/${saved.id}/avatar`);
       }
 
@@ -330,6 +332,10 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
                   )}
                 </div>
                 <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
+                <p className="hint">
+                  {savedPicture === 'video' && hasImage && !pendingImage ? '✨ A living photo (it moves on bigger screens). ' : ''}
+                  Want an avatar that moves? Make a living photo in Photos → ✨ Animate, then tap 🙂 Avatar on it.
+                </p>
               </Card>
             </>
           )}

@@ -594,6 +594,14 @@ for (const column of ['photo_paths TEXT', 'music_track_details TEXT', 'options T
   }
 }
 
+// movies.living: set (JSON { photo_id, effect, overlay, seconds }) for a "living photo" clip made on
+// the Photos page's ✨ Animate tab (services/livingPhoto.ts) — NULL for a regular slideshow movie.
+try {
+  db.exec('ALTER TABLE movies ADD COLUMN living TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 // Auto-saved, not-yet-rendered movie maker forms (routes/movies.ts's /drafts), so a half-built movie
 // survives the screensaver, a closed browser, or switching screens. movie_id set = unsaved edits to
 // that existing movie (at most one per movie); NULL = a new movie in progress. state is the form,

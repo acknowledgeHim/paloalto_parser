@@ -452,8 +452,19 @@ export interface Movie {
   style: { transition: 'cut' | 'crossfade'; motion: 'none' | 'kenburns'; title_card: boolean; subtitle: string };
   /** Live render progress (0-100) — only meaningful while status is 'rendering'. */
   progress_percent: number | null;
+  /** A "living photo" (one photo, animated — Photos → ✨ Animate) rather than a slideshow. */
+  living: LivingOptions | null;
   created_by_id: string | null;
   created_at: string;
+}
+
+export type LivingEffect = 'zoom' | 'drift' | 'depth';
+export type LivingOverlay = 'none' | 'sparkles' | 'snow' | 'hearts' | 'bubbles' | 'petals';
+export interface LivingOptions {
+  photo_id: string;
+  effect: LivingEffect;
+  overlay: LivingOverlay;
+  seconds: number;
 }
 
 /** Face recognition (server/src/routes/faces.ts) — opt-in, entirely on the Pi. */

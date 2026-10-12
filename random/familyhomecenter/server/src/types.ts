@@ -280,8 +280,17 @@ export interface Movie {
   /** Live render progress (0-100), parsed from ffmpeg's own -progress output — only meaningful
    *  while status is 'rendering'; null before the first update or once no longer rendering. */
   progress_percent: number | null;
+  /** A "living photo" clip (one photo, animated) rather than a slideshow — see services/livingPhoto.ts. */
+  living: LivingOptions | null;
   created_by_id: string | null;
   created_at: string;
+}
+
+export interface LivingOptions {
+  photo_id: string;
+  effect: 'zoom' | 'drift' | 'depth';
+  overlay: 'none' | 'sparkles' | 'snow' | 'hearts' | 'bubbles' | 'petals';
+  seconds: number;
 }
 
 /** A grocery-list entry — see routes/grocery.ts. Getting checked off deletes it (no purchased

@@ -160,6 +160,29 @@ for each one either **📁** it into album(s) or **🙈** hide it. Filing keeps 
 you can add it to more than one album) until you tap **›**; hiding moves straight on. Either way it
 drops out of the list, so what's left is only what still needs sorting.
 
+## Tabs: Photos, Movies, Animate, Documents
+
+The Photos page has four tabs across the top. **Movies**, **Animate**, and **Documents** each list
+what the family has made, with **Sort** (newest, oldest, title, by owner, longest/shortest — for
+documents, most/fewest pictures) and an **Owner** filter. "By owner" splits the list under each
+person's name. Each entry shows its length, the date it was made, and who made it.
+
+## Living photos (✨ Animate)
+
+Bring one photo to life as a short clip that loops seamlessly: open a photo and tap **✨** in the
+viewer (or **+** on the Animate tab), then pick:
+
+- **Movement** — 🔍 *Zoom to faces* (moves in on the people and back out), 🌊 *Gentle drift* (a
+  slow pan), or 🌄 *3-D depth* (the people float in front of a softly blurred background).
+- **Floating over it** — nothing, ✨ sparkles, ❄️ snow, 💖 hearts, 🫧 bubbles, or 🌸 petals.
+- **Length** — 5, 8, or 12 seconds.
+
+It's made on the Pi (one at a time, a minute or two each — the list shows progress) using the faces
+face recognition found, if it's on. A finished clip can be watched, downloaded, played as the
+**📺 screensaver**, or made someone's **🙂 avatar** — a small square cut around the faces that plays
+on the bigger avatar spots (Family Board, profile) and shows as a still in small ones. Needs ffmpeg,
+like movies (docs/MOVIES_SETUP.md). The photo itself is only read, never changed.
+
 ## On this day
 
 When there are photos taken on today's date in past years, the Dashboard shows an **On this day**

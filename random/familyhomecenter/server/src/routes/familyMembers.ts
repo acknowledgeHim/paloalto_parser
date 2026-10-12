@@ -1,10 +1,14 @@
+import path from 'node:path';
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { requireSelfOrAdmin } from '../middleware/requireSelfOrAdmin.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { deleteAvatarImage, findAvatarImage, saveAvatarImage } from '../services/avatars.js';
+import { deleteAvatarImage, findAvatarImage, findAvatarVideo, saveAvatarImage, saveAvatarVideo } from '../services/avatars.js';
+import { config } from '../config.js';
+import { livingFocusX } from '../services/livingPhoto.js';
+import { findPhotoById } from '../services/photos.js';
 import { deleteCompletionSound, findCompletionSound, saveCompletionSound } from '../services/sounds.js';
 import {
   createSession,
@@ -332,6 +336,39 @@ familyMembersRouter.post(
     await saveAvatarImage(req.params.id, imageDataUrl);
     db.prepare('UPDATE family_members SET avatar = ? WHERE id = ?').run('image', req.params.id);
     res.json(toPublic({ ...existing, avatar: 'image' }));
+  })
+);
+
+/** POST /:id/avatar-from-movie { movie_id } — a finished living photo (Photos → ✨ Animate) as this
+ *  member's avatar: a small looping square of it, centered on the faces. */
+familyMembersRouter.post(
+  '/:id/avatar-from-movie',
+  requireSelfOrAdmin,
+  asyncHandler(async (req, res) => {
+    const existing = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as FamilyMember | undefined;
+    if (!existing) return res.status(404).json({ error: 'not found' });
+    const movie = db.prepare('SELECT file_name, status, living, photo_paths FROM movies WHERE id = ?').get(String((req.body as { movie_id?: string }).movie_id ?? '')) as
+      | { file_name: string | null; status: string; living: string | null; photo_paths: string | null }
+      | undefined;
+    if (!movie?.living || movie.status !== 'ready' || !movie.file_name) return res.status(400).json({ error: 'Pick a finished living photo' });
+    const { photo_id } = JSON.parse(movie.living) as { photo_id: string };
+    const photoPath = await findPhotoById(photo_id);
+    const rel = (JSON.parse(movie.photo_paths ?? '[]') as string[])[0];
+    const faces = rel ? (db.prepare('SELECT x, y, w, h FROM faces WHERE path = ? AND ignored = 0 AND score >= 0.8').all(rel) as Array<{ x: number; y: number; w: number; h: number }>) : [];
+    const centerX = photoPath ? await livingFocusX(photoPath, faces) : 0.5;
+    await saveAvatarVideo(req.params.id, path.join(config.moviesDir, movie.file_name), centerX);
+    db.prepare("UPDATE family_members SET avatar = 'video' WHERE id = ?").run(req.params.id);
+    res.json(toPublic({ ...existing, avatar: 'video' }));
+  })
+);
+
+familyMembersRouter.get(
+  '/:id/avatar-video',
+  asyncHandler(async (req, res) => {
+    const file = await findAvatarVideo(req.params.id);
+    if (!file) return res.status(404).end();
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(file);
   })
 );
 

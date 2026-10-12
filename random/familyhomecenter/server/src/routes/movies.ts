@@ -7,9 +7,10 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { resolveMovieSelection, type MovieSelection } from '../services/movieSelection.js';
 import { renderMovie, deleteMovieFile, type MovieStyle } from '../services/movieRender.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { listPhotos, photoIdFor } from '../services/photos.js';
+import { findPhotoById, listPhotos, photoIdFor } from '../services/photos.js';
 import { canManageMember, canManageOwnedItem, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
-import type { Movie, MovieStyleOptions } from '../types.js';
+import type { LivingOptions, Movie, MovieStyleOptions } from '../types.js';
+import { LIVING_EFFECTS, LIVING_OVERLAYS, LIVING_SECONDS, renderLivingPhoto, type FaceBox } from '../services/livingPhoto.js';
 
 // Open to everyone, same household-trust default as Photos/Music — this is a fun family feature,
 // not configuration. Read-only against the source photos/music throughout (see
@@ -55,8 +56,9 @@ function parseSelectionMode(selection: Record<string, unknown>): MovieSelection 
   return null;
 }
 
-type MovieRow = Omit<Movie, 'music_tracks' | 'has_source' | 'style'> & {
+type MovieRow = Omit<Movie, 'music_tracks' | 'has_source' | 'style' | 'living'> & {
   music_tracks: string | null;
+  living: string | null;
   photo_paths: string | null;
   music_track_details: string | null;
   options: string | null;
@@ -83,6 +85,14 @@ function parseOptions(raw: string | null): MovieStyleOptions {
   }
 }
 
+function parseLiving(raw: string | null): LivingOptions | null {
+  try {
+    return raw ? (JSON.parse(raw) as LivingOptions) : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseCaptions(raw: string | null): Record<string, string> {
   try {
     const parsed = raw ? (JSON.parse(raw) as unknown) : null;
@@ -93,10 +103,18 @@ function parseCaptions(raw: string | null): Record<string, string> {
 }
 
 function rowToMovie(row: MovieRow): Movie {
-  const { photo_paths, music_track_details: _details, options, photo_captions: _captions, ...rest } = row;
+  const { photo_paths, music_track_details: _details, options, photo_captions: _captions, living, ...rest } = row;
   let tracks = parseJsonArray<string>(row.music_tracks) ?? [];
   if (tracks.length === 0 && row.music_track) tracks = [row.music_track];
-  return { ...rest, music_tracks: tracks, has_source: Boolean(parseJsonArray<string>(photo_paths)?.length), style: parseOptions(options) };
+  const livingOptions = parseLiving(living);
+  return {
+    ...rest,
+    music_tracks: tracks,
+    // A living photo isn't edited in the movie maker — it's remade from the Animate tab.
+    has_source: !livingOptions && Boolean(parseJsonArray<string>(photo_paths)?.length),
+    style: parseOptions(options),
+    living: livingOptions,
+  };
 }
 
 function getMovieRow(id: string): MovieRow | undefined {
@@ -236,8 +254,8 @@ function startRender(movieId: string, title: string, input: MovieInput, previous
 }
 
 /** A Movie minus the fields that aren't (directly) table columns. */
-function movieColumns(movie: Movie): Omit<Movie, 'has_source' | 'style'> {
-  const { has_source: _hasSource, style: _style, ...columns } = movie;
+function movieColumns(movie: Movie): Omit<Movie, 'has_source' | 'style' | 'living'> {
+  const { has_source: _hasSource, style: _style, living: _living, ...columns } = movie;
   return columns;
 }
 
@@ -287,6 +305,82 @@ moviesRouter.post(
     if (!selection) return res.status(400).json({ error: 'A valid selection is required' });
     const photoPaths = await resolveMovieSelection(selection);
     res.json({ count: photoPaths.length });
+  })
+);
+
+// ---- Living photos (the Photos page's ✨ Animate tab) ----
+
+/** One at a time — each is a lot of work for a Pi, and a queue keeps the rest of the app responsive. */
+let livingQueue: Promise<unknown> = Promise.resolve();
+
+/** POST /living { photo_id, title?, effect, overlay, seconds } — makes a looping clip of one photo
+ *  (services/livingPhoto.ts), saved and shown like any movie (Watch, Download, Screensaver). */
+moviesRouter.post(
+  '/living',
+  asyncHandler(async (req, res) => {
+    const body = req.body as Partial<LivingOptions> & { title?: string; created_by_id?: string };
+    const effect = LIVING_EFFECTS.find((e) => e === body.effect);
+    const overlay = LIVING_OVERLAYS.find((o) => o === body.overlay) ?? 'none';
+    const seconds = LIVING_SECONDS.find((s) => s === Number(body.seconds));
+    if (!effect || !seconds) return res.status(400).json({ error: 'Pick an effect and a length' });
+    const photoPath = body.photo_id ? await findPhotoById(String(body.photo_id)) : null;
+    if (!photoPath) return res.status(400).json({ error: "That photo isn't in the library any more" });
+    const rel = path.relative(config.photosDir, photoPath);
+    const title = String(body.title ?? '').trim().slice(0, 120) || path.basename(rel).replace(/\.[^.]+$/, '');
+    const token = req.cookies?.[SESSION_COOKIE_NAME];
+    const living: LivingOptions = { photo_id: String(body.photo_id), effect, overlay, seconds };
+    const movie: Movie = {
+      id: uuidv4(),
+      title,
+      status: 'rendering',
+      file_name: null,
+      error: null,
+      photo_count: 1,
+      seconds_per_photo: seconds,
+      music_track: null,
+      music_tracks: [],
+      has_source: false,
+      style: DEFAULT_OPTIONS,
+      progress_percent: 0,
+      living,
+      created_by_id: sessionMemberId(token) ?? body.created_by_id ?? null,
+      created_at: new Date().toISOString(),
+    };
+    db.prepare(
+      `INSERT INTO movies (id, title, status, file_name, error, photo_count, seconds_per_photo, music_track, music_tracks,
+                           photo_paths, options, progress_percent, created_by_id, created_at, living)
+       VALUES (@id, @title, @status, @file_name, @error, @photo_count, @seconds_per_photo, @music_track, '[]',
+               @photo_paths, NULL, @progress_percent, @created_by_id, @created_at, @living)`
+    ).run({ ...movieColumns(movie), photo_paths: JSON.stringify([rel]), living: JSON.stringify(living) });
+    res.status(201).json(movie);
+
+    // Faces (if face recognition has found any) are what the zoom heads for and the 3-D effect lifts.
+    const faces = db.prepare('SELECT x, y, w, h FROM faces WHERE path = ? AND ignored = 0 AND score >= 0.8').all(rel) as FaceBox[];
+    const progress = db.prepare('UPDATE movies SET progress_percent = ? WHERE id = ?');
+    let last = -1;
+    livingQueue = livingQueue
+      .then(() =>
+        renderLivingPhoto({
+          photoPath,
+          effect,
+          overlay,
+          seconds,
+          faces,
+          onProgress: (p) => {
+            const rounded = Math.floor(p);
+            if (rounded !== last) progress.run((last = rounded), movie.id);
+          },
+        })
+      )
+      .then(async ({ fileName }) => {
+        // Deleted while it was being made: throw the file away.
+        if (!getMovieRow(movie.id)) return deleteMovieFile(fileName);
+        db.prepare("UPDATE movies SET status = 'ready', file_name = ?, error = NULL, progress_percent = 100 WHERE id = ?").run(fileName, movie.id);
+      })
+      .catch((err) => {
+        console.error(`[movies] living photo failed for "${title}":`, err);
+        db.prepare("UPDATE movies SET status = 'failed', error = ? WHERE id = ?").run((err as Error).message, movie.id);
+      });
   })
 );
 
@@ -517,6 +611,7 @@ moviesRouter.post(
       has_source: true,
       style: input.options,
       progress_percent: 0,
+      living: null,
       created_by_id: createdBy,
       created_at: new Date().toISOString(),
     };
@@ -544,6 +639,7 @@ moviesRouter.put(
   asyncHandler(async (req, res) => {
     const row = getMovieRow(req.params.id);
     if (!row) return res.status(404).json({ error: 'not found' });
+    if (row.living) return res.status(400).json({ error: 'A living photo is remade from the Animate tab, not edited' });
     if (!canManageMovie(req.cookies?.[SESSION_COOKIE_NAME], row)) {
       return res.status(401).json({ error: 'Only whoever made this movie, or a parent, can change it' });
     }
