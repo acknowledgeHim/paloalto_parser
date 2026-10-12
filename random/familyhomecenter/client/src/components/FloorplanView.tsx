@@ -3,7 +3,7 @@ import { api, type Floorplan, type FloorplanRoom, type Task } from '../api/clien
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { canEditTask, isTaskDoneByAll, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { taskIcon } from '../utils/taskIcons.js';
-import { findRoom, refreshFloorplans, useFloorplans } from '../utils/floorplans.js';
+import { canPlaceTask, findRoom, refreshFloorplans, roomAt, useFloorplans } from '../utils/floorplans.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { FloorplanStage, walkerSpots } from './FloorplanStage.js';
 import { MemberAvatar } from './MemberAvatar.js';
@@ -119,10 +119,87 @@ export function FloorplanView({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 📌 Place chores: drag jobs from each person's list onto their spot on the plan.
+  const canPlaceAny = canPlaceTask(null, activeProfile, members);
+  const [placing, setPlacing] = useState(false);
+  // Every job (not just today's), for placing — a weekly chore needs a spot too.
+  const [allTasks, setAllTasks] = useState<Task[] | null>(null);
+  const loadAll = () =>
+    api
+      .get<Task[]>('/tasks?all=true')
+      .then(setAllTasks)
+      .catch((err) => setError((err as Error).message));
+  useEffect(() => {
+    if (placing) loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placing]);
+  const [pinMenu, setPinMenu] = useState<Task | null>(null);
+  const [drag, setDrag] = useState<{ task: Task; x: number; y: number } | null>(null);
+  const changed = () => {
+    onChange();
+    if (placing) loadAll();
+  };
 
   const plan = plans?.find((p) => p.id === planId) ?? plans?.[0] ?? null;
   const room = plan?.rooms.find((r) => r.id === selectedRoomId) ?? null;
-  const spots = plans ? walkerSpots(tasks, members, plans) : [];
+  const spots = plans ? walkerSpots(tasks, members, plans, threeD) : [];
+
+  const place = async (task: Task, roomId: string | null, at?: [number, number]) => {
+    setError(null);
+    try {
+      await api.patch(`/tasks/${task.id}/location`, { room_id: roomId, x: at?.[0], y: at?.[1], acting_member_id: activeProfile?.id ?? null });
+      changed();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  /** Press on a job (in a list, or its pin while placing): a drag puts it where it's dropped; a tap on a pin opens its menu. */
+  const startDrag = (task: Task, e: ReactPointerEvent, fromPin: boolean) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    const start = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 8) moved = true;
+      if (!moved) return;
+      setDrag({ task, x: ev.clientX, y: ev.clientY });
+      // Near the top or bottom of the screen, scroll — the lists are under the plan.
+      if (ev.clientY < 70) window.scrollBy(0, -18);
+      else if (ev.clientY > window.innerHeight - 70) window.scrollBy(0, 18);
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      setDrag(null);
+      if (!moved) {
+        if (fromPin) setPinMenu(task);
+        return;
+      }
+      const planeEl = document
+        .elementsFromPoint(ev.clientX, ev.clientY)
+        .find((el) => el.classList.contains('fp-stage__plane')) as HTMLElement | undefined;
+      if (!planeEl || !plan) return; // dropped off the plan — nothing changes
+      const r = planeEl.getBoundingClientRect();
+      const pt: [number, number] = [(ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height];
+      const target = roomAt(plan, pt);
+      if (!target) {
+        setError(`Drop "${task.title}" inside one of the marked rooms.`);
+        return;
+      }
+      void place(task, target.id, pt);
+    };
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      setDrag(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  };
 
   const act = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -195,11 +272,26 @@ export function FloorplanView({
           >
             👣 Paths
           </button>
-          <button type="button" className={threeD ? '' : 'secondary'} onClick={() => setThreeD(!threeD)} disabled={editing}>
+          {canPlaceAny && (
+            <button
+              type="button"
+              className={placing ? '' : 'secondary'}
+              onClick={() => {
+                setPlacing(!placing);
+                setEditing(false);
+                setSelectedRoomId(null);
+              }}
+              aria-pressed={placing}
+              title="Drag chores and to-dos onto their spot on the plan"
+            >
+              {placing ? '✓ Done placing' : '📌 Place chores'}
+            </button>
+          )}
+          <button type="button" className={threeD ? '' : 'secondary'} onClick={() => setThreeD(!threeD)} disabled={editing || placing}>
             {threeD ? '🧊 3-D' : '🗺️ Flat'}
           </button>
           {canEdit && (
-            <button type="button" className={editing ? '' : 'secondary'} onClick={() => { setEditing(!editing); setSelectedRoomId(null); }}>
+            <button type="button" className={editing ? '' : 'secondary'} onClick={() => { setEditing(!editing); setPlacing(false); setSelectedRoomId(null); }}>
               {editing ? '✓ Done editing' : '✏️ Edit plans'}
             </button>
           )}
@@ -209,6 +301,22 @@ export function FloorplanView({
 
       {plan && editing ? (
         <PlanEditor plan={plan} plans={plans} act={act} busy={busy} onPlanAdded={(p) => setPlanId(p.id)} />
+      ) : plan && placing ? (
+        <>
+          <p className="hint">
+            Drag a job from a list below onto the spot in the room where it's done. Drag a pin to move it; tap it to take it off the
+            plan, edit it, or delete it.
+          </p>
+          <FloorplanStage
+            plan={plan}
+            tasks={tasks}
+            spots={[]}
+            showWalkers={false}
+            pins={(allTasks ?? []).filter((t) => t.room_id)}
+            onPinPointerDown={(t, e) => (canPlaceTask(t, activeProfile, members) ? startDrag(t, e, true) : setPinMenu(t))}
+          />
+          <UnplacedLists tasks={allTasks} onPress={(t, e) => startDrag(t, e, false)} />
+        </>
       ) : (
         plan && (
           <>
@@ -222,6 +330,9 @@ export function FloorplanView({
               selectedRoomId={selectedRoomId}
               onRoomClick={(r) => setSelectedRoomId(selectedRoomId === r.id ? null : r.id)}
               onWalkerClick={(s) => setPersonId(s.member.id)}
+              pins={tasks.filter((t) => t.room_id && !isTaskDoneByAll(t))}
+              hidePinIds={new Set(spots.map((s) => s.task.id))}
+              onPinClick={setPinMenu}
             />
             </div>
             {plan.rooms.length === 0 && (
@@ -231,6 +342,34 @@ export function FloorplanView({
             {room && <RoomPanel room={room} tasks={tasks} onChange={changedAndWatch} onEdit={onEdit} onAdd={onAdd} onClose={() => setSelectedRoomId(null)} />}
           </>
         )
+      )}
+      {drag && (
+        <div className="drag-ghost fp-drag-ghost" style={{ left: drag.x, top: drag.y }}>
+          {taskIcon(drag.task)} {drag.task.title}
+        </div>
+      )}
+      {pinMenu && (
+        <PinMenu
+          task={pinMenu}
+          plans={plans}
+          onClose={() => setPinMenu(null)}
+          onRemove={() => {
+            setPinMenu(null);
+            void place(pinMenu, null);
+          }}
+          onEdit={
+            onEdit
+              ? () => {
+                  setPinMenu(null);
+                  onEdit(pinMenu);
+                }
+              : undefined
+          }
+          onDeleted={() => {
+            setPinMenu(null);
+            changed();
+          }}
+        />
       )}
       {personId && members.some((m) => m.id === personId) && (
         <PersonJobsPopup
@@ -251,6 +390,110 @@ export function FloorplanView({
         />
       )}
     </section>
+  );
+}
+
+/**
+ * While placing: each person's jobs that aren't on the plan yet, to drag onto it — a kid allowed to
+ * place their own sees just theirs. A job on several people shows under each (it's one job).
+ */
+function UnplacedLists({ tasks, onPress }: { tasks: Task[] | null; onPress: (task: Task, e: ReactPointerEvent) => void }) {
+  const { members, activeProfile } = useFamilyMembers();
+  if (!tasks) return <div className="empty-state">Loading chores…</div>;
+  const unplaced = sortForColumn(tasks.filter((t) => !t.room_id && canPlaceTask(t, activeProfile, members)));
+  const groups = [
+    ...members.map((m) => ({ key: m.id, member: m, label: m.name, items: unplaced.filter((t) => t.assignee_ids.includes(m.id)) })),
+    { key: 'anyone', member: null, label: 'Anyone (not assigned)', items: unplaced.filter((t) => t.assignee_ids.length === 0) },
+  ].filter((g) => g.items.length > 0);
+  if (!groups.length) return <div className="empty-state">Every chore and to-do is on the plan. 🎉</div>;
+  return (
+    <div className="fp-unplaced">
+      {groups.map((g) => (
+        <div key={g.key} className="fp-unplaced__group" style={{ borderTopColor: g.member?.color ?? 'var(--border)' }}>
+          <h4>
+            {g.member && <MemberAvatar member={g.member} size={24} />} {g.label} <span className="hint">({g.items.length})</span>
+          </h4>
+          <div className="fp-unplaced__items">
+            {g.items.map((t) => (
+              <button key={t.id} type="button" className="fp-unplaced__item" onPointerDown={(e) => onPress(t, e)} title="Drag onto the plan">
+                <span aria-hidden="true">{taskIcon(t)}</span> {t.title}
+                <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Tap a job's pin: where it is and who it's on, then take it off the plan, edit it, or delete it. */
+function PinMenu({
+  task,
+  plans,
+  onClose,
+  onRemove,
+  onEdit,
+  onDeleted,
+}: {
+  task: Task;
+  plans: Floorplan[];
+  onClose: () => void;
+  onRemove: () => void;
+  onEdit?: () => void;
+  onDeleted: () => void;
+}) {
+  const { members, activeProfile } = useFamilyMembers();
+  const found = findRoom(plans, task.room_id);
+  const people = members.filter((m) => task.assignee_ids.includes(m.id));
+  const mayPlace = canPlaceTask(task, activeProfile, members);
+  const mayEdit = canEditTask(task, activeProfile);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel panel fp-pin-menu" onClick={(e) => e.stopPropagation()}>
+        <h2>
+          <span aria-hidden="true">{taskIcon(task)}</span> {task.title}
+        </h2>
+        <p className="hint">
+          {found ? `📍 ${found.room.name}${plans.length > 1 ? ` · ${found.plan.name}` : ''}` : 'Not on the plan'}
+          {' · '}
+          {people.length ? people.map((m) => m.name).join(', ') : 'Anyone'}
+        </p>
+        {error && <div className="settings-login__error">{error}</div>}
+        <div className="fp-pin-menu__buttons">
+          {mayPlace && found && (
+            <button type="button" className="secondary" onClick={onRemove}>
+              📍 Take it off the plan
+            </button>
+          )}
+          {mayEdit && onEdit && (
+            <button type="button" className="secondary" onClick={onEdit}>
+              ✎ Edit
+            </button>
+          )}
+          {mayEdit && (
+            <ConfirmButton
+              label={`🗑️ Delete this ${task.kind === 'chore' ? 'chore' : 'to-do'}`}
+              confirmLabel={`Delete "${task.title}" for good?`}
+              className="secondary"
+              onConfirm={async () => {
+                try {
+                  await api.delete(`/tasks/${task.id}`);
+                  onDeleted();
+                } catch (err) {
+                  setError((err as Error).message);
+                }
+              }}
+            />
+          )}
+          <button type="button" className="secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {!mayPlace && <p className="hint">Only a parent can move this on the plan.</p>}
+      </div>
+    </div>
   );
 }
 

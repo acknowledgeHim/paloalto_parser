@@ -1,7 +1,8 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 import { todayStr } from '../utils/recurrence.js';
 import { assigneesFor, tasksForDate, allActiveTasks } from '../services/taskQueries.js';
 import type { Task, TaskCompletion } from '../types.js';
@@ -14,6 +15,27 @@ function creditReward(memberId: string, rewardType: 'stars' | 'money', amount: n
   } else {
     db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(amount, memberId);
   }
+}
+
+/**
+ * Putting a chore/to-do somewhere on the floor plan is a parent's call — or a kid's whom a parent
+ * has let place their own (family_members.can_place_tasks), for jobs that are theirs. Like the rest
+ * of the parent-only settings, this only bites once a parent has a password (requireAdmin).
+ */
+function mayPlace(req: Request, assigneeIds: string[], actingMemberId: unknown): boolean {
+  if (!isAdminGateActive()) return true;
+  const token = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+  if (isRequestAdmin(token)) return true;
+  const actor = sessionMemberId(token) ?? (typeof actingMemberId === 'string' ? actingMemberId : null);
+  if (!actor || !assigneeIds.includes(actor)) return false;
+  return Boolean(db.prepare('SELECT 1 FROM family_members WHERE id = ? AND can_place_tasks = 1').get(actor));
+}
+
+/** A spot on the plan: both 0–1, or neither (the middle of the room). */
+function parseSpot(x: unknown, y: unknown): { room_x: number | null; room_y: number | null } | null {
+  if (x == null && y == null) return { room_x: null, room_y: null };
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { room_x: Math.min(1, Math.max(0, x)), room_y: Math.min(1, Math.max(0, y)) };
 }
 
 /** A task's room must be a real one (or none). */
@@ -62,6 +84,9 @@ tasksRouter.post('/', (req, res) => {
   const { kind, title, notes, assignee_ids, created_by_id, recurrence, due_date, time_of_day, icon, room_id } = req.body as Partial<Task> & {
     assignee_ids?: string[];
   };
+  if (room_id && !mayPlace(req, assignee_ids ?? [], (req.body as { acting_member_id?: unknown }).acting_member_id)) {
+    return res.status(403).json({ error: 'Only a parent can put this on the floor plan' });
+  }
   if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
   if (kind !== 'chore' && kind !== 'todo') return res.status(400).json({ error: 'kind must be chore or todo' });
   if (!roomExists(room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
@@ -77,14 +102,16 @@ tasksRouter.post('/', (req, res) => {
     time_of_day: time_of_day ?? null,
     icon: icon ?? null,
     room_id: room_id || null,
+    room_x: null,
+    room_y: null,
     reward_type: null,
     reward_amount: null,
     active: 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y, @active, @created_at)`
   ).run(task);
   setAssignees(task.id, assignee_ids ?? []);
   res.status(201).json({ ...task, assignee_ids: assignee_ids ?? [], completions: [] });
@@ -109,16 +136,48 @@ tasksRouter.patch('/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   if (!existing) return res.status(404).json({ error: 'not found' });
 
-  const { assignee_ids, ...fields } = req.body as Partial<Task> & { assignee_ids?: string[] };
+  const { assignee_ids, acting_member_id, room_x: _x, room_y: _y, ...fields } = req.body as Partial<Task> & {
+    assignee_ids?: string[];
+    acting_member_id?: unknown;
+  };
   const updated: Task = { ...existing, ...fields, id: existing.id };
   updated.room_id = updated.room_id || null;
   if (!roomExists(updated.room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
+  if (updated.room_id !== existing.room_id) {
+    // Moving it to another room (from the edit form) — only someone who may place it, and the old
+    // exact spot doesn't belong to the new room.
+    if (!mayPlace(req, assignee_ids ?? assigneesFor(existing.id), acting_member_id)) {
+      return res.status(403).json({ error: 'Only a parent can change where this is on the floor plan' });
+    }
+    updated.room_x = null;
+    updated.room_y = null;
+  }
   db.prepare(
     `UPDATE tasks SET kind=@kind, title=@title, notes=@notes, recurrence=@recurrence,
-     due_date=@due_date, time_of_day=@time_of_day, icon=@icon, room_id=@room_id, active=@active WHERE id=@id`
+     due_date=@due_date, time_of_day=@time_of_day, icon=@icon, room_id=@room_id, room_x=@room_x, room_y=@room_y,
+     active=@active WHERE id=@id`
   ).run(updated);
   if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
   res.json({ ...updated, assignee_ids: assignee_ids ?? assigneesFor(req.params.id) });
+});
+
+/**
+ * PATCH /api/tasks/:id/location { room_id, x?, y?, acting_member_id? } — puts a chore/to-do at a
+ * spot on the floor plan (dragged there), or takes it off (room_id null). Parents, or a kid allowed
+ * to place their own jobs (see mayPlace).
+ */
+tasksRouter.patch('/:id/location', (req, res) => {
+  const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  const { room_id, x, y, acting_member_id } = req.body as { room_id?: string | null; x?: unknown; y?: unknown; acting_member_id?: unknown };
+  if (!mayPlace(req, assigneesFor(existing.id), acting_member_id)) {
+    return res.status(403).json({ error: 'Only a parent can change where this is on the floor plan' });
+  }
+  if (!roomExists(room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
+  const spot = room_id ? parseSpot(x, y) : { room_x: null, room_y: null };
+  if (!spot) return res.status(400).json({ error: 'x and y must be numbers from 0 to 1' });
+  db.prepare('UPDATE tasks SET room_id = ?, room_x = ?, room_y = ? WHERE id = ?').run(room_id || null, spot.room_x, spot.room_y, existing.id);
+  res.json({ ...existing, room_id: room_id || null, ...spot, assignee_ids: assigneesFor(existing.id) });
 });
 
 /**

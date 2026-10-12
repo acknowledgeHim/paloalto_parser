@@ -54,6 +54,16 @@ familyMembersRouter.get('/', (_req, res) => {
  * (any member left out keeps its existing sort_order). Parent-only, same gate as adding/removing
  * a family member — this is roster configuration, not everyday use.
  */
+/** PUT /:id/can-place-tasks { allowed } — a parent letting a kid put their own chores/to-dos on the
+ *  floor plan. Its own parent-only route, so the everyday profile edit can't grant it. */
+familyMembersRouter.put('/:id/can-place-tasks', requireAdmin, (req, res) => {
+  const { changes } = db
+    .prepare('UPDATE family_members SET can_place_tasks = ? WHERE id = ?')
+    .run((req.body as { allowed?: unknown }).allowed ? 1 : 0, req.params.id);
+  if (!changes) return res.status(404).json({ error: 'not found' });
+  res.json(toPublic(db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as FamilyMember));
+});
+
 familyMembersRouter.post('/reorder', requireAdmin, (req, res) => {
   const { ids } = req.body as { ids?: string[] };
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });

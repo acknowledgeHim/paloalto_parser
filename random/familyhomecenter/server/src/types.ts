@@ -6,6 +6,8 @@ export interface FamilyMember {
    *  /:id/avatar-image), or null/empty for no avatar (falls back to a colored initial in the client). */
   avatar: string | null;
   is_parent: 0 | 1;
+  /** A kid a parent lets put their own chores/to-dos on the floor plan (parents always can). */
+  can_place_tasks?: 0 | 1;
   /** Sound id (client/src/utils/sounds.ts preset list) to play when this person completes a task. */
   complete_sound: string | null;
   /** Prize Bank running totals — credited on completing a reward task, spent on star-cost prizes. */
@@ -82,6 +84,9 @@ export interface Task {
   icon: string | null;
   /** Where in the house this is (a room on a floor plan — routes/floorplans.ts); null = nowhere in particular. */
   room_id: string | null;
+  /** The exact spot in that room, 0–1 across/down the plan's picture; null = the middle of the room. */
+  room_x: number | null;
+  room_y: number | null;
 }
 
 /** A floor plan's room: its outline as points 0–1 across/down the plan's picture. */

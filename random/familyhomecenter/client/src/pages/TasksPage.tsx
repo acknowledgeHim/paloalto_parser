@@ -19,6 +19,20 @@ export function TasksPage() {
   const { members, activeProfile } = useFamilyMembers();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [modalTask, setModalTask] = useState<Task | 'new' | null>(null);
+  // ✎ always shows here; when this person can't edit that job, it says why instead of hiding.
+  const [editNotice, setEditNotice] = useState<string | null>(null);
+  const tryEdit = (t: Task) => {
+    if (canEditTask(t, activeProfile)) {
+      setEditNotice(null);
+      setModalTask(t);
+      return;
+    }
+    setEditNotice(
+      activeProfile
+        ? `Only a parent, or whoever "${t.title}" is assigned to, can edit it — ${activeProfile.name} is picked in "Who's this?" up top.`
+        : `Pick who you are in "Who's this?" up top first — parents can edit every chore and to-do, kids their own.`
+    );
+  };
   // "+ Add a job here" on a floor plan room: the new task starts in that room.
   const [newRoomId, setNewRoomId] = useState<string | null>(null);
   const [view, setViewState] = useState<'people' | 'rooms'>(() => {
@@ -99,7 +113,7 @@ export function TasksPage() {
         onChange={load}
         hideAssignee
         viewerId={viewerId}
-        onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+        onEdit={tryEdit}
       />
     </div>
   );
@@ -125,6 +139,13 @@ export function TasksPage() {
           </button>
         </div>
       </div>
+
+      {editNotice && (
+        <div className="settings-login__error tasks-page__notice" role="status">
+          {editNotice}
+          <button type="button" className="link-button" onClick={() => setEditNotice(null)}>OK</button>
+        </div>
+      )}
 
       {view === 'rooms' && (
         <FloorplanView

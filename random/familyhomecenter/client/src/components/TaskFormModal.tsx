@@ -4,7 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '../utils/timeOfDay.js';
 import { TASK_ICON_PRESETS, taskIcon } from '../utils/taskIcons.js';
 import { EmojiPicker } from './EmojiPicker.js';
-import { useFloorplans } from '../utils/floorplans.js';
+import { canPlaceTask, useFloorplans } from '../utils/floorplans.js';
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
@@ -158,6 +158,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
       time_of_day: timeOfDaySlots.length > 0 ? timeOfDaySlots.join(',') : null,
       due_date: recurrence === 'once' ? dueDate || null : null,
       room_id: roomId || null,
+      acting_member_id: activeProfile?.id ?? null,
     };
     let taskId: string;
     if (task) {
@@ -278,7 +279,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
           </p>
         )}
 
-        {plans && plans.some((p) => p.rooms.length > 0) && (
+        {plans && plans.some((p) => p.rooms.length > 0) && canPlaceTask({ assignee_ids: isParent ? assigneeIds : activeProfile ? [activeProfile.id] : [] }, activeProfile, members) && (
           <div>
             <label className="member-form__label">Where (optional — shows it in that room on the floor plan)</label>
             <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>

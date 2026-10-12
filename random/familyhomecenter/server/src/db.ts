@@ -911,6 +911,19 @@ try {
 } catch (err) {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
+// Where in the room exactly (0–1 across/down the plan's picture; NULL = the middle of the room),
+// and which kids a parent lets put their own chores on the floor plan.
+for (const [table, column] of [
+  ['tasks', 'room_x REAL'],
+  ['tasks', 'room_y REAL'],
+  ['family_members', 'can_place_tasks INTEGER NOT NULL DEFAULT 0'],
+]) {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
+  } catch (err) {
+    if (!(err as Error).message.includes('duplicate column')) throw err;
+  }
+}
 
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;

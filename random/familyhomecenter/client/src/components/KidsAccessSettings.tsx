@@ -9,7 +9,7 @@ import { SECTIONS } from '../utils/sections.js';
  * right now. Off stays off until a parent turns it back on. Parents always see everything.
  */
 export function KidsAccessSettings() {
-  const { members } = useFamilyMembers();
+  const { members, refresh } = useFamilyMembers();
   const { access } = useSectionAccess();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -68,6 +68,24 @@ export function KidsAccessSettings() {
                   <button type="button" className="link-button" onClick={() => save(row.id, [])}>All off</button>
                 </span>
               </div>
+              {row.id !== 'guest' && (
+                <label className="kids-access__place">
+                  <input
+                    type="checkbox"
+                    checked={members.find((m) => m.id === row.id)?.can_place_tasks === 1}
+                    onChange={async (e) => {
+                      setError(null);
+                      try {
+                        await api.put(`/family-members/${row.id}/can-place-tasks`, { allowed: e.target.checked });
+                        await refresh();
+                      } catch (err) {
+                        setError((err as Error).message);
+                      }
+                    }}
+                  />
+                  📌 Can put their own chores and to-dos on the floor plan
+                </label>
+              )}
               <div className="kids-access__sections">
                 {SECTIONS.map((sec) => (
                   <label key={sec.key}>

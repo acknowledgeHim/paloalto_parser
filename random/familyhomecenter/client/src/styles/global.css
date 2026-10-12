@@ -1920,3 +1920,40 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 .fp-path__stop { fill: #fff; stroke: currentColor; stroke-width: 3; vector-effect: non-scaling-stroke; }
 @keyframes fp-march { to { stroke-dashoffset: -20; } }
 @media (prefers-reduced-motion: reduce) { .fp-path__trail { animation: none; } }
+/* Zoom (flat floor plans) */
+.fp-stage-wrap { position: relative; }
+.fp-zoom { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-bottom: 6px; }
+.fp-zoom button { min-height: 36px; padding: 0 12px; font-size: 1.1em; }
+.fp-zoom__level { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 0.9em; }
+.fp-stage--flat { display: block; max-height: 78vh; overflow: auto; overscroll-behavior: contain; }
+.fp-stage--flat .fp-stage__plane { margin: 0 auto; }
+.fp-stage--zoomed { border: 1px solid var(--border); border-radius: 10px; }
+
+/* Jobs as pins at their spot */
+.fp-pin {
+  position: absolute; z-index: 2; transform: translate(-50%, -100%);
+  min-height: 0; width: 30px; height: 30px; padding: 0; border-radius: 50% 50% 50% 0; rotate: -45deg;
+  background: #fff; border: 2px solid #c0392b; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+  display: grid; place-items: center; font-size: 15px; line-height: 1; cursor: pointer;
+}
+.fp-pin__icon { rotate: 45deg; }
+.fp-pin--done { opacity: 0.45; filter: grayscale(0.6); }
+.fp-pin--movable { cursor: grab; touch-action: none; }
+.fp-pin--3d { transform: translate(-50%, -100%) rotateX(var(--tilt)); transform-origin: 50% 100%; }
+.fp-drag-ghost { z-index: 400; }
+
+.fp-unplaced { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.fp-unplaced__group { border-top: 4px solid; padding-top: 6px; }
+.fp-unplaced__group h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.fp-unplaced__items { display: flex; flex-wrap: wrap; gap: 6px; }
+.fp-unplaced__item {
+  min-height: 40px; padding: 0 12px; border-radius: 999px; background: var(--bg); color: var(--text);
+  border: 1px dashed var(--border); font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+  cursor: grab; touch-action: none; user-select: none;
+}
+.fp-unplaced__item .badge { margin: 0; }
+.fp-pin-menu { max-width: 460px; }
+.fp-pin-menu h2 { margin-bottom: 4px; }
+.fp-pin-menu__buttons { display: flex; flex-direction: column; gap: 8px; }
+.kids-access__place { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-weight: 600; }
+.tasks-page__notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }

@@ -39,6 +39,8 @@ export interface FamilyMember {
   /** Where this person sorts in the profile switcher, Settings roster, and Family Board columns. */
   sort_order: number;
   is_parent: 0 | 1;
+  /** A kid a parent lets put their own chores/to-dos on the floor plan (parents always can). */
+  can_place_tasks?: 0 | 1;
   /** Prize Bank running totals. */
   star_balance: number;
   money_balance: number;
@@ -94,6 +96,9 @@ export interface Task {
   icon: string | null;
   /** Which room it's in, on a floor plan (Chores & Tasks → 🏠 By room); null = nowhere in particular. */
   room_id: string | null;
+  /** The exact spot in that room (dragged there), 0–1 across/down the plan; null = the middle of the room. */
+  room_x: number | null;
+  room_y: number | null;
 }
 
 /** A room marked on a floor plan: its outline as points 0–1 across/down the plan's picture. */
