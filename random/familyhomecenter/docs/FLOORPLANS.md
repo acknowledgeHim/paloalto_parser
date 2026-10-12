@@ -2,7 +2,8 @@
 
 **Chores & Tasks → 🏠 By room** shows a picture of each floor (and the yard, if you add one) with
 the rooms marked. Each room shows how many jobs are left in it. Everyone's avatar stands in the
-room of their next unfinished chore or to-do, with a small emoji of that job beside them. When they
+room of their next unfinished chore or to-do, with a small emoji of that job beside them. Only
+that one job shows for each person. All the placed jobs show as pins in 📌 Place chores. When they
 check it off, they walk to the next one.
 
 **Family Board → 🏠 House (3-D)** is the same thing, tilted like a dollhouse with everyone
@@ -42,9 +43,10 @@ avatar walks to that exact spot, and 👣 Paths go there too.
 
 ## ⛶ Full screen
 
-**⛶ Full screen** makes the floor plan fill the screen in every mode: viewing, 📌 placing
-(the job lists move beside the plan) and editing. Popups still open over it. Press
-**✕ Exit full screen** or Esc to go back.
+**⛶ Full screen** fills the screen with just the plan, in every mode: viewing, 📌 placing
+(the job lists sit beside the plan) and editing. The controls shrink to small icons floating in
+the top-right corner: the plan names, 👣, 📌, 🗺️/🧊, ✏️ and **✕** to exit (Esc also exits).
+Zoom floats in the bottom-right corner. Popups still open over it.
 
 ## Zoom
 

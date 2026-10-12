@@ -326,7 +326,7 @@ export function FloorplanStage({
         style={{
           aspectRatio: aspect,
           // As wide as fits, but not taller than most of the screen — times the zoom.
-          width: `calc(min(100%, ${((threeD ? (big ? 120 : 95) : big ? 76 : 70) * aspect).toFixed(2)}vh) * ${zoom})`,
+          width: `calc(min(100%, ${((threeD ? (big ? 135 : 95) : big ? 96 : 70) * aspect).toFixed(2)}vh) * ${zoom})`,
           maxWidth: zoom > 1 ? 'none' : undefined,
           ['--tilt' as string]: `${TILT_DEG}deg`,
         }}

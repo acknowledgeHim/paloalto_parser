@@ -251,7 +251,8 @@ export function FloorplanView({
 
   return (
     <section className={`panel fp-view ${full ? 'fp-view--full' : ''}`}>
-      <div className="fp-view__bar">
+      {/* Full screen: the same controls, shrunk to icons floating in a corner, so the plan gets the screen. */}
+      <div className={`fp-view__bar ${full ? 'fp-view__bar--float' : ''}`}>
         <div className="fp-view__tabs" role="tablist">
           {plans.map((p) => {
             const people = spots.filter((s) => s.planId === p.id);
@@ -265,7 +266,7 @@ export function FloorplanView({
                 onClick={() => setPlanId(p.id)}
               >
                 {p.name}
-                {people.length > 0 && (
+                {people.length > 0 && !full && (
                   <span className="fp-view__tab-people">
                     {people.slice(0, 4).map((s) => (
                       <MemberAvatar key={s.member.id} member={s.member} size={20} />
@@ -283,18 +284,20 @@ export function FloorplanView({
             onClick={() => setShowPaths(!showPaths)}
             disabled={editing}
             aria-pressed={showPaths}
+            aria-label="Paths"
             title="Show each person's walking route through their next jobs"
           >
-            👣 Paths
+            {full ? '👣' : '👣 Paths'}
           </button>
           <button
             type="button"
-            className={full ? '' : 'secondary'}
+            className={`fp-view__full-toggle ${full ? '' : 'secondary'}`}
             onClick={() => setFull(!full)}
             aria-pressed={full}
-            title={full ? 'Back to the page (Esc)' : 'Fill the screen with the plan'}
+            aria-label={full ? 'Exit full screen' : 'Full screen'}
+            title={full ? 'Exit full screen (Esc)' : 'Fill the screen with the plan'}
           >
-            {full ? '✕ Exit full screen' : '⛶ Full screen'}
+            {full ? '✕' : '⛶ Full screen'}
           </button>
           {canPlaceAny && (
             <button
@@ -306,17 +309,31 @@ export function FloorplanView({
                 setSelectedRoomId(null);
               }}
               aria-pressed={placing}
-              title="Drag chores and to-dos onto their spot on the plan"
+              aria-label={placing ? 'Done placing' : 'Place chores'}
+              title={placing ? 'Done placing' : 'Drag chores and to-dos onto their spot on the plan'}
             >
-              {placing ? '✓ Done placing' : '📌 Place chores'}
+              {full ? (placing ? '✓📌' : '📌') : placing ? '✓ Done placing' : '📌 Place chores'}
             </button>
           )}
-          <button type="button" className={threeD ? '' : 'secondary'} onClick={() => setThreeD(!threeD)} disabled={editing || placing}>
-            {threeD ? '🧊 3-D' : '🗺️ Flat'}
+          <button
+            type="button"
+            className={threeD ? '' : 'secondary'}
+            onClick={() => setThreeD(!threeD)}
+            disabled={editing || placing}
+            aria-label={threeD ? '3-D (tap for flat)' : 'Flat (tap for 3-D)'}
+            title={threeD ? '3-D — tap for flat' : 'Flat — tap for 3-D'}
+          >
+            {full ? (threeD ? '🧊' : '🗺️') : threeD ? '🧊 3-D' : '🗺️ Flat'}
           </button>
           {canEdit && (
-            <button type="button" className={editing ? '' : 'secondary'} onClick={() => { setEditing(!editing); setPlacing(false); setSelectedRoomId(null); }}>
-              {editing ? '✓ Done editing' : '✏️ Edit plans'}
+            <button
+              type="button"
+              className={editing ? '' : 'secondary'}
+              onClick={() => { setEditing(!editing); setPlacing(false); setSelectedRoomId(null); }}
+              aria-label={editing ? 'Done editing' : 'Edit plans'}
+              title={editing ? 'Done editing' : 'Edit plans'}
+            >
+              {full ? (editing ? '✓✏️' : '✏️') : editing ? '✓ Done editing' : '✏️ Edit plans'}
             </button>
           )}
         </div>
@@ -327,7 +344,7 @@ export function FloorplanView({
         <PlanEditor plan={plan} plans={plans} act={act} busy={busy} big={full} onPlanAdded={(p) => setPlanId(p.id)} />
       ) : plan && placing ? (
         <>
-          <p className="hint">
+          <p className="hint fp-view__hint">
             Drag a job from the lists onto the spot in the room where it's done. Drag a pin to move it; tap it to take it off the
             plan, edit it, or delete it.
           </p>
@@ -358,9 +375,6 @@ export function FloorplanView({
               selectedRoomId={selectedRoomId}
               onRoomClick={(r) => setSelectedRoomId(selectedRoomId === r.id ? null : r.id)}
               onWalkerClick={(s) => setPersonId(s.member.id)}
-              pins={tasks.filter((t) => t.room_id && !isTaskDoneByAll(t))}
-              hidePinIds={new Set(spots.map((s) => s.task.id))}
-              onPinClick={setPinMenu}
             />
             </div>
             {plan.rooms.length === 0 && (

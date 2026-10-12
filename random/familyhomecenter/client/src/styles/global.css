@@ -1981,3 +1981,24 @@ body.fp-full-open { overflow: hidden; }
 }
 /* Tilted (3-D), the plan's box reaches up over the buttons above it — keep those on top so taps reach them. */
 .fp-view__bar, .fp-zoom, .family-board__tabs, .fp-view > .settings-login__error { position: relative; z-index: 6; }
+/* Full screen, round two: just the plan — controls float small in the corners. */
+.fp-view--full { padding: 6px; }
+.fp-view--full .fp-view__hint { display: none; }
+.fp-view--full .fp-stage--flat { max-height: calc(100vh - 12px); }
+.fp-view__bar--float {
+  position: fixed; top: 8px; right: 8px; z-index: 145; flex-wrap: nowrap; gap: 6px;
+  padding: 4px; border-radius: 12px; background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); max-width: calc(100vw - 16px);
+}
+.fp-view__bar--float .fp-view__tabs { flex-wrap: nowrap; overflow-x: auto; gap: 4px; }
+.fp-view__bar--float .fp-view__tab { min-height: 34px; padding: 0 10px; font-size: 0.85em; white-space: nowrap; }
+.fp-view__bar--float .fp-view__tools { gap: 4px; }
+.fp-view__bar--float .fp-view__tools button { min-height: 34px; min-width: 38px; padding: 0 8px; font-size: 1em; }
+.fp-view--full .fp-zoom {
+  position: fixed; bottom: 10px; right: 10px; z-index: 145; margin: 0; padding: 4px; border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.fp-view--full .fp-zoom button { min-height: 32px; padding: 0 10px; }
+.fp-view--full .fp-place { grid-template-columns: minmax(0, 1fr) minmax(200px, 260px); }
+.fp-view--full .fp-place .fp-unplaced { max-height: calc(100vh - 70px); margin-top: 50px; }
+.fp-view__bar--float .fp-view__full-toggle { order: 99; }
