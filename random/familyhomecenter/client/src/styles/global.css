@@ -865,7 +865,20 @@ textarea {
 .movie-maker__movie-list li:last-child { border-bottom: none; }
 .movie-maker__movie-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .movie-maker__movie-row .task-form__row > * { white-space: nowrap; }
-.movie-maker__movie-info { display: flex; flex-direction: column; gap: 2px; }
+.movie-maker__movie-info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; min-width: 0; }
+/* Compact buttons so a movie's/document's actions sit on one line beside its title — quicker to scroll a long list. */
+.movie-maker__movie-row > .task-form__row { flex: 0 1 auto; flex-wrap: nowrap; gap: 6px; align-items: center; }
+.movie-maker__movie-row > .task-form__row > * { flex: 0 0 auto; }
+.movie-maker__movie-row > .task-form__row > button:not(.task-card__edit),
+.movie-maker__movie-row > .task-form__row > .movie-maker__download {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 0.9em;
+}
+@media (max-width: 640px) {
+  .movie-maker__movie-row > .task-form__row { flex-wrap: wrap; }
+}
 .movie-maker__movie-title { font-weight: 600; }
 /* A link (so the browser's download attribute works) styled like button.secondary. */
 .movie-maker__download {
