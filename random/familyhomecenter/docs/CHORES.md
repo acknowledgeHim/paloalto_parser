@@ -9,7 +9,8 @@ order, and each person can set their own.
 - **Numbers:** they show on the cards (1, 2, 3…) on Chores & Tasks, the Family Board and the floor
   plan's person popup.
 - **Every job is listed:** the order covers all of the person's jobs, including weekly ones that
-  aren't on today's list, so they keep their place.
+  aren't on today's list, so they keep their place. One-time jobs that are already done are left
+  out.
 - **Unordered jobs:** jobs the person hasn't put in order come after the ordered ones.
 
 **On the floor plan**, the avatar stands at the first unfinished job in that order. When it's

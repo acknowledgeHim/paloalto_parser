@@ -139,6 +139,8 @@ export interface TaskWithAssignment extends Task {
   rotation_next_id?: string | null;
   /** Where this sits in each person's routine (member id → 1, 2, …), for those who've ordered it. */
   positions?: Record<string, number>;
+  /** A one-time job that's been done (only from GET /tasks?all=true). */
+  finished?: boolean;
 }
 
 export interface TaskCompletion {

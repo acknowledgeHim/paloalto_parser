@@ -123,7 +123,7 @@ export function TasksPage() {
     // Every job of theirs, not just today's — a weekly one keeps its place on the days it's off.
     api
       .get<Task[]>('/tasks?all=true')
-      .then((all) => setOrderList(sortForColumn(all.filter((t) => t.assignee_ids.includes(memberId)), memberId)))
+      .then((all) => setOrderList(sortForColumn(all.filter((t) => t.assignee_ids.includes(memberId) && !t.finished), memberId)))
       .catch(console.error);
   };
   const moveInOrder = (i: number, by: -1 | 1) => {

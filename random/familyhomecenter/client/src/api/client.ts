@@ -107,6 +107,8 @@ export interface Task {
   needed_since?: string | null;
   /** Where this sits in each person's routine (member id → 1, 2, …), for those who've ordered it. */
   positions?: Record<string, number>;
+  /** A one-time job that's been done (only from GET /tasks?all=true) — nothing left to put in order. */
+  finished?: boolean;
 }
 
 /** A room marked on a floor plan: its outline as points 0–1 across/down the plan's picture. */

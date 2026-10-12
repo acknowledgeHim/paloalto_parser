@@ -126,11 +126,19 @@ export function allActiveTasks(): TaskWithAssignment[] {
   // whose turn it is now (for "when needed" chores waiting for a 🔔).
   const today = todayStr();
   const positions = allPositions();
+  const finishedOnce = new Set(
+    (
+      db
+        .prepare(`SELECT DISTINCT c.task_id FROM task_completions c JOIN tasks t ON t.id = c.task_id WHERE t.recurrence = 'once'`)
+        .all() as Array<{ task_id: string }>
+    ).map((r) => r.task_id)
+  );
   return tasks.map((task) => {
     const state = rotationState(task, today);
     return {
       ...task,
       positions: positions.get(task.id) ?? {},
+      finished: finishedOnce.has(task.id),
       assignee_ids: assigneesFor(task.id),
       completions: [],
       rotation_ids: rotationIds(task) ?? undefined,
