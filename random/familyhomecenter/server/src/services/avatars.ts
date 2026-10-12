@@ -68,6 +68,38 @@ export async function saveAvatarImage(id: string, dataUrl: string): Promise<void
   await fs.rm(avatarVideoPath(id), { force: true }); // a new photo replaces a living one
 }
 
+/** A face's box in a photo, 0–1 of the (upright) photo's width/height — as faces are stored. */
+export interface AvatarFaceBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * A photo from the library as this member's avatar: a square around `face` (with room for hair and
+ * shoulders), or the middle of the photo when there's no face to go on.
+ */
+export async function saveAvatarFromPhoto(id: string, photoPath: string, face: AvatarFaceBox | null): Promise<void> {
+  const meta = await sharp(photoPath).metadata();
+  const turned = (meta.orientation ?? 1) >= 5; // stored sideways; .rotate() below stands it up
+  const pw = (turned ? meta.height : meta.width) ?? 0;
+  const ph = (turned ? meta.width : meta.height) ?? 0;
+  if (!pw || !ph) throw new Error("Couldn't read that photo");
+  let img = sharp(photoPath).rotate();
+  if (face) {
+    const side = Math.round(Math.min(pw, ph, Math.max(face.w * pw, face.h * ph) * 2.2));
+    const cx = (face.x + face.w / 2) * pw;
+    const cy = (face.y + face.h / 2) * ph;
+    const left = Math.round(Math.max(0, Math.min(pw - side, cx - side / 2)));
+    const top = Math.round(Math.max(0, Math.min(ph - side, cy - side / 2)));
+    img = img.extract({ left, top, width: side, height: side });
+  }
+  await fs.mkdir(config.avatarsDir, { recursive: true });
+  await img.resize({ width: AVATAR_SIZE, height: AVATAR_SIZE, fit: 'cover' }).jpeg({ quality: 88 }).toFile(avatarPath(id));
+  await fs.rm(avatarVideoPath(id), { force: true });
+}
+
 export async function deleteAvatarImage(id: string): Promise<void> {
   await fs.rm(avatarPath(id), { force: true });
   await fs.rm(avatarVideoPath(id), { force: true });

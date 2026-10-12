@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type LivingEffect, type LivingOverlay, type Movie } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { ConfirmButton } from './ConfirmButton.js';
+import { avatarChanged } from './MemberAvatar.js';
 import { PhotoPicker } from './PhotoPicker.js';
 import { fmtMadeOn, OwnedListControls, sortOwned, type OwnedSort } from './OwnedListControls.js';
 import { AreaPainter, isPainted, REGION_EFFECTS, type PaintedArea } from './AreaPainter.js';
@@ -314,6 +315,7 @@ export function AnimateSection() {
                         onClick={() =>
                           act(async () => {
                             await api.post(`/family-members/${x.id}/avatar-from-movie`, { movie_id: m.id });
+                            avatarChanged(x.id);
                             await refresh();
                           }, `✨ ${x.name}'s avatar is now "${m.title}".`)
                         }

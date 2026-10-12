@@ -193,6 +193,12 @@ face recognition found, if it's on. A finished clip can be watched, downloaded, 
 on the bigger avatar spots (Family Board, profile) and shows as a still in small ones. Needs ffmpeg,
 like movies (docs/MOVIES_SETUP.md). The photo itself is only read, never changed.
 
+## A photo as your avatar
+
+In the photo viewer, **🙂** makes that photo the avatar of whoever is picked in **Who's this?**
+(the button only shows once someone is). It's cropped square around their face if it's named
+after them in People, otherwise around the biggest face, otherwise the middle of the photo.
+
 ## On this day
 
 When there are photos taken on today's date in past years, the Dashboard shows an **On this day**

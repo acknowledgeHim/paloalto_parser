@@ -11,6 +11,7 @@ import { useSectionAccess } from '../state/SectionAccess.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import { PhotoFaces } from '../components/PhotoFaces.js';
 import type { Person } from '../api/client.js';
+import { MemberAvatar, avatarChanged } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 type PhotoTab = 'photos' | 'movies' | 'documents' | 'animate';
@@ -557,7 +558,7 @@ function MoviesSection() {
 const PAGE_SIZE = 120;
 
 export function PhotosPage() {
-  const { members } = useFamilyMembers();
+  const { members, activeProfile, refresh: refreshMembers } = useFamilyMembers();
   const { canSee } = useSectionAccess();
   const canManage = useCanManageOwned();
   const albumsApi = useAlbums();
@@ -571,6 +572,9 @@ export function PhotosPage() {
   const [slideshowOn, setSlideshowOn] = useState(false);
   // The ✨ button on a photo in the viewer: make a living photo from it.
   const [animating, setAnimating] = useState<string | null>(null);
+  // The 🙂 button on a photo in the viewer: make it the avatar of whoever's using the screen.
+  const [avatarPanel, setAvatarPanel] = useState<null | 'ask' | 'saving' | { done: string } | { error: string }>(null);
+  useEffect(() => setAvatarPanel(null), [viewingId]);
   // Dates/paths for sorting — loaded after the (quicker) plain photo list.
   const [details, setDetails] = useState<Map<string, PhotoDetail> | null>(null);
   const [detailsFailed, setDetailsFailed] = useState(false);
@@ -1024,7 +1028,7 @@ export function PhotosPage() {
             >
               {albumsApi.isIn(viewing.id, FAVORITES_ID) ? '★' : '☆'}
             </button>
-            <button type="button" className="photo-lightbox__action" aria-label="Albums" onClick={() => setAlbumPanel(albumPanel === 'viewer' ? null : 'viewer')}>
+            <button type="button" className="photo-lightbox__action" aria-label="Albums" onClick={() => { setAvatarPanel(null); setAlbumPanel(albumPanel === 'viewer' ? null : 'viewer'); }}>
               📁
             </button>
             {canSee('movies') && (
@@ -1048,6 +1052,74 @@ export function PhotosPage() {
             >
               {viewing.hidden ? '👁' : '🙈'}
             </button>
+            {activeProfile && (
+              <button
+                type="button"
+                className="photo-lightbox__action"
+                aria-label="Make this my avatar"
+                title={`Make this ${activeProfile.name}'s avatar`}
+                onClick={() => {
+                  setAlbumPanel(null);
+                  setAvatarPanel(avatarPanel ? null : 'ask');
+                }}
+              >
+                🙂
+              </button>
+            )}
+            {activeProfile && avatarPanel && (
+              <div className="album-checklist photo-avatar-panel">
+                {avatarPanel === 'ask' || avatarPanel === 'saving' ? (
+                  <>
+                    <div className="photo-avatar-panel__who">
+                      <MemberAvatar member={activeProfile} size={48} />
+                      <span>Make this photo <b>{activeProfile.name}</b>'s avatar?</span>
+                    </div>
+                    <span className="hint">It's cropped to {activeProfile.name}'s face if they're named in it, otherwise the biggest face.</span>
+                    <div className="photo-avatar-panel__buttons">
+                      <button
+                        type="button"
+                        disabled={avatarPanel === 'saving'}
+                        onClick={async () => {
+                          setAvatarPanel('saving');
+                          try {
+                            const r = await api.post<{ cropped_to: 'yours' | 'biggest' | 'middle' }>(`/family-members/${activeProfile.id}/avatar-from-photo`, {
+                              photo_id: viewing.id,
+                            });
+                            avatarChanged(activeProfile.id);
+                            await refreshMembers();
+                            setAvatarPanel({
+                              done:
+                                r.cropped_to === 'yours'
+                                  ? `Done — cropped to ${activeProfile.name}'s face.`
+                                  : r.cropped_to === 'biggest'
+                                    ? 'Done — cropped to the biggest face. (Name your face in People and it picks yours.)'
+                                    : 'Done — no face found, so it used the middle of the photo.',
+                            });
+                          } catch (err) {
+                            setAvatarPanel({ error: (err as Error).message });
+                          }
+                        }}
+                      >
+                        {avatarPanel === 'saving' ? 'Saving…' : 'Yes, use it'}
+                      </button>
+                      <button type="button" className="secondary" onClick={() => setAvatarPanel(null)}>Cancel</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="photo-avatar-panel__who">
+                      {'done' in avatarPanel && <MemberAvatar member={activeProfile} size={48} />}
+                      <span className={'error' in avatarPanel ? 'internet-page__bad' : ''}>
+                        {'done' in avatarPanel ? avatarPanel.done : `Couldn't change the avatar: ${avatarPanel.error}`}
+                      </span>
+                    </div>
+                    <div className="photo-avatar-panel__buttons">
+                      <button type="button" className="secondary" onClick={() => setAvatarPanel(null)}>OK</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {albumPanel === 'viewer' && <AlbumChecklist albumsApi={albumsApi} photoIds={[viewing.id]} onDone={() => setAlbumPanel(null)} />}
           </div>
           {viewing.hidden && <div className="photo-lightbox__badge">🙈 Hidden</div>}

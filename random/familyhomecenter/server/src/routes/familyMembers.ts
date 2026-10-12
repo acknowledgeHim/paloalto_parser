@@ -5,7 +5,7 @@ import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { requireSelfOrAdmin } from '../middleware/requireSelfOrAdmin.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { deleteAvatarImage, findAvatarImage, findAvatarVideo, saveAvatarImage, saveAvatarVideo } from '../services/avatars.js';
+import { deleteAvatarImage, findAvatarImage, findAvatarVideo, saveAvatarFromPhoto, saveAvatarImage, saveAvatarVideo } from '../services/avatars.js';
 import { config } from '../config.js';
 import { livingFocusX } from '../services/livingPhoto.js';
 import { findPhotoById } from '../services/photos.js';
@@ -336,6 +336,30 @@ familyMembersRouter.post(
     await saveAvatarImage(req.params.id, imageDataUrl);
     db.prepare('UPDATE family_members SET avatar = ? WHERE id = ?').run('image', req.params.id);
     res.json(toPublic({ ...existing, avatar: 'image' }));
+  })
+);
+
+/** POST /:id/avatar-from-photo { photo_id } — a library photo (the 🙂 in the photo viewer) as this
+ *  member's avatar, cropped to their face: the face named after them, else the biggest face. */
+familyMembersRouter.post(
+  '/:id/avatar-from-photo',
+  requireSelfOrAdmin,
+  asyncHandler(async (req, res) => {
+    const existing = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as FamilyMember | undefined;
+    if (!existing) return res.status(404).json({ error: 'not found' });
+    const photoPath = await findPhotoById(String((req.body as { photo_id?: string }).photo_id ?? ''));
+    if (!photoPath) return res.status(404).json({ error: 'That photo is gone' });
+    const faces = db
+      .prepare(
+        `SELECT f.x, f.y, f.w, f.h, p.name FROM faces f LEFT JOIN people p ON p.id = f.person_id
+         WHERE f.path = ? AND f.ignored = 0 AND f.score >= 0.8 ORDER BY f.w * f.h DESC`
+      )
+      .all(path.relative(config.photosDir, photoPath)) as Array<{ x: number; y: number; w: number; h: number; name: string | null }>;
+    const mine = faces.find((f) => f.name?.trim().toLowerCase() === existing.name.trim().toLowerCase());
+    const face = mine ?? faces[0] ?? null;
+    await saveAvatarFromPhoto(req.params.id, photoPath, face);
+    db.prepare("UPDATE family_members SET avatar = 'image' WHERE id = ?").run(req.params.id);
+    res.json({ ...toPublic({ ...existing, avatar: 'image' }), cropped_to: mine ? 'yours' : face ? 'biggest' : 'middle' });
   })
 );
 

@@ -4,7 +4,7 @@ import { downscaleImageToDataUrl } from '../utils/images.js';
 import { playAudioClip, playCompletionSound, SOUND_OPTIONS } from '../utils/sounds.js';
 import { PROGRESS_STYLES, progressFillFor } from '../utils/progressStyles.js';
 import { CELEBRATIONS, DEFAULT_CELEBRATION, celebrate, celebrationFor } from '../utils/celebrations.js';
-import { MemberAvatar } from './MemberAvatar.js';
+import { avatarChanged, MemberAvatar } from './MemberAvatar.js';
 import { EmojiPicker } from './EmojiPicker.js';
 
 const COLOR_PRESETS = ['#5b8def', '#e2685a', '#3fae66', '#c96fd6', '#e0a638', '#33a3a3'];
@@ -250,6 +250,7 @@ export function FamilyMemberFormModal({ member, onClose, onSaved, canChangeRole 
 
       if (pendingImage) {
         await api.post(`/family-members/${saved.id}/avatar`, { imageDataUrl: pendingImage });
+        avatarChanged(saved.id);
       } else if (savedPicture && !hasImage) {
         await api.delete(`/family-members/${saved.id}/avatar`);
       }

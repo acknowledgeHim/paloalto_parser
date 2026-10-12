@@ -6,6 +6,14 @@ interface Props {
   size?: number;
 }
 
+/** When each member's avatar picture last changed in this browser, so a new one shows straight
+ *  away instead of the cached old one (the URL stays the same). */
+const changedAt = new Map<string, number>();
+export function avatarChanged(id: string) {
+  changedAt.set(id, Date.now());
+}
+const bust = (id: string) => (changedAt.has(id) ? `?v=${changedAt.get(id)}` : '');
+
 /** Smaller than this, a living-photo avatar shows as its still picture. */
 const VIDEO_MIN_SIZE = 40;
 
@@ -23,8 +31,8 @@ export function MemberAvatar({ member, size = 24 }: Props) {
       <video
         className="member-avatar member-avatar--image"
         style={style}
-        src={`/api/family-members/${member.id}/avatar-video`}
-        poster={`/api/family-members/${member.id}/avatar-image`}
+        src={`/api/family-members/${member.id}/avatar-video${bust(member.id)}`}
+        poster={`/api/family-members/${member.id}/avatar-image${bust(member.id)}`}
         autoPlay
         muted
         loop
@@ -38,7 +46,7 @@ export function MemberAvatar({ member, size = 24 }: Props) {
       <img
         className="member-avatar member-avatar--image"
         style={style}
-        src={`/api/family-members/${member.id}/avatar-image`}
+        src={`/api/family-members/${member.id}/avatar-image${bust(member.id)}`}
         alt={member.name}
       />
     );
