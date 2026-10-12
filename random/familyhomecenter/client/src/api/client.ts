@@ -105,6 +105,8 @@ export interface Task {
   rotation_next_id?: string | null;
   /** A "when needed" chore (recurrence 'asneeded'): since when it needs doing; null = it doesn't now. */
   needed_since?: string | null;
+  /** Where this sits in each person's routine (member id → 1, 2, …), for those who've ordered it. */
+  positions?: Record<string, number>;
 }
 
 /** A room marked on a floor plan: its outline as points 0–1 across/down the plan's picture. */

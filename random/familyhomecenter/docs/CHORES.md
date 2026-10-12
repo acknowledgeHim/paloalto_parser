@@ -1,4 +1,21 @@
-# Chores: taking turns and "when needed"
+# Chores: routines, taking turns and "when needed"
+
+## 🔢 Routine order
+
+On Chores & Tasks (👥 By person), the **🔢** button on someone's column puts their chores and
+to-dos in the order they should do them. Use ↑ ↓, then **✓ Done**. A parent can set anyone's
+order, and each person can set their own.
+
+- **Numbers:** they show on the cards (1, 2, 3…) on Chores & Tasks, the Family Board and the floor
+  plan's person popup.
+- **Every job is listed:** the order covers all of the person's jobs, including weekly ones that
+  aren't on today's list, so they keep their place.
+- **Unordered jobs:** jobs the person hasn't put in order come after the ordered ones.
+
+**On the floor plan**, the avatar stands at the first unfinished job in that order. When it's
+checked off, the avatar walks to the next one along the same curved line the 👣 path draws. If
+the next job is in the same spot, the avatar spins around and bounces a couple of times instead.
+
 
 ## 🔄 Taking turns (parents only)
 
@@ -42,5 +59,5 @@ shows it the next day.
 
 ## Data
 
-Only new columns were added: `tasks.rotation`, `tasks.rotation_start` and `tasks.needed_since`.
+Only new things were added: the columns `tasks.rotation`, `tasks.rotation_start` and `tasks.needed_since`, and the table `task_positions` (each person's routine order).
 No existing data changes.

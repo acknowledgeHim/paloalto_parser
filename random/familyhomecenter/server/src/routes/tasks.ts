@@ -235,6 +235,23 @@ tasksRouter.patch('/:id/location', (req, res) => {
 });
 
 /**
+ * PUT /api/tasks/order/:memberId { task_ids: [...] } — this person's routine: their jobs in the
+ * order they should do them (1st, 2nd, …). Replaces their whole order; jobs left out are unordered.
+ */
+tasksRouter.put('/order/:memberId', (req, res) => {
+  const ids = (req.body as { task_ids?: unknown }).task_ids;
+  if (!Array.isArray(ids) || !ids.every((x) => typeof x === 'string')) return res.status(400).json({ error: 'task_ids must be a list' });
+  if (!db.prepare('SELECT 1 FROM family_members WHERE id = ?').get(req.params.memberId)) return res.status(404).json({ error: 'not found' });
+  const known = db.prepare('SELECT 1 FROM tasks WHERE id = ?');
+  const insert = db.prepare('INSERT INTO task_positions (family_member_id, task_id, position) VALUES (?, ?, ?)');
+  db.transaction(() => {
+    db.prepare('DELETE FROM task_positions WHERE family_member_id = ?').run(req.params.memberId);
+    [...new Set(ids as string[])].filter((id) => known.get(id)).forEach((id, i) => insert.run(req.params.memberId, id, i + 1));
+  })();
+  res.status(204).end();
+});
+
+/**
  * POST /api/tasks/:id/needed { needed?: boolean } — 🔔 a "when needed" chore needs doing (anyone can
  * say so — the dishwasher's clean, the trash is full); it shows up for whoever's turn it is.
  */

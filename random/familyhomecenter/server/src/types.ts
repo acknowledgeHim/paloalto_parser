@@ -137,6 +137,8 @@ export interface TaskWithAssignment extends Task {
   rotation_ids?: string[];
   /** …and whose turn it is the next time it comes up. */
   rotation_next_id?: string | null;
+  /** Where this sits in each person's routine (member id → 1, 2, …), for those who've ordered it. */
+  positions?: Record<string, number>;
 }
 
 export interface TaskCompletion {

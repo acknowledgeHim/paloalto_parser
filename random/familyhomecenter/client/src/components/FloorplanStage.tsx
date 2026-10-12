@@ -12,8 +12,6 @@ import { MemberAvatar } from './MemberAvatar.js';
  * standing up in it.
  */
 
-/** How long a walk from one room to the next takes. */
-const WALK_MS = 2200;
 /** The 3-D view's tilt. */
 const TILT_DEG = 52;
 /** Never smaller than fitting the screen. */
@@ -41,7 +39,7 @@ export function walkerSpots(tasks: Task[], members: FamilyMember[], plans: Floor
   for (const p of plans) for (const r of p.rooms) rooms.set(r.id, { planId: p.id, room: r });
   const spots: WalkerSpot[] = [];
   for (const member of members) {
-    const located = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id) && !isTaskDoneFor(t, member.id))).filter(
+    const located = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id) && !isTaskDoneFor(t, member.id)), member.id).filter(
       (t) => t.room_id && rooms.has(t.room_id)
     );
     const next = located[0];
@@ -93,6 +91,16 @@ export function jobSpot(task: Pick<Task, 'room_x' | 'room_y'>, room: FloorplanRo
   return task.room_x != null && task.room_y != null ? [task.room_x, task.room_y] : standSpot(room, threeD);
 }
 
+/** How much a person's walking legs bend to one side — a little different per person. */
+function bendFor(memberId: string): number {
+  return 0.06 + (parseInt(memberId.replace(/[^0-9a-f]/gi, '').slice(-2) || '0', 16) % 5) * 0.025;
+}
+
+/** The curve's control point for one leg of a walk (a quadratic Bézier from `a` to `b`). */
+function legControl([x1, y1]: [number, number], [x2, y2]: [number, number], bend: number): [number, number] {
+  return [(x1 + x2) / 2 - (y2 - y1) * bend, (y1 + y2) / 2 + (x2 - x1) * bend];
+}
+
 /**
  * A person's route as a dotted trail in their color: from where they stand, through each next
  * room on this plan in order, gently curved so trails between the same rooms don't sit on top of
@@ -105,18 +113,13 @@ function WalkPath({ spot, planId }: { spot: WalkerSpot; planId: string }) {
     stops.push(r.at);
   }
   if (stops.length < 2) return null;
-  // Bend each leg a little to one side, by an amount that differs per person.
-  const bend = 0.06 + (parseInt(spot.member.id.replace(/[^0-9a-f]/gi, '').slice(-2) || '0', 16) % 5) * 0.025;
+  const bend = bendFor(spot.member.id);
   let d = `M ${stops[0][0]} ${stops[0][1]}`;
   const heads: Array<{ x: number; y: number }> = [];
   for (let i = 1; i < stops.length; i++) {
-    const [x1, y1] = stops[i - 1];
-    const [x2, y2] = stops[i];
-    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
-    const cx = (x1 + x2) / 2 - ((y2 - y1) / len) * len * bend;
-    const cy = (y1 + y2) / 2 + ((x2 - x1) / len) * len * bend;
-    d += ` Q ${cx} ${cy} ${x2} ${y2}`;
-    heads.push({ x: x2, y: y2 });
+    const [cx, cy] = legControl(stops[i - 1], stops[i], bend);
+    d += ` Q ${cx} ${cy} ${stops[i][0]} ${stops[i][1]}`;
+    heads.push({ x: stops[i][0], y: stops[i][1] });
   }
   return (
     <g className="fp-path" style={{ color: spot.member.color }}>
@@ -128,24 +131,66 @@ function WalkPath({ spot, planId }: { spot: WalkerSpot; planId: string }) {
   );
 }
 
+/** The little dance when the next job is right where they already are: spin around, bounce twice. */
+const SPIN_MS = 1400;
+
+/**
+ * A person standing at their job. When the job changes they walk there along the same curve the
+ * 👣 path draws (bobbing as they go); if the next job is in the same spot, they spin and bounce.
+ */
 function Walker({ spot, x, y, dx, threeD, scale, onClick }: { spot: WalkerSpot; x: number; y: number; dx: number; threeD: boolean; scale: number; onClick?: () => void }) {
+  const [pos, setPos] = useState<[number, number]>([x, y]);
+  const posRef = useRef<[number, number]>([x, y]);
   const [walking, setWalking] = useState(false);
-  const last = useRef<{ x: number; y: number } | null>(null);
+  const [spinning, setSpinning] = useState(false);
+  const lastTask = useRef(spot.task.id);
+
   useEffect(() => {
-    const prev = last.current;
-    last.current = { x, y };
-    if (!prev || (Math.abs(prev.x - x) < 0.001 && Math.abs(prev.y - y) < 0.001)) return;
+    const from = posRef.current;
+    const to: [number, number] = [x, y];
+    const moved = Math.hypot(to[0] - from[0], to[1] - from[1]) > 0.001;
+    const newJob = lastTask.current !== spot.task.id;
+    lastTask.current = spot.task.id;
+    if (!moved) {
+      if (!newJob) return;
+      setSpinning(true);
+      const t = setTimeout(() => setSpinning(false), SPIN_MS);
+      return () => clearTimeout(t);
+    }
+    // Walk the curve: a quadratic Bézier from where they are to the new spot, eased in and out.
+    const ctrl = legControl(from, to, bendFor(spot.member.id));
+    const ms = Math.min(3200, Math.max(1200, Math.hypot(to[0] - from[0], to[1] - from[1]) * 5000));
+    const start = performance.now();
+    let frame = 0;
     setWalking(true);
-    const t = setTimeout(() => setWalking(false), WALK_MS);
-    return () => clearTimeout(t);
-  }, [x, y]);
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / ms);
+      const t = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+      const u = 1 - t;
+      const next: [number, number] = [
+        u * u * from[0] + 2 * u * t * ctrl[0] + t * t * to[0],
+        u * u * from[1] + 2 * u * t * ctrl[1] + t * t * to[1],
+      ];
+      posRef.current = next;
+      setPos(next);
+      if (p < 1) frame = requestAnimationFrame(step);
+      else setWalking(false);
+    };
+    frame = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(frame);
+      setWalking(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [x, y, spot.task.id]);
+
   return (
     <button
       type="button"
-      className={`fp-walker ${walking ? 'fp-walker--walking' : ''} ${threeD ? 'fp-walker--3d' : ''}`}
+      className={`fp-walker ${walking ? 'fp-walker--walking' : ''} ${spinning ? 'fp-walker--spin' : ''} ${threeD ? 'fp-walker--3d' : ''}`}
       onClick={onClick}
       aria-label={`${spot.member.name}: next is ${spot.task.title}`}
-      style={{ left: `calc(${x * 100}% + ${dx}px)`, top: `${y * 100}%`, transitionDuration: `${WALK_MS}ms`, ['--tilt' as string]: `${-TILT_DEG}deg` }}
+      style={{ left: `calc(${pos[0] * 100}% + ${dx}px)`, top: `${pos[1] * 100}%`, ['--tilt' as string]: `${-TILT_DEG}deg` }}
       title={`${spot.member.name}: ${spot.task.title} (${spot.room.name})`}
     >
       <div className="fp-walker__shadow" />

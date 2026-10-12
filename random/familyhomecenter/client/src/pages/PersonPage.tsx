@@ -38,7 +38,7 @@ function DayDetailModal({
     setTasks(null);
     api
       .get<Task[]>(`/tasks?date=${date}`)
-      .then((all) => setTasks(sortForColumn(all.filter((t) => t.assignee_ids.includes(member.id)))))
+      .then((all) => setTasks(sortForColumn(all.filter((t) => t.assignee_ids.includes(member.id)), member.id)))
       .catch(() => setTasks([]));
   }, [date, member.id]);
 
@@ -136,7 +136,7 @@ export function PersonPage() {
 
   const { member, agenda, stats } = detail;
   const [current, ...upcoming] = agenda;
-  const currentTasks = sortForColumn(current?.tasks ?? []);
+  const currentTasks = sortForColumn(current?.tasks ?? [], member.id);
   const personEvents = events.filter((e) => !e.for_member_id || e.for_member_id === member.id);
   // Household-trust-level rule (see utils/tasks.ts's canEditTask comment) — real enforcement is
   // server-side once a password protects it (requireSelfOrAdmin), same as Bank.
@@ -242,7 +242,7 @@ export function PersonPage() {
                 <div className="person-page__upcoming-date">
                   {new Date(`${day.date}T00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                 </div>
-                {sortForColumn(day.tasks).map((t) => (
+                {sortForColumn(day.tasks, member.id).map((t) => (
                   <div key={t.id} className="person-page__upcoming-task">
                     <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>
                     {t.title}

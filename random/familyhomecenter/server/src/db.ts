@@ -937,6 +937,18 @@ for (const [table, column] of [
   }
 }
 
+// The order each person does their chores/to-dos in (1st, 2nd, …) — their routine; the floor plan's
+// avatar walks from one to the next in this order. Per person, since a shared job can sit at a
+// different point in each person's routine. Jobs not in it come after, in the usual order.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS task_positions (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (family_member_id, task_id)
+  );
+`);
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

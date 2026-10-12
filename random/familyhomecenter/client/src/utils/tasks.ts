@@ -4,9 +4,19 @@ import { parseTimeOfDaySlots } from './timeOfDay.js';
 const TIME_OF_DAY_ORDER: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
 
 /** Chores read before to-dos, and within that, by (earliest) time of day, then unscheduled —
- *  otherwise keep whatever order the API returned them in. */
-export function sortForColumn(tasks: Task[]): Task[] {
+ *  otherwise keep whatever order the API returned them in. With `memberId`, that person's own
+ *  routine order (🔢 Order on Chores & Tasks) comes first; jobs they haven't ordered follow. */
+export function sortForColumn(tasks: Task[], memberId?: string): Task[] {
   return [...tasks].sort((a, b) => {
+    if (memberId) {
+      const pa = a.positions?.[memberId];
+      const pb = b.positions?.[memberId];
+      if (pa != null || pb != null) {
+        if (pa == null) return 1;
+        if (pb == null) return -1;
+        if (pa !== pb) return pa - pb;
+      }
+    }
     if (a.kind !== b.kind) return a.kind === 'chore' ? -1 : 1;
     const aSlots = parseTimeOfDaySlots(a.time_of_day);
     const bSlots = parseTimeOfDaySlots(b.time_of_day);
@@ -42,6 +52,13 @@ export function canEditHistoricalTask(task: Task, pageOwnerId: string, activePro
   if (activeProfile.is_parent === 1) return true;
   if (task.kind === 'chore') return false;
   return activeProfile.id === pageOwnerId;
+}
+
+/** Its number in this person's routine as they'll see it today (1, 2, … among `list`), or null if
+ *  they haven't put it in order. `list` = their jobs, already sorted with sortForColumn(…, memberId). */
+export function routineNumber(task: Task, list: Task[], memberId: string): number | null {
+  if (task.positions?.[memberId] == null) return null;
+  return list.filter((t) => t.positions?.[memberId] != null).indexOf(task) + 1 || null;
 }
 
 /** Fully done for this person — every slot completed if it has more than one, else the one checkbox. */

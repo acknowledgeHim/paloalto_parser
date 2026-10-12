@@ -7,7 +7,7 @@ import { TaskFormModal } from '../components/TaskFormModal.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { AdventureProgressBar } from '../components/AdventureProgressBar.js';
-import { canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
 import { isAdventureStyle, progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
 import { taskIcon } from '../utils/taskIcons.js';
@@ -123,7 +123,7 @@ function MemberProgressBars({ member, tasks }: { member: FamilyMember; tasks: Ta
             {isAdventureStyle(style) ? (
               <AdventureProgressBar
                 member={member}
-                items={sortForColumn(relevantTasksForKind(tasks, member.id, b.kind))}
+                items={sortForColumn(relevantTasksForKind(tasks, member.id, b.kind), member.id)}
                 done={b.done}
                 total={b.total}
                 startIcon={startIcon}
@@ -230,7 +230,7 @@ export function FamilyBoardPage() {
           // Pending first (still actionable), done ones after — struck through via TaskCard's own
           // "done" styling, same as the main Chores & To-dos page. Columns collapse by default now,
           // so there's no more scroll cost to leaving completed chores visible at a glance.
-          const sortedMemberTasks = sortForColumn(allMemberTasks);
+          const sortedMemberTasks = sortForColumn(allMemberTasks, member.id);
           const pendingTasks = sortedMemberTasks.filter((t) => !isTaskDoneFor(t, member.id));
           const doneMemberTasks = sortedMemberTasks.filter((t) => isTaskDoneFor(t, member.id));
           const memberEvents = events.filter((e) => e.for_member_id === member.id);
@@ -276,6 +276,7 @@ export function FamilyBoardPage() {
                       onChange={loadTasks}
                       hideAssignee
                       viewerId={member.id}
+                      orderNumber={routineNumber(t, sortedMemberTasks, member.id)}
                       onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
                     />
                   ))}
@@ -286,6 +287,7 @@ export function FamilyBoardPage() {
                       onChange={loadTasks}
                       hideAssignee
                       viewerId={member.id}
+                      orderNumber={routineNumber(t, sortedMemberTasks, member.id)}
                       onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
                     />
                   ))}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { api, type Floorplan, type FloorplanRoom, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
-import { canEditTask, isTaskDoneByAll, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, isTaskDoneByAll, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { canPlaceTask, findRoom, refreshFloorplans, roomAt, useFloorplans } from '../utils/floorplans.js';
 import { ConfirmButton } from './ConfirmButton.js';
@@ -595,7 +595,7 @@ function PersonJobsPopup({
 }) {
   const { members } = useFamilyMembers();
   const member = members.find((m) => m.id === memberId)!;
-  const mine = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(memberId)));
+  const mine = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(memberId)), memberId);
   const next = mine.filter((t) => !isTaskDoneFor(t, memberId));
   const done = mine.filter((t) => isTaskDoneFor(t, memberId));
   useEffect(() => {
@@ -627,7 +627,7 @@ function PersonJobsPopup({
           <div key={t.id} className={`fp-person__row ${i === 0 ? 'fp-person__row--now' : ''}`}>
             {i === 0 && <span className="fp-person__now">Now</span>}
             {where(t)}
-            <TaskCard task={t} onChange={onChange} hideAssignee viewerId={memberId} />
+            <TaskCard task={t} onChange={onChange} hideAssignee viewerId={memberId} orderNumber={routineNumber(t, mine, memberId)} />
           </div>
         ))}
         {done.length > 0 && (
@@ -636,7 +636,7 @@ function PersonJobsPopup({
             {done.map((t) => (
               <div key={t.id} className="fp-person__row">
                 {where(t)}
-                <TaskCard task={t} onChange={onChange} hideAssignee viewerId={memberId} />
+                <TaskCard task={t} onChange={onChange} hideAssignee viewerId={memberId} orderNumber={routineNumber(t, mine, memberId)} />
               </div>
             ))}
           </>

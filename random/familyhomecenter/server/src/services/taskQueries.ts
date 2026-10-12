@@ -86,8 +86,21 @@ function withAssignees(task: Task, date: string, completions: TaskCompletion[]):
   return { ...task, assignee_ids: assigneesFor(task.id), completions };
 }
 
+/** Every person's routine order, by task: task id → { member id: position }. */
+function allPositions(): Map<string, Record<string, number>> {
+  const rows = db.prepare('SELECT family_member_id, task_id, position FROM task_positions').all() as Array<{
+    family_member_id: string;
+    task_id: string;
+    position: number;
+  }>;
+  const map = new Map<string, Record<string, number>>();
+  for (const r of rows) map.set(r.task_id, { ...(map.get(r.task_id) ?? {}), [r.family_member_id]: r.position });
+  return map;
+}
+
 export function tasksForDate(date: string): TaskWithAssignment[] {
   const tasks = db.prepare('SELECT * FROM tasks WHERE active = 1').all() as Task[];
+  const positions = allPositions();
   return tasks
     .filter((t) => (t.recurrence === 'asneeded' ? asNeededShowsOn(t, date) : taskAppliesOn(t, date)))
     .filter((t) => onceTaskStillOpenOn(t, date))
@@ -103,20 +116,21 @@ export function tasksForDate(date: string): TaskWithAssignment[] {
           : (db
               .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
               .all(task.id, date) as TaskCompletion[]);
-      return withAssignees(task, date, completions);
+      return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {} };
     });
 }
 
 export function allActiveTasks(): TaskWithAssignment[] {
   const tasks = db.prepare('SELECT * FROM tasks WHERE active = 1').all() as Task[];
-  // Everyone a rotating chore can land on (for setting things up — rewards, the floor plan…).
   // Everyone a rotating chore can land on (for setting things up — rewards, the floor plan…), and
   // whose turn it is now (for "when needed" chores waiting for a 🔔).
   const today = todayStr();
+  const positions = allPositions();
   return tasks.map((task) => {
     const state = rotationState(task, today);
     return {
       ...task,
+      positions: positions.get(task.id) ?? {},
       assignee_ids: assigneesFor(task.id),
       completions: [],
       rotation_ids: rotationIds(task) ?? undefined,

@@ -5,7 +5,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
-import { canEditTask, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, routineNumber, sortForColumn } from '../utils/tasks.js';
 import { FloorplanView } from '../components/FloorplanView.js';
 import { taskIcon } from '../utils/taskIcons.js';
 
@@ -112,7 +112,31 @@ export function TasksPage() {
   const unassigned = sortForColumn(tasks.filter((t) => t.assignee_ids.length === 0));
   const draggedTask = dragTaskId ? tasks.find((t) => t.id === dragTaskId) : null;
 
-  const renderTask = (t: Task, viewerId?: string) => (
+  // 🔢 Putting someone's jobs in the order they should do them (parents, or that person themselves).
+  const [orderingId, setOrderingId] = useState<string | null>(null);
+  const [orderList, setOrderList] = useState<Task[] | null>(null);
+  const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
+  const canOrder = (memberId: string) => isParent || activeProfile?.id === memberId;
+  const startOrdering = (memberId: string) => {
+    setOrderingId(memberId);
+    setOrderList(null);
+    // Every job of theirs, not just today's — a weekly one keeps its place on the days it's off.
+    api
+      .get<Task[]>('/tasks?all=true')
+      .then((all) => setOrderList(sortForColumn(all.filter((t) => t.assignee_ids.includes(memberId)), memberId)))
+      .catch(console.error);
+  };
+  const moveInOrder = (i: number, by: -1 | 1) => {
+    if (!orderList || !orderingId) return;
+    const j = i + by;
+    if (j < 0 || j >= orderList.length) return;
+    const next = [...orderList];
+    [next[i], next[j]] = [next[j], next[i]];
+    setOrderList(next);
+    api.put(`/tasks/order/${orderingId}`, { task_ids: next.map((t) => t.id) }).then(load).catch(console.error);
+  };
+
+  const renderTask = (t: Task, viewerId?: string, list?: Task[]) => (
     <div
       key={t.id}
       className={`draggable-task ${dragTaskId === t.id ? 'draggable-task--dragging' : ''}`}
@@ -124,6 +148,7 @@ export function TasksPage() {
         hideAssignee
         viewerId={viewerId}
         onEdit={tryEdit}
+        orderNumber={viewerId && list ? routineNumber(t, list, viewerId) : null}
       />
     </div>
   );
@@ -193,7 +218,8 @@ export function TasksPage() {
       {view === 'people' && (
       <div className="tasks-page__columns">
         {members.map((member) => {
-          const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id)));
+          const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id)), member.id);
+          const ordering = orderingId === member.id;
           return (
             <section
               key={member.id}
@@ -205,9 +231,45 @@ export function TasksPage() {
                   <MemberAvatar member={member} /> {member.name}
                 </Link>
                 <span className="person-column__count">{memberTasks.length}</span>
+                {canOrder(member.id) && (
+                  <button
+                    type="button"
+                    className={`person-column__order ${ordering ? '' : 'secondary'}`}
+                    onClick={() => (ordering ? setOrderingId(null) : startOrdering(member.id))}
+                    title={ordering ? 'Done' : `Put ${member.name}'s jobs in the order to do them`}
+                    aria-label={ordering ? 'Done ordering' : `Put ${member.name}'s jobs in order`}
+                  >
+                    {ordering ? '✓' : '🔢'}
+                  </button>
+                )}
               </h2>
-              {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}
-              {memberTasks.map((t) => renderTask(t, member.id))}
+              {ordering ? (
+                <div className="task-order">
+                  <p className="hint">
+                    The order {member.name} does them in — their avatar on the floor plan walks from one to the next. ↑ ↓ to move.
+                  </p>
+                  {!orderList && <div className="empty-state">Loading…</div>}
+                  {orderList?.length === 0 && <div className="empty-state">Nothing assigned</div>}
+                  <ol className="task-order__list">
+                    {orderList?.map((t, i) => (
+                      <li key={t.id}>
+                        <span className="task-card__order">{i + 1}</span>
+                        <span className="task-order__title">
+                          {taskIcon(t)} {t.title}
+                        </span>
+                        <button type="button" className="secondary" aria-label={`Move ${t.title} up`} disabled={i === 0} onClick={() => moveInOrder(i, -1)}>↑</button>
+                        <button type="button" className="secondary" aria-label={`Move ${t.title} down`} disabled={i === orderList.length - 1} onClick={() => moveInOrder(i, 1)}>↓</button>
+                      </li>
+                    ))}
+                  </ol>
+                  <button type="button" onClick={() => setOrderingId(null)}>✓ Done</button>
+                </div>
+              ) : (
+                <>
+                  {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}
+                  {memberTasks.map((t) => renderTask(t, member.id, memberTasks))}
+                </>
+              )}
             </section>
           );
         })}

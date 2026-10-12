@@ -1840,7 +1840,6 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 /* An avatar standing on the plan; it glides (walks) to its next room. */
 .fp-walker {
   position: absolute; z-index: 3; transform: translate(-50%, -85%);
-  transition-property: left, top; transition-timing-function: ease-in-out;
   display: flex; flex-direction: column; align-items: center;
   min-height: 0; padding: 0; background: none; border: none; cursor: pointer;
 }
@@ -2030,3 +2029,29 @@ body.fp-full-open { overflow: hidden; }
 .person-column .task-card__edit { min-height: 26px; width: 26px; }
 .person-column .task-card__slot { min-height: 32px; padding: 0 10px; }
 .person-column .task-card__claim { min-height: 0; }
+
+/* 🔢 Routine order */
+.task-card__order {
+  display: inline-grid; place-items: center; min-width: 1.6em; height: 1.6em; padding: 0 0.3em; margin-right: 0.35em;
+  border-radius: 999px; background: var(--accent); color: #fff; font-size: 0.8em; font-weight: 800; vertical-align: 0.1em;
+}
+.person-column__order { min-height: 32px; width: 36px; padding: 0; margin-left: 4px; }
+.task-order { display: flex; flex-direction: column; gap: 8px; }
+.task-order__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.task-order__list li { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.task-order__title { flex: 1; min-width: 0; font-weight: 600; }
+.task-order__list button { min-height: 36px; width: 36px; padding: 0; }
+
+/* Next job in the same spot: spin around and bounce a couple of times. */
+.fp-walker--spin .fp-walker__body { animation: fp-spin 1.4s ease-in-out; }
+.fp-walker--spin .fp-walker__job { animation: fp-job 0.35s ease-in-out 4; }
+@keyframes fp-spin {
+  0% { transform: translateY(0) rotateY(0deg); }
+  22% { transform: translateY(-18px) rotateY(180deg); }
+  42% { transform: translateY(0) rotateY(360deg); }
+  62% { transform: translateY(-12px) rotateY(360deg); }
+  80% { transform: translateY(0) rotateY(360deg); }
+  90% { transform: translateY(-5px) rotateY(360deg); }
+  100% { transform: translateY(0) rotateY(360deg); }
+}
+@media (prefers-reduced-motion: reduce) { .fp-walker--spin .fp-walker__body, .fp-walker--spin .fp-walker__job { animation: none; } }

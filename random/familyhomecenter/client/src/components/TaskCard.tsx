@@ -21,9 +21,11 @@ interface Props {
   onEdit?: (task: Task) => void;
   /** Whose copy of this task to show/toggle — the column this card is rendered in. Defaults to activeProfile. */
   viewerId?: string;
+  /** Its number in that person's routine (1st, 2nd, …), if they've put their jobs in order. */
+  orderNumber?: number | null;
 }
 
-export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Props) {
+export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, orderNumber }: Props) {
   const { members, activeProfile } = useFamilyMembers();
   const room = findRoom(useFloorplans(), task.room_id);
   const assignees = members.filter((m) => task.assignee_ids.includes(m.id));
@@ -89,6 +91,11 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
       )}
       <div className="task-card__body">
         <div className="task-card__title">
+          {orderNumber != null && (
+            <span className="task-card__order" title={`Number ${orderNumber} in the routine`}>
+              {orderNumber}
+            </span>
+          )}
           <span aria-hidden="true">{taskIcon(task)}</span> {task.title}
         </div>
         {task.notes && <div className="task-card__notes">{task.notes}</div>}
