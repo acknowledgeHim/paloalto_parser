@@ -40,6 +40,12 @@ avatar walks to that exact spot, and 👣 Paths go there too.
   **📌 Can put their own chores and to-dos on the floor plan** for a kid, who can then place
   their own jobs. Once parents have passwords, the server enforces this as well.
 
+## ⛶ Full screen
+
+**⛶ Full screen** makes the floor plan fill the screen in every mode: viewing, 📌 placing
+(the job lists move beside the plan) and editing. Popups still open over it. Press
+**✕ Exit full screen** or Esc to go back.
+
 ## Zoom
 
 Every flat plan, in all three modes (viewing, placing and editing), has **− / ＋ / Fit**.

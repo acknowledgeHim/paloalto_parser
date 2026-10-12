@@ -117,6 +117,21 @@ export function FloorplanView({
     stageBox.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
   const [editing, setEditing] = useState(false);
+  // ⛶ Full screen: the plan fills the screen (viewing, placing or editing). Esc leaves.
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => {
+      // Esc closes a popup first, if one is open (they listen too).
+      if (e.key === 'Escape' && !document.querySelector('.modal-overlay')) setFull(false);
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.classList.add('fp-full-open');
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.classList.remove('fp-full-open');
+    };
+  }, [full]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // 📌 Place chores: drag jobs from each person's list onto their spot on the plan.
@@ -235,7 +250,7 @@ export function FloorplanView({
   }
 
   return (
-    <section className="panel fp-view">
+    <section className={`panel fp-view ${full ? 'fp-view--full' : ''}`}>
       <div className="fp-view__bar">
         <div className="fp-view__tabs" role="tablist">
           {plans.map((p) => {
@@ -272,6 +287,15 @@ export function FloorplanView({
           >
             👣 Paths
           </button>
+          <button
+            type="button"
+            className={full ? '' : 'secondary'}
+            onClick={() => setFull(!full)}
+            aria-pressed={full}
+            title={full ? 'Back to the page (Esc)' : 'Fill the screen with the plan'}
+          >
+            {full ? '✕ Exit full screen' : '⛶ Full screen'}
+          </button>
           {canPlaceAny && (
             <button
               type="button"
@@ -300,22 +324,25 @@ export function FloorplanView({
       {error && <div className="settings-login__error">{error}</div>}
 
       {plan && editing ? (
-        <PlanEditor plan={plan} plans={plans} act={act} busy={busy} onPlanAdded={(p) => setPlanId(p.id)} />
+        <PlanEditor plan={plan} plans={plans} act={act} busy={busy} big={full} onPlanAdded={(p) => setPlanId(p.id)} />
       ) : plan && placing ? (
         <>
           <p className="hint">
-            Drag a job from a list below onto the spot in the room where it's done. Drag a pin to move it; tap it to take it off the
+            Drag a job from the lists onto the spot in the room where it's done. Drag a pin to move it; tap it to take it off the
             plan, edit it, or delete it.
           </p>
+          <div className="fp-place">
           <FloorplanStage
             plan={plan}
             tasks={tasks}
             spots={[]}
+            big={full}
             showWalkers={false}
             pins={(allTasks ?? []).filter((t) => t.room_id)}
             onPinPointerDown={(t, e) => (canPlaceTask(t, activeProfile, members) ? startDrag(t, e, true) : setPinMenu(t))}
           />
           <UnplacedLists tasks={allTasks} onPress={(t, e) => startDrag(t, e, false)} />
+          </div>
         </>
       ) : (
         plan && (
@@ -326,6 +353,7 @@ export function FloorplanView({
               tasks={tasks}
               spots={spots}
               threeD={threeD}
+              big={full}
               showPaths={showPaths}
               selectedRoomId={selectedRoomId}
               onRoomClick={(r) => setSelectedRoomId(selectedRoomId === r.id ? null : r.id)}
@@ -705,12 +733,14 @@ function PlanEditor({
   plans,
   act,
   busy,
+  big = false,
   onPlanAdded,
 }: {
   plan: Floorplan;
   plans: Floorplan[];
   act: (fn: () => Promise<unknown>) => Promise<void>;
   busy: boolean;
+  big?: boolean;
   onPlanAdded: (plan: Floorplan) => void;
 }) {
   const stage = useRef<HTMLDivElement>(null);
@@ -872,7 +902,7 @@ function PlanEditor({
           : 'Tap each corner of the room in order, then tap the first corner again (or ✓ Finish shape).'}
       </p>
 
-      <FloorplanStage plan={plan} tasks={[]} spots={[]} showWalkers={false} selectedRoomId={selectedId} onRoomClick={pending || draft.length || box ? undefined : (r) => setSelectedId(r.id === selectedId ? null : r.id)}>
+      <FloorplanStage plan={plan} tasks={[]} spots={[]} big={big} showWalkers={false} selectedRoomId={selectedId} onRoomClick={pending || draft.length || box ? undefined : (r) => setSelectedId(r.id === selectedId ? null : r.id)}>
         <div
           ref={stage}
           className={`fp-editor__layer ${selectedId && !redrawing ? 'fp-editor__layer--passive' : ''}`}

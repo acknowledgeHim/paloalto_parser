@@ -171,6 +171,7 @@ export function FloorplanStage({
   showWalkers = true,
   onWalkerClick,
   pins = [],
+  big = false,
   hidePinIds,
   onPinPointerDown,
   onPinClick,
@@ -186,6 +187,8 @@ export function FloorplanStage({
   onRoomClick?: (room: FloorplanRoom) => void;
   showWalkers?: boolean;
   onWalkerClick?: (spot: WalkerSpot) => void;
+  /** Full screen: let the plan use (nearly) all of the screen's height. */
+  big?: boolean;
   /** Jobs to show as emoji pins where they are (any of them on this plan). */
   pins?: Task[];
   /** Pins not to show — a job someone is standing on already shows on them. */
@@ -323,7 +326,7 @@ export function FloorplanStage({
         style={{
           aspectRatio: aspect,
           // As wide as fits, but not taller than most of the screen — times the zoom.
-          width: `calc(min(100%, ${((threeD ? 95 : 70) * aspect).toFixed(2)}vh) * ${zoom})`,
+          width: `calc(min(100%, ${((threeD ? (big ? 120 : 95) : big ? 76 : 70) * aspect).toFixed(2)}vh) * ${zoom})`,
           maxWidth: zoom > 1 ? 'none' : undefined,
           ['--tilt' as string]: `${TILT_DEG}deg`,
         }}
