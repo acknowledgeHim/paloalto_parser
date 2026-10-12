@@ -87,6 +87,12 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId }: Pro
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
           {!multiSlot && slots[0] && <span className="badge badge--time">{timeOfDayIcon(slots[0])} {timeOfDayLabel(slots[0])}</span>}
           {room && <span className="badge badge--time" title={room.plan.name}>📍 {room.room.name}</span>}
+          {task.recurrence === 'asneeded' && <span className="badge badge--time">🔔 When needed</span>}
+          {task.rotation_ids && task.rotation_ids.length > 1 && (
+            <span className="badge badge--time" title={`Taking turns: ${task.rotation_ids.map((id) => members.find((m) => m.id === id)?.name).join(' → ')}`}>
+              🔄{task.rotation_next_id ? ` next: ${members.find((m) => m.id === task.rotation_next_id)?.name ?? '?'}` : ' turns'}
+            </span>
+          )}
           {task.reward_type === 'stars' && <span className="badge badge--reward">⭐ {task.reward_amount}</span>}
           {task.reward_type === 'money' && <span className="badge badge--reward">${task.reward_amount?.toFixed(2)}</span>}
           {onEdit && (

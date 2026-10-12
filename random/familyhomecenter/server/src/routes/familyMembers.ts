@@ -18,7 +18,7 @@ import {
   isRequestAdmin,
   SESSION_COOKIE_NAME,
 } from '../services/auth.js';
-import { tasksForDate } from '../services/taskQueries.js';
+import { rotationTurn, tasksForDate } from '../services/taskQueries.js';
 import { addDays, isCompletionLate, taskAppliesOn, timeOfDaySlots, todayStr } from '../utils/recurrence.js';
 import type { FamilyMember, Task, TaskWithAssignment } from '../types.js';
 
@@ -164,7 +164,8 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
   const strugglingTasks: Array<{ task_id: string; title: string; kind: string; expected: number; completed: number; missed: number }> = [];
   for (const { task_id } of assignedTaskIds) {
     const task = db.prepare('SELECT * FROM tasks WHERE id = ? AND active = 1').get(task_id) as Task | undefined;
-    if (!task || task.recurrence === 'once') continue; // "missed" isn't meaningful for a one-off
+    // "Missed" isn't meaningful for a one-off, or for a "when needed" chore.
+    if (!task || task.recurrence === 'once' || task.recurrence === 'asneeded') continue;
 
     // A task with multiple time-of-day slots (e.g. "morning,evening") expects — and can
     // independently complete — one occurrence per slot per applicable day, not just one.
@@ -173,7 +174,9 @@ familyMembersRouter.get('/:id/detail', (req, res) => {
 
     let expected = 0;
     for (let i = 0; i < statsDays; i++) {
-      if (taskAppliesOn(task, addDays(startDate, i))) expected += perDay;
+      // A chore taken in turns only counts on this person's turns.
+      const day = addDays(startDate, i);
+      if (taskAppliesOn(task, day) && (rotationTurn(task, day) ?? member.id) === member.id) expected += perDay;
     }
     if (expected === 0) continue;
 

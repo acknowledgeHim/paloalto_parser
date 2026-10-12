@@ -8,6 +8,7 @@ import { canPlaceTask, useFloorplans } from '../utils/floorplans.js';
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'One time' },
+  { value: 'asneeded', label: 'When needed (someone taps 🔔 Needs doing)' },
   { value: 'daily', label: 'Every day' },
   { value: 'weekdays', label: 'Weekdays' },
   { value: 'weekends', label: 'Weekends' },
@@ -105,6 +106,28 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
   const [rewardAmount, setRewardAmount] = useState(task?.reward_amount ?? 1);
   const [bulkIconStatus, setBulkIconStatus] = useState<string | null>(null);
   const plans = useFloorplans();
+  // 🔄 Taking turns (parents only): the people in order, and whose turn it is today. Only sent
+  // when changed, so editing a title doesn't restart anyone's turn.
+  const [rotating, setRotating] = useState(Boolean(task?.rotation_ids?.length));
+  const [rotationOrder, setRotationOrder] = useState<string[]>(() => {
+    const ids = task?.rotation_ids ?? [];
+    const today = task?.assignee_ids.length === 1 ? task.assignee_ids[0] : null;
+    const at = today ? ids.indexOf(today) : -1;
+    return at > 0 ? [...ids.slice(at), ...ids.slice(0, at)] : ids;
+  });
+  const [rotationFirst, setRotationFirst] = useState<string | null>(task?.rotation_ids?.length ? rotationOrder[0] ?? null : null);
+  const [rotationDirty, setRotationDirty] = useState(false);
+  const moveInRotation = (id: string, by: -1 | 1) => {
+    setRotationDirty(true);
+    setRotationOrder((order) => {
+      const i = order.indexOf(id);
+      const j = i + by;
+      if (i < 0 || j < 0 || j >= order.length) return order;
+      const next = [...order];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
   const [roomId, setRoomId] = useState<string>(task?.room_id ?? defaultRoomId ?? '');
 
   const toggleWeeklyDay = (code: string) => {
@@ -137,6 +160,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (isParent && rotating && recurrence !== 'once' && rotationOrder.length < 2) return;
     if (recurrence === 'weekly' && weeklyDays.length === 0) return;
 
     let finalRecurrence = recurrence;
@@ -148,6 +172,14 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     // regardless of any stale local state.
     const finalAssigneeIds = isParent ? assigneeIds : activeProfile ? [activeProfile.id] : [];
 
+    const turns = isParent && rotating && recurrence !== 'once';
+    const rotationFields = turns
+      ? rotationDirty || !task?.rotation_ids?.length
+        ? { rotation_ids: rotationOrder, rotation_first_id: rotationFirst ?? rotationOrder[0], assignee_ids: rotationOrder }
+        : {}
+      : isParent && task?.rotation_ids?.length
+        ? { rotation_ids: null }
+        : {};
     const body = {
       title: title.trim(),
       notes: notes.trim() || null,
@@ -159,6 +191,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
       due_date: recurrence === 'once' ? dueDate || null : null,
       room_id: roomId || null,
       acting_member_id: activeProfile?.id ?? null,
+      ...rotationFields,
     };
     let taskId: string;
     if (task) {
@@ -261,7 +294,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
           </div>
         )}
 
-        {isParent ? (
+        {isParent && rotating && recurrence !== 'once' ? null : isParent ? (
           <div>
             <label className="member-form__label">Assign to (optional — leave all unchecked for anyone to claim)</label>
             <div className="task-form__row chip-list">
@@ -302,6 +335,96 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
             ))}
           </select>
         </div>
+
+        {isParent && recurrence !== 'once' && (
+          <div className="task-form__turns">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={rotating}
+                onChange={(e) => {
+                  setRotating(e.target.checked);
+                  setRotationDirty(true);
+                  if (e.target.checked && rotationOrder.length === 0) {
+                    const start = assigneeIds.length >= 2 ? assigneeIds : members.filter((m) => m.is_parent !== 1).map((m) => m.id);
+                    setRotationOrder(start);
+                    setRotationFirst(start[0] ?? null);
+                  }
+                }}
+              />
+              🔄 Take turns — each time it's done, it goes to the next person
+            </label>
+            {rotating && (
+              <>
+                <ol className="task-form__turn-list">
+                  {rotationOrder.map((id, i) => {
+                    const m = members.find((x) => x.id === id);
+                    if (!m) return null;
+                    return (
+                      <li key={id}>
+                        <span className="task-form__turn-name">{m.name}</span>
+                        <label className="checkbox task-form__turn-first">
+                          <input
+                            type="radio"
+                            name="rotation-first"
+                            checked={(rotationFirst ?? rotationOrder[0]) === id}
+                            onChange={() => {
+                              setRotationFirst(id);
+                              setRotationDirty(true);
+                            }}
+                          />
+                          Up now
+                        </label>
+                        <button type="button" className="secondary" aria-label={`Move ${m.name} up`} disabled={i === 0} onClick={() => moveInRotation(id, -1)}>↑</button>
+                        <button type="button" className="secondary" aria-label={`Move ${m.name} down`} disabled={i === rotationOrder.length - 1} onClick={() => moveInRotation(id, 1)}>↓</button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label={`Take ${m.name} out`}
+                          onClick={() => {
+                            setRotationDirty(true);
+                            setRotationOrder((o) => o.filter((x) => x !== id));
+                            if (rotationFirst === id) setRotationFirst(null);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <div className="task-form__row chip-list">
+                  {members
+                    .filter((m) => !rotationOrder.includes(m.id))
+                    .map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setRotationDirty(true);
+                          setRotationOrder((o) => [...o, m.id]);
+                        }}
+                      >
+                        + {m.name}
+                      </button>
+                    ))}
+                </div>
+                <p className="hint">
+                  {rotationOrder.length < 2
+                    ? 'Add at least two people.'
+                    : `Order: ${(() => {
+                        const first = Math.max(0, rotationOrder.indexOf(rotationFirst ?? rotationOrder[0]));
+                        return [...rotationOrder.slice(first), ...rotationOrder.slice(0, first)]
+                          .map((id) => members.find((m) => m.id === id)?.name)
+                          .join(' → ');
+                      })()} → back to the start. It shows on whoever's turn it is, and their history and rewards keep track.`}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
 
         <div>
           <label className="member-form__label">

@@ -31,6 +31,27 @@ function mayPlace(req: Request, assigneeIds: string[], actingMemberId: unknown):
   return Boolean(db.prepare('SELECT 1 FROM family_members WHERE id = ? AND can_place_tasks = 1').get(actor));
 }
 
+/** Setting up (or changing, or stopping) taking turns is a parent's call. */
+function mayRotate(req: Request): boolean {
+  return !isAdminGateActive() || isRequestAdmin(req.cookies?.[SESSION_COOKIE_NAME] as string | undefined);
+}
+
+/**
+ * The rotation from a request: { rotation_ids: [...in order], rotation_first_id } — stored so the
+ * first person's turn is `startDate`. null = stop rotating; undefined = leave as is.
+ */
+function parseRotation(body: { rotation_ids?: unknown; rotation_first_id?: unknown }, startDate: string): { rotation: string | null; rotation_start: string | null } | undefined | 'bad' {
+  if (body.rotation_ids === undefined) return undefined;
+  if (body.rotation_ids === null) return { rotation: null, rotation_start: null };
+  const ids = body.rotation_ids;
+  if (!Array.isArray(ids) || ids.length < 2 || !ids.every((x) => typeof x === 'string') || new Set(ids).size !== ids.length) return 'bad';
+  const known = db.prepare('SELECT 1 FROM family_members WHERE id = ?');
+  if (!ids.every((id) => known.get(id))) return 'bad';
+  const first = typeof body.rotation_first_id === 'string' ? ids.indexOf(body.rotation_first_id) : 0;
+  const ordered = [...ids.slice(Math.max(0, first)), ...ids.slice(0, Math.max(0, first))] as string[];
+  return { rotation: JSON.stringify(ordered), rotation_start: startDate };
+}
+
 /** A spot on the plan: both 0–1, or neither (the middle of the room). */
 function parseSpot(x: unknown, y: unknown): { room_x: number | null; room_y: number | null } | null {
   if (x == null && y == null) return { room_x: null, room_y: null };
@@ -87,6 +108,10 @@ tasksRouter.post('/', (req, res) => {
   if (room_id && !mayPlace(req, assignee_ids ?? [], (req.body as { acting_member_id?: unknown }).acting_member_id)) {
     return res.status(403).json({ error: 'Only a parent can put this on the floor plan' });
   }
+  const rotation = parseRotation(req.body, (req.body as { rotation_start?: string }).rotation_start || todayStr());
+  if (rotation === 'bad') return res.status(400).json({ error: 'Taking turns needs at least two different people' });
+  if (rotation?.rotation && !mayRotate(req)) return res.status(403).json({ error: 'Only a parent can set up taking turns' });
+  if (rotation?.rotation && (recurrence ?? 'once') === 'once') return res.status(400).json({ error: 'Taking turns is for chores that repeat' });
   if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
   if (kind !== 'chore' && kind !== 'todo') return res.status(400).json({ error: 'kind must be chore or todo' });
   if (!roomExists(room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
@@ -104,16 +129,20 @@ tasksRouter.post('/', (req, res) => {
     room_id: room_id || null,
     room_x: null,
     room_y: null,
+    rotation: rotation?.rotation ?? null,
+    rotation_start: rotation?.rotation_start ?? null,
+    needed_since: null,
     reward_type: null,
     reward_amount: null,
     active: 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y, rotation, rotation_start, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y, @rotation, @rotation_start, @active, @created_at)`
   ).run(task);
-  setAssignees(task.id, assignee_ids ?? []);
+  // A rotating chore is on everyone in the rotation (whose turn it is, is worked out per day).
+  setAssignees(task.id, rotation?.rotation ? (JSON.parse(rotation.rotation) as string[]) : assignee_ids ?? []);
   res.status(201).json({ ...task, assignee_ids: assignee_ids ?? [], completions: [] });
 });
 
@@ -136,11 +165,36 @@ tasksRouter.patch('/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   if (!existing) return res.status(404).json({ error: 'not found' });
 
-  const { assignee_ids, acting_member_id, room_x: _x, room_y: _y, ...fields } = req.body as Partial<Task> & {
+  const {
+    assignee_ids: requestedAssignees,
+    acting_member_id,
+    room_x: _x,
+    room_y: _y,
+    rotation: _r,
+    rotation_start: _rs,
+    rotation_ids: _ri,
+    rotation_first_id: _rf,
+    rotation_next_id: _rn,
+    ...fields
+  } = req.body as Partial<Task> & {
     assignee_ids?: string[];
     acting_member_id?: unknown;
+    rotation_ids?: unknown;
+    rotation_first_id?: unknown;
+    rotation_next_id?: unknown;
   };
-  const updated: Task = { ...existing, ...fields, id: existing.id };
+  let assignee_ids = requestedAssignees;
+  const rotation = parseRotation(req.body, todayStr());
+  if (rotation === 'bad') return res.status(400).json({ error: 'Taking turns needs at least two different people' });
+  const rotating = Boolean(existing.rotation);
+  if (rotation !== undefined && !mayRotate(req)) {
+    return res.status(403).json({ error: 'Only a parent can change who takes turns' });
+  }
+  // A rotating chore's people are its rotation — dragging it to someone's column doesn't change that.
+  if (rotation === undefined && rotating) assignee_ids = undefined;
+  if (rotation?.rotation) assignee_ids = JSON.parse(rotation.rotation) as string[];
+  const updated: Task = { ...existing, ...fields, ...(rotation ?? {}), id: existing.id };
+  if (updated.rotation && updated.recurrence === 'once') return res.status(400).json({ error: 'Taking turns is for chores that repeat' });
   updated.room_id = updated.room_id || null;
   if (!roomExists(updated.room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
   if (updated.room_id !== existing.room_id) {
@@ -155,7 +209,7 @@ tasksRouter.patch('/:id', (req, res) => {
   db.prepare(
     `UPDATE tasks SET kind=@kind, title=@title, notes=@notes, recurrence=@recurrence,
      due_date=@due_date, time_of_day=@time_of_day, icon=@icon, room_id=@room_id, room_x=@room_x, room_y=@room_y,
-     active=@active WHERE id=@id`
+     rotation=@rotation, rotation_start=@rotation_start, active=@active WHERE id=@id`
   ).run(updated);
   if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
   res.json({ ...updated, assignee_ids: assignee_ids ?? assigneesFor(req.params.id) });
@@ -178,6 +232,19 @@ tasksRouter.patch('/:id/location', (req, res) => {
   if (!spot) return res.status(400).json({ error: 'x and y must be numbers from 0 to 1' });
   db.prepare('UPDATE tasks SET room_id = ?, room_x = ?, room_y = ? WHERE id = ?').run(room_id || null, spot.room_x, spot.room_y, existing.id);
   res.json({ ...existing, room_id: room_id || null, ...spot, assignee_ids: assigneesFor(existing.id) });
+});
+
+/**
+ * POST /api/tasks/:id/needed { needed?: boolean } — 🔔 a "when needed" chore needs doing (anyone can
+ * say so — the dishwasher's clean, the trash is full); it shows up for whoever's turn it is.
+ */
+tasksRouter.post('/:id/needed', (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
+  if (!task) return res.status(404).json({ error: 'not found' });
+  if (task.recurrence !== 'asneeded') return res.status(400).json({ error: 'Only a "when needed" chore can be called for' });
+  const needed = (req.body as { needed?: boolean }).needed !== false;
+  db.prepare('UPDATE tasks SET needed_since = ? WHERE id = ?').run(needed ? task.needed_since ?? todayStr() : null, task.id);
+  res.json({ ...task, needed_since: needed ? task.needed_since ?? todayStr() : null });
 });
 
 /**
@@ -235,6 +302,9 @@ tasksRouter.post('/:id/complete', (req, res) => {
     ).run(completion);
   }
 
+  // A "when needed" chore is done until someone says it needs doing again.
+  if (task.recurrence === 'asneeded') db.prepare('UPDATE tasks SET needed_since = NULL WHERE id = ?').run(task.id);
+
   // Only credit the first time this person's instance (of this slot) is completed — re-saving the
   // same completion (e.g. a retried request) must not pay out twice.
   if (!existing && task.reward_type && task.reward_amount && completedBy) {
@@ -257,6 +327,11 @@ tasksRouter.post('/:id/uncomplete', (req, res) => {
     db.prepare('DELETE FROM task_completions WHERE id = ?').run(existing.id);
     if (task?.reward_type && task.reward_amount && existing.completed_by_id) {
       creditReward(existing.completed_by_id, task.reward_type, -task.reward_amount);
+    }
+    // Undoing the last check-off of a "when needed" chore: it still needs doing.
+    if (task?.recurrence === 'asneeded' && !task.needed_since) {
+      const left = db.prepare('SELECT 1 FROM task_completions WHERE task_id = ? AND completed_on = ? LIMIT 1').get(task.id, date);
+      if (!left) db.prepare('UPDATE tasks SET needed_since = ? WHERE id = ?').run(date, task.id);
     }
   }
   res.status(204).end();

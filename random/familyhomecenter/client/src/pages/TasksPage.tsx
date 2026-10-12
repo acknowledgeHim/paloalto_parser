@@ -7,6 +7,7 @@ import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { canEditTask, sortForColumn } from '../utils/tasks.js';
 import { FloorplanView } from '../components/FloorplanView.js';
+import { taskIcon } from '../utils/taskIcons.js';
 
 const UNASSIGNED = 'unassigned';
 const VIEW_KEY = 'familyhomecenter.tasks.view';
@@ -55,13 +56,22 @@ export function TasksPage() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const dragState = useRef<{ taskId: string; startX: number; startY: number; moved: boolean } | null>(null);
 
+  // "When needed" chores (the dishwasher) that don't need doing right now — a 🔔 calls for one.
+  const [waiting, setWaiting] = useState<Task[]>([]);
   const load = () => {
     api.get<Task[]>('/tasks').then(setTasks).catch(console.error);
+    api
+      .get<Task[]>('/tasks?all=true')
+      .then((all) => setWaiting(all.filter((t) => t.recurrence === 'asneeded' && !t.needed_since)))
+      .catch(console.error);
   };
+  const callFor = (t: Task) => api.post(`/tasks/${t.id}/needed`, { needed: true }).then(load).catch(console.error);
   useEffect(load, []);
 
   const startDrag = (e: ReactPointerEvent, taskId: string) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // A chore taken in turns goes to whoever's turn it is — change that in its ✎ settings instead.
+    if (tasks.find((t) => t.id === taskId)?.rotation_ids?.length) return;
     dragState.current = { taskId, startX: e.clientX, startY: e.clientY, moved: false };
 
     const findColumn = (x: number, y: number) =>
@@ -139,6 +149,26 @@ export function TasksPage() {
           </button>
         </div>
       </div>
+
+      {waiting.length > 0 && (
+        <div className="tasks-page__waiting">
+          <span className="hint">When needed:</span>
+          {waiting.map((t) => {
+            const who = members.find((m) => m.id === (t.rotation_next_id ?? (t.assignee_ids.length === 1 ? t.assignee_ids[0] : null)));
+            return (
+              <button key={t.id} type="button" className="secondary tasks-page__waiting-item" onClick={() => callFor(t)} title="Tap when it needs doing">
+                🔔 {taskIcon(t)} {t.title}
+                {who && (
+                  <span className="hint">
+                    {' '}
+                    — {who.name}'s turn
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {editNotice && (
         <div className="settings-login__error tasks-page__notice" role="status">

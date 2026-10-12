@@ -53,6 +53,8 @@ export type TaskKind = 'chore' | 'todo';
  */
 export type Recurrence =
   | 'once'
+  /** "When needed": not on anyone's list until someone taps 🔔 Needs doing (tasks.needed_since). */
+  | 'asneeded'
   | 'daily'
   | 'weekdays'
   | 'weekends'
@@ -87,6 +89,13 @@ export interface Task {
   /** The exact spot in that room, 0–1 across/down the plan's picture; null = the middle of the room. */
   room_x: number | null;
   room_y: number | null;
+  /** Taking turns (parents only): JSON array of member ids, in order — each time this comes up it's
+   *  the next one's. null = no rotation. */
+  rotation: string | null;
+  /** From this date on, turns count: rotation[0] first, then the next person each time it's done. */
+  rotation_start: string | null;
+  /** A "when needed" chore: the date someone said it needs doing (null = it doesn't right now). */
+  needed_since: string | null;
 }
 
 /** A floor plan's room: its outline as points 0–1 across/down the plan's picture. */
@@ -117,6 +126,10 @@ export interface TaskWithAssignment extends Task {
   /** Who this is assigned to; empty = anyone can claim it. Each person completes their own copy independently. */
   assignee_ids: string[];
   completions: TaskCompletion[];
+  /** Taking turns: everyone in the rotation, in order (assignee_ids is then just that day's turn). */
+  rotation_ids?: string[];
+  /** …and whose turn it is the next time it comes up. */
+  rotation_next_id?: string | null;
 }
 
 export interface TaskCompletion {

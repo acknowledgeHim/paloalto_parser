@@ -99,6 +99,12 @@ export interface Task {
   /** The exact spot in that room (dragged there), 0–1 across/down the plan; null = the middle of the room. */
   room_x: number | null;
   room_y: number | null;
+  /** Taking turns: everyone in the rotation, in order — assignee_ids is then just that day's turn. */
+  rotation_ids?: string[] | null;
+  /** …and whose turn it is the next time it comes up. */
+  rotation_next_id?: string | null;
+  /** A "when needed" chore (recurrence 'asneeded'): since when it needs doing; null = it doesn't now. */
+  needed_since?: string | null;
 }
 
 /** A room marked on a floor plan: its outline as points 0–1 across/down the plan's picture. */

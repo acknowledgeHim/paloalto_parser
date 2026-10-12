@@ -917,6 +917,12 @@ for (const [table, column] of [
   ['tasks', 'room_x REAL'],
   ['tasks', 'room_y REAL'],
   ['family_members', 'can_place_tasks INTEGER NOT NULL DEFAULT 0'],
+  // Taking turns: the people (JSON array of ids, in order) a chore rotates through, one per time
+  // it comes up, counting from rotation_start (whose turn is rotation[0]). See taskQueries.ts.
+  ['tasks', 'rotation TEXT'],
+  ['tasks', 'rotation_start TEXT'],
+  // A "when needed" chore (recurrence 'asneeded'): since when it needs doing; cleared when done.
+  ['tasks', 'needed_since TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
