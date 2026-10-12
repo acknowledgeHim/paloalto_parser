@@ -1979,3 +1979,5 @@ body.fp-full-open { overflow: hidden; }
 @media (max-width: 800px) {
   .fp-view--full .fp-place { grid-template-columns: 1fr; }
 }
+/* Tilted (3-D), the plan's box reaches up over the buttons above it — keep those on top so taps reach them. */
+.fp-view__bar, .fp-zoom, .family-board__tabs, .fp-view > .settings-login__error { position: relative; z-index: 6; }
