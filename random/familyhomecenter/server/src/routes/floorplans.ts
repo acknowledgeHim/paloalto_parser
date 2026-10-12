@@ -116,7 +116,7 @@ floorplansRouter.patch(
     const plan = db.prepare('SELECT * FROM floorplans WHERE id = ?').get(req.params.id) as PlanRow | undefined;
     if (!plan) return res.status(404).json({ error: 'not found' });
     const body = req.body as Record<string, unknown>;
-    // Display settings: sizes 50%–300%; the starting zoom 50%–200%, or null for "fit".
+    // Display settings: sizes 50%–300%; the starting zoom 100% (fit) to 200%, or null for "fit".
     for (const key of ['label_scale', 'avatar_scale', 'job_scale'] as const) {
       const v = body[key];
       if (typeof v === 'number' && Number.isFinite(v)) {
@@ -124,7 +124,7 @@ floorplansRouter.patch(
       }
     }
     if (body.default_zoom === null || (typeof body.default_zoom === 'number' && Number.isFinite(body.default_zoom))) {
-      const z = body.default_zoom === null ? null : Math.min(2, Math.max(0.5, body.default_zoom as number));
+      const z = body.default_zoom === null || (body.default_zoom as number) <= 1 ? null : Math.min(2, body.default_zoom as number);
       db.prepare('UPDATE floorplans SET default_zoom = ? WHERE id = ?').run(z, plan.id);
     }
     if (body.name !== undefined) {

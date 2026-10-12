@@ -763,7 +763,7 @@ function PlanDisplaySettings({ plan, act, busy }: { plan: Floorplan; act: (fn: (
         Starting zoom
         <select value={plan.default_zoom == null ? 'fit' : String(plan.default_zoom)} disabled={busy} onChange={(e) => set('default_zoom', e.target.value === 'fit' ? null : Number(e.target.value))}>
           <option value="fit">Fit the screen</option>
-          {[0.5, 0.75, 1.25, 1.5, 1.75, 2].map((z) => (
+          {[1.25, 1.5, 1.75, 2].map((z) => (
             <option key={z} value={String(z)}>{Math.round(z * 100)}%</option>
           ))}
         </select>

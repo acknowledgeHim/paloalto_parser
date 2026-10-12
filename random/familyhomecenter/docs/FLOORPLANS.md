@@ -66,7 +66,7 @@ doesn't zoom.
 
    Name the room (common names are offered).
 3. **How each plan looks** (✏️ Edit plans, parents only):
-   - **Starting zoom:** *Fit the screen*, or 50%–200% of that.
+   - **Starting zoom:** *Fit the screen* (100%), or zoomed in up to 200%. Zoom never goes below fit.
    - **Labels**, **Avatars** and **Job emoji:** − / ＋ for each, 50%–300%, set separately
      per plan. Room labels are small and borderless by default.
 4. **Change rooms or plans.** Tap a room's name to rename, recolor, redraw or delete it.

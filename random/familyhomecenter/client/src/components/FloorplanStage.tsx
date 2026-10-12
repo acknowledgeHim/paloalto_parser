@@ -16,7 +16,8 @@ import { MemberAvatar } from './MemberAvatar.js';
 const WALK_MS = 2200;
 /** The 3-D view's tilt. */
 const TILT_DEG = 52;
-const MIN_ZOOM = 0.5;
+/** Never smaller than fitting the screen. */
+const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 
 export interface WalkerSpot {
@@ -256,7 +257,7 @@ export function FloorplanStage({
   }, [zoom]);
   useEffect(() => {
     // Each plan starts at its own zoom (set in ✏️ Edit plans), or fitting the screen.
-    const start = threeD ? 1 : plan.default_zoom ?? 1;
+    const start = threeD ? 1 : Math.max(MIN_ZOOM, plan.default_zoom ?? 1);
     zoomRef.current = start;
     setZoomState(start);
   }, [plan.id, threeD, plan.default_zoom]);
@@ -315,7 +316,7 @@ export function FloorplanStage({
           <button type="button" className="secondary" aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => setZoom(zoom / 1.5)}>−</button>
           <span className="fp-zoom__level">{Math.round(zoom * 100)}%</span>
           <button type="button" className="secondary" aria-label="Zoom in" disabled={zoom >= MAX_ZOOM} onClick={() => setZoom(zoom * 1.5)}>＋</button>
-          {zoom !== 1 && <button type="button" className="secondary" onClick={() => setZoom(1)}>Fit</button>}
+          {zoom > 1 && <button type="button" className="secondary" onClick={() => setZoom(1)}>Fit</button>}
         </div>
       )}
     <div
