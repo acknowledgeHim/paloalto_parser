@@ -1,39 +1,59 @@
-Network device - AV/Threat Content Updates Not Automatic
-Network device - disabled rule
-Network device - insecure account settings
-Network device - insecure protocol use
-Network device - missing rule description / comment
-Network device - missing security profile
-Network device - NTP Authentication Not Configured
-Network device - post login banner not set
-Network device - rules allowing excessive traffic
-Network device - syslog transmitted over UDP
-Network device - high availability
-Network device - unencrypted log traffic
-Network device - non-default port usage
-Network device - WAN management access
-Network device - snmpv1 or snmpv2 enabled
-Network device - USB enabled
-Network device - DNS not configured
-Network device - NTP server not configured
-Network device - device timezone not set
-Network device - HA reserved management not configured
-Network device - pre login banner not set
-Network device - default credential
-Network device - latest firmware not installed
-Network device - hostname not set
-Network device - unused rule /policy enabled
-Network device - management using generic user
-Network device - weak authentication configuration
-Network device - insufficient logging and auditing
-Network device - weak cipher suite
-Network device - shadow firewall rule / ACL
-Network device - PFS is disabled
-Network device - ARP inspection not enabled
-Network device - Spanning Tree (STP) or Bridge Protocol Data Units (BPDUs) is missing
-Network device - active interface not shutdown
-Network device - native vlan is the management vlan
-Network device - interface missing description
-Network device - snmpv3 query per user
-Network device - invalid certificate used
-
+Secondary Ntp Server Not Configured
+Default Credential Used
+Latest Firmware Not Installed
+Hostname Not Set
+Unused Rule / Policy Enabled
+Management Using Generic User
+NTP Authentication Not Configured
+AV/Threat Content Updates Not Automatic
+Invalid Certificate Used
+Account Lockout Duration Not Configured Or Insufficient
+Account Lockout Duration Insufficient
+Enforce Password History Missing Or Insufficient
+Maximum password age
+Minimum password age
+Minimum password length
+HA Reserved Management Not Configured
+Insecure Protocol Permitted By Rule / ACL
+Decrypted Traffic Not Forwarded For Analysis
+Block Malicious Domain
+URL Filtering
+Data Filtering
+Threat Protection Missing Or Not Configured
+Insufficient Session Idle Timeout
+Missing Centralized Logging and Reporting
+Rules Allowing Excessive Traffic (Any Source Or Any Destination)
+Rules Allowing Excessive Traffic (Any Application Or Any Service)
+Excessive Number Of Failed Login Attempts Allowed
+Password Complexity Requirements Not Enforced
+Force Change Password At 1st Login
+Native VLAN Is The Management VLAN
+Missing Security Profile
+Insufficient Logging And Auditing
+Weak Cipher Suite
+Shadow Firewall Fule / ACL
+PFS Is Disabled
+Disabled Rule
+Missing Rule Description / Comment
+Syslog Transmitted Over UDP
+Weak Authentication Configuration
+Insecure Protocol Use
+ARP Inspection Not Enabled
+Spanning Tree (STP) Or Bridge Protocol Data Units (BPDUs) Is Missing
+Active Interface Not Shutdown
+Rules Allowing Excessive Traffic
+Interface Missing Description
+Post Login Banner Not Set
+SNMPv3 Query Per User
+Pre Login Banner Not Set
+High Availability Not Enabled
+Unencrypted Log Traffic
+Non-Default Port Usage
+WAN Management Access
+SNMPv1 Or SNMPv2 Enabled
+USB Enabled
+DNS Not Configured
+NTP Server Not Configured
+Device Timezone Not Set
+Insecure WMI Probing
+Rules Allowing Excessive Traffic (Any Source And Any Destination)
