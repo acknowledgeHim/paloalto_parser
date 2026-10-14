@@ -31,7 +31,7 @@ Native VLAN Is The Management VLAN
 Missing Security Profile
 Insufficient Logging And Auditing
 Weak Cipher Suite
-Shadow Firewall Fule / ACL
+Shadow Firewall Rule / ACL
 PFS Is Disabled
 Disabled Rule
 Missing Rule Description / Comment
