@@ -1006,6 +1006,8 @@ CATEGORY_VULN_ID: dict[str, int] = {
     "Packet-Based Attack Protection Disabled":       22,
     "SSL Decryption Not Configured":                 22,
     "Threat Intelligence Blocking Not Configured":   19,
+    "User-ID Not Configured":                        60,
+    "Update Server Verification Disabled":           61,
 }
 
 

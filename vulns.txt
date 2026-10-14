@@ -57,3 +57,5 @@ NTP Server Not Configured
 Device Timezone Not Set
 Insecure WMI Probing
 Rules Allowing Excessive Traffic (Any Source And Any Destination)
+User-ID Is Not Turned On / Configured
+Server Verification Disabled
