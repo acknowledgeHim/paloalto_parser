@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import re
 import tarfile
 import xml.etree.ElementTree as ET
@@ -886,6 +887,49 @@ def _find_vulns_file() -> dict[int, str]:
     print("[!] Warning: vulns.txt not found — Vuln column will be empty. "
           "Place vulns.txt alongside pa_analyzer.py.")
     return {}
+
+# ── vuln_controls.json (canonical framework controls per vulns.txt entry) ───
+_VULN_CONTROLS: dict[int, dict] | None = None
+
+
+def _vuln_controls() -> dict[int, dict]:
+    """vulns.txt line ID → {"cis_v8", "pci_dss", "scf"} from vuln_controls.json
+    (script directory, then CWD), so every finding mapped to the same vuln
+    reports the same CIS Controls / PCI DSS / SCF IDs whichever analyzer
+    produced it. An entry whose "vuln" text no longer matches that vulns.txt
+    line is skipped (the finding falls back to its own per-category maps)
+    rather than reporting another vuln's controls after a reorder. Its CIS /
+    PCI descriptions are merged into the mapping-sheet tables."""
+    global _VULN_CONTROLS
+    if _VULN_CONTROLS is not None:
+        return _VULN_CONTROLS
+    _VULN_CONTROLS = {}
+    vulns = _find_vulns_file()
+    for path in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "vuln_controls.json"),
+                 os.path.join(os.getcwd(), "vuln_controls.json")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (FileNotFoundError, ValueError):
+            continue
+        stale = []
+        for key, entry in data.get("vulns", {}).items():
+            vid = int(key)
+            if vulns.get(vid, "").casefold() != entry.get("vuln", "").casefold():
+                stale.append(vid)
+                continue
+            _VULN_CONTROLS[vid] = entry
+        if stale:
+            print(f"[!] Warning: vuln_controls.json entries {stale} don't match vulns.txt — "
+                  "those findings use their per-category framework mappings.")
+        for cid, desc in data.get("cis_v8_desc", {}).items():
+            CIS_CTRL_DESC.setdefault(cid, desc)
+        for pid, desc in data.get("pci_dss_desc", {}).items():
+            PCI_DSS_DESC.setdefault(pid, desc)
+        return _VULN_CONTROLS
+    print("[!] Warning: vuln_controls.json not found — framework columns use "
+          "per-category mappings. Place vuln_controls.json alongside pa_analyzer.py.")
+    return _VULN_CONTROLS
 
 
 # Maps each check category to its vuln ID in vulns.txt
@@ -1850,6 +1894,9 @@ class PaloAltoParser:
         cis_ids   = CIS_CONTROL_MAP.get(category, [])
         pci_ids   = PCI_DSS_MAP.get(category, [])
         scf_ids   = SCF_MAP.get(category, [])
+        canon = _vuln_controls().get(vuln_id or CATEGORY_VULN_ID.get(category))
+        if canon:
+            cis_ids, pci_ids, scf_ids = canon["cis_v8"], canon["pci_dss"], canon["scf"]
         bench_ids = bench_override if bench_override is not None else CIS_BENCHMARK_MAP.get(category, [])
         self.issues.append({
             "severity":        severity,
