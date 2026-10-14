@@ -3825,10 +3825,11 @@ class ExcelReporter:
             target = f"{rule_name} ({line})" if line else rule_name
             details = iss.get("details", "")
             output = f"{iss['description']}\n{details}" if details else iss["description"]
+            residual_risk_note = details or iss["category"]
             vuln_id = iss.get("vuln_id") or CATEGORY_VULN_ID.get(iss["category"])
             vuln = self._vulns[vuln_id] if vuln_id and vuln_id in self._vulns else ""
 
-            values = [idx, "Y", sev, "", "",
+            values = [idx, "Y", sev, "", residual_risk_note,
                       iss["category"], rule_name,
                       line, iss.get("cis_controls", ""), iss.get("cis_benchmark", ""),
                       iss.get("pci_dss", ""), iss.get("scf", ""),
