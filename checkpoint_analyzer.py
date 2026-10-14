@@ -97,14 +97,14 @@ def _find_vulns_file() -> dict[int, str]:
 # Benchmark-catalog-driven findings (the CIS Check Point items) don't use this —
 # their evidence/mapping comes straight from the .audit file's own reference data.
 CATEGORY_VULN_ID: dict[str, int] = {
-    "Disabled Rulebase Rule":              2,
-    "Missing Rule Comment":                5,
-    "Rule Allows Any Source":              9,
-    "Rule Allows Any Destination":         9,
-    "Rule Allows Any Service":             9,
-    "Allow Rule Not Logging":              28,
-    "No Hit Count Data":                   25,
-    "No Default Drop/Cleanup Rule":        9,
+    "Disabled Rulebase Rule":              36,
+    "Missing Rule Comment":                37,
+    "Rule Allows Any Source":              25,
+    "Rule Allows Any Destination":         25,
+    "Rule Allows Any Service":             26,
+    "Allow Rule Not Logging":              32,
+    "No Hit Count Data":                   5,
+    "No Default Drop/Cleanup Rule":        44,
 }
 
 # Maps each CIS Check Point Firewall Benchmark ID to a vulns.txt line ID —
@@ -114,15 +114,15 @@ CATEGORY_VULN_ID: dict[str, int] = {
 # reasonable fit in vulns.txt's fixed taxonomy are left unmapped (blank Vuln
 # column) rather than forced into a category that doesn't really describe them.
 BENCHMARK_ID_VULN_ID: dict[str, int] = {
-    "1.1": 27, "1.2": 27, "1.3": 27, "1.4": 27, "1.5": 27, "1.6": 27,
-    "1.7": 3, "1.8": 3, "1.9": 3, "1.10": 27, "1.11": 3, "1.12": 3, "1.13": 3,
-    "2.1.1": 21, "2.1.2": 8, "2.1.5": 34, "2.1.6": 17, "2.1.8": 24, "2.1.9": 4,
-    "2.2.1": 15, "2.2.2": 15, "2.2.3": 28, "2.2.4": 28,
-    "2.3.1": 18, "2.3.2": 19,
-    "2.5.1": 27, "2.5.2": 27, "2.5.3": 4, "2.5.4": 27, "2.5.5": 14,
-    "2.6.1": 28, "2.6.2": 28, "2.6.3": 28,
-    "3.1": 14, "3.2": 9, "3.4": 25, "3.5": 9, "3.6": 9, "3.7": 9, "3.8": 28, "3.9": 28,
-    "3.15": 17, "3.16": 17, "3.20": 28,
+    "1.1": 15, "1.2": 28, "1.3": 28, "1.4": 12, "1.5": 13, "1.6": 13,
+    "1.7": 13, "1.8": 39, "1.9": 39, "1.10": 29, "1.11": 27, "1.12": 27, "1.13": 10,
+    "2.1.1": 48, "2.1.2": 46, "2.1.5": 43, "2.1.6": 55, "2.1.8": 4, "2.1.9": 40,
+    "2.2.1": 53, "2.2.2": 53, "2.2.3": 32, "2.2.4": 24,
+    "2.3.1": 56, "2.3.2": 57,
+    "2.5.1": 23, "2.5.2": 23, "2.5.3": 40, "2.5.4": 39, "2.5.5": 52,
+    "2.6.1": 32, "2.6.2": 32, "2.6.3": 32,
+    "3.1": 52, "3.2": 44, "3.3": 37, "3.4": 5, "3.5": 25, "3.6": 25, "3.7": 26, "3.8": 32, "3.9": 32,
+    "3.14": 17, "3.15": 17, "3.16": 17, "3.17": 17, "3.20": 32,
 }
 
 
