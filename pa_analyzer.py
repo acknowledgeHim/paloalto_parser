@@ -14,6 +14,8 @@ Usage:
     python pa_analyzer.py "show merged combined.txt" --rules-csv rules.csv
 """
 
+from __future__ import annotations
+
 import re
 import tarfile
 import xml.etree.ElementTree as ET
