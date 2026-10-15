@@ -22,6 +22,9 @@ up to the first job on another floor. The browser remembers whether it's on or o
 - **Tap a person** to see what they're doing now, what's after that, and what they've finished
   today. Tap outside the popup to close it. Checking a job off there closes the popup so you can
   watch them walk to the next one.
+- **Next job on another plan?** When a check-off leaves someone's next job on a different plan
+  (upstairs, the yard…), that plan opens by itself. If you checked it off from a room's list, the
+  next job's room opens too, so you can keep checking things off.
 - **Chips under the plan** show people whose next job is on another floor, or who have nothing
   left in a room.
 - **In the add/edit chore form**, the new **Where** setting puts a job in a room. It's optional;

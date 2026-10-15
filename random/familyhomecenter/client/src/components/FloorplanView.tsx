@@ -111,8 +111,17 @@ export function FloorplanView({
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
   const stageBox = useRef<HTMLDivElement>(null);
-  /** After a check-off: back to the plan, to watch them walk to their next job. */
-  const changedAndWatch = () => {
+  /**
+   * After a check-off: back to the plan, to watch them walk to their next job. If that job is on
+   * another plan (upstairs, the yard…), switch to it once the new list arrives — and, when they
+   * were checking off from a room, open the next job's room so they can carry on.
+   */
+  const follow = useRef<{ memberId: string; fromTaskId: string | null; openRoom: boolean; until: number } | null>(null);
+  const changedAndWatch = (memberId?: string, openRoom = false) => {
+    if (memberId && plans) {
+      const before = walkerSpots(tasks, members, plans).find((s) => s.member.id === memberId);
+      follow.current = { memberId, fromTaskId: before?.task.id ?? null, openRoom, until: Date.now() + 15000 };
+    }
     onChange();
     stageBox.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
@@ -156,6 +165,21 @@ export function FloorplanView({
   };
 
   const plan = plans?.find((p) => p.id === planId) ?? plans?.[0] ?? null;
+  useEffect(() => {
+    const f = follow.current;
+    if (!f || !plans || !plan) return;
+    if (Date.now() > f.until) {
+      follow.current = null;
+      return;
+    }
+    const spot = walkerSpots(tasks, members, plans).find((s) => s.member.id === f.memberId);
+    if (spot?.task.id === f.fromTaskId) return; // the new list hasn't arrived yet
+    follow.current = null;
+    if (!spot || spot.planId === plan.id) return;
+    setPlanId(spot.planId);
+    if (f.openRoom) setSelectedRoomId(spot.room.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
   const room = plan?.rooms.find((r) => r.id === selectedRoomId) ?? null;
   const spots = plans ? walkerSpots(tasks, members, plans, threeD) : [];
 
@@ -381,7 +405,7 @@ export function FloorplanView({
               <p className="hint">No rooms marked on this plan yet{canEdit ? ' — tap ✏️ Edit plans to mark them.' : '.'}</p>
             )}
             <WhereIsEveryone spots={spots} plans={plans} planId={plan.id} tasks={tasks} onPerson={setPersonId} />
-            {room && <RoomPanel room={room} tasks={tasks} onChange={changedAndWatch} onEdit={onEdit} onAdd={onAdd} onClose={() => setSelectedRoomId(null)} />}
+            {room && <RoomPanel room={room} tasks={tasks} onChange={(who) => changedAndWatch(who, true)} onEdit={onEdit} onAdd={onAdd} onClose={() => setSelectedRoomId(null)} />}
           </>
         )
       )}
@@ -421,7 +445,7 @@ export function FloorplanView({
           onChange={() => {
             // Close so the walk to their next job can be seen.
             setPersonId(null);
-            changedAndWatch();
+            changedAndWatch(personId);
           }}
           onClose={() => setPersonId(null)}
           onGoToRoom={(p, r) => {
@@ -657,7 +681,8 @@ function RoomPanel({
 }: {
   room: FloorplanRoom;
   tasks: Task[];
-  onChange: () => void;
+  /** Something was checked off (or changed) — by/for this person, if it was theirs. */
+  onChange: (memberId?: string) => void;
   onEdit?: (task: Task) => void;
   onAdd?: (roomId: string) => void;
   onClose: () => void;
@@ -670,13 +695,13 @@ function RoomPanel({
   const rows = (list: Task[]) =>
     list.flatMap((t) => {
       const people = members.filter((m) => t.assignee_ids.includes(m.id));
-      if (!people.length) return [<TaskCard key={t.id} task={t} onChange={onChange} onEdit={editFor(t)} />];
+      if (!people.length) return [<TaskCard key={t.id} task={t} onChange={() => onChange()} onEdit={editFor(t)} />];
       return people.map((m) => (
         <div key={`${t.id}:${m.id}`} className="fp-room-panel__row">
           <span className="fp-room-panel__who" style={{ borderColor: m.color }}>
             <MemberAvatar member={m} size={28} /> {m.name}
           </span>
-          <TaskCard task={t} onChange={onChange} onEdit={editFor(t)} hideAssignee viewerId={m.id} />
+          <TaskCard task={t} onChange={() => onChange(m.id)} onEdit={editFor(t)} hideAssignee viewerId={m.id} />
         </div>
       ));
     });
