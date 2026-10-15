@@ -57,8 +57,10 @@ export function canEditHistoricalTask(task: Task, pageOwnerId: string, activePro
 /** Its number in this person's routine as they'll see it today (1, 2, … among `list`), or null if
  *  they haven't put it in order. `list` = their jobs, already sorted with sortForColumn(…, memberId). */
 export function routineNumber(task: Task, list: Task[], memberId: string): number | null {
-  if (task.positions?.[memberId] == null) return null;
-  return list.filter((t) => t.positions?.[memberId] != null).indexOf(task) + 1 || null;
+  // A one-time job that's done is out of the routine: no number, and it doesn't take one up.
+  const numbered = (t: Task) => t.positions?.[memberId] != null && !(t.recurrence === 'once' && t.completions.length > 0);
+  if (!numbered(task)) return null;
+  return list.filter(numbered).indexOf(task) + 1 || null;
 }
 
 /** Fully done for this person — every slot completed if it has more than one, else the one checkbox. */

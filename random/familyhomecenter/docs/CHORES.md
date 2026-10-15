@@ -10,7 +10,8 @@ order, and each person can set their own.
   plan's person popup.
 - **Every job is listed:** the order covers all of the person's jobs, including weekly ones that
   aren't on today's list, so they keep their place. One-time jobs that are already done are left
-  out.
+  out, and a one-time job checked off today (still shown crossed out) loses its number, so the
+  rest stay numbered 1, 2, 3…
 - **Unordered jobs:** jobs the person hasn't put in order come after the ordered ones.
 
 **On the floor plan**, the avatar stands at the first unfinished job in that order. When it's

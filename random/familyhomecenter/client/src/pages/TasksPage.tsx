@@ -117,13 +117,23 @@ export function TasksPage() {
   const [orderList, setOrderList] = useState<Task[] | null>(null);
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   const canOrder = (memberId: string) => isParent || activeProfile?.id === memberId;
+  /** A one-time job that's been done — nothing left to put in order. The server says so; if it's an
+   *  older server that doesn't, tell from today's list (done today, or gone from it because it was
+   *  done on an earlier day). */
+  const isFinishedOnce = (t: Task) => {
+    if (t.finished !== undefined) return t.finished;
+    if (t.recurrence !== 'once') return false;
+    const todays = tasks.find((x) => x.id === t.id);
+    if (todays) return todays.completions.length > 0;
+    return !t.due_date || t.due_date <= new Date().toLocaleDateString('en-CA');
+  };
   const startOrdering = (memberId: string) => {
     setOrderingId(memberId);
     setOrderList(null);
     // Every job of theirs, not just today's — a weekly one keeps its place on the days it's off.
     api
       .get<Task[]>('/tasks?all=true')
-      .then((all) => setOrderList(sortForColumn(all.filter((t) => t.assignee_ids.includes(memberId) && !t.finished), memberId)))
+      .then((all) => setOrderList(sortForColumn(all.filter((t) => t.assignee_ids.includes(memberId) && !isFinishedOnce(t)), memberId)))
       .catch(console.error);
   };
   const moveInOrder = (i: number, by: -1 | 1) => {
