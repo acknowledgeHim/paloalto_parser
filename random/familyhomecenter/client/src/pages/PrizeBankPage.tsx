@@ -157,13 +157,8 @@ function PrizeColumn({
       {notice && <div className="hint prize-bank-page__notice">{notice}</div>}
 
       <h3>🎁 Prize boxes</h3>
-      {current.length === 0 && editing !== 'new' && <div className="empty-state">No prize boxes right now.</div>}
+      {current.length === 0 && <div className="empty-state">No prize boxes right now.</div>}
       {current.map((prize) => {
-        if (isParent && editing === prize.id) {
-          return (
-            <PrizeForm key={prize.id} prize={prize} tasks={tasks} onDone={() => { setEditing(null); onChanged(); }} onCancel={() => setEditing(null)} />
-          );
-        }
         const pct = prize.progress && prize.progress.needed > 0
           ? Math.min(100, Math.round((Math.max(0, prize.progress.current) / prize.progress.needed) * 100))
           : 0;
@@ -173,6 +168,11 @@ function PrizeColumn({
           <div key={prize.id} className="prize-card prize-card--compact">
             <div className="prize-card__title">
               <span className="prize-card__emoji" aria-hidden="true">{prizeEmoji(prize)}</span> {prize.title}
+              {isParent && (
+                <button type="button" className="task-card__edit prize-card__edit" aria-label={`Edit ${prize.title}`} title="Edit · add jobs" onClick={() => setEditing(prize.id)}>
+                  ✎
+                </button>
+              )}
             </div>
             {reward && prize.title !== reward.slice(1) && <div className="prize-card__reward">{reward}</div>}
             <div className="hint">{prizeCostLabel(prize, prize.task_id ? byId[prize.task_id]?.title : undefined)}</div>
@@ -244,14 +244,25 @@ function PrizeColumn({
           </div>
         );
       })}
-      {isParent &&
-        (editing === 'new' ? (
-          <PrizeForm prize={null} tasks={tasks} forMemberId={member.id} onDone={() => { setEditing(null); onChanged(); }} onCancel={() => setEditing(null)} />
-        ) : (
-          <button type="button" className="secondary" onClick={() => setEditing('new')}>
-            + Add a prize box for {member.name}
-          </button>
-        ))}
+      {isParent && (
+        <button type="button" className="secondary prize-column__add" onClick={() => setEditing('new')}>
+          + Add a prize box
+        </button>
+      )}
+      {/* Adding or changing a prize box opens in a pop-up — roomier than the column. */}
+      {isParent && editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal-panel panel prize-form-modal" onClick={(e) => e.stopPropagation()}>
+            <PrizeForm
+              prize={editing === 'new' ? null : prizes.find((p) => p.id === editing) ?? null}
+              tasks={tasks}
+              forMemberId={member.id}
+              onDone={() => { setEditing(null); onChanged(); }}
+              onCancel={() => setEditing(null)}
+            />
+          </div>
+        </div>
+      )}
 
       {toEnjoy.length > 0 && (
         <>

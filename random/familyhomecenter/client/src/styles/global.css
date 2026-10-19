@@ -2169,3 +2169,8 @@ body.fp-full-open { overflow: hidden; }
 .prize-card__redeemed { font-weight: 600; }
 .prize-card__actions > * { flex: 0 0 auto; width: auto; }
 .prize-card__actions > button:not(.link-button) { min-width: 120px; }
+.prize-card__title { display: flex; align-items: center; gap: 6px; }
+.prize-card__edit { margin-left: auto; flex: 0 0 auto; font-size: 1.1em; }
+.prize-column__add { width: auto; align-self: flex-start; min-height: 36px; padding: 0 14px; font-size: 0.9em; }
+.modal-panel.prize-form-modal { max-width: 640px; }
+.prize-form-modal .prize-form { box-shadow: none; border: 0; padding: 0; margin: 0; }
