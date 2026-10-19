@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { ProfileSwitcher } from './ProfileSwitcher.js';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
@@ -34,11 +34,29 @@ export function NavBar() {
   const pendingRequests = usePendingInternetRequests();
   // Tabs a parent has turned off for whoever's picked are hidden (Settings → Kids' access).
   const { canSee } = useSectionAccess();
+  // On a phone the links fold into ☰ — one slim row with the page you're on.
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => setOpen(false), [location.pathname]);
+  const sections = SECTIONS.filter((sec) => sec.path && canSee(sec.key));
+  const here =
+    location.pathname === '/' ? 'Home' : location.pathname.startsWith('/settings') ? 'Settings' : sections.find((sec) => location.pathname.startsWith(sec.path!))?.label ?? '';
   return (
-    <nav className="navbar">
+    <nav className={`navbar ${open ? 'navbar--open' : ''}`}>
+      <button
+        type="button"
+        className="navbar__toggle"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={open ? 'Close the menu' : 'Open the menu'}
+      >
+        <span aria-hidden="true">{open ? '✕' : '☰'}</span>
+        <span className="navbar__here">{here}</span>
+        {!open && pendingRequests > 0 && <span className="navbar__badge">{pendingRequests}</span>}
+      </button>
       <div className="navbar__links">
         <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>Home</NavLink>
-        {SECTIONS.filter((sec) => sec.path && canSee(sec.key)).map((sec) => (
+        {sections.map((sec) => (
           <NavLink key={sec.key} to={sec.path!} className={({ isActive }) => (isActive ? 'active' : '')}>
             {sec.label}
             {sec.key === 'internet' && pendingRequests > 0 && <span className="navbar__badge">{pendingRequests}</span>}

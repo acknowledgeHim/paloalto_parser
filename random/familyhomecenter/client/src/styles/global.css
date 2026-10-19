@@ -2097,3 +2097,45 @@ body.fp-full-open { overflow: hidden; }
 .prize-earned__done { margin-top: 8px; }
 .task-form__copy { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .task-form__copy-status { color: var(--accent); font-weight: 600; }
+
+/* ---- NavBar on a phone: one slim row (☰ + the page you're on + who's picked); the links open as a
+   compact grid under it. ---- */
+.navbar__toggle { display: none; }
+@media (max-width: 700px) {
+  .navbar { padding: 6px 12px; gap: 8px; flex-wrap: wrap; }
+  .navbar__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 1.15em;
+    font-weight: 700;
+    padding: 6px 4px;
+    min-height: 0;
+  }
+  .navbar__toggle > span:first-child { font-size: 1.25em; width: 1.2em; }
+  .navbar__links { display: none; }
+  .navbar--open .navbar__links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    order: 3;
+    width: 100%;
+    padding: 4px 0 6px;
+  }
+  .navbar--open .navbar__links a {
+    font-size: 0.95em;
+    padding: 10px 6px;
+    text-align: center;
+    border-radius: 8px;
+    background: var(--bg);
+    white-space: normal;
+  }
+  .navbar--open .navbar__links a.active { border-bottom: none; background: var(--accent); color: #fff; }
+  .navbar .profile-switcher__current { padding: 4px 8px; font-size: 0.9em; }
+  .page-container { padding: 12px 12px 48px; }
+  .page-container h1 { font-size: 1.5em; margin: 0.2em 0 0.4em; }
+}
+.profile-switcher__keep { padding: 10px 14px; font-size: 0.9em; border-bottom: 1px solid var(--border); gap: 8px; }

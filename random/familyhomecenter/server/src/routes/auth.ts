@@ -11,6 +11,7 @@ import {
   pruneExpiredSessions,
   sessionMemberId,
   isSessionValid,
+  renewSession,
   SESSION_COOKIE_NAME,
 } from '../services/auth.js';
 
@@ -26,6 +27,9 @@ const COOKIE_OPTIONS = {
 authRouter.get('/status', (req, res) => {
   const token = req.cookies?.[SESSION_COOKIE_NAME];
   const valid = isSessionValid(token);
+  // Still logged in: renew it (and the cookie), so a phone that keeps opening the app never
+  // quietly drops back out after 30 days — it lasts until someone logs out on purpose.
+  if (valid && renewSession(token)) res.cookie(SESSION_COOKIE_NAME, token, COOKIE_OPTIONS);
   res.json({
     member_id: valid ? sessionMemberId(token) : null,
     is_admin: isRequestAdmin(token),

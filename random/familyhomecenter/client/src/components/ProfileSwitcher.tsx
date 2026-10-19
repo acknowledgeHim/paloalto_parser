@@ -3,6 +3,7 @@ import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from './MemberAvatar.js';
 import { MemberPasswordModal } from './MemberPasswordModal.js';
+import { isPersonalDevice, setPersonalDevice } from '../utils/device.js';
 
 /** Inline password prompt shown in place of the roster when switching to a protected profile. */
 function LoginPrompt({ member, onClose, onSuccess }: { member: FamilyMember; onClose: () => void; onSuccess: (m: FamilyMember) => void }) {
@@ -49,6 +50,8 @@ export function ProfileSwitcher() {
   const [open, setOpen] = useState(false);
   const [loginTarget, setLoginTarget] = useState<FamilyMember | null>(null);
   const [passwordModalTarget, setPasswordModalTarget] = useState<FamilyMember | null>(null);
+  // Own phone: stays logged in until "Log out" (see utils/device.ts). Takes effect on the next load.
+  const [keep, setKeep] = useState(isPersonalDevice);
 
   const pick = (m: FamilyMember) => {
     if (m.has_password) {
@@ -100,8 +103,19 @@ export function ProfileSwitcher() {
                   </button>
                 </div>
               ))}
+              <label className="checkbox profile-switcher__keep">
+                <input
+                  type="checkbox"
+                  checked={keep}
+                  onChange={(e) => {
+                    setKeep(e.target.checked);
+                    setPersonalDevice(e.target.checked);
+                  }}
+                />
+                📱 Keep me logged in on this device
+              </label>
               <button className="profile-switcher__clear" onClick={clear}>
-                Clear
+                {keep && activeProfile ? 'Log out' : 'Clear'}
               </button>
             </>
           )}

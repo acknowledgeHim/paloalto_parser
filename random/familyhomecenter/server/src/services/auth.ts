@@ -89,6 +89,14 @@ function getValidSession(token: string | undefined): SessionRow | null {
   return row;
 }
 
+/** Pushes a still-valid session's expiry out to a full lifetime again (a device that's kept using
+ *  it stays logged in until someone logs out on purpose). Returns whether it was valid. */
+export function renewSession(token: string | undefined): boolean {
+  if (!getValidSession(token)) return false;
+  db.prepare('UPDATE admin_sessions SET expires_at = ? WHERE token = ?').run(new Date(Date.now() + SESSION_LIFETIME_MS).toISOString(), token);
+  return true;
+}
+
 /** True for a valid session of any kind (a specific family member, or the legacy recovery login). */
 export function isSessionValid(token: string | undefined): boolean {
   return getValidSession(token) !== null;

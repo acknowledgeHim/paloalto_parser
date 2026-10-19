@@ -23,6 +23,7 @@ import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
 import { SectionGate } from './state/SectionAccess.js';
+import { isPersonalDevice } from './utils/device.js';
 
 export function App() {
   const { activeProfile, setActiveProfile } = useFamilyMembers();
@@ -40,7 +41,9 @@ export function App() {
       .catch(() => {});
   }, []);
 
-  const idle = useIdle(idleTimeoutMs);
+  // Someone's own phone: no screensaver and no forgetting who's logged in when it sits idle.
+  const personal = isPersonalDevice();
+  const idle = useIdle(idleTimeoutMs) && !personal;
   const showSlideshow = idle && !dismissed;
 
   useEffect(() => {
