@@ -2174,3 +2174,4 @@ body.fp-full-open { overflow: hidden; }
 .prize-column__add { width: auto; align-self: flex-start; min-height: 36px; padding: 0 14px; font-size: 0.9em; }
 .modal-panel.prize-form-modal { max-width: 640px; }
 .prize-form-modal .prize-form { box-shadow: none; border: 0; padding: 0; margin: 0; }
+.prize-jobs__item { flex-wrap: wrap; }

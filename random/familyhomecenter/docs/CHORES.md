@@ -134,6 +134,8 @@ The Prize Bank page looks like the Family Board, with one column for each kid. E
   - **Doing chores / to-dos:** one or more jobs, each with how much of it is needed, for example 4 hours of weeding + 4 hours of mulching. An hours job counts the hours put in; any other job counts the times it was done. Pick jobs with the box's job list, or add **+ Add another job**.
 - **🔁 Can be earned again:** off for new boxes, so once redeemed a box moves to the kid's 📜 Past prizes. Turn it on for something they can earn over and over. Prizes made before this change can all be earned again.
 
+**From a to-do's own reward.** A to-do's reward ("Movie time") is paid each time that one job is done, and shows under 💪 Jobs that earn rewards. To make it need several jobs, a parent taps **🎁 Make it a prize box** on it. That makes a prize box for that kid with the same reward and emoji and this to-do as its first job, then opens it so you can add more. The to-do stops paying the reward by itself, so it isn't given twice.
+
 **From a chore or to-do.** A parent can open a job's ✎ form and use **🎁 Counts toward a prize** to add it to one of that kid's prize boxes, or to start a new one. **Take off** removes it again.
 
 **✓ Redeemed (parents).** Each box has a **Redeemed** tick box.

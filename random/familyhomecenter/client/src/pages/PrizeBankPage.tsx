@@ -117,6 +117,29 @@ function PrizeColumn({
     });
   const setRedeemed = (prize: Prize, redeemed: boolean) =>
     act(prize.id, () => api.post(`/prizes/${prize.id}/redeemed`, { family_member_id: member.id, acting_member_id: actingId, redeemed }));
+  // A to-do's own reward is paid each time that one job is done. To need several jobs for one
+  // reward, it becomes a prize box (for this kid) with this job as the first of them — and the
+  // to-do stops paying on its own, so the reward isn't given twice. The box opens to add more jobs.
+  const makeBox = (t: Task) => {
+    const reward = taskRewardText(t) ?? t.title;
+    if (!window.confirm(`Make "${reward}" a prize box for ${member.name}, with "${t.title}" as its first job? You can then add more chores / to-dos to it. "${t.title}" won't pay "${reward}" by itself any more.`)) return;
+    act(t.id, async () => {
+      const kind = t.reward_type === 'money' || t.reward_type === 'stars' ? t.reward_type : 'custom';
+      const created = await api.post<Prize>('/prizes', {
+        title: kind === 'custom' ? reward : t.title,
+        cost_type: 'task_count',
+        reward_kind: kind,
+        reward_amount: kind === 'custom' ? null : t.reward_amount,
+        emoji: t.reward_emoji ?? null,
+        member_ids: [member.id],
+        once: true,
+        needs_approval: true,
+        requirements: [{ task_id: t.id, amount: t.goal_type && t.goal_amount ? t.goal_amount : 1 }],
+      });
+      await api.patch(`/tasks/${t.id}/reward`, { reward_type: null, reward_amount: null, reward_text: null, reward_emoji: null });
+      setEditing(created.id);
+    });
+  };
   const markUsed = (r: EarnedReward, used: boolean) => act(r.id, () => api.post(`/prizes/earned/${r.id}/use`, { used }));
 
   const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
@@ -250,7 +273,7 @@ function PrizeColumn({
         </button>
       )}
       {/* Adding or changing a prize box opens in a pop-up — roomier than the column. */}
-      {isParent && editing && (
+      {isParent && editing && (editing === 'new' || prizes.some((p) => p.id === editing)) && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>
           <div className="modal-panel panel prize-form-modal" onClick={(e) => e.stopPropagation()}>
             <PrizeForm
@@ -304,6 +327,11 @@ function PrizeColumn({
                   <span className="badge badge--reward">
                     {taskRewardEmoji(t)} {taskRewardText(t)}
                   </span>
+                  {isParent && (
+                    <button type="button" className="link-button" disabled={busy === t.id} onClick={() => makeBox(t)}>
+                      🎁 Make it a prize box
+                    </button>
+                  )}
                 </li>
               );
             })}
