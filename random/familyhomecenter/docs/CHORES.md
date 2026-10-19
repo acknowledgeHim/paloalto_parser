@@ -71,6 +71,22 @@ The card shows a progress bar such as "⏱ 2½ of 6 h". **↶** takes back the l
 
 A one-time job can take as many days as it needs. A repeating job starts from zero each time it comes up. Any reward on the job is paid once, when the goal is reached.
 
+## ✅ Needs a parent's OK
+
+Parents can tick **✅ Needs a parent's OK** on a chore or to-do, or on a prize.
+
+- **When it's ticked:** in the chore form it's at the top. It's ticked automatically when you turn on a Prize Bank reward for a new to-do. New prizes have it ticked by default. Untick it any time.
+- **When a kid checks off such a job:** the card shows **⏳ Waiting for a parent's OK**. It doesn't count as done, and doesn't pay its reward, until a parent says yes. The kid can tap ⏳ to take it back.
+- **When a kid claims such a prize:** the claim waits for a parent. Any stars it costs are held until then.
+- **When a parent checks it off:** it counts straight away.
+
+**✅ To approve** appears in the menu for parents, with a red count when something is waiting. It lists each kid's waiting items with **✓ Yes** / **✗ No**, plus **✓ Yes to all** per kid.
+
+- **Yes:** the job counts as done and pays its reward, or the prize pays out.
+- **No:** the job goes back to not done. For a times or hours job, only the last chunk comes off. A refused prize claim gives back any stars it cost.
+
+Jobs and prizes you already had don't need an OK unless you tick it.
+
 ## ⧉ Copy to someone else (parents)
 
 Open a chore or to-do (✎), tap **⧉ Copy to…**, tick one or more people, then tap **⧉ Copy**.
@@ -127,5 +143,7 @@ Only new things were added:
   - `task_progress`: the chunks of a times or hours job.
   - `prize_requirements`: the jobs a prize needs.
   - `earned_rewards`: custom rewards a kid has earned, and when each was used.
+  - `pending_completions`: kids' check-offs waiting for a parent's OK.
+- **Approval columns:** `tasks.needs_approval`, `prizes.needs_approval`, `prize_redemptions.status` (`'pending'` while waiting).
 
 No existing data changes.

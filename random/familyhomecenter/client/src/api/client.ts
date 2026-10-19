@@ -92,6 +92,10 @@ export interface Task {
   reward_text?: string | null;
   /** The reward's emoji; null = 💲 money, ⭐ stars, 🎁 custom. */
   reward_emoji?: string | null;
+  /** A kid's check-off waits for a parent's OK before it counts (1). */
+  needs_approval?: 0 | 1;
+  /** Check-offs waiting for that OK (who, and which slot). */
+  pending?: Array<{ family_member_id: string | null; time_of_day: string | null }>;
   active: 0 | 1;
   /** Every completion for the fetched date (or, for a "once" task, ever) — one per person who's done their copy. */
   completions: TaskCompletion[];
@@ -283,6 +287,10 @@ export interface Prize {
   emoji?: string | null;
   /** The jobs it's earned by (with how much of each); empty = stars, or an older single-job prize. */
   requirements?: PrizeRequirement[];
+  /** A kid's claim waits for a parent's OK (1). */
+  needs_approval?: 0 | 1;
+  /** With ?family_member_id=: how many of their claims are waiting for that OK. */
+  waiting?: number;
   /** Present only when fetched with ?family_member_id=. */
   progress?: PrizeProgress;
   eligible?: boolean;
@@ -611,4 +619,37 @@ export interface EarnedReward {
   earned_at: string;
   /** When a parent marked it used; null = still to enjoy. */
   used_at: string | null;
+}
+
+/** ✅ To approve: a kid's check-off of a job that needs a parent's OK. */
+export interface PendingJob {
+  id: string;
+  task_id: string;
+  family_member_id: string | null;
+  completed_on: string;
+  time_of_day: string | null;
+  created_at: string;
+  title: string;
+  kind: 'chore' | 'todo';
+  icon: string | null;
+  goal_type: 'times' | 'hours' | null;
+  goal_amount: number | null;
+  reward_type: 'stars' | 'money' | 'custom' | null;
+  reward_amount: number | null;
+  reward_text: string | null;
+  reward_emoji: string | null;
+}
+
+/** ✅ To approve: a kid's prize claim that needs a parent's OK. */
+export interface PendingPrizeClaim {
+  id: string;
+  prize_id: string;
+  family_member_id: string;
+  redeemed_at: string;
+  title: string;
+  emoji: string | null;
+  reward_kind: 'money' | 'stars' | 'custom' | null;
+  reward_amount: number | null;
+  cost_type: 'stars' | 'task_count';
+  star_cost: number | null;
 }

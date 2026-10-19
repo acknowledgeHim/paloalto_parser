@@ -2139,3 +2139,17 @@ body.fp-full-open { overflow: hidden; }
   .page-container h1 { font-size: 1.5em; margin: 0.2em 0 0.4em; }
 }
 .profile-switcher__keep { padding: 10px 14px; font-size: 0.9em; border-bottom: 1px solid var(--border); gap: 8px; }
+/* Waiting for a parent's OK. */
+.badge--waiting { background: #fff3cd; color: #8a6d00; }
+.task-card--waiting .task-card__check { border-color: #e0b400; background: #fff8e1; }
+.prize-bank-page__notice { background: #fff8e1; font-weight: 600; margin-bottom: 12px; }
+/* ✅ To approve: per kid, each item with big ✓ Yes / ✗ No. */
+.approvals-page__person { border-top: 5px solid var(--border); margin-bottom: 16px; }
+.approvals-page__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.approvals-page__head h2 { margin: 0; flex: 1; }
+.approvals-page__item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.approvals-page__icon { font-size: 1.8em; }
+.approvals-page__what { flex: 1 1 12em; min-width: 0; }
+.approvals-page__buttons { display: flex; gap: 8px; }
+.approvals-page__yes { background: #2e9d57; border-color: #2e9d57; color: #fff; }
+.approvals-page__buttons button { min-width: 5.5em; }

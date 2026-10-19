@@ -6,6 +6,7 @@ import './db.js'; // ensures schema is created on boot
 import { config } from './config.js';
 import { familyMembersRouter } from './routes/familyMembers.js';
 import { tasksRouter } from './routes/tasks.js';
+import { approvalsRouter } from './routes/approvals.js';
 import { calendarRouter } from './routes/calendar.js';
 import { weatherRouter } from './routes/weather.js';
 import { photosRouter } from './routes/photos.js';
@@ -52,6 +53,7 @@ app.use(cookieParser());
 app.use('/api/auth', authRouter);
 app.use('/api/family-members', familyMembersRouter);
 app.use('/api/tasks', tasksRouter);
+app.use('/api/approvals', approvalsRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/photos', photosRouter);

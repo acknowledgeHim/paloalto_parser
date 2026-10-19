@@ -6,43 +6,9 @@ import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME
 import { todayStr } from '../utils/recurrence.js';
 import { assigneesFor, tasksForDate, allActiveTasks, goalUnits, progressFor } from '../services/taskQueries.js';
 import type { Task, TaskCompletion } from '../types.js';
+import { addPending, creditReward, goalSlots, hasReward, isParentRequest, recordCompletion, removePending } from '../services/rewards.js';
 
 export const tasksRouter = Router();
-
-/** Does completing this pay anything? (money/stars need an amount; a custom reward needs its text) */
-function hasReward(task: Task | undefined): task is Task {
-  if (!task?.reward_type) return false;
-  return task.reward_type === 'custom' ? Boolean(task.reward_text) : Boolean(task.reward_amount);
-}
-
-/** Pays (sign 1) or takes back (sign -1) a task's reward: money or stars into the balance, or a
- *  custom reward ("Movie time") onto their earned list — taking back removes one not yet used. */
-function creditReward(memberId: string, task: Task, sign: 1 | -1) {
-  if (task.reward_type === 'custom') {
-    if (sign > 0) {
-      db.prepare('INSERT INTO earned_rewards (id, family_member_id, task_id, text, emoji, earned_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-        uuidv4(),
-        memberId,
-        task.id,
-        task.reward_text,
-        task.reward_emoji ?? null,
-        new Date().toISOString()
-      );
-    } else {
-      db.prepare(
-        `DELETE FROM earned_rewards WHERE id = (SELECT id FROM earned_rewards WHERE family_member_id = ? AND task_id = ? AND used_at IS NULL
-         ORDER BY earned_at DESC LIMIT 1)`
-      ).run(memberId, task.id);
-    }
-    return;
-  }
-  const amount = (task.reward_amount ?? 0) * sign;
-  if (task.reward_type === 'stars') {
-    db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(Math.round(amount), memberId);
-  } else if (task.reward_type === 'money') {
-    db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(amount, memberId);
-  }
-}
 
 /**
  * Putting a chore/to-do somewhere on the floor plan is a parent's call — or a kid's whom a parent
@@ -195,12 +161,13 @@ tasksRouter.post('/', (req, res) => {
     goal_type: goal?.goal_type ?? null,
     goal_amount: goal?.goal_amount ?? null,
     goal_minutes: goal?.goal_minutes ?? null,
+    needs_approval: (req.body as { needs_approval?: unknown }).needs_approval && isParentRequest(req, (req.body as { acting_member_id?: unknown }).acting_member_id) ? 1 : 0,
     active: 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y, rotation, rotation_start, goal_type, goal_amount, goal_minutes, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y, @rotation, @rotation_start, @goal_type, @goal_amount, @goal_minutes, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y, rotation, rotation_start, goal_type, goal_amount, goal_minutes, needs_approval, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y, @rotation, @rotation_start, @goal_type, @goal_amount, @goal_minutes, @needs_approval, @active, @created_at)`
   ).run(task);
   // A rotating chore is on everyone in the rotation (whose turn it is, is worked out per day).
   setAssignees(task.id, rotation?.rotation ? (JSON.parse(rotation.rotation) as string[]) : assignee_ids ?? []);
@@ -240,6 +207,8 @@ tasksRouter.patch('/:id', (req, res) => {
     goal_amount: _ga,
     goal_minutes: _gm,
     progress: _p,
+    pending: _pe,
+    needs_approval: requestedApproval,
     ...fields
   } = req.body as Partial<Task> & {
     assignee_ids?: string[];
@@ -248,6 +217,7 @@ tasksRouter.patch('/:id', (req, res) => {
     rotation_first_id?: unknown;
     rotation_next_id?: unknown;
     progress?: unknown;
+    pending?: unknown;
   };
   let assignee_ids = requestedAssignees;
   const goal = parseGoal(req.body);
@@ -262,6 +232,9 @@ tasksRouter.patch('/:id', (req, res) => {
   if (rotation === undefined && rotating) assignee_ids = undefined;
   if (rotation?.rotation) assignee_ids = JSON.parse(rotation.rotation) as string[];
   const updated: Task = { ...existing, ...fields, ...(rotation ?? {}), ...(goal ?? {}), id: existing.id };
+  // Only a parent can say a job needs (or no longer needs) their OK.
+  if (requestedApproval !== undefined && isParentRequest(req, acting_member_id)) updated.needs_approval = requestedApproval ? 1 : 0;
+  updated.needs_approval = updated.needs_approval ? 1 : 0;
   if (updated.rotation && updated.recurrence === 'once') return res.status(400).json({ error: 'Taking turns is for chores that repeat' });
   updated.room_id = updated.room_id || null;
   if (!roomExists(updated.room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
@@ -278,7 +251,7 @@ tasksRouter.patch('/:id', (req, res) => {
     `UPDATE tasks SET kind=@kind, title=@title, notes=@notes, recurrence=@recurrence,
      due_date=@due_date, time_of_day=@time_of_day, icon=@icon, room_id=@room_id, room_x=@room_x, room_y=@room_y,
      rotation=@rotation, rotation_start=@rotation_start, goal_type=@goal_type, goal_amount=@goal_amount,
-     goal_minutes=@goal_minutes, active=@active WHERE id=@id`
+     goal_minutes=@goal_minutes, needs_approval=@needs_approval, active=@active WHERE id=@id`
   ).run(updated);
   if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
   res.json({ ...updated, assignee_ids: assignee_ids ?? assigneesFor(req.params.id) });
@@ -382,9 +355,9 @@ tasksRouter.post('/:id/duplicate', requireAdmin, (req, res) => {
   if (!people.length) return res.status(400).json({ error: 'Pick who to copy it to' });
   const insert = db.prepare(
     `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y,
-       needed_since, goal_type, goal_amount, goal_minutes, reward_type, reward_amount, reward_text, reward_emoji, active, created_at)
+       needed_since, goal_type, goal_amount, goal_minutes, reward_type, reward_amount, reward_text, reward_emoji, needs_approval, active, created_at)
      VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y,
-       @needed_since, @goal_type, @goal_amount, @goal_minutes, @reward_type, @reward_amount, @reward_text, @reward_emoji, 1, @created_at)`
+       @needed_since, @goal_type, @goal_amount, @goal_minutes, @reward_type, @reward_amount, @reward_text, @reward_emoji, @needs_approval, 1, @created_at)`
   );
   const created = db.transaction(() =>
     people.map((memberId) => {
@@ -397,6 +370,7 @@ tasksRouter.post('/:id/duplicate', requireAdmin, (req, res) => {
         goal_minutes: source.goal_minutes ?? null,
         reward_text: source.reward_text ?? null,
         reward_emoji: source.reward_emoji ?? null,
+        needs_approval: source.needs_approval ? 1 : 0,
         created_at: new Date().toISOString(),
       };
       insert.run(copy);
@@ -421,6 +395,13 @@ tasksRouter.post('/:id/complete', (req, res) => {
   const date = (req.body.date as string) || todayStr();
   const completedBy: string | null = req.body.completed_by_id ?? null;
   const timeOfDay: string | null = req.body.time_of_day ?? null;
+  // A job that needs a parent's OK: a kid's check-off waits for it (no completion, no reward yet).
+  if (task.needs_approval && completedBy && !isParentRequest(req, req.body.acting_member_id)) {
+    if (!findCompletion(task.id, date, completedBy, timeOfDay)) addPending(task, completedBy, date, timeOfDay);
+    return res.status(202).json({ pending: true });
+  }
+  // A parent checking it off settles any waiting check-off too.
+  if (task.needs_approval) removePending(task, completedBy, date, timeOfDay);
   const existing = findCompletion(task.id, date, completedBy, timeOfDay);
 
   const completion: TaskCompletion = {
@@ -460,6 +441,8 @@ tasksRouter.post('/:id/uncomplete', (req, res) => {
   const timeOfDay: string | null = req.body.time_of_day ?? null;
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   const existing = findCompletion(req.params.id, date, completedBy, timeOfDay);
+  // Taking back a check-off that's still waiting for a parent's OK.
+  if (task) removePending(task, completedBy, date, timeOfDay);
 
   if (existing) {
     db.prepare('DELETE FROM task_completions WHERE id = ?').run(existing.id);
@@ -474,12 +457,6 @@ tasksRouter.post('/:id/uncomplete', (req, res) => {
   }
   res.status(204).end();
 });
-
-/** The completion rows a finished "times"/"hours" job gets: one per time-of-day slot (or one). */
-function goalSlots(task: Task): Array<string | null> {
-  const slots = (task.time_of_day ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-  return slots.length > 1 ? slots : [null];
-}
 
 /**
  * POST /api/tasks/:id/progress { family_member_id, amount?, date? } — a chunk of a "times"/"hours"
@@ -515,20 +492,13 @@ tasksRouter.post('/:id/progress', (req, res) => {
     );
     const sum = progressFor(task, memberId, date);
     if (sum >= goal) {
-      let added = false;
-      for (const slot of goalSlots(task)) {
-        if (findCompletion(task.id, date, memberId, slot)) continue;
-        db.prepare(
-          'INSERT INTO task_completions (id, task_id, completed_on, completed_by_id, completed_at, time_of_day) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(uuidv4(), task.id, date, memberId, new Date().toISOString(), slot);
-        added = true;
-      }
-      if (task.recurrence === 'asneeded') db.prepare('UPDATE tasks SET needed_since = NULL WHERE id = ?').run(task.id);
-      if (added && hasReward(task) && memberId) creditReward(memberId, task, 1);
+      // All done — checked off, or (a job that needs a parent's OK, done by a kid) waiting for it.
+      if (task.needs_approval && memberId && !isParentRequest(req, req.body.acting_member_id)) addPending(task, memberId, date, null);
+      else recordCompletion(task, memberId, date, goalSlots(task));
     }
     return sum;
   })();
-  res.status(201).json({ progress: total, goal, done: total >= goal });
+  res.status(201).json({ progress: total, goal, done: total >= goal, pending: Boolean(task.needs_approval && total >= goal && !isParentRequest(req, req.body.acting_member_id)) });
 });
 
 /**
@@ -552,6 +522,7 @@ tasksRouter.post('/:id/progress/undo', (req, res) => {
     db.prepare('DELETE FROM task_progress WHERE id = ?').run(last.id);
     const sum = progressFor(task, memberId, date);
     if (sum < goal) {
+      removePending(task, memberId, date);
       // Its check-off: that day's, or (one-time job) whenever it was finished.
       const on = task.recurrence === 'once' ? 'completed_on <= ?' : 'completed_on = ?';
       const by = memberId === null ? 'completed_by_id IS NULL' : 'completed_by_id = ?';

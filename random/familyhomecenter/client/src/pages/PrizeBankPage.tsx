@@ -20,6 +20,7 @@ export function PrizeBankPage() {
   const [tasksById, setTasksById] = useState<Record<string, Task>>({});
   const [redeeming, setRedeeming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = () => {
     const path = activeProfile ? `/prizes?family_member_id=${activeProfile.id}` : '/prizes';
@@ -38,7 +39,9 @@ export function PrizeBankPage() {
     setError(null);
     setRedeeming(prize.id);
     try {
-      await api.post(`/prizes/${prize.id}/redeem`, { family_member_id: activeProfile.id });
+      const r = await api.post<{ pending?: boolean }>(`/prizes/${prize.id}/redeem`, { family_member_id: activeProfile.id, acting_member_id: activeProfile.id });
+      if (r?.pending) setNotice(`${prize.title}: claimed — waiting for a parent's OK ⏳`);
+      window.dispatchEvent(new Event('approvals-changed'));
       load();
       refresh();
     } catch (err) {
@@ -82,6 +85,7 @@ export function PrizeBankPage() {
       )}
 
       {error && <div className="settings-login__error">{error}</div>}
+      {notice && <div className="panel prize-bank-page__notice">{notice}</div>}
 
       {activeProfile && earned.length > 0 && (
         <section className="panel prize-earned">
@@ -172,6 +176,9 @@ export function PrizeBankPage() {
                     {Math.max(0, prize.progress.current)} / {prize.progress.needed}
                   </div>
                 </>
+              )}
+              {activeProfile && (prize.waiting ?? 0) > 0 && (
+                <div className="badge badge--waiting">⏳ Claimed — waiting for a parent's OK{(prize.waiting ?? 0) > 1 ? ` (${prize.waiting})` : ''}</div>
               )}
               {activeProfile && (
                 <button

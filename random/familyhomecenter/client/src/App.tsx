@@ -19,6 +19,7 @@ import { IntercomPage } from './pages/IntercomPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { InternetPage } from './pages/InternetPage.js';
 import { PeoplePage } from './pages/PeoplePage.js';
+import { ApprovalsPage } from './pages/ApprovalsPage.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
@@ -70,6 +71,7 @@ export function App() {
       <main className="page-container">
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/approvals" element={<ApprovalsPage />} />
           <Route path="/calendar" element={<SectionGate section="calendar"><CalendarPage /></SectionGate>} />
           <Route path="/tasks" element={<SectionGate section="tasks"><TasksPage /></SectionGate>} />
           <Route path="/meals" element={<SectionGate section="meals"><MealsPage /></SectionGate>} />

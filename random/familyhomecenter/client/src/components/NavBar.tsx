@@ -30,8 +30,33 @@ function usePendingInternetRequests(): number {
   return count;
 }
 
+/** How many kids' check-offs / prize claims are waiting for a parent's OK — for parents only. */
+function usePendingApprovals(): number {
+  const { members, activeProfile } = useFamilyMembers();
+  const forParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!forParent) {
+      setCount(0);
+      return;
+    }
+    const load = () => api.get<number>('/approvals/count').then(setCount).catch(() => setCount(0));
+    load();
+    const t = setInterval(load, 30_000);
+    window.addEventListener('approvals-changed', load);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('approvals-changed', load);
+    };
+  }, [forParent]);
+  return count;
+}
+
 export function NavBar() {
   const pendingRequests = usePendingInternetRequests();
+  const pendingApprovals = usePendingApprovals();
+  const { members, activeProfile } = useFamilyMembers();
+  const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   // Tabs a parent has turned off for whoever's picked are hidden (Settings → Kids' access).
   const { canSee } = useSectionAccess();
   // On a phone the links fold into ☰ — one slim row with the page you're on.
@@ -40,7 +65,7 @@ export function NavBar() {
   useEffect(() => setOpen(false), [location.pathname]);
   const sections = SECTIONS.filter((sec) => sec.path && canSee(sec.key));
   const here =
-    location.pathname === '/' ? 'Home' : location.pathname.startsWith('/settings') ? 'Settings' : sections.find((sec) => location.pathname.startsWith(sec.path!))?.label ?? '';
+    location.pathname === '/' ? 'Home' : location.pathname.startsWith('/settings') ? 'Settings' : location.pathname.startsWith('/approvals') ? '✅ To approve' : sections.find((sec) => location.pathname.startsWith(sec.path!))?.label ?? '';
   return (
     <nav className={`navbar ${open ? 'navbar--open' : ''}`}>
       <button
@@ -52,7 +77,7 @@ export function NavBar() {
       >
         <span aria-hidden="true">{open ? '✕' : '☰'}</span>
         <span className="navbar__here">{here}</span>
-        {!open && pendingRequests > 0 && <span className="navbar__badge">{pendingRequests}</span>}
+        {!open && pendingRequests + pendingApprovals > 0 && <span className="navbar__badge">{pendingRequests + pendingApprovals}</span>}
       </button>
       <div className="navbar__links">
         <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>Home</NavLink>
@@ -62,6 +87,12 @@ export function NavBar() {
             {sec.key === 'internet' && pendingRequests > 0 && <span className="navbar__badge">{pendingRequests}</span>}
           </NavLink>
         ))}
+        {isParent && (
+          <NavLink to="/approvals" className={({ isActive }) => (isActive ? 'active' : '')}>
+            ✅ To approve
+            {pendingApprovals > 0 && <span className="navbar__badge">{pendingApprovals}</span>}
+          </NavLink>
+        )}
         <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
       </div>
       <ProfileSwitcher />

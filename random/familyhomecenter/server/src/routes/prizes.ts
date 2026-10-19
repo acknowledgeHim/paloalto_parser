@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { isParentRequest } from '../services/rewards.js';
 import type { FamilyMember, Prize, PrizeRequirement, Task } from '../types.js';
 
 export const prizesRouter = Router();
@@ -73,7 +74,8 @@ function progressFor(prize: Prize, memberId: string) {
       | undefined;
     const current = member?.star_balance ?? 0;
     const needed = prize.star_cost ?? 0;
-    return { current, needed, available: needed > 0 ? Math.floor(current / needed) - redemptionsFor(prize.id, memberId) : 0 };
+    // Claiming already takes the stars out of the balance, so what's left is all that counts.
+    return { current, needed, available: needed > 0 ? Math.floor(current / needed) : 0 };
   }
   if (!prize.task_id || !prize.required_count) return { current: 0, needed: 0, available: 0 };
   const completions = completionsFor(prize.task_id, memberId);
@@ -115,7 +117,10 @@ prizesRouter.get('/', (req, res) => {
   res.json(
     prizes.map((p) => {
       const progress = progressFor(p, memberId);
-      return { ...withRequirements(p), progress, eligible: progress.available > 0 };
+      const waiting = (db
+        .prepare("SELECT COUNT(*) AS n FROM prize_redemptions WHERE prize_id = ? AND family_member_id = ? AND status = 'pending'")
+        .get(p.id, memberId) as { n: number }).n;
+      return { ...withRequirements(p), progress, eligible: progress.available > 0, waiting };
     })
   );
 });
@@ -187,6 +192,7 @@ function parsePrize(body: Record<string, unknown>, existing?: Prize):
       reward_kind,
       reward_amount: roundedReward,
       emoji,
+      needs_approval: merged.needs_approval ? 1 : 0,
     },
   };
 }
@@ -204,8 +210,8 @@ prizesRouter.post('/', requireAdmin, (req, res) => {
   const { prize, requirements } = parsed;
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO prizes (id, title, cost_type, star_cost, task_id, required_count, created_at, reward_kind, reward_amount, emoji)
-       VALUES (@id, @title, @cost_type, @star_cost, @task_id, @required_count, @created_at, @reward_kind, @reward_amount, @emoji)`
+      `INSERT INTO prizes (id, title, cost_type, star_cost, task_id, required_count, created_at, reward_kind, reward_amount, emoji, needs_approval)
+       VALUES (@id, @title, @cost_type, @star_cost, @task_id, @required_count, @created_at, @reward_kind, @reward_amount, @emoji, @needs_approval)`
     ).run(prize);
     saveRequirements(prize.id, requirements);
   })();
@@ -221,7 +227,8 @@ prizesRouter.patch('/:id', requireAdmin, (req, res) => {
   db.transaction(() => {
     db.prepare(
       `UPDATE prizes SET title=@title, cost_type=@cost_type, star_cost=@star_cost, task_id=@task_id,
-       required_count=@required_count, reward_kind=@reward_kind, reward_amount=@reward_amount, emoji=@emoji WHERE id=@id`
+       required_count=@required_count, reward_kind=@reward_kind, reward_amount=@reward_amount, emoji=@emoji,
+       needs_approval=@needs_approval WHERE id=@id`
     ).run(prize);
     saveRequirements(prize.id, requirements);
   })();
@@ -234,24 +241,9 @@ prizesRouter.delete('/:id', requireAdmin, (req, res) => {
 });
 
 /** POST /api/prizes/:id/redeem { family_member_id } — validated server-side against the real balance/count. */
-prizesRouter.post('/:id/redeem', (req, res) => {
-  const prize = db.prepare('SELECT * FROM prizes WHERE id = ?').get(req.params.id) as Prize | undefined;
-  if (!prize) return res.status(404).json({ error: 'not found' });
-  const memberId = req.body.family_member_id as string | undefined;
-  if (!memberId) return res.status(400).json({ error: 'family_member_id is required' });
-
-  const progress = progressFor(prize, memberId);
-  if (progress.available <= 0) return res.status(400).json({ error: 'not eligible for this prize yet' });
-
-  if (prize.cost_type === 'stars' && prize.star_cost) {
-    db.prepare('UPDATE family_members SET star_balance = star_balance - ? WHERE id = ?').run(prize.star_cost, memberId);
-  }
-  const redemption = { id: uuidv4(), prize_id: prize.id, family_member_id: memberId, redeemed_at: new Date().toISOString() };
-  db.prepare(
-    'INSERT INTO prize_redemptions (id, prize_id, family_member_id, redeemed_at) VALUES (@id, @prize_id, @family_member_id, @redeemed_at)'
-  ).run(redemption);
-  // A money or stars prize pays into their balance; anything else ("Movie night") goes on their
-  // earned list until a parent marks it used.
+/** Pays out a claimed prize: money or stars into their balance; anything else ("Movie night") onto
+ *  their earned list until a parent marks it used. */
+export function payPrize(prize: Prize, memberId: string, at: string): void {
   if (prize.reward_kind === 'money' && prize.reward_amount) {
     db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(prize.reward_amount, memberId);
   } else if (prize.reward_kind === 'stars' && prize.reward_amount) {
@@ -263,8 +255,39 @@ prizesRouter.post('/:id/redeem', (req, res) => {
       prize.id,
       prize.title,
       prize.emoji ?? null,
-      redemption.redeemed_at
+      at
     );
   }
-  res.status(201).json(redemption);
+}
+
+/** POST /api/prizes/:id/redeem { family_member_id, acting_member_id? } — validated server-side against
+ *  the real balance/count. A prize that needs a parent's OK, claimed by a kid, waits for it: its star
+ *  cost is held now, and it pays out when a parent says yes (or the stars come back on a no). */
+prizesRouter.post('/:id/redeem', (req, res) => {
+  const prize = db.prepare('SELECT * FROM prizes WHERE id = ?').get(req.params.id) as Prize | undefined;
+  if (!prize) return res.status(404).json({ error: 'not found' });
+  const memberId = req.body.family_member_id as string | undefined;
+  if (!memberId) return res.status(400).json({ error: 'family_member_id is required' });
+
+  const progress = progressFor(prize, memberId);
+  if (progress.available <= 0) return res.status(400).json({ error: 'not eligible for this prize yet' });
+
+  const pending = Boolean(prize.needs_approval) && !isParentRequest(req, req.body.acting_member_id ?? memberId);
+  const redemption = {
+    id: uuidv4(),
+    prize_id: prize.id,
+    family_member_id: memberId,
+    redeemed_at: new Date().toISOString(),
+    status: pending ? 'pending' : null,
+  };
+  db.transaction(() => {
+    if (prize.cost_type === 'stars' && prize.star_cost) {
+      db.prepare('UPDATE family_members SET star_balance = star_balance - ? WHERE id = ?').run(prize.star_cost, memberId);
+    }
+    db.prepare(
+      'INSERT INTO prize_redemptions (id, prize_id, family_member_id, redeemed_at, status) VALUES (@id, @prize_id, @family_member_id, @redeemed_at, @status)'
+    ).run(redemption);
+    if (!pending) payPrize(prize, memberId, redemption.redeemed_at);
+  })();
+  res.status(201).json({ ...redemption, pending });
 });

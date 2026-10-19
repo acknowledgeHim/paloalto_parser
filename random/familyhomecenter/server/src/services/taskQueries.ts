@@ -144,7 +144,12 @@ export function tasksForDate(date: string): TaskWithAssignment[] {
           : (db
               .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
               .all(task.id, date) as TaskCompletion[]);
-      return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {}, progress: progressByMember(task, date) };
+      const pending = task.needs_approval
+        ? (db
+            .prepare(`SELECT family_member_id, time_of_day FROM pending_completions WHERE task_id = ? AND ${task.recurrence === 'once' ? 'completed_on <= ?' : 'completed_on = ?'}`)
+            .all(task.id, date) as Array<{ family_member_id: string | null; time_of_day: string | null }>)
+        : undefined;
+      return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {}, progress: progressByMember(task, date), pending };
     });
 }
 

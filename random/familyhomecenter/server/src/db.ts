@@ -945,6 +945,12 @@ for (const [table, column] of [
   // ("Movie time", "Friend time", "Special trip"). And the reward's emoji, any type (NULL = 💲 / ⭐ / 🎁).
   ['tasks', 'reward_text TEXT'],
   ['tasks', 'reward_emoji TEXT'],
+  // Needs a parent's OK: a kid checking it off (or claiming the prize) waits in the parent's
+  // "To approve" list instead of counting straight away.
+  ['tasks', 'needs_approval INTEGER NOT NULL DEFAULT 0'],
+  ['prizes', 'needs_approval INTEGER NOT NULL DEFAULT 0'],
+  // A prize claim waiting for that OK: 'pending' (NULL = an ordinary, settled claim).
+  ['prize_redemptions', 'status TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
@@ -1006,6 +1012,19 @@ db.exec(`
     used_at TEXT
   );
   CREATE INDEX IF NOT EXISTS earned_rewards_member ON earned_rewards(family_member_id, used_at);
+`);
+
+// A kid's check-off of a job that needs a parent's OK, waiting for it. Approving turns it into a
+// real completion (and pays the reward); saying no just removes it.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_completions (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    family_member_id TEXT REFERENCES family_members(id) ON DELETE CASCADE,
+    completed_on TEXT NOT NULL,
+    time_of_day TEXT,
+    created_at TEXT NOT NULL
+  );
 `);
 
 export function getSetting(key: string, fallback = ''): string {

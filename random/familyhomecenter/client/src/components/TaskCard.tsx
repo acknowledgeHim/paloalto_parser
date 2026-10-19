@@ -49,18 +49,30 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
     return task.completions.some((c) => c.time_of_day === slot);
   };
 
+  // Checked off by a kid, waiting for a parent's OK (a job that needs one) — not done yet.
+  const isPending = (slot: string | null): boolean =>
+    Boolean(task.pending?.some((p) => (p.family_member_id ?? undefined) === (effectiveViewerId ?? undefined) && (goal || p.time_of_day === slot)));
+  const isParentHere = activeProfile?.is_parent === 1;
+
   const toggle = async (slot: string | null) => {
     const done = isDone(slot);
-    const body = { completed_by_id: effectiveViewerId ?? null, time_of_day: slot };
+    const body = { completed_by_id: effectiveViewerId ?? null, time_of_day: slot, acting_member_id: activeProfile?.id ?? null };
+    // A kid tapping their waiting check-off takes it back; a parent tapping it says yes (it counts).
+    if (isPending(slot) && !isParentHere) {
+      await api.post(`/tasks/${task.id}/uncomplete`, body);
+      onChange();
+      return;
+    }
     if (done) {
       await api.post(`/tasks/${task.id}/uncomplete`, body);
     } else {
       // Play immediately (before the await) so it stays tied to this click as a user gesture.
       const soundOwner = members.find((m) => m.id === effectiveViewerId);
       if (soundOwner) playCompletionSound(soundOwner.complete_sound, soundOwner.id);
-      await api.post(`/tasks/${task.id}/complete`, body);
+      const r = await api.post<{ pending?: boolean }>(`/tasks/${task.id}/complete`, body);
+      if (r?.pending || task.needs_approval) window.dispatchEvent(new Event('approvals-changed'));
       // Was that the last chore (or to-do) of their day? Then it's party time.
-      if (soundOwner) celebrateIfAllDone(soundOwner, task.kind).catch(() => {});
+      if (soundOwner && !r?.pending) celebrateIfAllDone(soundOwner, task.kind).catch(() => {});
     }
     onChange();
   };
@@ -76,8 +88,12 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
     const soundOwner = members.find((m) => m.id === effectiveViewerId);
     if (soundOwner) playCompletionSound(soundOwner.complete_sound, soundOwner.id);
     try {
-      const r = await api.post<{ done: boolean }>(`/tasks/${task.id}/progress`, { family_member_id: effectiveViewerId ?? null, amount });
-      if (r.done && soundOwner) celebrateIfAllDone(soundOwner, task.kind).catch(() => {});
+      const r = await api.post<{ done: boolean; pending?: boolean }>(`/tasks/${task.id}/progress`, {
+        family_member_id: effectiveViewerId ?? null,
+        amount,
+        acting_member_id: activeProfile?.id ?? null,
+      });
+      if (r.done && !r.pending && soundOwner) celebrateIfAllDone(soundOwner, task.kind).catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -86,13 +102,23 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
   const takeBack = async () => {
     setBusy(true);
     try {
-      await api.post(`/tasks/${task.id}/progress/undo`, { family_member_id: effectiveViewerId ?? null });
+      await api.post(`/tasks/${task.id}/progress/undo`, { family_member_id: effectiveViewerId ?? null, acting_member_id: activeProfile?.id ?? null });
     } finally {
       setBusy(false);
     }
     onChange();
   };
   const pressGoalCheck = () => {
+    // Waiting for a parent's OK: a parent tapping it says yes (it counts); a kid takes the last chunk back.
+    if (left <= 0 && isPending(null)) {
+      if (isParentHere) {
+        void api
+          .post(`/tasks/${task.id}/complete`, { completed_by_id: effectiveViewerId ?? null, time_of_day: null, acting_member_id: activeProfile?.id ?? null })
+          .then(onChange);
+        return;
+      }
+      return void takeBack();
+    }
     if (left <= 0) return void takeBack();
     if (task.goal_type === 'hours') setChoosingChunk(!choosingChunk);
     else void addChunk(1);
@@ -112,20 +138,21 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
   const mayEdit = Boolean(onEdit) || canEditTask(task, activeProfile);
   const edit = () => (onEdit ? onEdit(task) : setEditingHere(true));
 
-  const allDone = goal ? left <= 0 : multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
+  const allDone = goal ? left <= 0 && !isPending(null) : multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
+  const waiting = multiSlot ? slots.some((sl) => isPending(sl)) : isPending(null);
   const visibleAssignees = hideAssignee ? assignees.filter((m) => m.id !== effectiveViewerId) : assignees;
 
   return (
-    <div className={`task-card ${allDone ? 'task-card--done' : ''}`}>
+    <div className={`task-card ${allDone ? 'task-card--done' : ''} ${waiting ? 'task-card--waiting' : ''}`}>
       {!multiSlot && !goal && (
         <button
           className="task-card__check"
           onClick={() => toggle(null)}
           disabled={!canToggle}
           title={toggleTitle}
-          aria-label={isDone(null) ? 'Mark not done' : 'Mark done'}
+          aria-label={isDone(null) ? 'Mark not done' : isPending(null) ? (isParentHere ? 'Approve' : 'Take it back') : 'Mark done'}
         >
-          {isDone(null) ? '✓' : ''}
+          {isDone(null) ? '✓' : isPending(null) ? '⏳' : ''}
         </button>
       )}
       {goal && (
@@ -136,7 +163,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
           title={toggleTitle ?? (left <= 0 ? 'Take back the last one' : task.goal_type === 'hours' ? 'Check off some time' : 'Did one more')}
           aria-label={left <= 0 ? 'Take back the last one' : task.goal_type === 'hours' ? 'Check off some time' : 'Did one more'}
         >
-          {left <= 0 ? '✓' : '＋'}
+          {left <= 0 ? (isPending(null) ? '⏳' : '✓') : '＋'}
         </button>
       )}
       <div className="task-card__body">
@@ -158,6 +185,14 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
             <span className="badge badge--time" title={`Taking turns: ${task.rotation_ids.map((id) => members.find((m) => m.id === id)?.name).join(' → ')}`}>
               🔄{task.rotation_next_id ? ` next: ${members.find((m) => m.id === task.rotation_next_id)?.name ?? '?'}` : ' turns'}
             </span>
+          )}
+          {waiting && (
+            <span className="badge badge--waiting" title={isParentHere ? 'Tap ⏳ to approve, or use ✅ To approve' : 'A parent needs to OK it'}>
+              ⏳ Waiting for a parent's OK
+            </span>
+          )}
+          {task.needs_approval === 1 && !waiting && !allDone && (
+            <span className="badge badge--time" title="A parent OKs it before it counts">✅ Parent OK</span>
           )}
           {taskRewardText(task) && (
             <span className="badge badge--reward" title="Prize Bank reward">
@@ -230,7 +265,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
                   disabled={!canToggle}
                   title={toggleTitle}
                 >
-                  {done ? '✓' : passed ? '⏰' : timeOfDayIcon(slot)} {timeOfDayLabel(slot)}
+                  {done ? '✓' : isPending(slot) ? '⏳' : passed ? '⏰' : timeOfDayIcon(slot)} {timeOfDayLabel(slot)}
                 </button>
               );
             })}

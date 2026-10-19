@@ -169,6 +169,7 @@ function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; ta
     if (prize?.task_id) return [{ task_id: prize.task_id, amount: String(prize.required_count ?? 1) }];
     return [{ task_id: '', amount: '1' }];
   });
+  const [needsApproval, setNeedsApproval] = useState(prize ? prize.needs_approval === 1 : true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const unitOf = (taskId: string) => (tasks.find((t) => t.id === taskId)?.goal_type === 'hours' ? 'hours' : 'times');
@@ -190,6 +191,7 @@ function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; ta
       cost_type: costType,
       star_cost: costType === 'stars' ? Number(starCost) : null,
       requirements: costType === 'task_count' ? requirements : [],
+      needs_approval: needsApproval,
     };
     setSaving(true);
     try {
@@ -303,6 +305,10 @@ function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; ta
           </p>
         </div>
       )}
+      <label className="checkbox">
+        <input type="checkbox" checked={needsApproval} onChange={(e) => setNeedsApproval(e.target.checked)} />
+        ✅ Needs a parent's OK when a kid claims it (waits in ✅ To approve; any stars are held until then)
+      </label>
       {error && <div className="settings-login__error">{error}</div>}
       <div className="task-form__row">
         <button type="submit" disabled={saving}>{prize ? 'Save' : 'Add prize'}</button>

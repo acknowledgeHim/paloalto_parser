@@ -144,3 +144,13 @@ part is turned off for you right now — ask a parent", and the Home dashboard h
 
 It's a screen-level control for the family dashboard, not a lock on the server's data — pair it
 with the Internet page's time limits for anything that really needs enforcing.
+
+## Phones: staying logged in
+
+The wall screen forgets who's picked, and logs them out, after a few idle minutes so the next person starts fresh. A phone shouldn't do that.
+
+On a phone (any small screen), whoever is logged in stays logged in. There's no idle logout and no screensaver until someone taps **Log out** in the person menu.
+
+Any device can be set either way with **📱 Keep me logged in on this device** in the person menu. Tick it on a tablet you carry around, or untick it on a phone that's shared.
+
+Logins also renew each time the app is opened, so they don't run out after 30 days.

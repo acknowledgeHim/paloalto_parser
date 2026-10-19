@@ -103,6 +103,8 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
   const [timeOfDaySlots, setTimeOfDaySlots] = useState<TimeOfDaySlot[]>(parseTimeOfDaySlots(task?.time_of_day));
   const [dueDate, setDueDate] = useState(task?.due_date ?? '');
   const [rewardEligible, setRewardEligible] = useState(Boolean(task?.reward_type));
+  // ✅ A kid's check-off waits for a parent's OK (parents set this).
+  const [needsApproval, setNeedsApproval] = useState(task?.needs_approval === 1);
   const [reward, setReward] = useState<RewardValue>({
     type: task?.reward_type ?? 'stars',
     amount: task?.reward_amount ?? 1,
@@ -203,6 +205,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
       due_date: recurrence === 'once' ? dueDate || null : null,
       room_id: roomId || null,
       acting_member_id: activeProfile?.id ?? null,
+      ...(isParent ? { needs_approval: needsApproval } : {}),
       goal_type: goalType || null,
       goal_amount: goalType ? Number(goalAmount) : null,
       goal_minutes: goalType === 'times' && goalMinutes ? Number(goalMinutes) : null,
@@ -309,11 +312,26 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
         {isParent && kind === 'todo' && (
           <div>
             <label className="checkbox">
-              <input type="checkbox" checked={rewardEligible} onChange={(e) => setRewardEligible(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={rewardEligible}
+                onChange={(e) => {
+                  setRewardEligible(e.target.checked);
+                  // A Prize Bank job usually wants a parent's OK before it pays — on by default (can be unticked).
+                  if (e.target.checked && !task?.reward_type) setNeedsApproval(true);
+                }}
+              />
               Prize Bank eligible
             </label>
             {rewardEligible && <RewardEditor value={reward} onChange={setReward} />}
           </div>
+        )}
+
+        {isParent && (
+          <label className="checkbox">
+            <input type="checkbox" checked={needsApproval} onChange={(e) => setNeedsApproval(e.target.checked)} />
+            ✅ Needs a parent's OK — when a kid checks it off, it waits in ✅ To approve before it counts (or pays)
+          </label>
         )}
 
         {isParent && rotating && recurrence !== 'once' ? null : isParent ? (

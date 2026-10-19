@@ -83,6 +83,8 @@ export interface Task {
    *  type (null = 💲 money, ⭐ stars, 🎁 custom). */
   reward_text?: string | null;
   reward_emoji?: string | null;
+  /** A kid's check-off waits for a parent's OK before it counts (1), or counts straight away (0). */
+  needs_approval?: 0 | 1;
   active: 0 | 1;
   created_at: string;
   /** This task's checkpoint icon on the "Adventure Map" progress_bar_style — null falls back to a
@@ -163,6 +165,8 @@ export interface TaskWithAssignment extends Task {
   /** A "times"/"hours" job: how much each person has done so far (times, or minutes) — member id
    *  ('' for nobody in particular) → amount. One-time jobs count every day; repeating ones just that day. */
   progress?: Record<string, number>;
+  /** Check-offs waiting for a parent's OK (a job that needs one). */
+  pending?: Array<{ family_member_id: string | null; time_of_day: string | null }>;
 }
 
 export interface TaskCompletion {
@@ -227,6 +231,8 @@ export interface Prize {
   reward_amount?: number | null;
   /** Its emoji; null = 💲 / ⭐ / 🎁 by reward_kind. */
   emoji?: string | null;
+  /** A kid's claim waits for a parent's OK (1). */
+  needs_approval?: 0 | 1;
 }
 
 /** One job toward a prize, and how much of it (times; hours for an "hours" job). */
@@ -407,4 +413,13 @@ export interface EarnedReward {
   earned_at: string;
   /** When a parent marked it used (the movie was watched); null = still to enjoy. */
   used_at: string | null;
+}
+
+export interface PendingCompletion {
+  id: string;
+  task_id: string;
+  family_member_id: string | null;
+  completed_on: string;
+  time_of_day: string | null;
+  created_at: string;
 }
