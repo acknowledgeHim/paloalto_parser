@@ -1253,7 +1253,7 @@ textarea {
   50% { transform: scale(1.25); filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.9)); }
 }
 
-.prize-settings__row { align-items: center; margin-bottom: 8px; }
+.prize-settings__row { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .prize-settings__task-title { flex: 2; font-weight: 600; }
 
 /* ---- Completion trend chart ---- */
@@ -2081,3 +2081,17 @@ body.fp-full-open { overflow: hidden; }
 .prize-form__row { align-items: center; flex-wrap: wrap; }
 .prize-form__row input[type='number'] { width: 6em; }
 .prize-form__jobs { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+/* What a chore/to-do pays: emoji button, type, amount or text. */
+.reward-editor { display: flex; flex-direction: column; gap: 6px; }
+.reward-editor__row { align-items: center; flex-wrap: wrap; }
+.reward-editor__row input[type='number'] { width: 6em; }
+.reward-editor__row input:not([type]) { flex: 1 1 12em; }
+.reward-editor__emoji { font-size: 1.3em; padding: 0.15em 0.45em; min-height: 0; flex: 0 0 auto; width: auto; }
+/* Prize Bank: earned rewards that aren't money or stars, until a parent marks them used. */
+.prize-earned { margin-bottom: 16px; }
+.prize-earned__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.prize-earned__item { display: flex; align-items: center; gap: 10px; }
+.prize-earned__item--used { opacity: 0.6; }
+.prize-earned__emoji { font-size: 1.6em; }
+.prize-earned__text { flex: 1; }
+.prize-earned__done { margin-top: 8px; }

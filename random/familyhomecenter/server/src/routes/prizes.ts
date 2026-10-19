@@ -85,6 +85,26 @@ function progressFor(prize: Prize, memberId: string) {
   };
 }
 
+/**
+ * GET /api/prizes/earned?family_member_id=<id> — what they've earned that isn't money or stars:
+ * everything not used yet, then the last few used.
+ */
+prizesRouter.get('/earned', (req, res) => {
+  const memberId = req.query.family_member_id as string | undefined;
+  if (!memberId) return res.status(400).json({ error: 'family_member_id is required' });
+  const open = db.prepare('SELECT * FROM earned_rewards WHERE family_member_id = ? AND used_at IS NULL ORDER BY earned_at').all(memberId);
+  const used = db.prepare('SELECT * FROM earned_rewards WHERE family_member_id = ? AND used_at IS NOT NULL ORDER BY used_at DESC LIMIT 10').all(memberId);
+  res.json([...open, ...used]);
+});
+
+/** POST /api/prizes/earned/:id/use { used: boolean } — a parent marks it enjoyed (or not yet, to undo). */
+prizesRouter.post('/earned/:id/use', requireAdmin, (req, res) => {
+  const used = req.body?.used !== false;
+  const { changes } = db.prepare('UPDATE earned_rewards SET used_at = ? WHERE id = ?').run(used ? new Date().toISOString() : null, req.params.id);
+  if (!changes) return res.status(404).json({ error: 'not found' });
+  res.json(db.prepare('SELECT * FROM earned_rewards WHERE id = ?').get(req.params.id));
+});
+
 const withRequirements = (p: Prize) => ({ ...p, requirements: requirementsOf(p.id) });
 
 /** GET /api/prizes?family_member_id=<id> — with that param, each prize includes redemption progress/eligibility for them. */
@@ -230,11 +250,21 @@ prizesRouter.post('/:id/redeem', (req, res) => {
   db.prepare(
     'INSERT INTO prize_redemptions (id, prize_id, family_member_id, redeemed_at) VALUES (@id, @prize_id, @family_member_id, @redeemed_at)'
   ).run(redemption);
-  // A money or stars prize pays into their balance.
+  // A money or stars prize pays into their balance; anything else ("Movie night") goes on their
+  // earned list until a parent marks it used.
   if (prize.reward_kind === 'money' && prize.reward_amount) {
     db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(prize.reward_amount, memberId);
   } else if (prize.reward_kind === 'stars' && prize.reward_amount) {
     db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(Math.round(prize.reward_amount), memberId);
+  } else {
+    db.prepare('INSERT INTO earned_rewards (id, family_member_id, prize_id, text, emoji, earned_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      uuidv4(),
+      memberId,
+      prize.id,
+      prize.title,
+      prize.emoji ?? null,
+      redemption.redeemed_at
+    );
   }
   res.status(201).json(redemption);
 });

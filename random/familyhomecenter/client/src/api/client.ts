@@ -86,8 +86,12 @@ export interface Task {
   time_of_day: string | null;
   /** Prize Bank reward for completing this task; null reward_type means no reward. Only settable
    *  via a Settings-password-gated endpoint — see Settings page's Prize Bank section. */
-  reward_type: 'stars' | 'money' | null;
+  reward_type: 'stars' | 'money' | 'custom' | null;
   reward_amount: number | null;
+  /** A custom reward (reward_type 'custom'): what they earn ("Movie time"). */
+  reward_text?: string | null;
+  /** The reward's emoji; null = 💲 money, ⭐ stars, 🎁 custom. */
+  reward_emoji?: string | null;
   active: 0 | 1;
   /** Every completion for the fetched date (or, for a "once" task, ever) — one per person who's done their copy. */
   completions: TaskCompletion[];
@@ -594,4 +598,17 @@ export interface Face {
   /** Clear enough to be grouped/suggested automatically. */
   good: boolean;
   no_group: boolean;
+}
+
+/** Something earned that isn't money or stars — from a chore/to-do's custom reward, or a claimed prize. */
+export interface EarnedReward {
+  id: string;
+  family_member_id: string;
+  task_id: string | null;
+  prize_id: string | null;
+  text: string;
+  emoji: string | null;
+  earned_at: string;
+  /** When a parent marked it used; null = still to enjoy. */
+  used_at: string | null;
 }

@@ -71,6 +71,20 @@ The card shows a progress bar such as "⏱ 2½ of 6 h". **↶** takes back the l
 
 A one-time job can take as many days as it needs. A repeating job starts from zero each time it comes up. Any reward on the job is paid once, when the goal is reached.
 
+## 🎬 Rewards that aren't money or stars
+
+A Prize Bank to-do's reward can be **Stars**, **Money** or **Something else**. Choose **Something else** and type what the kid earns, for example "Movie time", "Friend time" or "Special trip".
+
+Set it in the chore/to-do form (parents) or under **Settings → Prize Bank — extra to-do rewards**.
+
+**Emoji:** every reward can have one. Tap the emoji next to the reward type to change it. Without one, money shows 💲, stars ⭐ and something else 🎁. The emoji shows on the job's card next to the reward.
+
+When the kid finishes the job, the reward goes on their **🎁 Earned** list at the top of the Prize Bank page. A "Something else" prize they claim goes on the list too.
+
+- A parent taps **✓ Used** once the reward has been enjoyed, and it moves to **Already enjoyed**.
+- **Not yet** moves it back.
+- Unchecking the job takes back the reward, as long as it hasn't been used yet.
+
 ## 🎁 Prize Bank prizes
 
 Set up under **Settings → Prize Bank — prizes**. Use **+ Add a prize**, or **Edit** on an existing prize.
@@ -98,9 +112,11 @@ Only new things were added:
 
 - **Columns on `tasks`:** `rotation`, `rotation_start`, `needed_since`, and `goal_type`, `goal_amount`, `goal_minutes`.
 - **Columns on `prizes`:** `reward_kind`, `reward_amount`, `emoji`.
+- **More columns on `tasks`:** `reward_text`, `reward_emoji`.
 - **New tables:**
   - `task_positions`: each person's routine order.
   - `task_progress`: the chunks of a times or hours job.
   - `prize_requirements`: the jobs a prize needs.
+  - `earned_rewards`: custom rewards a kid has earned, and when each was used.
 
 No existing data changes.

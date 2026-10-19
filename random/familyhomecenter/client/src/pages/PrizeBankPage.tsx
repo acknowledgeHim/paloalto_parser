@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Prize, type Task } from '../api/client.js';
+import { api, type EarnedReward, type Prize, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { amountLabel, prizeEmoji, prizeRewardLabel } from '../utils/prizes.js';
 import { formatHours } from '../utils/tasks.js';
@@ -12,7 +12,10 @@ function prizeCostLabel(prize: Prize, taskTitle: string | undefined): string {
 }
 
 export function PrizeBankPage() {
-  const { activeProfile, refresh } = useFamilyMembers();
+  const { activeProfile, members, refresh } = useFamilyMembers();
+  const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
+  // What they've earned that isn't money or stars ("Movie time"), until a parent marks it used.
+  const [earned, setEarned] = useState<EarnedReward[]>([]);
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [tasksById, setTasksById] = useState<Record<string, Task>>({});
   const [redeeming, setRedeeming] = useState<string | null>(null);
@@ -21,6 +24,8 @@ export function PrizeBankPage() {
   const load = () => {
     const path = activeProfile ? `/prizes?family_member_id=${activeProfile.id}` : '/prizes';
     api.get<Prize[]>(path).then(setPrizes).catch(console.error);
+    if (activeProfile) api.get<EarnedReward[]>(`/prizes/earned?family_member_id=${activeProfile.id}`).then(setEarned).catch(console.error);
+    else setEarned([]);
     api
       .get<Task[]>('/tasks?all=true')
       .then((tasks) => setTasksById(Object.fromEntries(tasks.map((t) => [t.id, t]))))
@@ -42,6 +47,18 @@ export function PrizeBankPage() {
       setRedeeming(null);
     }
   };
+
+  const markUsed = async (r: EarnedReward, used: boolean) => {
+    setError(null);
+    try {
+      await api.post(`/prizes/earned/${r.id}/use`, { used });
+      load();
+    } catch (err) {
+      setError((err as Error).message || 'Only a parent can do that');
+    }
+  };
+  const toEnjoy = earned.filter((r) => !r.used_at);
+  const enjoyed = earned.filter((r) => r.used_at);
 
   return (
     <div className="prize-bank-page">
@@ -65,6 +82,50 @@ export function PrizeBankPage() {
       )}
 
       {error && <div className="settings-login__error">{error}</div>}
+
+      {activeProfile && earned.length > 0 && (
+        <section className="panel prize-earned">
+          <h2>🎁 Earned</h2>
+          {toEnjoy.length === 0 && <div className="hint">Nothing waiting right now.</div>}
+          <ul className="prize-earned__list">
+            {toEnjoy.map((r) => (
+              <li key={r.id} className="prize-earned__item">
+                <span className="prize-earned__emoji" aria-hidden="true">{r.emoji ?? '🎁'}</span>
+                <span className="prize-earned__text">
+                  <strong>{r.text}</strong>
+                  <span className="hint"> · earned {new Date(r.earned_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                </span>
+                {isParent && (
+                  <button type="button" className="secondary" onClick={() => markUsed(r, true)}>
+                    ✓ Used
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {enjoyed.length > 0 && (
+            <details className="prize-earned__done">
+              <summary className="hint">Already enjoyed ({enjoyed.length})</summary>
+              <ul className="prize-earned__list">
+                {enjoyed.map((r) => (
+                  <li key={r.id} className="prize-earned__item prize-earned__item--used">
+                    <span className="prize-earned__emoji" aria-hidden="true">{r.emoji ?? '🎁'}</span>
+                    <span className="prize-earned__text">
+                      {r.text}
+                      <span className="hint"> · used {new Date(r.used_at!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                    </span>
+                    {isParent && (
+                      <button type="button" className="link-button" onClick={() => markUsed(r, false)}>
+                        Not yet
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+      )}
 
       <div className="prize-bank-page__prizes">
         {prizes.length === 0 && <div className="empty-state">No prizes set up yet — a parent can add some in Settings.</div>}

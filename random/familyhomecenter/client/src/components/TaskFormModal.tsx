@@ -4,6 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '../utils/timeOfDay.js';
 import { TASK_ICON_PRESETS, taskIcon } from '../utils/taskIcons.js';
 import { EmojiPicker } from './EmojiPicker.js';
+import { RewardEditor, type RewardValue } from './RewardEditor.js';
 import { canPlaceTask, useFloorplans } from '../utils/floorplans.js';
 
 const RECURRENCE_OPTIONS = [
@@ -102,8 +103,12 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
   const [timeOfDaySlots, setTimeOfDaySlots] = useState<TimeOfDaySlot[]>(parseTimeOfDaySlots(task?.time_of_day));
   const [dueDate, setDueDate] = useState(task?.due_date ?? '');
   const [rewardEligible, setRewardEligible] = useState(Boolean(task?.reward_type));
-  const [rewardType, setRewardType] = useState<'stars' | 'money'>(task?.reward_type ?? 'stars');
-  const [rewardAmount, setRewardAmount] = useState(task?.reward_amount ?? 1);
+  const [reward, setReward] = useState<RewardValue>({
+    type: task?.reward_type ?? 'stars',
+    amount: task?.reward_amount ?? 1,
+    text: task?.reward_text ?? '',
+    emoji: task?.reward_emoji ?? null,
+  });
   const [bulkIconStatus, setBulkIconStatus] = useState<string | null>(null);
   const plans = useFloorplans();
   // 🔄 Taking turns (parents only): the people in order, and whose turn it is today. Only sent
@@ -215,10 +220,12 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     // so this only fires for a parent's own add/edit, and PATCH /:id/reward is itself admin-gated
     // server-side, same defense-in-depth as everywhere else Prize Bank rewards are set.
     if (isParent) {
-      const effectiveType = kind === 'todo' && rewardEligible ? rewardType : null;
+      const effectiveType = kind === 'todo' && rewardEligible && (reward.type !== 'custom' || reward.text.trim()) ? reward.type : null;
       await api.patch(`/tasks/${taskId}/reward`, {
         reward_type: effectiveType,
-        reward_amount: effectiveType ? rewardAmount : null,
+        reward_amount: effectiveType && effectiveType !== 'custom' ? reward.amount : null,
+        reward_text: effectiveType === 'custom' ? reward.text.trim() : null,
+        reward_emoji: effectiveType ? reward.emoji : null,
       });
     }
     onSaved();
@@ -286,21 +293,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
               <input type="checkbox" checked={rewardEligible} onChange={(e) => setRewardEligible(e.target.checked)} />
               Prize Bank eligible
             </label>
-            {rewardEligible && (
-              <div className="task-form__row">
-                <select value={rewardType} onChange={(e) => setRewardType(e.target.value as 'stars' | 'money')}>
-                  <option value="stars">Stars</option>
-                  <option value="money">Money</option>
-                </select>
-                <input
-                  type="number"
-                  min={rewardType === 'stars' ? 1 : 0.01}
-                  step={rewardType === 'stars' ? 1 : 0.01}
-                  value={rewardAmount}
-                  onChange={(e) => setRewardAmount(Number(e.target.value) || 0)}
-                />
-              </div>
-            )}
+            {rewardEligible && <RewardEditor value={reward} onChange={setReward} />}
           </div>
         )}
 

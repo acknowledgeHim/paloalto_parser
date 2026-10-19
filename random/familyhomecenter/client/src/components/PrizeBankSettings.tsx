@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { EmojiPicker } from './EmojiPicker.js';
+import { RewardEditor, type RewardValue } from './RewardEditor.js';
 import { amountLabel, prizeEmoji, prizeRewardLabel } from '../utils/prizes.js';
 import { formatHours } from '../utils/tasks.js';
 import { api, type Prize, type Task } from '../api/client.js';
@@ -7,41 +8,46 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskFormModal } from './TaskFormModal.js';
 
 function RewardRow({ task, onSaved }: { task: Task; onSaved: () => void }) {
-  const [rewardType, setRewardType] = useState<'none' | 'stars' | 'money'>(task.reward_type ?? 'none');
-  const [amount, setAmount] = useState(task.reward_amount ?? (task.reward_type === 'stars' ? 1 : 1));
+  const [on, setOn] = useState(Boolean(task.reward_type));
+  const [reward, setReward] = useState<RewardValue>({
+    type: task.reward_type ?? 'stars',
+    amount: task.reward_amount ?? 1,
+    text: task.reward_text ?? '',
+    emoji: task.reward_emoji ?? null,
+  });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
     setSaving(true);
+    setError(null);
     try {
       await api.patch(`/tasks/${task.id}/reward`, {
-        reward_type: rewardType === 'none' ? null : rewardType,
-        reward_amount: rewardType === 'none' ? null : amount,
+        reward_type: on ? reward.type : null,
+        reward_amount: on && reward.type !== 'custom' ? reward.amount : null,
+        reward_text: on && reward.type === 'custom' ? reward.text.trim() : null,
+        reward_emoji: on ? reward.emoji : null,
       });
       onSaved();
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="task-form__row prize-settings__row">
-      <span className="prize-settings__task-title">{task.title}</span>
-      <select value={rewardType} onChange={(e) => setRewardType(e.target.value as 'none' | 'stars' | 'money')}>
-        <option value="none">No reward</option>
-        <option value="stars">Stars</option>
-        <option value="money">Money</option>
-      </select>
-      {rewardType !== 'none' && (
-        <input
-          type="number"
-          min={rewardType === 'stars' ? 1 : 0.01}
-          step={rewardType === 'stars' ? 1 : 0.01}
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-        />
-      )}
-      <button type="button" className="secondary" onClick={save} disabled={saving}>Save</button>
+    <div className="prize-settings__row">
+      <div className="task-form__row">
+        <span className="prize-settings__task-title">{task.title}</span>
+        <select value={on ? 'yes' : 'none'} onChange={(e) => setOn(e.target.value === 'yes')}>
+          <option value="none">No reward</option>
+          <option value="yes">Reward</option>
+        </select>
+        <button type="button" className="secondary" onClick={save} disabled={saving}>Save</button>
+      </div>
+      {on && <RewardEditor value={reward} onChange={setReward} />}
+      {error && <div className="settings-login__error">{error}</div>}
     </div>
   );
 }

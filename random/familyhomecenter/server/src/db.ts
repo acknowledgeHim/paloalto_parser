@@ -941,6 +941,10 @@ for (const [table, column] of [
   ['prizes', 'reward_kind TEXT'],
   ['prizes', 'reward_amount REAL'],
   ['prizes', 'emoji TEXT'],
+  // A chore/to-do can pay something other than money or stars (reward_type 'custom'): what it is
+  // ("Movie time", "Friend time", "Special trip"). And the reward's emoji, any type (NULL = 💲 / ⭐ / 🎁).
+  ['tasks', 'reward_text TEXT'],
+  ['tasks', 'reward_emoji TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
@@ -986,6 +990,22 @@ db.exec(`
     sort_order INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (prize_id, task_id)
   );
+`);
+
+// Something a kid has earned that isn't money or stars — from a chore/to-do with a custom reward,
+// or a "something else" prize they claimed. It stays on their list until a parent marks it used.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS earned_rewards (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+    prize_id TEXT REFERENCES prizes(id) ON DELETE SET NULL,
+    text TEXT NOT NULL,
+    emoji TEXT,
+    earned_at TEXT NOT NULL,
+    used_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS earned_rewards_member ON earned_rewards(family_member_id, used_at);
 `);
 
 export function getSetting(key: string, fallback = ''): string {

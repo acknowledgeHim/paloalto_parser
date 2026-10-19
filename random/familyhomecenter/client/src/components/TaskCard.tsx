@@ -9,6 +9,7 @@ import { MemberAvatar } from './MemberAvatar.js';
 import { findRoom, useFloorplans } from '../utils/floorplans.js';
 import { canEditTask, formatHours, formatMinutes, goalUnits } from '../utils/tasks.js';
 import { TaskFormModal } from './TaskFormModal.js';
+import { taskRewardEmoji, taskRewardText } from '../utils/prizes.js';
 
 interface Props {
   task: Task;
@@ -158,8 +159,11 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
               🔄{task.rotation_next_id ? ` next: ${members.find((m) => m.id === task.rotation_next_id)?.name ?? '?'}` : ' turns'}
             </span>
           )}
-          {task.reward_type === 'stars' && <span className="badge badge--reward">⭐ {task.reward_amount}</span>}
-          {task.reward_type === 'money' && <span className="badge badge--reward">${task.reward_amount?.toFixed(2)}</span>}
+          {taskRewardText(task) && (
+            <span className="badge badge--reward" title="Prize Bank reward">
+              {taskRewardEmoji(task)} {taskRewardText(task)}
+            </span>
+          )}
           {mayEdit && (
             <button type="button" className="task-card__edit" aria-label="Edit" onClick={edit}>
               ✎

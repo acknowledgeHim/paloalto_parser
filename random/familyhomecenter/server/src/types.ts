@@ -77,8 +77,12 @@ export interface Task {
   time_of_day: string | null;
   /** Prize Bank reward for completing this task; null reward_type means no reward. Set only via
    *  PATCH /:id/reward (requires the Settings password) — see routes/tasks.ts. */
-  reward_type: 'stars' | 'money' | null;
+  reward_type: 'stars' | 'money' | 'custom' | null;
   reward_amount: number | null;
+  /** A custom reward (reward_type 'custom'): what it is ("Movie time"). And the reward's emoji, any
+   *  type (null = 💲 money, ⭐ stars, 🎁 custom). */
+  reward_text?: string | null;
+  reward_emoji?: string | null;
   active: 0 | 1;
   created_at: string;
   /** This task's checkpoint icon on the "Adventure Map" progress_bar_style — null falls back to a
@@ -390,4 +394,17 @@ export interface GroceryItem {
   requested_by_id: string | null;
   meal_id: string | null;
   created_at: string;
+}
+
+/** Something earned that isn't money or stars (a custom chore/to-do reward, or a claimed prize). */
+export interface EarnedReward {
+  id: string;
+  family_member_id: string;
+  task_id: string | null;
+  prize_id: string | null;
+  text: string;
+  emoji: string | null;
+  earned_at: string;
+  /** When a parent marked it used (the movie was watched); null = still to enjoy. */
+  used_at: string | null;
 }

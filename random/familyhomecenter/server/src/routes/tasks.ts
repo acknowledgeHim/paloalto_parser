@@ -9,10 +9,37 @@ import type { Task, TaskCompletion } from '../types.js';
 
 export const tasksRouter = Router();
 
-function creditReward(memberId: string, rewardType: 'stars' | 'money', amount: number) {
-  if (rewardType === 'stars') {
+/** Does completing this pay anything? (money/stars need an amount; a custom reward needs its text) */
+function hasReward(task: Task | undefined): task is Task {
+  if (!task?.reward_type) return false;
+  return task.reward_type === 'custom' ? Boolean(task.reward_text) : Boolean(task.reward_amount);
+}
+
+/** Pays (sign 1) or takes back (sign -1) a task's reward: money or stars into the balance, or a
+ *  custom reward ("Movie time") onto their earned list — taking back removes one not yet used. */
+function creditReward(memberId: string, task: Task, sign: 1 | -1) {
+  if (task.reward_type === 'custom') {
+    if (sign > 0) {
+      db.prepare('INSERT INTO earned_rewards (id, family_member_id, task_id, text, emoji, earned_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+        uuidv4(),
+        memberId,
+        task.id,
+        task.reward_text,
+        task.reward_emoji ?? null,
+        new Date().toISOString()
+      );
+    } else {
+      db.prepare(
+        `DELETE FROM earned_rewards WHERE id = (SELECT id FROM earned_rewards WHERE family_member_id = ? AND task_id = ? AND used_at IS NULL
+         ORDER BY earned_at DESC LIMIT 1)`
+      ).run(memberId, task.id);
+    }
+    return;
+  }
+  const amount = (task.reward_amount ?? 0) * sign;
+  if (task.reward_type === 'stars') {
     db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(Math.round(amount), memberId);
-  } else {
+  } else if (task.reward_type === 'money') {
     db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(amount, memberId);
   }
 }
@@ -315,16 +342,25 @@ tasksRouter.patch('/:id/reward', requireAdmin, (req, res) => {
   const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
   if (!existing) return res.status(404).json({ error: 'not found' });
 
-  const { reward_type, reward_amount } = req.body as { reward_type?: 'stars' | 'money' | null; reward_amount?: number | null };
-  if (reward_type && reward_type !== 'stars' && reward_type !== 'money') {
-    return res.status(400).json({ error: 'reward_type must be "stars", "money", or null' });
+  const { reward_type, reward_amount, reward_text, reward_emoji } = req.body as {
+    reward_type?: 'stars' | 'money' | 'custom' | null;
+    reward_amount?: number | null;
+    reward_text?: string | null;
+    reward_emoji?: string | null;
+  };
+  if (reward_type && reward_type !== 'stars' && reward_type !== 'money' && reward_type !== 'custom') {
+    return res.status(400).json({ error: 'reward_type must be "stars", "money", "custom", or null' });
   }
+  const text = typeof reward_text === 'string' ? reward_text.trim().slice(0, 80) : '';
+  if (reward_type === 'custom' && !text) return res.status(400).json({ error: 'Type what they earn — e.g. "Movie time"' });
   const updated: Task = {
     ...existing,
     reward_type: reward_type ?? null,
-    reward_amount: reward_type ? Number(reward_amount) || 0 : null,
+    reward_amount: reward_type === 'stars' || reward_type === 'money' ? Number(reward_amount) || 0 : null,
+    reward_text: reward_type === 'custom' ? text : null,
+    reward_emoji: reward_type && typeof reward_emoji === 'string' && reward_emoji.trim() ? reward_emoji.trim().slice(0, 16) : null,
   };
-  db.prepare('UPDATE tasks SET reward_type=@reward_type, reward_amount=@reward_amount WHERE id=@id').run(updated);
+  db.prepare('UPDATE tasks SET reward_type=@reward_type, reward_amount=@reward_amount, reward_text=@reward_text, reward_emoji=@reward_emoji WHERE id=@id').run(updated);
   res.json({ ...updated, assignee_ids: assigneesFor(req.params.id) });
 });
 
@@ -366,8 +402,8 @@ tasksRouter.post('/:id/complete', (req, res) => {
 
   // Only credit the first time this person's instance (of this slot) is completed — re-saving the
   // same completion (e.g. a retried request) must not pay out twice.
-  if (!existing && task.reward_type && task.reward_amount && completedBy) {
-    creditReward(completedBy, task.reward_type, task.reward_amount);
+  if (!existing && hasReward(task) && completedBy) {
+    creditReward(completedBy, task, 1);
   }
 
   res.status(201).json(completion);
@@ -384,8 +420,8 @@ tasksRouter.post('/:id/uncomplete', (req, res) => {
 
   if (existing) {
     db.prepare('DELETE FROM task_completions WHERE id = ?').run(existing.id);
-    if (task?.reward_type && task.reward_amount && existing.completed_by_id) {
-      creditReward(existing.completed_by_id, task.reward_type, -task.reward_amount);
+    if (hasReward(task) && existing.completed_by_id) {
+      creditReward(existing.completed_by_id, task, -1);
     }
     // Undoing the last check-off of a "when needed" chore: it still needs doing.
     if (task?.recurrence === 'asneeded' && !task.needed_since) {
@@ -445,7 +481,7 @@ tasksRouter.post('/:id/progress', (req, res) => {
         added = true;
       }
       if (task.recurrence === 'asneeded') db.prepare('UPDATE tasks SET needed_since = NULL WHERE id = ?').run(task.id);
-      if (added && task.reward_type && task.reward_amount && memberId) creditReward(memberId, task.reward_type, task.reward_amount);
+      if (added && hasReward(task) && memberId) creditReward(memberId, task, 1);
     }
     return sum;
   })();
@@ -479,7 +515,7 @@ tasksRouter.post('/:id/progress/undo', (req, res) => {
       const removed = db
         .prepare(`DELETE FROM task_completions WHERE task_id = ? AND ${by} AND ${on}`)
         .run(task.id, ...(memberId === null ? [] : [memberId]), date).changes;
-      if (removed && task.reward_type && task.reward_amount && memberId) creditReward(memberId, task.reward_type, -task.reward_amount);
+      if (removed && hasReward(task) && memberId) creditReward(memberId, task, -1);
     }
     return sum;
   })();
