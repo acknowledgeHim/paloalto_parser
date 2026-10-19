@@ -71,6 +71,15 @@ The card shows a progress bar such as "⏱ 2½ of 6 h". **↶** takes back the l
 
 A one-time job can take as many days as it needs. A repeating job starts from zero each time it comes up. Any reward on the job is paid once, when the goal is reached.
 
+## ⧉ Copy to someone else (parents)
+
+Open a chore or to-do (✎), tap **⧉ Copy to…**, tick one or more people, then tap **⧉ Copy**.
+
+- Each person gets their own copy, with the same title, notes, icon, schedule, time of day, room and spot, how much, and reward.
+- Each person checks off their own copy, so one kid finishing doesn't finish it for the other.
+- Taking turns isn't copied; each copy belongs to just that person.
+- The copy is made from the job as saved, so save any changes first.
+
 ## 🎬 Rewards that aren't money or stars
 
 A Prize Bank to-do's reward can be **Stars**, **Money** or **Something else**. Choose **Something else** and type what the kid earns, for example "Movie time", "Friend time" or "Special trip".

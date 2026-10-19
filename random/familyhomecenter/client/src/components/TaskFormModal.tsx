@@ -231,6 +231,25 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     onSaved();
   };
 
+  // ⧉ Copy to… (parents): each picked person gets their own copy of this job.
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyTo, setCopyTo] = useState<string[]>([]);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const close = () => (copied ? onSaved() : onClose());
+  const copy = async () => {
+    if (!task || copyTo.length === 0) return;
+    setCopyStatus(null);
+    try {
+      await api.post(`/tasks/${task.id}/duplicate`, { member_ids: copyTo });
+      setCopyStatus(`Copied to ${members.filter((m) => copyTo.includes(m.id)).map((m) => m.name).join(', ')} ✓`);
+      setCopied(true);
+      setCopyTo([]);
+    } catch (err) {
+      setCopyStatus((err as Error).message || 'Could not copy it');
+    }
+  };
+
   const remove = async () => {
     if (!task) return;
     await api.delete(`/tasks/${task.id}`);
@@ -238,7 +257,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={close}>
       <form className="modal-panel task-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h2>{task ? 'Edit task' : 'Add a task'}</h2>
         <input
@@ -533,8 +552,43 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
 
         <div className="task-form__row">
           <button type="submit">{task ? 'Save' : 'Add'}</button>
-          <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="secondary" onClick={close}>{copied ? 'Close' : 'Cancel'}</button>
         </div>
+        {task && isParent && (
+          <div className="task-form__copy">
+            {!copyOpen ? (
+              <button type="button" className="secondary" onClick={() => setCopyOpen(true)}>
+                ⧉ Copy to…
+              </button>
+            ) : (
+              <>
+                <label className="member-form__label">Copy this {kind === 'chore' ? 'chore' : 'to-do'} to — each gets their own to check off</label>
+                <div className="task-form__row chip-list">
+                  {members
+                    .filter((m) => !task.assignee_ids.includes(m.id) && !(task.rotation_ids ?? []).includes(m.id))
+                    .map((m) => (
+                      <label key={m.id} className="checkbox">
+                        <input
+                          type="checkbox"
+                          checked={copyTo.includes(m.id)}
+                          onChange={() => setCopyTo((ids) => (ids.includes(m.id) ? ids.filter((x) => x !== m.id) : [...ids, m.id]))}
+                        />
+                        {m.name}
+                      </label>
+                    ))}
+                </div>
+                <div className="task-form__row">
+                  <button type="button" onClick={copy} disabled={copyTo.length === 0}>
+                    ⧉ Copy
+                  </button>
+                  <button type="button" className="link-button" onClick={() => setCopyOpen(false)}>Never mind</button>
+                </div>
+                <p className="hint">Copies it as saved — save any changes above first.</p>
+              </>
+            )}
+            {copyStatus && <p className="hint task-form__copy-status">{copyStatus}</p>}
+          </div>
+        )}
         {task && (
           <button type="button" className="secondary task-form__delete" onClick={remove}>
             Delete this task

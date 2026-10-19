@@ -2095,3 +2095,5 @@ body.fp-full-open { overflow: hidden; }
 .prize-earned__emoji { font-size: 1.6em; }
 .prize-earned__text { flex: 1; }
 .prize-earned__done { margin-top: 8px; }
+.task-form__copy { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.task-form__copy-status { color: var(--accent); font-weight: 600; }

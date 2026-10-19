@@ -364,6 +364,49 @@ tasksRouter.patch('/:id/reward', requireAdmin, (req, res) => {
   res.json({ ...updated, assignee_ids: assigneesFor(req.params.id) });
 });
 
+/**
+ * POST /api/tasks/:id/duplicate { member_ids: [...] } — a parent copies a chore/to-do to other
+ * people: each gets their own separate copy (same title, notes, icon, schedule, time of day, room
+ * and spot, how much, and reward), so each checks off their own. Taking turns isn't copied — a copy
+ * is just theirs. Returns the new tasks.
+ */
+tasksRouter.post('/:id/duplicate', requireAdmin, (req, res) => {
+  const source = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
+  if (!source) return res.status(404).json({ error: 'not found' });
+  const ids = (req.body as { member_ids?: unknown }).member_ids;
+  if (!Array.isArray(ids) || ids.length === 0 || !ids.every((x) => typeof x === 'string')) {
+    return res.status(400).json({ error: 'Pick who to copy it to' });
+  }
+  const known = db.prepare('SELECT 1 FROM family_members WHERE id = ?');
+  const people = [...new Set(ids as string[])].filter((id) => known.get(id));
+  if (!people.length) return res.status(400).json({ error: 'Pick who to copy it to' });
+  const insert = db.prepare(
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y,
+       needed_since, goal_type, goal_amount, goal_minutes, reward_type, reward_amount, reward_text, reward_emoji, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y,
+       @needed_since, @goal_type, @goal_amount, @goal_minutes, @reward_type, @reward_amount, @reward_text, @reward_emoji, 1, @created_at)`
+  );
+  const created = db.transaction(() =>
+    people.map((memberId) => {
+      const copy = {
+        ...source,
+        id: uuidv4(),
+        created_by_id: sessionMemberId(req.cookies?.[SESSION_COOKIE_NAME] as string | undefined) ?? source.created_by_id,
+        goal_type: source.goal_type ?? null,
+        goal_amount: source.goal_amount ?? null,
+        goal_minutes: source.goal_minutes ?? null,
+        reward_text: source.reward_text ?? null,
+        reward_emoji: source.reward_emoji ?? null,
+        created_at: new Date().toISOString(),
+      };
+      insert.run(copy);
+      setAssignees(copy.id, [memberId]);
+      return { ...copy, rotation: null, rotation_start: null, assignee_ids: [memberId], completions: [] };
+    })
+  )();
+  res.status(201).json(created);
+});
+
 tasksRouter.delete('/:id', (req, res) => {
   db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
   res.status(204).end();
