@@ -233,6 +233,8 @@ export interface Prize {
   emoji?: string | null;
   /** A kid's claim waits for a parent's OK (1). */
   needs_approval?: 0 | 1;
+  /** Who it's for (prize_members); empty = everyone. */
+  member_ids?: string[];
 }
 
 /** One job toward a prize, and how much of it (times; hours for an "hours" job). */

@@ -107,15 +107,27 @@ prizesRouter.post('/earned/:id/use', requireAdmin, (req, res) => {
   res.json(db.prepare('SELECT * FROM earned_rewards WHERE id = ?').get(req.params.id));
 });
 
-const withRequirements = (p: Prize) => ({ ...p, requirements: requirementsOf(p.id) });
+/** Who a prize is for; empty = everyone. */
+function membersOf(prizeId: string): string[] {
+  return (db.prepare('SELECT family_member_id FROM prize_members WHERE prize_id = ?').all(prizeId) as Array<{ family_member_id: string }>).map(
+    (r) => r.family_member_id
+  );
+}
+const isFor = (prizeId: string, memberId: string) => {
+  const ids = membersOf(prizeId);
+  return ids.length === 0 || ids.includes(memberId);
+};
+
+const withRequirements = (p: Prize) => ({ ...p, requirements: requirementsOf(p.id), member_ids: membersOf(p.id) });
 
 /** GET /api/prizes?family_member_id=<id> — with that param, each prize includes redemption progress/eligibility for them. */
 prizesRouter.get('/', (req, res) => {
   const prizes = db.prepare('SELECT * FROM prizes ORDER BY created_at ASC').all() as Prize[];
   const memberId = req.query.family_member_id as string | undefined;
   if (!memberId) return res.json(prizes.map(withRequirements));
+  // Just the prizes that are theirs (or everyone's).
   res.json(
-    prizes.map((p) => {
+    prizes.filter((p) => isFor(p.id, memberId)).map((p) => {
       const progress = progressFor(p, memberId);
       const waiting = (db
         .prepare("SELECT COUNT(*) AS n FROM prize_redemptions WHERE prize_id = ? AND family_member_id = ? AND status = 'pending'")
@@ -135,7 +147,7 @@ const REWARD_KINDS = ['money', 'stars', 'custom'] as const;
  */
 function parsePrize(body: Record<string, unknown>, existing?: Prize):
   | { error: string }
-  | { prize: Prize; requirements: Array<{ task_id: string; amount: number }> | undefined } {
+  | { prize: Prize; requirements: Array<{ task_id: string; amount: number }> | undefined; member_ids: string[] | undefined } {
   const merged = { ...existing, ...body } as Record<string, unknown>;
   const cost_type = merged.cost_type;
   if (cost_type !== 'stars' && cost_type !== 'task_count') return { error: 'cost_type must be "stars" or "task_count"' };
@@ -179,8 +191,14 @@ function parsePrize(body: Record<string, unknown>, existing?: Prize):
       return { error: 'Pick at least one chore or to-do and how much of it' };
     }
   }
+  const member_ids = Array.isArray(body.member_ids)
+    ? [...new Set((body.member_ids as unknown[]).filter((id): id is string => typeof id === 'string'))].filter((id) =>
+        db.prepare('SELECT 1 FROM family_members WHERE id = ?').get(id)
+      )
+    : undefined;
   return {
     requirements,
+    member_ids,
     prize: {
       id: existing?.id ?? uuidv4(),
       title,
@@ -197,6 +215,13 @@ function parsePrize(body: Record<string, unknown>, existing?: Prize):
   };
 }
 
+function saveMembers(prizeId: string, ids: string[] | undefined) {
+  if (ids === undefined) return;
+  db.prepare('DELETE FROM prize_members WHERE prize_id = ?').run(prizeId);
+  const add = db.prepare('INSERT INTO prize_members (prize_id, family_member_id) VALUES (?, ?)');
+  ids.forEach((id) => add.run(prizeId, id));
+}
+
 function saveRequirements(prizeId: string, reqs: Array<{ task_id: string; amount: number }> | undefined) {
   if (reqs === undefined) return;
   db.prepare('DELETE FROM prize_requirements WHERE prize_id = ?').run(prizeId);
@@ -207,13 +232,14 @@ function saveRequirements(prizeId: string, reqs: Array<{ task_id: string; amount
 prizesRouter.post('/', requireAdmin, (req, res) => {
   const parsed = parsePrize(req.body ?? {});
   if ('error' in parsed) return res.status(400).json({ error: parsed.error });
-  const { prize, requirements } = parsed;
+  const { prize, requirements, member_ids } = parsed;
   db.transaction(() => {
     db.prepare(
       `INSERT INTO prizes (id, title, cost_type, star_cost, task_id, required_count, created_at, reward_kind, reward_amount, emoji, needs_approval)
        VALUES (@id, @title, @cost_type, @star_cost, @task_id, @required_count, @created_at, @reward_kind, @reward_amount, @emoji, @needs_approval)`
     ).run(prize);
     saveRequirements(prize.id, requirements);
+    saveMembers(prize.id, member_ids);
   })();
   res.status(201).json(withRequirements(prize));
 });
@@ -223,7 +249,7 @@ prizesRouter.patch('/:id', requireAdmin, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'not found' });
   const parsed = parsePrize(req.body ?? {}, existing);
   if ('error' in parsed) return res.status(400).json({ error: parsed.error });
-  const { prize, requirements } = parsed;
+  const { prize, requirements, member_ids } = parsed;
   db.transaction(() => {
     db.prepare(
       `UPDATE prizes SET title=@title, cost_type=@cost_type, star_cost=@star_cost, task_id=@task_id,
@@ -231,6 +257,7 @@ prizesRouter.patch('/:id', requireAdmin, (req, res) => {
        needs_approval=@needs_approval WHERE id=@id`
     ).run(prize);
     saveRequirements(prize.id, requirements);
+    saveMembers(prize.id, member_ids);
   })();
   res.json(withRequirements(prize));
 });
@@ -269,6 +296,7 @@ prizesRouter.post('/:id/redeem', (req, res) => {
   const memberId = req.body.family_member_id as string | undefined;
   if (!memberId) return res.status(400).json({ error: 'family_member_id is required' });
 
+  if (!isFor(prize.id, memberId)) return res.status(400).json({ error: 'That prize is for someone else' });
   const progress = progressFor(prize, memberId);
   if (progress.available <= 0) return res.status(400).json({ error: 'not eligible for this prize yet' });
 

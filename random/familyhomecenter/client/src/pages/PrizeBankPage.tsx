@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api, type EarnedReward, type Prize, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
-import { amountLabel, prizeEmoji, prizeRewardLabel } from '../utils/prizes.js';
-import { formatHours } from '../utils/tasks.js';
+import { amountLabel, prizeEmoji, prizeRewardLabel, taskRewardEmoji, taskRewardText } from '../utils/prizes.js';
+import { formatHours, goalLabel } from '../utils/tasks.js';
 import { taskIcon } from '../utils/taskIcons.js';
+import { PrizeForm } from '../components/PrizeBankSettings.js';
 
 function prizeCostLabel(prize: Prize, taskTitle: string | undefined): string {
   if (prize.cost_type === 'stars') return `${prize.star_cost} ⭐`;
@@ -14,32 +15,43 @@ function prizeCostLabel(prize: Prize, taskTitle: string | undefined): string {
 export function PrizeBankPage() {
   const { activeProfile, members, refresh } = useFamilyMembers();
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
+  // A parent can look at (and set up) any kid's Prize Bank; everyone else sees their own.
+  const [viewId, setViewId] = useState<string | null>(null);
+  const viewed =
+    (isParent && members.find((m) => m.id === viewId)) ||
+    (activeProfile?.is_parent === 1 && members.find((m) => m.is_parent !== 1)) ||
+    activeProfile;
+  // A prize being added ('new') or changed (its id), parents only.
+  const [editing, setEditing] = useState<string | null>(null);
   // What they've earned that isn't money or stars ("Movie time"), until a parent marks it used.
   const [earned, setEarned] = useState<EarnedReward[]>([]);
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [tasksById, setTasksById] = useState<Record<string, Task>>({});
+  // Today's list (for done / waiting on each job that pays something).
+  const [today, setToday] = useState<Task[]>([]);
   const [redeeming, setRedeeming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = () => {
-    const path = activeProfile ? `/prizes?family_member_id=${activeProfile.id}` : '/prizes';
+    const path = viewed ? `/prizes?family_member_id=${viewed.id}` : '/prizes';
     api.get<Prize[]>(path).then(setPrizes).catch(console.error);
-    if (activeProfile) api.get<EarnedReward[]>(`/prizes/earned?family_member_id=${activeProfile.id}`).then(setEarned).catch(console.error);
+    if (viewed) api.get<EarnedReward[]>(`/prizes/earned?family_member_id=${viewed.id}`).then(setEarned).catch(console.error);
     else setEarned([]);
     api
       .get<Task[]>('/tasks?all=true')
       .then((tasks) => setTasksById(Object.fromEntries(tasks.map((t) => [t.id, t]))))
       .catch(console.error);
+    api.get<Task[]>('/tasks').then(setToday).catch(console.error);
   };
-  useEffect(load, [activeProfile?.id]);
+  useEffect(load, [viewed?.id]);
 
   const redeem = async (prize: Prize) => {
-    if (!activeProfile) return;
+    if (!activeProfile || !viewed) return;
     setError(null);
     setRedeeming(prize.id);
     try {
-      const r = await api.post<{ pending?: boolean }>(`/prizes/${prize.id}/redeem`, { family_member_id: activeProfile.id, acting_member_id: activeProfile.id });
+      const r = await api.post<{ pending?: boolean }>(`/prizes/${prize.id}/redeem`, { family_member_id: viewed.id, acting_member_id: activeProfile.id });
       if (r?.pending) setNotice(`${prize.title}: claimed — waiting for a parent's OK ⏳`);
       window.dispatchEvent(new Event('approvals-changed'));
       load();
@@ -60,6 +72,22 @@ export function PrizeBankPage() {
       setError((err as Error).message || 'Only a parent can do that');
     }
   };
+  // Chores / to-dos that pay something (money, stars or "Movie time"), for whoever's picked: theirs,
+  // ones anyone can claim, and rotating ones they take turns on. Finished one-time jobs are left out.
+  const rewardJobs = Object.values(tasksById)
+    .filter((t) => t.active && t.reward_type && !t.finished)
+    .filter((t) => !viewed || t.assignee_ids.length === 0 || t.assignee_ids.includes(viewed.id) || t.rotation_ids?.includes(viewed.id))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const allJobs = Object.values(tasksById).sort((a, b) => a.title.localeCompare(b.title));
+  const todayById = Object.fromEntries(today.map((t) => [t.id, t]));
+  const jobStatus = (t: Task): string | null => {
+    const d = todayById[t.id];
+    if (!d) return null;
+    const mine = (id: string | null) => !viewed || id === viewed.id;
+    if (d.completions.some((c) => mine(c.completed_by_id))) return '✓ Done today';
+    if (d.pending?.some((p) => mine(p.family_member_id))) return "⏳ Waiting for a parent's OK";
+    return 'On today’s list';
+  };
   const toEnjoy = earned.filter((r) => !r.used_at);
   const enjoyed = earned.filter((r) => r.used_at);
 
@@ -67,18 +95,39 @@ export function PrizeBankPage() {
     <div className="prize-bank-page">
       <h1>Prize Bank</h1>
 
-      {!activeProfile && (
+      {isParent && members.length > 0 && (
+        <div className="task-form__row prize-bank-page__who">
+          <label className="member-form__label--inline">
+            Prizes for{' '}
+            <select value={viewed?.id ?? ''} onChange={(e) => { setViewId(e.target.value); setEditing(null); }}>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </label>
+          {editing !== 'new' && (
+            <button type="button" className="secondary" onClick={() => setEditing('new')}>
+              + Add a prize{viewed ? ` for ${viewed.name}` : ''}
+            </button>
+          )}
+        </div>
+      )}
+      {isParent && editing === 'new' && (
+        <PrizeForm prize={null} tasks={allJobs} forMemberId={viewed?.id} onDone={() => { setEditing(null); load(); }} onCancel={() => setEditing(null)} />
+      )}
+
+      {!viewed && (
         <div className="empty-state">Pick your name up top to see your stars, earnings, and what you can redeem.</div>
       )}
 
-      {activeProfile && (
+      {viewed && (
         <div className="panel prize-bank-page__balance">
           <div>
-            <div className="prize-bank-page__balance-value">⭐ {activeProfile.star_balance ?? 0}</div>
+            <div className="prize-bank-page__balance-value">⭐ {viewed.star_balance ?? 0}</div>
             <div className="hint">stars</div>
           </div>
           <div>
-            <div className="prize-bank-page__balance-value">${(activeProfile.money_balance ?? 0).toFixed(2)}</div>
+            <div className="prize-bank-page__balance-value">${(viewed.money_balance ?? 0).toFixed(2)}</div>
             <div className="hint">earned</div>
           </div>
         </div>
@@ -87,7 +136,7 @@ export function PrizeBankPage() {
       {error && <div className="settings-login__error">{error}</div>}
       {notice && <div className="panel prize-bank-page__notice">{notice}</div>}
 
-      {activeProfile && earned.length > 0 && (
+      {viewed && earned.length > 0 && (
         <section className="panel prize-earned">
           <h2>🎁 Earned</h2>
           {toEnjoy.length === 0 && <div className="hint">Nothing waiting right now.</div>}
@@ -131,12 +180,42 @@ export function PrizeBankPage() {
         </section>
       )}
 
+      {rewardJobs.length > 0 && (
+        <section className="panel prize-jobs">
+          <h2>💪 Jobs that earn rewards</h2>
+          <ul className="prize-jobs__list">
+            {rewardJobs.map((t) => {
+              const status = jobStatus(t);
+              const goal = goalLabel(t);
+              return (
+                <li key={t.id} className="prize-jobs__item">
+                  <span aria-hidden="true">{taskIcon(t)}</span>
+                  <span className="prize-jobs__name">
+                    <strong>{t.title}</strong>
+                    {goal && <span className="hint"> · {goal}</span>}
+                    {status && <span className="hint"> · {status}</span>}
+                  </span>
+                  <span className="badge badge--reward">
+                    {taskRewardEmoji(t)} {taskRewardText(t)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       <div className="prize-bank-page__prizes">
-        {prizes.length === 0 && <div className="empty-state">No prizes set up yet — a parent can add some in Settings.</div>}
+        {prizes.length === 0 && <div className="empty-state">No prizes yet — a parent can add some here or in Settings.</div>}
         {prizes.map((prize) => {
           const pct = prize.progress && prize.progress.needed > 0
             ? Math.min(100, Math.round((Math.max(0, prize.progress.current) / prize.progress.needed) * 100))
             : 0;
+          if (isParent && editing === prize.id) {
+            return (
+              <PrizeForm key={prize.id} prize={prize} tasks={allJobs} onDone={() => { setEditing(null); load(); }} onCancel={() => setEditing(null)} />
+            );
+          }
           return (
             <div key={prize.id} className="panel prize-card">
               <div className="prize-card__title">
@@ -146,7 +225,7 @@ export function PrizeBankPage() {
                 <div className="prize-card__reward">{prizeRewardLabel(prize)}</div>
               )}
               <div className="hint">{prizeCostLabel(prize, prize.task_id ? tasksById[prize.task_id]?.title : undefined)}</div>
-              {activeProfile && prize.progress?.parts?.length ? (
+              {viewed && prize.progress?.parts?.length ? (
                 <ul className="prize-card__parts">
                   {prize.progress.parts.map((part) => {
                     const task = tasksById[part.task_id];
@@ -167,7 +246,7 @@ export function PrizeBankPage() {
                     );
                   })}
                 </ul>
-              ) : activeProfile && prize.progress && (
+              ) : viewed && prize.progress && (
                 <>
                   <div className="progress-bar">
                     <div className="progress-bar__fill" style={{ width: `${pct}%` }} />
@@ -177,10 +256,15 @@ export function PrizeBankPage() {
                   </div>
                 </>
               )}
-              {activeProfile && (prize.waiting ?? 0) > 0 && (
+              {viewed && (prize.waiting ?? 0) > 0 && (
                 <div className="badge badge--waiting">⏳ Claimed — waiting for a parent's OK{(prize.waiting ?? 0) > 1 ? ` (${prize.waiting})` : ''}</div>
               )}
-              {activeProfile && (
+              {isParent && (
+                <button type="button" className="link-button" onClick={() => setEditing(prize.id)}>
+                  ✎ Edit · add jobs
+                </button>
+              )}
+              {viewed && (
                 <button
                   type="button"
                   disabled={!prize.eligible || redeeming === prize.id}

@@ -5,6 +5,7 @@ import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '..
 import { TASK_ICON_PRESETS, taskIcon } from '../utils/taskIcons.js';
 import { EmojiPicker } from './EmojiPicker.js';
 import { RewardEditor, type RewardValue } from './RewardEditor.js';
+import { TaskPrizeLinks } from './TaskPrizeLinks.js';
 import { canPlaceTask, useFloorplans } from '../utils/floorplans.js';
 
 const RECURRENCE_OPTIONS = [
@@ -176,6 +177,10 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     if (recurrence === 'weekly' && weeklyDays.length === 0) return;
     if (goalType === 'times' && !(Number(goalAmount) >= 1)) return;
     if (goalType === 'hours' && !(Number(goalAmount) >= 0.5)) return;
+    if (isParent && rewardEligible && reward.type === 'custom' && !reward.text.trim()) {
+      window.alert('Type what they earn, e.g. "Movie time"');
+      return;
+    }
 
     let finalRecurrence = recurrence;
     if (recurrence === 'weekly') finalRecurrence = `weekly:${weeklyDays.join(',')}`;
@@ -223,7 +228,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     // so this only fires for a parent's own add/edit, and PATCH /:id/reward is itself admin-gated
     // server-side, same defense-in-depth as everywhere else Prize Bank rewards are set.
     if (isParent) {
-      const effectiveType = kind === 'todo' && rewardEligible && (reward.type !== 'custom' || reward.text.trim()) ? reward.type : null;
+      const effectiveType = rewardEligible && (reward.type !== 'custom' || reward.text.trim()) ? reward.type : null;
       await api.patch(`/tasks/${taskId}/reward`, {
         reward_type: effectiveType,
         reward_amount: effectiveType && effectiveType !== 'custom' ? reward.amount : null,
@@ -309,7 +314,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
           {bulkIconStatus && <p className="hint">{bulkIconStatus}</p>}
         </div>
 
-        {isParent && kind === 'todo' && (
+        {isParent && (
           <div>
             <label className="checkbox">
               <input
@@ -326,6 +331,8 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
             {rewardEligible && <RewardEditor value={reward} onChange={setReward} />}
           </div>
         )}
+
+        {isParent && task && <TaskPrizeLinks task={task} />}
 
         {isParent && (
           <label className="checkbox">

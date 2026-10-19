@@ -289,6 +289,8 @@ export interface Prize {
   requirements?: PrizeRequirement[];
   /** A kid's claim waits for a parent's OK (1). */
   needs_approval?: 0 | 1;
+  /** Who it's for; empty = everyone. */
+  member_ids?: string[];
   /** With ?family_member_id=: how many of their claims are waiting for that OK. */
   waiting?: number;
   /** Present only when fetched with ?family_member_id=. */

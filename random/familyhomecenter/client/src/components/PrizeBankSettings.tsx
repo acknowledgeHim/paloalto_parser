@@ -71,7 +71,7 @@ export function PrizeBankSettings() {
     api
       .get<Task[]>('/tasks?all=true')
       .then((t) => {
-        setTasks(t.filter((x) => x.active && x.kind === 'todo' && !x.assignee_ids.some((id) => parentIds.has(id))));
+        setTasks(t.filter((x) => x.active && (x.kind === 'todo' || x.reward_type) && !x.assignee_ids.some((id) => parentIds.has(id))));
         setJobs([...t].sort((a, b) => a.title.localeCompare(b.title)));
       });
     api.get<Prize[]>('/prizes').then(setPrizes);
@@ -96,6 +96,9 @@ export function PrizeBankSettings() {
     }
     return `do "${taskTitle(p.task_id)}" ${p.required_count}×`;
   };
+
+  const forText = (p: Prize) =>
+    p.member_ids?.length ? members.filter((m) => p.member_ids!.includes(m.id)).map((m) => m.name).join(', ') : 'everyone';
 
   return (
     <>
@@ -134,6 +137,7 @@ export function PrizeBankSettings() {
                   <strong>{p.title}</strong>
                   {prizeRewardLabel(p) && p.title !== prizeRewardLabel(p)?.slice(1) && <span className="hint"> ({prizeRewardLabel(p)})</span>}
                   <span className="hint"> — {costText(p)}</span>
+                  <span className="hint"> · for {forText(p)}</span>
                 </span>
                 <button type="button" className="link-button" onClick={() => setEditingId(p.id)}>Edit</button>
                 <button type="button" className="link-button" onClick={() => removePrize(p.id)}>Remove</button>
@@ -157,7 +161,23 @@ const PRIZE_EMOJI = ['💲', '💵', '⭐', '🎁', '🎬', '🍕', '🍦', '�
  * Adding or changing a prize: its emoji, what you get (money, stars, or something you type — "Movie
  * night"), and how it's earned (stars, or doing one or more chores/to-dos — so much of each).
  */
-function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; tasks: Task[]; onDone: () => void; onCancel: () => void }) {
+export function PrizeForm({
+  prize,
+  tasks,
+  onDone,
+  onCancel,
+  forMemberId,
+}: {
+  prize: Prize | null;
+  tasks: Task[];
+  onDone: () => void;
+  onCancel: () => void;
+  /** A new prize starts out for this person (the Prize Bank page's picked kid). */
+  forMemberId?: string;
+}) {
+  const { members } = useFamilyMembers();
+  // Who it's for: one or more kids; none ticked = everyone.
+  const [memberIds, setMemberIds] = useState<string[]>(prize?.member_ids ?? (forMemberId ? [forMemberId] : []));
   const [rewardKind, setRewardKind] = useState<'money' | 'stars' | 'custom'>(prize?.reward_kind ?? 'custom');
   const [rewardAmount, setRewardAmount] = useState(String(prize?.reward_amount ?? (prize?.reward_kind === 'money' ? 5 : 10)));
   const [title, setTitle] = useState(prize?.title ?? '');
@@ -172,6 +192,11 @@ function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; ta
   const [needsApproval, setNeedsApproval] = useState(prize ? prize.needs_approval === 1 : true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // With kids picked, offer their jobs (and ones anyone can claim) — not everybody's.
+  const forThem = (t: Task) =>
+    memberIds.length === 0 ||
+    t.assignee_ids.length === 0 ||
+    memberIds.some((id) => t.assignee_ids.includes(id) || t.rotation_ids?.includes(id));
   const unitOf = (taskId: string) => (tasks.find((t) => t.id === taskId)?.goal_type === 'hours' ? 'hours' : 'times');
   const setReq = (i: number, patch: Partial<{ task_id: string; amount: string }>) =>
     setReqs((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -192,6 +217,7 @@ function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; ta
       star_cost: costType === 'stars' ? Number(starCost) : null,
       requirements: costType === 'task_count' ? requirements : [],
       needs_approval: needsApproval,
+      member_ids: memberIds,
     };
     setSaving(true);
     try {
@@ -209,6 +235,19 @@ function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; ta
   return (
     <form className="task-form prize-form panel" onSubmit={submit}>
       <h3>{prize ? 'Change prize' : 'New prize'}</h3>
+      <label className="member-form__label">For (none ticked = everyone)</label>
+      <div className="task-form__row chip-list">
+        {members.map((m) => (
+          <label key={m.id} className="checkbox">
+            <input
+              type="checkbox"
+              checked={memberIds.includes(m.id)}
+              onChange={() => setMemberIds((ids) => (ids.includes(m.id) ? ids.filter((x) => x !== m.id) : [...ids, m.id]))}
+            />
+            {m.name}
+          </label>
+        ))}
+      </div>
       <label className="member-form__label">What they get</label>
       <div className="task-form__row prize-form__row">
         <select value={rewardKind} onChange={(e) => setRewardKind(e.target.value as 'money' | 'stars' | 'custom')}>
@@ -271,7 +310,7 @@ function PrizeForm({ prize, tasks, onDone, onCancel }: { prize: Prize | null; ta
                 <select value={r.task_id} onChange={(e) => setReq(i, { task_id: e.target.value })}>
                   <option value="">Pick a chore or to-do…</option>
                   {tasks
-                    .filter((t) => t.id === r.task_id || (!t.finished && !reqs.some((o) => o.task_id === t.id)))
+                    .filter((t) => t.id === r.task_id || (!t.finished && !reqs.some((o) => o.task_id === t.id) && forThem(t)))
                     .map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.title}

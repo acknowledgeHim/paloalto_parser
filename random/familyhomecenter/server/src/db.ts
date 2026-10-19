@@ -998,6 +998,15 @@ db.exec(`
   );
 `);
 
+// Who a prize is for: one or more kids. None listed = everyone (how every prize worked before).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS prize_members (
+    prize_id TEXT NOT NULL REFERENCES prizes(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    PRIMARY KEY (prize_id, family_member_id)
+  );
+`);
+
 // Something a kid has earned that isn't money or stars — from a chore/to-do with a custom reward,
 // or a "something else" prize they claimed. It stays on their list until a parent marks it used.
 db.exec(`
