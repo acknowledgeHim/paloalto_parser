@@ -235,6 +235,8 @@ export interface Prize {
   needs_approval?: 0 | 1;
   /** Who it's for (prize_members); empty = everyone. */
   member_ids?: string[];
+  /** Earned once (1) — afterwards it's in their past prizes; null = again and again. */
+  once?: 0 | 1 | null;
 }
 
 /** One job toward a prize, and how much of it (times; hours for an "hours" job). */

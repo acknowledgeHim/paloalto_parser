@@ -267,6 +267,21 @@ export interface PrizeProgress {
   parts?: PrizePart[];
 }
 
+/** One redeemed prize, for the past-prizes page. */
+export interface PastPrize {
+  id: string;
+  prize_id: string;
+  redeemed_at: string;
+  paid_money: number | null;
+  paid_stars: number | null;
+  bank_transaction_id: string | null;
+  title: string;
+  emoji: string | null;
+  reward_kind: Prize['reward_kind'];
+  reward_amount: number | null;
+  once: 0 | 1 | null;
+}
+
 export interface PrizeRequirement {
   task_id: string;
   amount: number;
@@ -291,6 +306,13 @@ export interface Prize {
   needs_approval?: 0 | 1;
   /** Who it's for; empty = everyone. */
   member_ids?: string[];
+  /** Earned once (1): after it's redeemed it's in their past prizes. null = again and again. */
+  once?: 0 | 1 | null;
+  /** With ?family_member_id=: how many times they've redeemed it, and when last. */
+  redeemed_count?: number;
+  last_redeemed_at?: string | null;
+  /** With ?family_member_id=: an earned-once prize they've redeemed (shown under past prizes). */
+  done?: boolean;
   /** With ?family_member_id=: how many of their claims are waiting for that OK. */
   waiting?: number;
   /** Present only when fetched with ?family_member_id=. */

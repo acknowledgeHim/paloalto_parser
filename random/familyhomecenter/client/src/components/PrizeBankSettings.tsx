@@ -190,6 +190,8 @@ export function PrizeForm({
     return [{ task_id: '', amount: '1' }];
   });
   const [needsApproval, setNeedsApproval] = useState(prize ? prize.needs_approval === 1 : true);
+  // New prizes are earned once (then they're in the kid's past prizes); older ones could always be earned again.
+  const [again, setAgain] = useState(prize ? !prize.once : false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // With kids picked, offer their jobs (and ones anyone can claim) — not everybody's.
@@ -218,6 +220,7 @@ export function PrizeForm({
       requirements: costType === 'task_count' ? requirements : [],
       needs_approval: needsApproval,
       member_ids: memberIds,
+      once: !again,
     };
     setSaving(true);
     try {
@@ -344,6 +347,10 @@ export function PrizeForm({
           </p>
         </div>
       )}
+      <label className="checkbox">
+        <input type="checkbox" checked={again} onChange={(e) => setAgain(e.target.checked)} />
+        🔁 Can be earned again (otherwise, once it's redeemed it moves to their past prizes)
+      </label>
       <label className="checkbox">
         <input type="checkbox" checked={needsApproval} onChange={(e) => setNeedsApproval(e.target.checked)} />
         ✅ Needs a parent's OK when a kid claims it (waits in ✅ To approve; any stars are held until then)

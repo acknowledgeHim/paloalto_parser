@@ -2160,3 +2160,12 @@ body.fp-full-open { overflow: hidden; }
 .prize-jobs__item { display: flex; align-items: center; gap: 10px; }
 .prize-jobs__name { flex: 1; min-width: 0; }
 .task-prize-links__list { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+/* Prize Bank board: a column per kid. */
+.prize-column h3 { margin: 14px 0 6px; font-size: 1em; }
+.prize-column__balances { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-weight: 600; }
+.prize-card--compact { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
+.prize-card__actions { align-items: center; justify-content: space-between; }
+.prize-card__redeemed { font-weight: 600; }
+.prize-card__actions > * { flex: 0 0 auto; width: auto; }
+.prize-card__actions > button:not(.link-button) { min-width: 120px; }

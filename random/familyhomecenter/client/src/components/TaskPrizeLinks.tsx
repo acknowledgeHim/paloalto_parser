@@ -49,6 +49,7 @@ export function TaskPrizeLinks({ task }: { task: Task }) {
           reward_kind: 'custom',
           needs_approval: true,
           member_ids: people,
+          once: true,
           requirements: [{ task_id: task.id, amount: n }],
         });
         setStatus(`New prize "${newTitle.trim()}" ✓ — open other chores / to-dos to add them to it too`);

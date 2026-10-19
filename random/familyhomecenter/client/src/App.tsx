@@ -10,6 +10,7 @@ import { MealsPage } from './pages/MealsPage.js';
 import { ContactsPage } from './pages/ContactsPage.js';
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage.js';
 import { PrizeBankPage } from './pages/PrizeBankPage.js';
+import { PastPrizesPage } from './pages/PastPrizesPage.js';
 import { FamilyBoardPage } from './pages/FamilyBoardPage.js';
 import { PersonPage } from './pages/PersonPage.js';
 import { BankPage } from './pages/BankPage.js';
@@ -78,6 +79,7 @@ export function App() {
           <Route path="/contacts" element={<SectionGate section="contacts"><ContactsPage /></SectionGate>} />
           <Route path="/knowledge-base" element={<SectionGate section="knowledge-base"><KnowledgeBasePage /></SectionGate>} />
           <Route path="/prizes" element={<SectionGate section="prizes"><PrizeBankPage /></SectionGate>} />
+          <Route path="/prizes/past/:id" element={<SectionGate section="prizes"><PastPrizesPage /></SectionGate>} />
           <Route path="/board" element={<SectionGate section="board"><FamilyBoardPage /></SectionGate>} />
           {/* A person's page is reached from the Family Board; their bank from the Prize Bank. */}
           <Route path="/person/:id" element={<SectionGate section="board"><PersonPage /></SectionGate>} />

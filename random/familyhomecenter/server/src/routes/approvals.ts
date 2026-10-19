@@ -75,7 +75,7 @@ approvalsRouter.post('/prize/:id', (req, res) => {
   db.transaction(() => {
     if (req.body?.ok) {
       db.prepare('UPDATE prize_redemptions SET status = NULL WHERE id = ?').run(claim.id);
-      if (prize) payPrize(prize, claim.family_member_id, new Date().toISOString());
+      if (prize) payPrize(prize, claim.family_member_id, claim.id);
     } else {
       db.prepare('DELETE FROM prize_redemptions WHERE id = ?').run(claim.id);
       if (prize?.cost_type === 'stars' && prize.star_cost) {

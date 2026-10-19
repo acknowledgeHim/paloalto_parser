@@ -132,7 +132,21 @@ prizesRouter.get('/', (req, res) => {
       const waiting = (db
         .prepare("SELECT COUNT(*) AS n FROM prize_redemptions WHERE prize_id = ? AND family_member_id = ? AND status = 'pending'")
         .get(p.id, memberId) as { n: number }).n;
-      return { ...withRequirements(p), progress, eligible: progress.available > 0, waiting };
+      const done = db
+        .prepare(
+          "SELECT COUNT(*) AS n, MAX(redeemed_at) AS last FROM prize_redemptions WHERE prize_id = ? AND family_member_id = ? AND status IS NULL"
+        )
+        .get(p.id, memberId) as { n: number; last: string | null };
+      return {
+        ...withRequirements(p),
+        progress,
+        eligible: progress.available > 0 && !(p.once && done.n > 0),
+        waiting,
+        redeemed_count: done.n,
+        last_redeemed_at: done.last,
+        // Earned once and redeemed: it's in their past prizes now.
+        done: Boolean(p.once && done.n > 0),
+      };
     })
   );
 });
@@ -211,6 +225,7 @@ function parsePrize(body: Record<string, unknown>, existing?: Prize):
       reward_amount: roundedReward,
       emoji,
       needs_approval: merged.needs_approval ? 1 : 0,
+      once: 'once' in body ? (body.once ? 1 : null) : (existing?.once ?? null),
     },
   };
 }
@@ -235,8 +250,8 @@ prizesRouter.post('/', requireAdmin, (req, res) => {
   const { prize, requirements, member_ids } = parsed;
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO prizes (id, title, cost_type, star_cost, task_id, required_count, created_at, reward_kind, reward_amount, emoji, needs_approval)
-       VALUES (@id, @title, @cost_type, @star_cost, @task_id, @required_count, @created_at, @reward_kind, @reward_amount, @emoji, @needs_approval)`
+      `INSERT INTO prizes (id, title, cost_type, star_cost, task_id, required_count, created_at, reward_kind, reward_amount, emoji, needs_approval, once)
+       VALUES (@id, @title, @cost_type, @star_cost, @task_id, @required_count, @created_at, @reward_kind, @reward_amount, @emoji, @needs_approval, @once)`
     ).run(prize);
     saveRequirements(prize.id, requirements);
     saveMembers(prize.id, member_ids);
@@ -254,7 +269,7 @@ prizesRouter.patch('/:id', requireAdmin, (req, res) => {
     db.prepare(
       `UPDATE prizes SET title=@title, cost_type=@cost_type, star_cost=@star_cost, task_id=@task_id,
        required_count=@required_count, reward_kind=@reward_kind, reward_amount=@reward_amount, emoji=@emoji,
-       needs_approval=@needs_approval WHERE id=@id`
+       needs_approval=@needs_approval, once=@once WHERE id=@id`
     ).run(prize);
     saveRequirements(prize.id, requirements);
     saveMembers(prize.id, member_ids);
@@ -267,25 +282,139 @@ prizesRouter.delete('/:id', requireAdmin, (req, res) => {
   res.status(204).end();
 });
 
-/** POST /api/prizes/:id/redeem { family_member_id } — validated server-side against the real balance/count. */
-/** Pays out a claimed prize: money or stars into their balance; anything else ("Movie night") onto
- *  their earned list until a parent marks it used. */
-export function payPrize(prize: Prize, memberId: string, at: string): void {
+/**
+ * Pays out a redeemed prize and notes what it paid on the redemption, so unticking "Redeemed" can
+ * take exactly that back. Money goes into their first bank account (a deposit you can see in the
+ * Bank), or — with no account yet — their earned Prize Bank money; stars onto their star count;
+ * anything else ("Movie night", a trip) is just marked redeemed.
+ */
+export function payPrize(prize: Prize, memberId: string, redemptionId: string): void {
   if (prize.reward_kind === 'money' && prize.reward_amount) {
-    db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(prize.reward_amount, memberId);
+    const account = db
+      .prepare('SELECT id FROM bank_accounts WHERE family_member_id = ? ORDER BY sort_order ASC, created_at ASC LIMIT 1')
+      .get(memberId) as { id: string } | undefined;
+    if (account) {
+      const txId = uuidv4();
+      db.prepare(
+        'INSERT INTO bank_transactions (id, account_id, amount, comment, category, created_by_id, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?)'
+      ).run(txId, account.id, prize.reward_amount, `🎁 Prize: ${prize.title}`, new Date().toISOString());
+      db.prepare('UPDATE prize_redemptions SET bank_transaction_id = ?, paid_money = ? WHERE id = ?').run(txId, prize.reward_amount, redemptionId);
+    } else {
+      db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(prize.reward_amount, memberId);
+      db.prepare('UPDATE prize_redemptions SET paid_money = ? WHERE id = ?').run(prize.reward_amount, redemptionId);
+    }
   } else if (prize.reward_kind === 'stars' && prize.reward_amount) {
-    db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(Math.round(prize.reward_amount), memberId);
-  } else {
-    db.prepare('INSERT INTO earned_rewards (id, family_member_id, prize_id, text, emoji, earned_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-      uuidv4(),
-      memberId,
-      prize.id,
-      prize.title,
-      prize.emoji ?? null,
-      at
-    );
+    const stars = Math.round(prize.reward_amount);
+    db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(stars, memberId);
+    db.prepare('UPDATE prize_redemptions SET paid_stars = ? WHERE id = ?').run(stars, redemptionId);
   }
 }
+
+interface Redemption {
+  id: string;
+  prize_id: string;
+  family_member_id: string;
+  redeemed_at: string;
+  status: string | null;
+  bank_transaction_id: string | null;
+  paid_money: number | null;
+  paid_stars: number | null;
+}
+
+/** Undoes a redemption: takes back what it paid, gives back any stars it cost, and removes it. */
+function undoRedemption(r: Redemption): void {
+  const prize = db.prepare('SELECT * FROM prizes WHERE id = ?').get(r.prize_id) as Prize | undefined;
+  db.transaction(() => {
+    if (r.status !== 'pending') {
+      if (r.bank_transaction_id) db.prepare('DELETE FROM bank_transactions WHERE id = ?').run(r.bank_transaction_id);
+      else if (r.paid_money) db.prepare('UPDATE family_members SET money_balance = money_balance - ? WHERE id = ?').run(r.paid_money, r.family_member_id);
+      if (r.paid_stars) db.prepare('UPDATE family_members SET star_balance = star_balance - ? WHERE id = ?').run(r.paid_stars, r.family_member_id);
+    }
+    if (prize?.cost_type === 'stars' && prize.star_cost) {
+      db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(prize.star_cost, r.family_member_id);
+    }
+    db.prepare('DELETE FROM prize_redemptions WHERE id = ?').run(r.id);
+  })();
+}
+
+/** GET /api/prizes/history?family_member_id=<id> — their redeemed prizes, newest first. */
+prizesRouter.get('/history', (req, res) => {
+  const memberId = req.query.family_member_id as string | undefined;
+  if (!memberId) return res.status(400).json({ error: 'family_member_id is required' });
+  res.json(
+    db
+      .prepare(
+        `SELECT r.id, r.prize_id, r.redeemed_at, r.paid_money, r.paid_stars, r.bank_transaction_id,
+                p.title, p.emoji, p.reward_kind, p.reward_amount, p.once
+         FROM prize_redemptions r JOIN prizes p ON p.id = r.prize_id
+         WHERE r.family_member_id = ? AND r.status IS NULL ORDER BY r.redeemed_at DESC`
+      )
+      .all(memberId)
+  );
+});
+
+/**
+ * POST /api/prizes/:id/redeemed { family_member_id, acting_member_id?, redeemed } — a parent ticks
+ * (or unticks) "Redeemed". Ticked: a claim waiting for their OK is approved, otherwise it's redeemed
+ * now (it pays out; a parent can do this before the jobs are all done). Unticked: the latest
+ * redemption is undone — what it paid comes back out, any stars it cost go back.
+ */
+prizesRouter.post('/:id/redeemed', (req, res) => {
+  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
+  const prize = db.prepare('SELECT * FROM prizes WHERE id = ?').get(req.params.id) as Prize | undefined;
+  if (!prize) return res.status(404).json({ error: 'not found' });
+  const memberId = req.body?.family_member_id as string | undefined;
+  if (!memberId) return res.status(400).json({ error: 'family_member_id is required' });
+  const latest = (status: 'pending' | 'settled') =>
+    db
+      .prepare(
+        `SELECT * FROM prize_redemptions WHERE prize_id = ? AND family_member_id = ? AND status ${status === 'pending' ? "= 'pending'" : 'IS NULL'} ORDER BY redeemed_at DESC LIMIT 1`
+      )
+      .get(prize.id, memberId) as Redemption | undefined;
+
+  if (req.body?.redeemed === false) {
+    const r = latest('settled');
+    if (!r) return res.status(404).json({ error: 'Not redeemed' });
+    undoRedemption(r);
+    return res.json({ ok: true });
+  }
+  const waiting = latest('pending');
+  if (waiting) {
+    db.transaction(() => {
+      db.prepare('UPDATE prize_redemptions SET status = NULL WHERE id = ?').run(waiting.id);
+      payPrize(prize, memberId, waiting.id);
+    })();
+    return res.json({ ok: true });
+  }
+  if (prize.once && latest('settled')) return res.status(400).json({ error: 'Already redeemed' });
+  if (prize.cost_type === 'stars' && prize.star_cost) {
+    const m = db.prepare('SELECT star_balance FROM family_members WHERE id = ?').get(memberId) as { star_balance: number } | undefined;
+    if (!m || m.star_balance < prize.star_cost) return res.status(400).json({ error: 'Not enough stars yet' });
+  }
+  const id = uuidv4();
+  db.transaction(() => {
+    if (prize.cost_type === 'stars' && prize.star_cost) {
+      db.prepare('UPDATE family_members SET star_balance = star_balance - ? WHERE id = ?').run(prize.star_cost, memberId);
+    }
+    db.prepare('INSERT INTO prize_redemptions (id, prize_id, family_member_id, redeemed_at, status) VALUES (?, ?, ?, ?, NULL)').run(
+      id,
+      prize.id,
+      memberId,
+      new Date().toISOString()
+    );
+    payPrize(prize, memberId, id);
+  })();
+  res.status(201).json({ ok: true });
+});
+
+/** POST /api/prizes/redemptions/:id/undo — a parent unticks one past prize: as above, for that one. */
+prizesRouter.post('/redemptions/:id/undo', (req, res) => {
+  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
+  const r = db.prepare('SELECT * FROM prize_redemptions WHERE id = ?').get(req.params.id) as Redemption | undefined;
+  if (!r) return res.status(404).json({ error: 'not found' });
+  undoRedemption(r);
+  res.json({ ok: true });
+});
 
 /** POST /api/prizes/:id/redeem { family_member_id, acting_member_id? } — validated server-side against
  *  the real balance/count. A prize that needs a parent's OK, claimed by a kid, waits for it: its star
@@ -299,6 +428,12 @@ prizesRouter.post('/:id/redeem', (req, res) => {
   if (!isFor(prize.id, memberId)) return res.status(400).json({ error: 'That prize is for someone else' });
   const progress = progressFor(prize, memberId);
   if (progress.available <= 0) return res.status(400).json({ error: 'not eligible for this prize yet' });
+  if (
+    prize.once &&
+    db.prepare('SELECT 1 FROM prize_redemptions WHERE prize_id = ? AND family_member_id = ?').get(prize.id, memberId)
+  ) {
+    return res.status(400).json({ error: 'Already claimed' });
+  }
 
   const pending = Boolean(prize.needs_approval) && !isParentRequest(req, req.body.acting_member_id ?? memberId);
   const redemption = {
@@ -315,7 +450,7 @@ prizesRouter.post('/:id/redeem', (req, res) => {
     db.prepare(
       'INSERT INTO prize_redemptions (id, prize_id, family_member_id, redeemed_at, status) VALUES (@id, @prize_id, @family_member_id, @redeemed_at, @status)'
     ).run(redemption);
-    if (!pending) payPrize(prize, memberId, redemption.redeemed_at);
+    if (!pending) payPrize(prize, memberId, redemption.id);
   })();
   res.status(201).json({ ...redemption, pending });
 });

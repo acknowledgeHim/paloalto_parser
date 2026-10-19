@@ -951,6 +951,14 @@ for (const [table, column] of [
   ['prizes', 'needs_approval INTEGER NOT NULL DEFAULT 0'],
   // A prize claim waiting for that OK: 'pending' (NULL = an ordinary, settled claim).
   ['prize_redemptions', 'status TEXT'],
+  // A prize that's earned once (1): after it's redeemed it moves to the kid's past prizes. NULL =
+  // can be earned again and again (how every prize worked before).
+  ['prizes', 'once INTEGER'],
+  // What redeeming it paid, so a parent unticking "Redeemed" can take exactly that back: the bank
+  // deposit it made (money), or how much money/stars it added to the balances.
+  ['prize_redemptions', 'bank_transaction_id TEXT'],
+  ['prize_redemptions', 'paid_money REAL'],
+  ['prize_redemptions', 'paid_stars INTEGER'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);

@@ -100,36 +100,50 @@ Open a chore or to-do (✎), tap **⧉ Copy to…**, tick one or more people, th
 
 A Prize Bank to-do's reward can be **Stars**, **Money** or **Something else**. Choose **Something else** and type what the kid earns, for example "Movie time", "Friend time" or "Special trip".
 
-Set it in the chore/to-do form (parents) or under **Settings → Prize Bank — extra to-do rewards**.
+Set it in the chore/to-do form (parents), on chores as well as to-dos, or under **Settings → Prize Bank — extra to-do rewards**.
 
 **Emoji:** every reward can have one. Tap the emoji next to the reward type to change it. Without one, money shows 💲, stars ⭐ and something else 🎁. The emoji shows on the job's card next to the reward.
 
-When the kid finishes the job, the reward goes on their **🎁 Earned** list at the top of the Prize Bank page. A "Something else" prize they claim goes on the list too.
+When the kid finishes the job, the reward goes on their **🎉 Earned to enjoy** list in their Prize Bank column.
 
-- A parent taps **✓ Used** once the reward has been enjoyed, and it moves to **Already enjoyed**.
-- **Not yet** moves it back.
+- A parent taps **✓ Used** once the reward has been enjoyed, and it moves to **Already enjoyed** on the kid's 📜 Past prizes page.
+- **Not yet** there moves it back.
 - Unchecking the job takes back the reward, as long as it hasn't been used yet.
 
-## 🎁 Prize Bank prizes
+## 🎁 Prize Bank page
 
-Set up under **Settings → Prize Bank — prizes**. Use **+ Add a prize**, or **Edit** on an existing prize.
+The Prize Bank page looks like the Family Board, with one column for each kid. Each column shows:
 
+- Their ⭐ stars and earned money, with links to their 🏦 Bank and 📜 Past prizes.
+- **🎁 Prize boxes:** what they're working toward, with a progress bar for each job.
+- **🎉 Earned to enjoy:** rewards like "Movie time" from to-dos, until a parent taps ✓ Used.
+- **💪 Jobs that earn rewards:** their chores and to-dos that pay something, and whether each is done today.
+
+## 🎁 Prize boxes
+
+**Adding one.** On the Prize Bank page, a parent taps **+ Add a prize box for …** in a kid's column, or **✎ Edit · add jobs** on a box. Prize boxes can also be set up under **Settings → Prize Bank — prizes**.
+
+- **For:** tick one or more kids. With nobody ticked, it's for everyone. Each kid only sees their own boxes and everyone's boxes, and earns them on their own.
 - **What they get:**
-  - **Money**: the amount is added to their earned balance when they claim the prize.
-  - **Stars**: the stars are added to their star balance when they claim it.
-  - **Something else**: type it in, for example "Movie night" or "Pick a restaurant".
-- **Emoji:** each prize can have one. Without one, a money prize shows 💲, a stars prize ⭐ and anything else 🎁. (There's no treasure-chest emoji, so 🎁 stands in for it.)
+  - **Money:** paid into their first bank account when it's redeemed. With no bank account it goes to their earned Prize Bank money instead.
+  - **Stars:** added to their star count.
+  - **Something else:** type it in, for example "Movie night" or "Beach trip". It's just marked redeemed.
+- **Emoji:** each prize can have one. Without one, a money prize shows 💲, a stars prize ⭐ and anything else 🎁.
 - **How it's earned:**
-  - **Spending stars**, as before.
-  - **Doing chores / to-dos:** one or more jobs, each with how much of it is needed. For example: 4 hours of weeding + 4 hours of mulching + 6 hours of project work.
-    - An hours job counts the hours put in.
-    - Any other job counts the times it was done.
-    - Every job has to reach its amount before the prize can be claimed.
-    - Claiming starts the count over for the next time.
+  - **Spending stars.**
+  - **Doing chores / to-dos:** one or more jobs, each with how much of it is needed, for example 4 hours of weeding + 4 hours of mulching. An hours job counts the hours put in; any other job counts the times it was done. Pick jobs with the box's job list, or add **+ Add another job**.
+- **🔁 Can be earned again:** off for new boxes, so once redeemed a box moves to the kid's 📜 Past prizes. Turn it on for something they can earn over and over. Prizes made before this change can all be earned again.
 
-On the Prize Bank page, each prize shows its emoji and what it pays. Prizes earned by doing jobs show a progress bar for each job.
+**From a chore or to-do.** A parent can open a job's ✎ form and use **🎁 Counts toward a prize** to add it to one of that kid's prize boxes, or to start a new one. **Take off** removes it again.
 
-Older prizes keep working exactly as before. An older prize with one job shows that job when you edit it.
+**✓ Redeemed (parents).** Each box has a **Redeemed** tick box.
+
+- **Ticking it** pays the prize out right away (money to the bank, stars to the count) and moves a one-time box to Past prizes. A parent can do this even if the jobs aren't all finished. If the kid had claimed it and it's waiting for an OK, ticking it approves it.
+- **Unticking it** on the 📜 Past prizes page takes back what it paid (removes the bank deposit, or the stars) and puts the box back on the board. For a box that can be earned again, **↶ undo last** on the board does the same.
+
+**Kids** can tap **Redeem** once a box is earned. If the box needs a parent's OK, the claim waits in ✅ To approve.
+
+**📜 Past prizes** lists a kid's redeemed boxes, newest first, with what each paid and when, plus the rewards they've already enjoyed.
 
 ## Data
 
@@ -145,5 +159,6 @@ Only new things were added:
   - `earned_rewards`: custom rewards a kid has earned, and when each was used.
   - `pending_completions`: kids' check-offs waiting for a parent's OK.
 - **Approval columns:** `tasks.needs_approval`, `prizes.needs_approval`, `prize_redemptions.status` (`'pending'` while waiting).
+- **Prize boxes:** the `prize_members` table (who a prize is for), `prizes.once`, and `prize_redemptions.bank_transaction_id`, `paid_money`, `paid_stars` (what redeeming paid, so it can be undone).
 
 No existing data changes.
