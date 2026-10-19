@@ -59,7 +59,48 @@ This doesn't count toward "missed chores" in the stats, since nothing was due.
 Limit: a "when needed" chore can be done once per day. A 🔔 on the same day it was finished
 shows it the next day.
 
+## ⏱ How much: times and hours
+
+In the add/edit form, **How much** can be:
+
+- **Just check it off.** This is the default, and how every job worked before.
+- **A number of times**, for example basketball practice 5 times at 30 minutes each. The minutes are optional and only shown on the card. Tap **＋** each time it's done. The job is checked off when all the times are done.
+- **A number of hours**, for example 6 hours of weeding, in half hours. Tap **＋**, then pick how much was done: 30 minutes, 1 hour and so on, or all the rest. 30 minutes is the smallest chunk.
+
+The card shows a progress bar such as "⏱ 2½ of 6 h". **↶** takes back the last chunk. Tapping the ✓ on a finished job takes back its last chunk, and the job is no longer done.
+
+A one-time job can take as many days as it needs. A repeating job starts from zero each time it comes up. Any reward on the job is paid once, when the goal is reached.
+
+## 🎁 Prize Bank prizes
+
+Set up under **Settings → Prize Bank — prizes**. Use **+ Add a prize**, or **Edit** on an existing prize.
+
+- **What they get:**
+  - **Money**: the amount is added to their earned balance when they claim the prize.
+  - **Stars**: the stars are added to their star balance when they claim it.
+  - **Something else**: type it in, for example "Movie night" or "Pick a restaurant".
+- **Emoji:** each prize can have one. Without one, a money prize shows 💲, a stars prize ⭐ and anything else 🎁. (There's no treasure-chest emoji, so 🎁 stands in for it.)
+- **How it's earned:**
+  - **Spending stars**, as before.
+  - **Doing chores / to-dos:** one or more jobs, each with how much of it is needed. For example: 4 hours of weeding + 4 hours of mulching + 6 hours of project work.
+    - An hours job counts the hours put in.
+    - Any other job counts the times it was done.
+    - Every job has to reach its amount before the prize can be claimed.
+    - Claiming starts the count over for the next time.
+
+On the Prize Bank page, each prize shows its emoji and what it pays. Prizes earned by doing jobs show a progress bar for each job.
+
+Older prizes keep working exactly as before. An older prize with one job shows that job when you edit it.
+
 ## Data
 
-Only new things were added: the columns `tasks.rotation`, `tasks.rotation_start` and `tasks.needed_since`, and the table `task_positions` (each person's routine order).
+Only new things were added:
+
+- **Columns on `tasks`:** `rotation`, `rotation_start`, `needed_since`, and `goal_type`, `goal_amount`, `goal_minutes`.
+- **Columns on `prizes`:** `reward_kind`, `reward_amount`, `emoji`.
+- **New tables:**
+  - `task_positions`: each person's routine order.
+  - `task_progress`: the chunks of a times or hours job.
+  - `prize_requirements`: the jobs a prize needs.
+
 No existing data changes.

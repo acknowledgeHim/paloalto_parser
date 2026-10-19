@@ -109,6 +109,13 @@ export interface Task {
   positions?: Record<string, number>;
   /** A one-time job that's been done (only from GET /tasks?all=true) — nothing left to put in order. */
   finished?: boolean;
+  /** How much of it to do: null = just check it off; 'times' = goal_amount times (each goal_minutes
+   *  long, if set); 'hours' = goal_amount hours, checked off 30 minutes or more at a time. */
+  goal_type?: 'times' | 'hours' | null;
+  goal_amount?: number | null;
+  goal_minutes?: number | null;
+  /** How much each person has done toward it (times, or minutes): member id ('' = nobody in particular) → amount. */
+  progress?: Record<string, number>;
 }
 
 /** A room marked on a floor plan: its outline as points 0–1 across/down the plan's picture. */
@@ -233,10 +240,28 @@ export interface SpendingSummary {
 
 // ---- Prize Bank ----
 
+/** One job toward a prize: how much of it (hours for an "hours" job, else times) since the last claim. */
+export interface PrizePart {
+  task_id: string;
+  title: string;
+  icon: string | null;
+  kind: 'chore' | 'todo';
+  unit: 'hours' | 'times';
+  current: number;
+  needed: number;
+}
+
 export interface PrizeProgress {
   current: number;
   needed: number;
   available: number;
+  /** For a prize earned by doing jobs (one or several): each job's progress. current/needed is then a percent. */
+  parts?: PrizePart[];
+}
+
+export interface PrizeRequirement {
+  task_id: string;
+  amount: number;
 }
 
 export interface Prize {
@@ -247,6 +272,13 @@ export interface Prize {
   task_id: string | null;
   required_count: number | null;
   created_at: string;
+  /** What you get: money / stars (reward_amount, paid in when claimed) or something custom (the title). null = older prize (custom). */
+  reward_kind?: 'money' | 'stars' | 'custom' | null;
+  reward_amount?: number | null;
+  /** Its emoji; null = 💲 / ⭐ / 🎁 by reward_kind. */
+  emoji?: string | null;
+  /** The jobs it's earned by (with how much of each); empty = stars, or an older single-job prize. */
+  requirements?: PrizeRequirement[];
   /** Present only when fetched with ?family_member_id=. */
   progress?: PrizeProgress;
   eligible?: boolean;

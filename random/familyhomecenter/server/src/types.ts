@@ -96,6 +96,21 @@ export interface Task {
   rotation_start: string | null;
   /** A "when needed" chore: the date someone said it needs doing (null = it doesn't right now). */
   needed_since: string | null;
+  /** How much of it to do: null = just check it off; 'times' = goal_amount times (each goal_minutes
+   *  long, if set); 'hours' = goal_amount hours, checked off 30 minutes or more at a time. */
+  goal_type?: 'times' | 'hours' | null;
+  goal_amount?: number | null;
+  goal_minutes?: number | null;
+}
+
+/** A chunk of a "times"/"hours" job: 1 per time, or minutes. */
+export interface TaskProgress {
+  id: string;
+  task_id: string;
+  family_member_id: string | null;
+  logged_on: string;
+  amount: number;
+  created_at: string;
 }
 
 /** A floor plan's room: its outline as points 0–1 across/down the plan's picture. */
@@ -141,6 +156,9 @@ export interface TaskWithAssignment extends Task {
   positions?: Record<string, number>;
   /** A one-time job that's been done (only from GET /tasks?all=true). */
   finished?: boolean;
+  /** A "times"/"hours" job: how much each person has done so far (times, or minutes) — member id
+   *  ('' for nobody in particular) → amount. One-time jobs count every day; repeating ones just that day. */
+  progress?: Record<string, number>;
 }
 
 export interface TaskCompletion {
@@ -199,6 +217,20 @@ export interface Prize {
   task_id: string | null;
   required_count: number | null;
   created_at: string;
+  /** What you get: money / stars (reward_amount, paid in when claimed) or custom (the title);
+   *  null = an older prize, treated as custom. */
+  reward_kind?: 'money' | 'stars' | 'custom' | null;
+  reward_amount?: number | null;
+  /** Its emoji; null = 💲 / ⭐ / 🎁 by reward_kind. */
+  emoji?: string | null;
+}
+
+/** One job toward a prize, and how much of it (times; hours for an "hours" job). */
+export interface PrizeRequirement {
+  prize_id: string;
+  task_id: string;
+  amount: number;
+  sort_order: number;
 }
 
 export interface PrizeRedemption {

@@ -929,6 +929,18 @@ for (const [table, column] of [
   ['floorplans', 'default_zoom REAL'],
   ['floorplans', 'avatar_scale REAL NOT NULL DEFAULT 1'],
   ['floorplans', 'job_scale REAL NOT NULL DEFAULT 1'],
+  // How much of it to do: NULL = just check it off (as always); 'times' = goal_amount times (each
+  // goal_minutes long, if set — e.g. basketball 5× at 30 min); 'hours' = goal_amount hours, checked
+  // off in 30-minute chunks (task_progress) — e.g. 6 hours of weeding, a bit at a time.
+  ['tasks', 'goal_type TEXT'],
+  ['tasks', 'goal_amount REAL'],
+  ['tasks', 'goal_minutes INTEGER'],
+  // Prize Bank prizes: what you get — 'money' / 'stars' (reward_amount, paid into the balance when
+  // claimed) or 'custom' (the title says it: "Movie night"); NULL = an older prize, same as custom.
+  // And an emoji for it (NULL = 💲 / ⭐ / 🎁 by kind).
+  ['prizes', 'reward_kind TEXT'],
+  ['prizes', 'reward_amount REAL'],
+  ['prizes', 'emoji TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
@@ -946,6 +958,33 @@ db.exec(`
     task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     position INTEGER NOT NULL,
     PRIMARY KEY (family_member_id, task_id)
+  );
+`);
+
+// A chunk of a "times"/"hours" job someone did (amount: 1 per time, or minutes). When they add up
+// to the goal, the job gets its usual completion (so everything else sees it as done).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS task_progress (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    family_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    logged_on TEXT NOT NULL,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS task_progress_task ON task_progress(task_id, family_member_id);
+`);
+
+// A prize earned by doing several jobs (e.g. 4 h weeding + 4 h mulching + 6 h project work):
+// each row is one job and how much of it (times, or hours for an "hours" job). A prize with rows
+// here uses them instead of its single task_id / required_count.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS prize_requirements (
+    prize_id TEXT NOT NULL REFERENCES prizes(id) ON DELETE CASCADE,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    amount REAL NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (prize_id, task_id)
   );
 `);
 

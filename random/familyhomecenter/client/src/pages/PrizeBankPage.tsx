@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api, type Prize, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { amountLabel, prizeEmoji, prizeRewardLabel } from '../utils/prizes.js';
+import { formatHours } from '../utils/tasks.js';
+import { taskIcon } from '../utils/taskIcons.js';
 
 function prizeCostLabel(prize: Prize, taskTitle: string | undefined): string {
   if (prize.cost_type === 'stars') return `${prize.star_cost} ⭐`;
+  if (prize.progress?.parts?.length) return prize.progress.parts.map((p) => `${p.title} ${amountLabel(p.needed, p.unit)}`).join(' + ');
   return `Do "${taskTitle ?? 'a task'}" ${prize.required_count}×`;
 }
 
@@ -70,9 +74,35 @@ export function PrizeBankPage() {
             : 0;
           return (
             <div key={prize.id} className="panel prize-card">
-              <div className="prize-card__title">{prize.title}</div>
+              <div className="prize-card__title">
+                <span className="prize-card__emoji" aria-hidden="true">{prizeEmoji(prize)}</span> {prize.title}
+              </div>
+              {prizeRewardLabel(prize) && prize.title !== prizeRewardLabel(prize)?.slice(1) && (
+                <div className="prize-card__reward">{prizeRewardLabel(prize)}</div>
+              )}
               <div className="hint">{prizeCostLabel(prize, prize.task_id ? tasksById[prize.task_id]?.title : undefined)}</div>
-              {activeProfile && prize.progress && (
+              {activeProfile && prize.progress?.parts?.length ? (
+                <ul className="prize-card__parts">
+                  {prize.progress.parts.map((part) => {
+                    const task = tasksById[part.task_id];
+                    const show = (n: number) => (part.unit === 'hours' ? formatHours(n) : String(Math.floor(n)));
+                    return (
+                      <li key={part.task_id}>
+                        <span className="prize-card__part-name">
+                          <span aria-hidden="true">{task ? taskIcon(task) : part.kind === 'chore' ? '🧹' : '📝'}</span> {part.title}
+                        </span>
+                        <div className="progress-bar">
+                          <div className="progress-bar__fill" style={{ width: `${Math.min(100, (part.current / part.needed) * 100)}%` }} />
+                        </div>
+                        <span className="hint">
+                          {show(part.current)} / {show(part.needed)}
+                          {part.unit === 'hours' ? ' h' : '×'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : activeProfile && prize.progress && (
                 <>
                   <div className="progress-bar">
                     <div className="progress-bar__fill" style={{ width: `${pct}%` }} />

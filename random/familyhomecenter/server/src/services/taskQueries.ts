@@ -86,6 +86,34 @@ function withAssignees(task: Task, date: string, completions: TaskCompletion[]):
   return { ...task, assignee_ids: assigneesFor(task.id), completions };
 }
 
+/** A "times"/"hours" job's goal, in the units its chunks are logged in (times, or minutes). */
+export function goalUnits(task: Pick<Task, 'goal_type' | 'goal_amount'>): number | null {
+  if (!task.goal_type || !task.goal_amount || task.goal_amount <= 0) return null;
+  return task.goal_type === 'hours' ? Math.round(task.goal_amount * 60) : Math.round(task.goal_amount);
+}
+
+/** Which chunks count toward this job on `date`: every one so far for a one-time job, else that day's. */
+function progressWindow(task: Pick<Task, 'recurrence'>): string {
+  return task.recurrence === 'once' ? 'logged_on <= ?' : 'logged_on = ?';
+}
+
+/** How much of a "times"/"hours" job this person has done toward `date`'s goal. */
+export function progressFor(task: Task, memberId: string | null, date: string): number {
+  const who = memberId === null ? 'family_member_id IS NULL' : 'family_member_id = ?';
+  const row = db
+    .prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND ${who} AND ${progressWindow(task)}`)
+    .get(task.id, ...(memberId === null ? [] : [memberId]), date) as { n: number };
+  return row.n;
+}
+
+function progressByMember(task: Task, date: string): Record<string, number> | undefined {
+  if (!goalUnits(task)) return undefined;
+  const rows = db
+    .prepare(`SELECT family_member_id AS m, SUM(amount) AS n FROM task_progress WHERE task_id = ? AND ${progressWindow(task)} GROUP BY family_member_id`)
+    .all(task.id, date) as Array<{ m: string | null; n: number }>;
+  return Object.fromEntries(rows.map((r) => [r.m ?? '', r.n]));
+}
+
 /** Every person's routine order, by task: task id → { member id: position }. */
 function allPositions(): Map<string, Record<string, number>> {
   const rows = db.prepare('SELECT family_member_id, task_id, position FROM task_positions').all() as Array<{
@@ -116,7 +144,7 @@ export function tasksForDate(date: string): TaskWithAssignment[] {
           : (db
               .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
               .all(task.id, date) as TaskCompletion[]);
-      return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {} };
+      return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {}, progress: progressByMember(task, date) };
     });
 }
 

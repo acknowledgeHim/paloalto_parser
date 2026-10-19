@@ -129,6 +129,11 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     });
   };
   const [roomId, setRoomId] = useState<string>(task?.room_id ?? defaultRoomId ?? '');
+  // How much: just check it off, a number of times (e.g. 5× at 30 min), or a number of hours (done
+  // 30 minutes or more at a time).
+  const [goalType, setGoalType] = useState<'' | 'times' | 'hours'>(task?.goal_type ?? '');
+  const [goalAmount, setGoalAmount] = useState(String(task?.goal_amount ?? (task?.goal_type === 'hours' ? 1 : 5)));
+  const [goalMinutes, setGoalMinutes] = useState(task?.goal_minutes ? String(task.goal_minutes) : '');
 
   const toggleWeeklyDay = (code: string) => {
     setWeeklyDays((days) => (days.includes(code) ? days.filter((d) => d !== code) : [...days, code]));
@@ -162,6 +167,8 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     if (!title.trim()) return;
     if (isParent && rotating && recurrence !== 'once' && rotationOrder.length < 2) return;
     if (recurrence === 'weekly' && weeklyDays.length === 0) return;
+    if (goalType === 'times' && !(Number(goalAmount) >= 1)) return;
+    if (goalType === 'hours' && !(Number(goalAmount) >= 0.5)) return;
 
     let finalRecurrence = recurrence;
     if (recurrence === 'weekly') finalRecurrence = `weekly:${weeklyDays.join(',')}`;
@@ -191,6 +198,9 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
       due_date: recurrence === 'once' ? dueDate || null : null,
       room_id: roomId || null,
       acting_member_id: activeProfile?.id ?? null,
+      goal_type: goalType || null,
+      goal_amount: goalType ? Number(goalAmount) : null,
+      goal_minutes: goalType === 'times' && goalMinutes ? Number(goalMinutes) : null,
       ...rotationFields,
     };
     let taskId: string;
@@ -334,6 +344,44 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="member-form__label">How much</label>
+          <div className="task-form__row task-form__goal">
+            <select value={goalType} onChange={(e) => {
+              const v = e.target.value as '' | 'times' | 'hours';
+              setGoalType(v);
+              if (v === 'hours' && !(Number(goalAmount) >= 0.5)) setGoalAmount('1');
+              if (v === 'times' && !(Number(goalAmount) >= 1)) setGoalAmount('5');
+            }}>
+              <option value="">Just check it off</option>
+              <option value="times">A number of times</option>
+              <option value="hours">A number of hours</option>
+            </select>
+            {goalType === 'times' && (
+              <>
+                <input type="number" min={1} step={1} value={goalAmount} onChange={(e) => setGoalAmount(e.target.value)} aria-label="How many times" />
+                <span>times, at</span>
+                <input type="number" min={1} step={5} value={goalMinutes} placeholder="—" onChange={(e) => setGoalMinutes(e.target.value)} aria-label="Minutes each time" />
+                <span>min each (optional)</span>
+              </>
+            )}
+            {goalType === 'hours' && (
+              <>
+                <input type="number" min={0.5} step={0.5} value={goalAmount} onChange={(e) => setGoalAmount(e.target.value)} aria-label="How many hours" />
+                <span>hours</span>
+              </>
+            )}
+          </div>
+          {goalType && (
+            <p className="hint">
+              {goalType === 'hours'
+                ? 'Checked off a bit at a time — 30 minutes or more at a go — until the hours are done.'
+                : 'Tap ＋ each time it’s done; it’s checked off when all the times are done.'}
+              {recurrence === 'once' ? ' It can take as many days as it needs.' : ' Each time it comes up, it starts again from zero.'}
+            </p>
+          )}
         </div>
 
         {isParent && recurrence !== 'once' && (

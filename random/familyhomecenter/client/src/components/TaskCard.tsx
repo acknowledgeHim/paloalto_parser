@@ -7,7 +7,7 @@ import { parseTimeOfDaySlots, timeOfDayIcon, timeOfDayLabel, isSlotWindowPassed 
 import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from './MemberAvatar.js';
 import { findRoom, useFloorplans } from '../utils/floorplans.js';
-import { canEditTask } from '../utils/tasks.js';
+import { canEditTask, formatHours, formatMinutes, goalUnits } from '../utils/tasks.js';
 import { TaskFormModal } from './TaskFormModal.js';
 
 interface Props {
@@ -31,7 +31,9 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
   const assignees = members.filter((m) => task.assignee_ids.includes(m.id));
   const effectiveViewerId = viewerId ?? activeProfile?.id;
   const slots = parseTimeOfDaySlots(task.time_of_day);
-  const multiSlot = slots.length > 1;
+  // A "times"/"hours" job is done a bit at a time, then checked off as a whole (every slot at once).
+  const goal = goalUnits(task);
+  const multiSlot = slots.length > 1 && !goal;
   // Household-trust-level rule, same spirit as canEditTask — checking a task done/undone is
   // whoever's copy this card shows (effectiveViewerId), so only that person or a parent should be
   // able to tap it, not whoever else happens to be standing at the kiosk. Enforced client-side
@@ -62,6 +64,42 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
     onChange();
   };
 
+  // A "times"/"hours" job: how much of it this person has done, and adding to (or taking back) it.
+  const doneSoFar = goal ? task.progress?.[effectiveViewerId ?? ''] ?? 0 : 0;
+  const left = goal ? Math.max(0, goal - doneSoFar) : 0;
+  const [choosingChunk, setChoosingChunk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const addChunk = async (amount: number) => {
+    setChoosingChunk(false);
+    setBusy(true);
+    const soundOwner = members.find((m) => m.id === effectiveViewerId);
+    if (soundOwner) playCompletionSound(soundOwner.complete_sound, soundOwner.id);
+    try {
+      const r = await api.post<{ done: boolean }>(`/tasks/${task.id}/progress`, { family_member_id: effectiveViewerId ?? null, amount });
+      if (r.done && soundOwner) celebrateIfAllDone(soundOwner, task.kind).catch(() => {});
+    } finally {
+      setBusy(false);
+    }
+    onChange();
+  };
+  const takeBack = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/tasks/${task.id}/progress/undo`, { family_member_id: effectiveViewerId ?? null });
+    } finally {
+      setBusy(false);
+    }
+    onChange();
+  };
+  const pressGoalCheck = () => {
+    if (left <= 0) return void takeBack();
+    if (task.goal_type === 'hours') setChoosingChunk(!choosingChunk);
+    else void addChunk(1);
+  };
+  // Chunks of an hours job to pick from: 30 min up, as far as what's left.
+  const chunkChoices = [30, 60, 90, 120, 180, 240].filter((m) => m < left);
+  if (left > 0) chunkChoices.push(left);
+
   const claim = async () => {
     if (!activeProfile) return;
     await api.patch(`/tasks/${task.id}`, { assignee_ids: [...task.assignee_ids, activeProfile.id] });
@@ -73,12 +111,12 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
   const mayEdit = Boolean(onEdit) || canEditTask(task, activeProfile);
   const edit = () => (onEdit ? onEdit(task) : setEditingHere(true));
 
-  const allDone = multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
+  const allDone = goal ? left <= 0 : multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
   const visibleAssignees = hideAssignee ? assignees.filter((m) => m.id !== effectiveViewerId) : assignees;
 
   return (
     <div className={`task-card ${allDone ? 'task-card--done' : ''}`}>
-      {!multiSlot && (
+      {!multiSlot && !goal && (
         <button
           className="task-card__check"
           onClick={() => toggle(null)}
@@ -87,6 +125,17 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
           aria-label={isDone(null) ? 'Mark not done' : 'Mark done'}
         >
           {isDone(null) ? '✓' : ''}
+        </button>
+      )}
+      {goal && (
+        <button
+          className="task-card__check task-card__check--goal"
+          onClick={pressGoalCheck}
+          disabled={!canToggle || busy}
+          title={toggleTitle ?? (left <= 0 ? 'Take back the last one' : task.goal_type === 'hours' ? 'Check off some time' : 'Did one more')}
+          aria-label={left <= 0 ? 'Take back the last one' : task.goal_type === 'hours' ? 'Check off some time' : 'Did one more'}
+        >
+          {left <= 0 ? '✓' : '＋'}
         </button>
       )}
       <div className="task-card__body">
@@ -135,6 +184,34 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
             </span>
           )}
         </div>
+        {goal && (
+          <div className="task-card__goal">
+            <div className="progress-bar task-card__goal-bar">
+              <div className="progress-bar__fill" style={{ width: `${Math.min(100, (doneSoFar / goal) * 100)}%` }} />
+            </div>
+            <span className="task-card__goal-text">
+              {task.goal_type === 'hours'
+                ? `⏱ ${formatHours(doneSoFar / 60)} of ${formatHours(goal / 60)} h`
+                : `🔁 ${doneSoFar} of ${goal} times${task.goal_minutes ? ` · ${formatMinutes(task.goal_minutes)} each` : ''}`}
+            </span>
+            {doneSoFar > 0 && left > 0 && canToggle && (
+              <button type="button" className="link-button task-card__goal-undo" onClick={takeBack} disabled={busy} title="Take back the last one">
+                ↶
+              </button>
+            )}
+          </div>
+        )}
+        {goal && choosingChunk && left > 0 && (
+          <div className="task-card__chunks" role="group" aria-label="How much did you do?">
+            <span className="hint">How much did you do?</span>
+            {chunkChoices.map((m) => (
+              <button key={m} type="button" className="secondary" onClick={() => addChunk(m)} disabled={busy}>
+                {m === left && m > 30 && !([30, 60, 90, 120, 180, 240].includes(m)) ? `All the rest (${formatMinutes(m)})` : `+${formatMinutes(m)}`}
+              </button>
+            ))}
+            <button type="button" className="link-button" onClick={() => setChoosingChunk(false)}>Cancel</button>
+          </div>
+        )}
         {multiSlot && (
           <div className="task-card__slots">
             {slots.map((slot) => {

@@ -4,7 +4,7 @@ import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 import { todayStr } from '../utils/recurrence.js';
-import { assigneesFor, tasksForDate, allActiveTasks } from '../services/taskQueries.js';
+import { assigneesFor, tasksForDate, allActiveTasks, goalUnits, progressFor } from '../services/taskQueries.js';
 import type { Task, TaskCompletion } from '../types.js';
 
 export const tasksRouter = Router();
@@ -64,6 +64,35 @@ function roomExists(roomId: string | null | undefined): boolean {
   return !roomId || Boolean(db.prepare('SELECT 1 FROM floorplan_rooms WHERE id = ?').get(roomId));
 }
 
+/**
+ * How much of it to do, from a request: { goal_type: 'times', goal_amount: 5, goal_minutes?: 30 }
+ * or { goal_type: 'hours', goal_amount: 6 } (half hours allowed). null/'' = just check it off;
+ * undefined = leave as is.
+ */
+function parseGoal(body: { goal_type?: unknown; goal_amount?: unknown; goal_minutes?: unknown }):
+  | { goal_type: 'times' | 'hours' | null; goal_amount: number | null; goal_minutes: number | null }
+  | undefined
+  | 'bad' {
+  if (body.goal_type === undefined) return undefined;
+  if (body.goal_type === null || body.goal_type === '') return { goal_type: null, goal_amount: null, goal_minutes: null };
+  const amount = Number(body.goal_amount);
+  if (body.goal_type === 'times') {
+    if (!Number.isFinite(amount) || amount < 1 || amount > 500) return 'bad';
+    const minutes = body.goal_minutes == null || body.goal_minutes === '' ? null : Math.round(Number(body.goal_minutes));
+    if (minutes !== null && (!Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60)) return 'bad';
+    return { goal_type: 'times', goal_amount: Math.round(amount), goal_minutes: minutes };
+  }
+  if (body.goal_type === 'hours') {
+    const half = Math.round(amount * 2) / 2;
+    if (!Number.isFinite(half) || half < 0.5 || half > 1000) return 'bad';
+    return { goal_type: 'hours', goal_amount: half, goal_minutes: null };
+  }
+  return 'bad';
+}
+
+/** The smallest chunk of an "hours" job you can check off. */
+const HOURS_CHUNK = 30;
+
 function setAssignees(taskId: string, memberIds: string[]) {
   db.prepare('DELETE FROM task_assignees WHERE task_id = ?').run(taskId);
   const stmt = db.prepare('INSERT OR IGNORE INTO task_assignees (task_id, family_member_id) VALUES (?, ?)');
@@ -115,6 +144,8 @@ tasksRouter.post('/', (req, res) => {
   if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
   if (kind !== 'chore' && kind !== 'todo') return res.status(400).json({ error: 'kind must be chore or todo' });
   if (!roomExists(room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
+  const goal = parseGoal(req.body);
+  if (goal === 'bad') return res.status(400).json({ error: 'How much: a number of times (1 or more), or hours in half hours (½ or more)' });
 
   const task: Task = {
     id: uuidv4(),
@@ -134,12 +165,15 @@ tasksRouter.post('/', (req, res) => {
     needed_since: null,
     reward_type: null,
     reward_amount: null,
+    goal_type: goal?.goal_type ?? null,
+    goal_amount: goal?.goal_amount ?? null,
+    goal_minutes: goal?.goal_minutes ?? null,
     active: 1,
     created_at: new Date().toISOString(),
   };
   db.prepare(
-    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y, rotation, rotation_start, active, created_at)
-     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y, @rotation, @rotation_start, @active, @created_at)`
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, room_id, room_x, room_y, rotation, rotation_start, goal_type, goal_amount, goal_minutes, active, created_at)
+     VALUES (@id, @kind, @title, @notes, @created_by_id, @recurrence, @due_date, @time_of_day, @icon, @room_id, @room_x, @room_y, @rotation, @rotation_start, @goal_type, @goal_amount, @goal_minutes, @active, @created_at)`
   ).run(task);
   // A rotating chore is on everyone in the rotation (whose turn it is, is worked out per day).
   setAssignees(task.id, rotation?.rotation ? (JSON.parse(rotation.rotation) as string[]) : assignee_ids ?? []);
@@ -175,6 +209,10 @@ tasksRouter.patch('/:id', (req, res) => {
     rotation_ids: _ri,
     rotation_first_id: _rf,
     rotation_next_id: _rn,
+    goal_type: _gt,
+    goal_amount: _ga,
+    goal_minutes: _gm,
+    progress: _p,
     ...fields
   } = req.body as Partial<Task> & {
     assignee_ids?: string[];
@@ -182,8 +220,11 @@ tasksRouter.patch('/:id', (req, res) => {
     rotation_ids?: unknown;
     rotation_first_id?: unknown;
     rotation_next_id?: unknown;
+    progress?: unknown;
   };
   let assignee_ids = requestedAssignees;
+  const goal = parseGoal(req.body);
+  if (goal === 'bad') return res.status(400).json({ error: 'How much: a number of times (1 or more), or hours in half hours (½ or more)' });
   const rotation = parseRotation(req.body, todayStr());
   if (rotation === 'bad') return res.status(400).json({ error: 'Taking turns needs at least two different people' });
   const rotating = Boolean(existing.rotation);
@@ -193,7 +234,7 @@ tasksRouter.patch('/:id', (req, res) => {
   // A rotating chore's people are its rotation — dragging it to someone's column doesn't change that.
   if (rotation === undefined && rotating) assignee_ids = undefined;
   if (rotation?.rotation) assignee_ids = JSON.parse(rotation.rotation) as string[];
-  const updated: Task = { ...existing, ...fields, ...(rotation ?? {}), id: existing.id };
+  const updated: Task = { ...existing, ...fields, ...(rotation ?? {}), ...(goal ?? {}), id: existing.id };
   if (updated.rotation && updated.recurrence === 'once') return res.status(400).json({ error: 'Taking turns is for chores that repeat' });
   updated.room_id = updated.room_id || null;
   if (!roomExists(updated.room_id)) return res.status(400).json({ error: 'That room is gone — pick another' });
@@ -209,7 +250,8 @@ tasksRouter.patch('/:id', (req, res) => {
   db.prepare(
     `UPDATE tasks SET kind=@kind, title=@title, notes=@notes, recurrence=@recurrence,
      due_date=@due_date, time_of_day=@time_of_day, icon=@icon, room_id=@room_id, room_x=@room_x, room_y=@room_y,
-     rotation=@rotation, rotation_start=@rotation_start, active=@active WHERE id=@id`
+     rotation=@rotation, rotation_start=@rotation_start, goal_type=@goal_type, goal_amount=@goal_amount,
+     goal_minutes=@goal_minutes, active=@active WHERE id=@id`
   ).run(updated);
   if (assignee_ids !== undefined) setAssignees(req.params.id, assignee_ids);
   res.json({ ...updated, assignee_ids: assignee_ids ?? assigneesFor(req.params.id) });
@@ -352,4 +394,94 @@ tasksRouter.post('/:id/uncomplete', (req, res) => {
     }
   }
   res.status(204).end();
+});
+
+/** The completion rows a finished "times"/"hours" job gets: one per time-of-day slot (or one). */
+function goalSlots(task: Task): Array<string | null> {
+  const slots = (task.time_of_day ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  return slots.length > 1 ? slots : [null];
+}
+
+/**
+ * POST /api/tasks/:id/progress { family_member_id, amount?, date? } — a chunk of a "times"/"hours"
+ * job: one more time (amount 1), or some minutes of an hours job (30 or more, in 30s). When it adds
+ * up to the goal, the job is checked off as usual (and pays its reward, once).
+ */
+tasksRouter.post('/:id/progress', (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
+  if (!task) return res.status(404).json({ error: 'not found' });
+  const goal = goalUnits(task);
+  if (!goal) return res.status(400).json({ error: 'This job is just checked off — it has no times or hours to count' });
+  const date = (req.body.date as string) || todayStr();
+  const memberId: string | null = req.body.family_member_id ?? null;
+  const done = progressFor(task, memberId, date);
+  if (done >= goal) return res.status(400).json({ error: 'That’s all done already' });
+  let amount: number;
+  if (task.goal_type === 'hours') {
+    amount = Math.round(Number(req.body.amount) / HOURS_CHUNK) * HOURS_CHUNK;
+    if (!(amount >= HOURS_CHUNK)) return res.status(400).json({ error: `Check off ${HOURS_CHUNK} minutes or more at a time` });
+    amount = Math.min(amount, Math.ceil((goal - done) / HOURS_CHUNK) * HOURS_CHUNK);
+  } else {
+    amount = Math.max(1, Math.round(Number(req.body.amount) || 1));
+    amount = Math.min(amount, goal - done);
+  }
+  const total = db.transaction(() => {
+    db.prepare('INSERT INTO task_progress (id, task_id, family_member_id, logged_on, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      uuidv4(),
+      task.id,
+      memberId,
+      date,
+      amount,
+      new Date().toISOString()
+    );
+    const sum = progressFor(task, memberId, date);
+    if (sum >= goal) {
+      let added = false;
+      for (const slot of goalSlots(task)) {
+        if (findCompletion(task.id, date, memberId, slot)) continue;
+        db.prepare(
+          'INSERT INTO task_completions (id, task_id, completed_on, completed_by_id, completed_at, time_of_day) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(uuidv4(), task.id, date, memberId, new Date().toISOString(), slot);
+        added = true;
+      }
+      if (task.recurrence === 'asneeded') db.prepare('UPDATE tasks SET needed_since = NULL WHERE id = ?').run(task.id);
+      if (added && task.reward_type && task.reward_amount && memberId) creditReward(memberId, task.reward_type, task.reward_amount);
+    }
+    return sum;
+  })();
+  res.status(201).json({ progress: total, goal, done: total >= goal });
+});
+
+/**
+ * POST /api/tasks/:id/progress/undo { family_member_id, date? } — takes back their last chunk. If
+ * that drops it below the goal, it's no longer checked off (and its reward comes back out).
+ */
+tasksRouter.post('/:id/progress/undo', (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Task | undefined;
+  if (!task) return res.status(404).json({ error: 'not found' });
+  const goal = goalUnits(task);
+  if (!goal) return res.status(400).json({ error: 'This job has no times or hours to count' });
+  const date = (req.body.date as string) || todayStr();
+  const memberId: string | null = req.body.family_member_id ?? null;
+  const who = memberId === null ? 'family_member_id IS NULL' : 'family_member_id = ?';
+  const window = task.recurrence === 'once' ? 'logged_on <= ?' : 'logged_on = ?';
+  const last = db
+    .prepare(`SELECT id FROM task_progress WHERE task_id = ? AND ${who} AND ${window} ORDER BY created_at DESC LIMIT 1`)
+    .get(task.id, ...(memberId === null ? [] : [memberId]), date) as { id: string } | undefined;
+  if (!last) return res.status(400).json({ error: 'Nothing to take back' });
+  const total = db.transaction(() => {
+    db.prepare('DELETE FROM task_progress WHERE id = ?').run(last.id);
+    const sum = progressFor(task, memberId, date);
+    if (sum < goal) {
+      // Its check-off: that day's, or (one-time job) whenever it was finished.
+      const on = task.recurrence === 'once' ? 'completed_on <= ?' : 'completed_on = ?';
+      const by = memberId === null ? 'completed_by_id IS NULL' : 'completed_by_id = ?';
+      const removed = db
+        .prepare(`DELETE FROM task_completions WHERE task_id = ? AND ${by} AND ${on}`)
+        .run(task.id, ...(memberId === null ? [] : [memberId]), date).changes;
+      if (removed && task.reward_type && task.reward_amount && memberId) creditReward(memberId, task.reward_type, -task.reward_amount);
+    }
+    return sum;
+  })();
+  res.json({ progress: total, goal, done: total >= goal });
 });

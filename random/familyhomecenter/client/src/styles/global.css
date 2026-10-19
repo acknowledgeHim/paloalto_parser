@@ -308,6 +308,15 @@ textarea {
 .task-card--done .task-card__check { background: var(--accent); color: white; border-color: var(--accent); }
 .task-card__check:disabled, .task-card__slot:disabled { opacity: 0.5; cursor: not-allowed; }
 .task-card--done .task-card__title { text-decoration: line-through; color: var(--text-muted); }
+/* A "times"/"hours" job: its progress, and the chunk sizes to check off. */
+.task-card__check--goal { border-style: dashed; }
+.task-card--done .task-card__check--goal { border-style: solid; }
+.task-card__goal { display: flex; align-items: center; gap: 0.5em; margin-top: 0.3em; flex-wrap: wrap; }
+.task-card__goal-bar { flex: 1 1 6em; max-width: 14em; height: 8px; margin: 0; }
+.task-card__goal-text { font-size: 0.85em; color: var(--text-muted); white-space: nowrap; }
+.task-card__goal-undo { font-size: 1.1em; padding: 0 0.3em; }
+.task-card__chunks { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35em; margin-top: 0.4em; }
+.task-card__chunks button.secondary { padding: 0.25em 0.7em; min-height: 0; font-size: 0.9em; }
 .task-card__title { font-weight: 600; font-size: 1.1em; }
 .task-card__notes { color: var(--text-muted); font-size: 0.9em; }
 .task-card__meta { margin-top: 6px; display: flex; align-items: center; gap: 4px; }
@@ -2055,3 +2064,20 @@ body.fp-full-open { overflow: hidden; }
   100% { transform: translateY(0) rotateY(360deg); }
 }
 @media (prefers-reduced-motion: reduce) { .fp-walker--spin .fp-walker__body, .fp-walker--spin .fp-walker__job { animation: none; } }
+.task-form__goal { align-items: center; flex-wrap: wrap; }
+.task-form__goal input[type='number'] { width: 5em; }
+/* Prize Bank: each prize's emoji, what it pays, and each job's progress toward it. */
+.prize-card__emoji { font-size: 1.4em; margin-right: 0.15em; }
+.prize-card__reward { font-weight: 600; color: var(--accent); }
+.prize-card__parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.prize-card__parts li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+.prize-card__parts .progress-bar { grid-column: 1 / -1; grid-row: 2; height: 8px; }
+.prize-card__part-name { font-size: 0.9em; }
+.prize-settings__list { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
+.prize-settings__item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prize-settings__emoji { font-size: 1.5em; }
+.prize-settings__what { flex: 1 1 14em; }
+.prize-form { margin: 8px 0; }
+.prize-form__row { align-items: center; flex-wrap: wrap; }
+.prize-form__row input[type='number'] { width: 6em; }
+.prize-form__jobs { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
