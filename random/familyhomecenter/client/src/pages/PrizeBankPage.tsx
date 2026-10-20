@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type EarnedReward, type FamilyMember, type Prize, type Task } from '../api/client.js';
+import { api, type FamilyMember, type Prize, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
-import { amountLabel, prizeEmoji, prizeRewardLabel, taskRewardEmoji, taskRewardText } from '../utils/prizes.js';
-import { formatHours, goalLabel } from '../utils/tasks.js';
+import { amountLabel, prizeEmoji, prizeRewardLabel } from '../utils/prizes.js';
+import { formatHours } from '../utils/tasks.js';
+import { FloorplanView } from '../components/FloorplanView.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { PrizeForm } from '../components/PrizeBankSettings.js';
@@ -29,6 +30,22 @@ export function PrizeBankPage() {
   const [today, setToday] = useState<Task[]>([]);
   // Bumped after anything changes, so every column reloads.
   const [version, setVersion] = useState(0);
+  // 👥 Board (a column per kid) or 🏠 Map (the floor plan, with just the prize-box jobs).
+  const [view, setView] = useState<'board' | 'map'>(() => {
+    try {
+      return localStorage.getItem('familyhomecenter.prizes.view') === 'map' ? 'map' : 'board';
+    } catch {
+      return 'board';
+    }
+  });
+  const pickView = (v: 'board' | 'map') => {
+    setView(v);
+    try {
+      localStorage.setItem('familyhomecenter.prizes.view', v);
+    } catch {
+      /* fine — just not remembered */
+    }
+  };
 
   useEffect(() => {
     api.get<Task[]>('/tasks?all=true').then(setTasks).catch(console.error);
@@ -41,13 +58,25 @@ export function PrizeBankPage() {
     setVersion((v) => v + 1);
     refresh();
     window.dispatchEvent(new Event('approvals-changed'));
+    window.dispatchEvent(new Event('prizes-changed'));
   };
 
   return (
     <div className="prize-bank-page">
-      <h1>Prize Bank</h1>
+      <div className="family-board__head">
+        <h1>Prize Bank</h1>
+        <div className="family-board__tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={view === 'board'} className={`family-board__tab ${view === 'board' ? 'family-board__tab--active' : ''}`} onClick={() => pickView('board')}>
+            👥 Board
+          </button>
+          <button type="button" role="tab" aria-selected={view === 'map'} className={`family-board__tab ${view === 'map' ? 'family-board__tab--active' : ''}`} onClick={() => pickView('map')}>
+            🏠 Map
+          </button>
+        </div>
+      </div>
       {columns.length === 0 && <div className="empty-state">Add your family in Settings to start a Prize Bank.</div>}
-      <div className="family-board__columns">
+      {view === 'map' && <FloorplanView tasks={today} jobs="prize" onChange={changed} />}
+      {view === 'board' && <div className="family-board__columns">
         {columns.map((m) => (
           <PrizeColumn
             key={m.id}
@@ -61,7 +90,7 @@ export function PrizeBankPage() {
             onChanged={changed}
           />
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -86,7 +115,6 @@ function PrizeColumn({
   onChanged: () => void;
 }) {
   const [prizes, setPrizes] = useState<Prize[]>([]);
-  const [earned, setEarned] = useState<EarnedReward[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +122,6 @@ function PrizeColumn({
 
   useEffect(() => {
     api.get<Prize[]>(`/prizes?family_member_id=${member.id}`).then(setPrizes).catch(console.error);
-    api.get<EarnedReward[]>(`/prizes/earned?family_member_id=${member.id}`).then(setEarned).catch(console.error);
   }, [member.id, version]);
 
   const act = async (id: string, run: () => Promise<unknown>) => {
@@ -117,50 +144,10 @@ function PrizeColumn({
     });
   const setRedeemed = (prize: Prize, redeemed: boolean) =>
     act(prize.id, () => api.post(`/prizes/${prize.id}/redeemed`, { family_member_id: member.id, acting_member_id: actingId, redeemed }));
-  // A to-do's own reward is paid each time that one job is done. To need several jobs for one
-  // reward, it becomes a prize box (for this kid) with this job as the first of them — and the
-  // to-do stops paying on its own, so the reward isn't given twice. The box opens to add more jobs.
-  const makeBox = (t: Task) => {
-    const reward = taskRewardText(t) ?? t.title;
-    if (!window.confirm(`Make "${reward}" a prize box for ${member.name}, with "${t.title}" as its first job? You can then add more chores / to-dos to it. "${t.title}" won't pay "${reward}" by itself any more.`)) return;
-    act(t.id, async () => {
-      const kind = t.reward_type === 'money' || t.reward_type === 'stars' ? t.reward_type : 'custom';
-      const created = await api.post<Prize>('/prizes', {
-        title: kind === 'custom' ? reward : t.title,
-        cost_type: 'task_count',
-        reward_kind: kind,
-        reward_amount: kind === 'custom' ? null : t.reward_amount,
-        emoji: t.reward_emoji ?? null,
-        member_ids: [member.id],
-        once: true,
-        needs_approval: true,
-        requirements: [{ task_id: t.id, amount: t.goal_type && t.goal_amount ? t.goal_amount : 1 }],
-      });
-      await api.patch(`/tasks/${t.id}/reward`, { reward_type: null, reward_amount: null, reward_text: null, reward_emoji: null });
-      setEditing(created.id);
-    });
-  };
-  const markUsed = (r: EarnedReward, used: boolean) => act(r.id, () => api.post(`/prizes/earned/${r.id}/use`, { used }));
 
   const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
   const current = prizes.filter((p) => !p.done);
   const pastCount = prizes.reduce((n, p) => n + (p.redeemed_count ?? 0), 0);
-  const toEnjoy = earned.filter((r) => !r.used_at);
-
-  // Chores / to-dos that pay something, for this kid: theirs, ones anyone can claim, and rotating
-  // ones they take turns on. Finished one-time jobs are left out.
-  const rewardJobs = tasks
-    .filter((t) => t.active && t.reward_type && !t.finished)
-    .filter((t) => t.assignee_ids.length === 0 || t.assignee_ids.includes(member.id) || t.rotation_ids?.includes(member.id))
-    .sort((a, b) => a.title.localeCompare(b.title));
-  const todayById = Object.fromEntries(today.map((t) => [t.id, t]));
-  const jobStatus = (t: Task): string | null => {
-    const d = todayById[t.id];
-    if (!d) return null;
-    if (d.completions.some((c) => c.completed_by_id === member.id)) return '✓ done today';
-    if (d.pending?.some((p) => p.family_member_id === member.id)) return '⏳ waiting for OK';
-    return 'today';
-  };
 
   return (
     <section className="panel person-column prize-column">
@@ -287,57 +274,6 @@ function PrizeColumn({
         </div>
       )}
 
-      {toEnjoy.length > 0 && (
-        <>
-          <h3>🎉 Earned to enjoy</h3>
-          <ul className="prize-earned__list">
-            {toEnjoy.map((r) => (
-              <li key={r.id} className="prize-earned__item">
-                <span className="prize-earned__emoji" aria-hidden="true">{r.emoji ?? '🎁'}</span>
-                <span className="prize-earned__text">
-                  <strong>{r.text}</strong>
-                  <span className="hint"> · {shortDate(r.earned_at)}</span>
-                </span>
-                {isParent && (
-                  <button type="button" className="secondary" disabled={busy === r.id} onClick={() => markUsed(r, true)}>
-                    ✓ Used
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {rewardJobs.length > 0 && (
-        <>
-          <h3>💪 Jobs that earn rewards</h3>
-          <ul className="prize-jobs__list">
-            {rewardJobs.map((t) => {
-              const status = jobStatus(t);
-              const goal = goalLabel(t);
-              return (
-                <li key={t.id} className="prize-jobs__item">
-                  <span aria-hidden="true">{taskIcon(t)}</span>
-                  <span className="prize-jobs__name">
-                    {t.title}
-                    {goal && <span className="hint"> · {goal}</span>}
-                    {status && <span className="hint"> · {status}</span>}
-                  </span>
-                  <span className="badge badge--reward">
-                    {taskRewardEmoji(t)} {taskRewardText(t)}
-                  </span>
-                  {isParent && (
-                    <button type="button" className="link-button" disabled={busy === t.id} onClick={() => makeBox(t)}>
-                      🎁 Make it a prize box
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
     </section>
   );
 }

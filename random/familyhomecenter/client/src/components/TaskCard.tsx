@@ -79,7 +79,11 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
 
   // A "times"/"hours" job: how much of it this person has done, and adding to (or taking back) it.
   const doneSoFar = goal ? task.progress?.[effectiveViewerId ?? ''] ?? 0 : 0;
-  const left = goal ? Math.max(0, goal - doneSoFar) : 0;
+  // Chunks a kid logged that are waiting for a parent's OK: not counted yet, but not left to do either.
+  const waitingSoFar = goal ? task.progress_waiting?.[effectiveViewerId ?? ''] ?? 0 : 0;
+  const left = goal ? Math.max(0, goal - doneSoFar - waitingSoFar) : 0;
+  // Everything's logged, but some of it is still waiting for that OK.
+  const chunksWaiting = Boolean(goal) && left <= 0 && waitingSoFar > 0;
   const [choosingChunk, setChoosingChunk] = useState(false);
   const [busy, setBusy] = useState(false);
   const addChunk = async (amount: number) => {
@@ -94,6 +98,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
         acting_member_id: activeProfile?.id ?? null,
       });
       if (r.done && !r.pending && soundOwner) celebrateIfAllDone(soundOwner, task.kind).catch(() => {});
+      if (r.pending) window.dispatchEvent(new Event('approvals-changed'));
     } finally {
       setBusy(false);
     }
@@ -110,6 +115,12 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
   };
   const pressGoalCheck = () => {
     // Waiting for a parent's OK: a parent tapping it says yes (it counts); a kid takes the last chunk back.
+    if (chunksWaiting) {
+      // A parent says yes in ✅ To approve (each chunk there); a kid takes the last chunk back.
+      if (isParentHere) window.location.hash = '#/approvals';
+      else void takeBack();
+      return;
+    }
     if (left <= 0 && isPending(null)) {
       if (isParentHere) {
         void api
@@ -138,7 +149,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
   const mayEdit = Boolean(onEdit) || canEditTask(task, activeProfile);
   const edit = () => (onEdit ? onEdit(task) : setEditingHere(true));
 
-  const allDone = goal ? left <= 0 && !isPending(null) : multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
+  const allDone = goal ? left <= 0 && !isPending(null) && !chunksWaiting : multiSlot ? slots.every((s) => isDone(s)) : isDone(null);
   const waiting = multiSlot ? slots.some((sl) => isPending(sl)) : isPending(null);
   const visibleAssignees = hideAssignee ? assignees.filter((m) => m.id !== effectiveViewerId) : assignees;
 
@@ -160,10 +171,10 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
           className="task-card__check task-card__check--goal"
           onClick={pressGoalCheck}
           disabled={!canToggle || busy}
-          title={toggleTitle ?? (left <= 0 ? 'Take back the last one' : task.goal_type === 'hours' ? 'Check off some time' : 'Did one more')}
+          title={toggleTitle ?? (left <= 0 ? 'Take back the last one' : task.goal_type === 'hours' ? 'Check off some time' : `Did one more${task.goal_minutes ? ` (${formatMinutes(task.goal_minutes)})` : ''}`)}
           aria-label={left <= 0 ? 'Take back the last one' : task.goal_type === 'hours' ? 'Check off some time' : 'Did one more'}
         >
-          {left <= 0 ? (isPending(null) ? '⏳' : '✓') : '＋'}
+          {left <= 0 ? (isPending(null) || chunksWaiting ? '⏳' : '✓') : '＋'}
         </button>
       )}
       <div className="task-card__body">
@@ -233,7 +244,12 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
                 ? `⏱ ${formatHours(doneSoFar / 60)} of ${formatHours(goal / 60)} h`
                 : `🔁 ${doneSoFar} of ${goal} times${task.goal_minutes ? ` · ${formatMinutes(task.goal_minutes)} each` : ''}`}
             </span>
-            {doneSoFar > 0 && left > 0 && canToggle && (
+            {waitingSoFar > 0 && (
+              <span className="badge badge--waiting" title="Waiting for a parent's OK — it counts once they say yes">
+                ⏳ {task.goal_type === 'hours' ? formatMinutes(waitingSoFar) : `${waitingSoFar}×`} waiting for OK
+              </span>
+            )}
+            {doneSoFar + waitingSoFar > 0 && left > 0 && canToggle && (
               <button type="button" className="link-button task-card__goal-undo" onClick={takeBack} disabled={busy} title="Take back the last one">
                 ↶
               </button>

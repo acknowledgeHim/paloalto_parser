@@ -25,7 +25,10 @@ export function PastPrizesPage() {
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   const member = members.find((m) => m.id === id);
   const [past, setPast] = useState<PastPrize[]>([]);
-  const [enjoyed, setEnjoyed] = useState<EarnedReward[]>([]);
+  const [earned, setEarned] = useState<EarnedReward[]>([]);
+  const enjoyed = earned.filter((r) => r.used_at);
+  // Rewards from to-dos ("Movie time") not used yet.
+  const toEnjoy = earned.filter((r) => !r.used_at);
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
@@ -33,7 +36,7 @@ export function PastPrizesPage() {
     api.get<PastPrize[]>(`/prizes/history?family_member_id=${id}`).then(setPast).catch(console.error);
     api
       .get<EarnedReward[]>(`/prizes/earned?family_member_id=${id}`)
-      .then((all) => setEnjoyed(all.filter((r) => r.used_at)))
+      .then(setEarned)
       .catch(console.error);
   };
   useEffect(load, [id]);
@@ -49,10 +52,11 @@ export function PastPrizesPage() {
       setError((err as Error).message || 'Only a parent can do that');
     }
   };
-  const notUsed = async (r: EarnedReward) => {
+  const notUsed = (r: EarnedReward) => setUsed(r, false);
+  const setUsed = async (r: EarnedReward, used: boolean) => {
     setError(null);
     try {
-      await api.post(`/prizes/earned/${r.id}/use`, { used: false });
+      await api.post(`/prizes/earned/${r.id}/use`, { used });
       load();
     } catch (err) {
       setError((err as Error).message || 'Only a parent can do that');
@@ -93,6 +97,29 @@ export function PastPrizesPage() {
           ))}
         </ul>
       </section>
+
+      {toEnjoy.length > 0 && (
+        <section className="panel">
+          <h2>🎉 Earned to enjoy</h2>
+          <p className="hint">Rewards from chores and to-dos, until a parent marks them used.</p>
+          <ul className="prize-earned__list">
+            {toEnjoy.map((r) => (
+              <li key={r.id} className="prize-earned__item">
+                <span className="prize-earned__emoji" aria-hidden="true">{r.emoji ?? '🎁'}</span>
+                <span className="prize-earned__text">
+                  <strong>{r.text}</strong>
+                  <span className="hint"> · earned {longDate(r.earned_at)}</span>
+                </span>
+                {isParent && (
+                  <button type="button" className="secondary" onClick={() => setUsed(r, true)}>
+                    ✓ Used
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {enjoyed.length > 0 && (
         <section className="panel">

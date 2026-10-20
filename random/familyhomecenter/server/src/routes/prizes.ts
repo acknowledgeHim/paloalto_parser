@@ -31,7 +31,7 @@ function doneFor(task: Task | undefined, memberId: string): number {
   if (!task) return 0;
   if (task.goal_type === 'hours' || task.goal_type === 'times') {
     const row = db
-      .prepare('SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND family_member_id = ?')
+      .prepare('SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND family_member_id = ? AND pending IS NULL')
       .get(task.id, memberId) as { n: number };
     return task.goal_type === 'hours' ? row.n / 60 : row.n;
   }

@@ -1,4 +1,5 @@
-import type { Prize, Task } from '../api/client.js';
+import { useEffect, useState } from 'react';
+import { api, type Prize, type Task } from '../api/client.js';
 import { formatHours } from './tasks.js';
 
 /** A prize's emoji: its own, else 💲 for money, ⭐ for stars, 🎁 for anything else. */
@@ -32,4 +33,25 @@ export function taskRewardText(task: Pick<Task, 'reward_type' | 'reward_amount' 
   if (task.reward_type === 'stars' && task.reward_amount) return String(task.reward_amount);
   if (task.reward_type === 'custom' && task.reward_text) return task.reward_text;
   return null;
+}
+
+/**
+ * The ids of every job that counts toward a prize box. Those are kept off the regular floor plan and
+ * shown on the Prize Bank's own map instead. null until loaded. Reloads on a 'prizes-changed' event.
+ */
+export function usePrizeJobIds(): Set<string> | null {
+  const [ids, setIds] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    const load = () =>
+      api
+        .get<Prize[]>('/prizes')
+        .then((all) =>
+          setIds(new Set(all.flatMap((p) => [...(p.requirements ?? []).map((r) => r.task_id), ...(p.task_id ? [p.task_id] : [])])))
+        )
+        .catch(() => setIds(new Set()));
+    load();
+    window.addEventListener('prizes-changed', load);
+    return () => window.removeEventListener('prizes-changed', load);
+  }, []);
+  return ids;
 }

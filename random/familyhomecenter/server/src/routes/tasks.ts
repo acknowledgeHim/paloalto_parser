@@ -4,7 +4,7 @@ import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 import { todayStr } from '../utils/recurrence.js';
-import { assigneesFor, tasksForDate, allActiveTasks, goalUnits, progressFor } from '../services/taskQueries.js';
+import { assigneesFor, tasksForDate, allActiveTasks, goalUnits, progressFor, waitingProgressFor } from '../services/taskQueries.js';
 import type { Task, TaskCompletion } from '../types.js';
 import { addPending, creditReward, goalSlots, hasReward, isParentRequest, recordCompletion, removePending } from '../services/rewards.js';
 
@@ -470,7 +470,10 @@ tasksRouter.post('/:id/progress', (req, res) => {
   if (!goal) return res.status(400).json({ error: 'This job is just checked off — it has no times or hours to count' });
   const date = (req.body.date as string) || todayStr();
   const memberId: string | null = req.body.family_member_id ?? null;
-  const done = progressFor(task, memberId, date);
+  // A kid's chunk of a job that needs a parent's OK waits in ✅ To approve — each chunk on its own —
+  // and only counts once a parent says yes. Chunks already waiting count toward what's left.
+  const waits = Boolean(task.needs_approval && memberId && !isParentRequest(req, req.body.acting_member_id));
+  const done = progressFor(task, memberId, date) + waitingProgressFor(task, memberId, date);
   if (done >= goal) return res.status(400).json({ error: 'That’s all done already' });
   let amount: number;
   if (task.goal_type === 'hours') {
@@ -482,23 +485,15 @@ tasksRouter.post('/:id/progress', (req, res) => {
     amount = Math.min(amount, goal - done);
   }
   const total = db.transaction(() => {
-    db.prepare('INSERT INTO task_progress (id, task_id, family_member_id, logged_on, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-      uuidv4(),
-      task.id,
-      memberId,
-      date,
-      amount,
-      new Date().toISOString()
-    );
+    db.prepare(
+      'INSERT INTO task_progress (id, task_id, family_member_id, logged_on, amount, created_at, pending) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(uuidv4(), task.id, memberId, date, amount, new Date().toISOString(), waits ? 1 : null);
     const sum = progressFor(task, memberId, date);
-    if (sum >= goal) {
-      // All done — checked off, or (a job that needs a parent's OK, done by a kid) waiting for it.
-      if (task.needs_approval && memberId && !isParentRequest(req, req.body.acting_member_id)) addPending(task, memberId, date, null);
-      else recordCompletion(task, memberId, date, goalSlots(task));
-    }
+    // All done (with the parent-approved chunks) — checked off as usual.
+    if (!waits && sum >= goal) recordCompletion(task, memberId, date, goalSlots(task));
     return sum;
   })();
-  res.status(201).json({ progress: total, goal, done: total >= goal, pending: Boolean(task.needs_approval && total >= goal && !isParentRequest(req, req.body.acting_member_id)) });
+  res.status(201).json({ progress: total, goal, done: !waits && total >= goal, pending: waits });
 });
 
 /**

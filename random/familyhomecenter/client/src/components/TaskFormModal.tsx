@@ -80,7 +80,8 @@ interface Props {
   /** Pre-pick this room when creating (e.g. "+ Add a job here" on a floor plan). */
   defaultRoomId?: string | null;
   onClose: () => void;
-  onSaved: () => void;
+  /** After a save: the job's id (new or changed). */
+  onSaved: (savedId?: string) => void;
 }
 
 export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose, onSaved }: Props) {
@@ -236,7 +237,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
         reward_emoji: effectiveType ? reward.emoji : null,
       });
     }
-    onSaved();
+    onSaved(taskId);
   };
 
   // ⧉ Copy to… (parents): each picked person gets their own copy of this job.
@@ -401,7 +402,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
                 <input type="number" min={1} step={1} value={goalAmount} onChange={(e) => setGoalAmount(e.target.value)} aria-label="How many times" />
                 <span>times, at</span>
                 <input type="number" min={1} step={5} value={goalMinutes} placeholder="—" onChange={(e) => setGoalMinutes(e.target.value)} aria-label="Minutes each time" />
-                <span>min each (optional)</span>
+                <span>minutes each time (optional)</span>
               </>
             )}
             {goalType === 'hours' && (
@@ -415,7 +416,9 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
             <p className="hint">
               {goalType === 'hours'
                 ? 'Checked off a bit at a time — 30 minutes or more at a go — until the hours are done.'
-                : 'Tap ＋ each time it’s done; it’s checked off when all the times are done.'}
+                : goalMinutes
+                  ? `Each ＋ is one time of ${goalMinutes} minutes (e.g. one ${goalMinutes}-minute practice); it’s checked off when all ${goalAmount || 'the'} times are done.`
+                  : 'Tap ＋ each time it’s done; it’s checked off when all the times are done.'}
               {recurrence === 'once' ? ' It can take as many days as it needs.' : ' Each time it comes up, it starts again from zero.'}
             </p>
           )}

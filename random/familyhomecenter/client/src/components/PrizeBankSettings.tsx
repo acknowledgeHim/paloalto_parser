@@ -194,12 +194,29 @@ export function PrizeForm({
   const [again, setAgain] = useState(prize ? !prize.once : false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // "+ New chore / to-do": made right here, then added to this box. Jobs made here are kept
+  // until the list passed in catches up.
+  const [newJob, setNewJob] = useState(false);
+  const [madeHere, setMadeHere] = useState<Task[]>([]);
+  const jobs = [...tasks, ...madeHere.filter((t) => !tasks.some((x) => x.id === t.id))];
+  const jobMade = async (id?: string) => {
+    setNewJob(false);
+    if (!id) return;
+    const all = await api.get<Task[]>('/tasks?all=true');
+    const made = all.find((t) => t.id === id);
+    if (made) setMadeHere((m) => [...m, made]);
+    setReqs((rs) => {
+      const empty = rs.findIndex((r) => !r.task_id);
+      const add = { task_id: id, amount: made?.goal_type && made.goal_amount ? String(made.goal_amount) : '1' };
+      return empty >= 0 ? rs.map((r, i) => (i === empty ? add : r)) : [...rs, add];
+    });
+  };
   // With kids picked, offer their jobs (and ones anyone can claim) — not everybody's.
   const forThem = (t: Task) =>
     memberIds.length === 0 ||
     t.assignee_ids.length === 0 ||
     memberIds.some((id) => t.assignee_ids.includes(id) || t.rotation_ids?.includes(id));
-  const unitOf = (taskId: string) => (tasks.find((t) => t.id === taskId)?.goal_type === 'hours' ? 'hours' : 'times');
+  const unitOf = (taskId: string) => (jobs.find((t) => t.id === taskId)?.goal_type === 'hours' ? 'hours' : 'times');
   const setReq = (i: number, patch: Partial<{ task_id: string; amount: string }>) =>
     setReqs((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
@@ -312,7 +329,7 @@ export function PrizeForm({
               <div key={i} className="task-form__row prize-form__row">
                 <select value={r.task_id} onChange={(e) => setReq(i, { task_id: e.target.value })}>
                   <option value="">Pick a chore or to-do…</option>
-                  {tasks
+                  {jobs
                     .filter((t) => t.id === r.task_id || (!t.finished && !reqs.some((o) => o.task_id === t.id) && forThem(t)))
                     .map((t) => (
                       <option key={t.id} value={t.id}>
@@ -340,7 +357,18 @@ export function PrizeForm({
           })}
           <button type="button" className="secondary" onClick={() => setReqs((rs) => [...rs, { task_id: '', amount: '1' }])}>
             + Add another job
+          </button>{' '}
+          <button type="button" className="secondary" onClick={() => setNewJob(true)}>
+            + New chore / to-do
           </button>
+          {newJob && (
+            <TaskFormModal
+              task={null}
+              defaultAssigneeId={memberIds.length === 1 ? memberIds[0] : undefined}
+              onClose={() => setNewJob(false)}
+              onSaved={jobMade}
+            />
+          )}
           <p className="hint">
             They need all of these to claim it. An hours job counts the hours they've put in (checked off a bit at a time);
             any other job counts the times they've done it.

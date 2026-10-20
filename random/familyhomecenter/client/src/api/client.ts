@@ -124,6 +124,8 @@ export interface Task {
   goal_minutes?: number | null;
   /** How much each person has done toward it (times, or minutes): member id ('' = nobody in particular) → amount. */
   progress?: Record<string, number>;
+  /** Same, for chunks a kid logged that are still waiting for a parent's OK. */
+  progress_waiting?: Record<string, number>;
 }
 
 /** A room marked on a floor plan: its outline as points 0–1 across/down the plan's picture. */
@@ -658,10 +660,13 @@ export interface PendingJob {
   icon: string | null;
   goal_type: 'times' | 'hours' | null;
   goal_amount: number | null;
+  goal_minutes?: number | null;
   reward_type: 'stars' | 'money' | 'custom' | null;
   reward_amount: number | null;
   reward_text: string | null;
   reward_emoji: string | null;
+  /** A chunk of a times/hours job (minutes for hours, else times) rather than the whole job. */
+  chunk?: number | null;
 }
 
 /** ✅ To approve: a kid's prize claim that needs a parent's OK. */

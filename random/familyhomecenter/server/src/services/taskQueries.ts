@@ -101,15 +101,26 @@ function progressWindow(task: Pick<Task, 'recurrence'>): string {
 export function progressFor(task: Task, memberId: string | null, date: string): number {
   const who = memberId === null ? 'family_member_id IS NULL' : 'family_member_id = ?';
   const row = db
-    .prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND ${who} AND ${progressWindow(task)}`)
+    .prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND ${who} AND pending IS NULL AND ${progressWindow(task)}`)
     .get(task.id, ...(memberId === null ? [] : [memberId]), date) as { n: number };
   return row.n;
 }
 
-function progressByMember(task: Task, date: string): Record<string, number> | undefined {
+/** Chunks still waiting for a parent's OK (they don't count yet). */
+export function waitingProgressFor(task: Task, memberId: string | null, date: string): number {
+  const who = memberId === null ? 'family_member_id IS NULL' : 'family_member_id = ?';
+  const row = db
+    .prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND ${who} AND pending = 1 AND ${progressWindow(task)}`)
+    .get(task.id, ...(memberId === null ? [] : [memberId]), date) as { n: number };
+  return row.n;
+}
+
+function progressByMember(task: Task, date: string, waiting = false): Record<string, number> | undefined {
   if (!goalUnits(task)) return undefined;
   const rows = db
-    .prepare(`SELECT family_member_id AS m, SUM(amount) AS n FROM task_progress WHERE task_id = ? AND ${progressWindow(task)} GROUP BY family_member_id`)
+    .prepare(
+      `SELECT family_member_id AS m, SUM(amount) AS n FROM task_progress WHERE task_id = ? AND pending IS ${waiting ? '1' : 'NULL'} AND ${progressWindow(task)} GROUP BY family_member_id`
+    )
     .all(task.id, date) as Array<{ m: string | null; n: number }>;
   return Object.fromEntries(rows.map((r) => [r.m ?? '', r.n]));
 }
@@ -149,7 +160,7 @@ export function tasksForDate(date: string): TaskWithAssignment[] {
             .prepare(`SELECT family_member_id, time_of_day FROM pending_completions WHERE task_id = ? AND ${task.recurrence === 'once' ? 'completed_on <= ?' : 'completed_on = ?'}`)
             .all(task.id, date) as Array<{ family_member_id: string | null; time_of_day: string | null }>)
         : undefined;
-      return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {}, progress: progressByMember(task, date), pending };
+      return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {}, progress: progressByMember(task, date), progress_waiting: progressByMember(task, date, true), pending };
     });
 }
 

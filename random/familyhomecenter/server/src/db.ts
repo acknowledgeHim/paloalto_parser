@@ -959,6 +959,9 @@ for (const [table, column] of [
   ['prize_redemptions', 'bank_transaction_id TEXT'],
   ['prize_redemptions', 'paid_money REAL'],
   ['prize_redemptions', 'paid_stars INTEGER'],
+  // A kid's chunk of a times/hours job that needs a parent's OK: 1 while it waits in ✅ To approve
+  // (it doesn't count yet); NULL = counted.
+  ['task_progress', 'pending INTEGER'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);

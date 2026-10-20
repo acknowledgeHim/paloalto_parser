@@ -4,7 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { prizeEmoji, prizeRewardLabel, taskRewardEmoji, taskRewardText } from '../utils/prizes.js';
-import { formatHours } from '../utils/tasks.js';
+import { formatHours, formatMinutes } from '../utils/tasks.js';
 import { timeOfDayLabel } from '../utils/timeOfDay.js';
 
 interface Approvals {
@@ -33,7 +33,7 @@ export function ApprovalsPage() {
     return () => clearInterval(t);
   }, []);
 
-  const decide = async (kind: 'job' | 'prize', id: string, ok: boolean) => {
+  const decide = async (kind: 'job' | 'chunk' | 'prize', id: string, ok: boolean) => {
     setBusy(id);
     setError(null);
     try {
@@ -62,7 +62,7 @@ export function ApprovalsPage() {
         const jobs = data.jobs.filter((j) => j.family_member_id === m.id);
         const prizes = data.prizes.filter((p) => p.family_member_id === m.id);
         const yesAll = async () => {
-          for (const j of jobs) await decide('job', j.id, true);
+          for (const j of jobs) await decide(j.chunk != null ? 'chunk' : 'job', j.id, true);
           for (const p of prizes) await decide('prize', p.id, true);
         };
         return (
@@ -81,20 +81,25 @@ export function ApprovalsPage() {
               <div key={j.id} className="approvals-page__item">
                 <span className="approvals-page__icon" aria-hidden="true">{taskIcon(j)}</span>
                 <div className="approvals-page__what">
-                  <strong>{j.title}</strong>
+                  <strong>
+                    {j.title}
+                    {j.chunk != null && (j.goal_type === 'hours' ? ` · ${formatMinutes(j.chunk)}` : ` · ${j.chunk} time${j.chunk === 1 ? '' : 's'}${j.goal_minutes ? ` (${formatMinutes(j.chunk * j.goal_minutes)})` : ''}`)}
+                  </strong>
                   <div className="hint">
                     {j.kind === 'chore' ? 'Chore' : 'To-do'} · done {when(j.created_at)}
                     {j.time_of_day ? ` · ${timeOfDayLabel(j.time_of_day)}` : ''}
-                    {j.goal_type === 'hours' && j.goal_amount ? ` · all ${formatHours(j.goal_amount)} h` : ''}
-                    {j.goal_type === 'times' && j.goal_amount ? ` · all ${j.goal_amount} times` : ''}
+                    {j.chunk == null && j.goal_type === 'hours' && j.goal_amount ? ` · all ${formatHours(j.goal_amount)} h` : ''}
+                    {j.chunk == null && j.goal_type === 'times' && j.goal_amount ? ` · all ${j.goal_amount} times` : ''}
+                    {j.chunk != null && j.goal_type === 'hours' && j.goal_amount ? ` · of ${formatHours(j.goal_amount)} h` : ''}
+                    {j.chunk != null && j.goal_type === 'times' && j.goal_amount ? ` · of ${j.goal_amount} times` : ''}
                     {taskRewardText(j) ? ` · pays ${taskRewardEmoji(j)} ${taskRewardText(j)}` : ''}
                   </div>
                 </div>
                 <div className="approvals-page__buttons">
-                  <button type="button" className="approvals-page__yes" onClick={() => decide('job', j.id, true)} disabled={busy === j.id}>
+                  <button type="button" className="approvals-page__yes" onClick={() => decide(j.chunk != null ? 'chunk' : 'job', j.id, true)} disabled={busy === j.id}>
                     ✓ Yes
                   </button>
-                  <button type="button" className="secondary approvals-page__no" onClick={() => decide('job', j.id, false)} disabled={busy === j.id}>
+                  <button type="button" className="secondary approvals-page__no" onClick={() => decide(j.chunk != null ? 'chunk' : 'job', j.id, false)} disabled={busy === j.id}>
                     ✗ No
                   </button>
                 </div>
@@ -126,8 +131,8 @@ export function ApprovalsPage() {
       })}
       {total > 0 && (
         <p className="hint">
-          ✓ Yes: it counts as done (and pays its reward). ✗ No: it goes back to not done for them to finish — for an hours or
-          times job, just their last chunk comes off. A prize ✗ No gives back any stars it cost.
+          ✓ Yes: it counts as done (and pays its reward). ✗ No: it goes back to not done for them to finish — for a chunk of an
+          hours or times job, just that chunk comes off. A prize ✗ No gives back any stars it cost.
         </p>
       )}
     </div>

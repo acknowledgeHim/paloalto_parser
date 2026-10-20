@@ -64,7 +64,7 @@ shows it the next day.
 In the add/edit form, **How much** can be:
 
 - **Just check it off.** This is the default, and how every job worked before.
-- **A number of times**, for example basketball practice 5 times at 30 minutes each. The minutes are optional and only shown on the card. Tap **＋** each time it's done. The job is checked off when all the times are done.
+- **A number of times**, for example basketball practice 5 times at 30 minutes each. Each ＋ counts one time of that many minutes (the minutes are optional; they show on the card and in ✅ To approve). Tap **＋** each time it's done. The job is checked off when all the times are done.
 - **A number of hours**, for example 6 hours of weeding, in half hours. Tap **＋**, then pick how much was done: 30 minutes, 1 hour and so on, or all the rest. 30 minutes is the smallest chunk.
 
 The card shows a progress bar such as "⏱ 2½ of 6 h". **↶** takes back the last chunk. Tapping the ✓ on a finished job takes back its last chunk, and the job is no longer done.
@@ -76,6 +76,7 @@ A one-time job can take as many days as it needs. A repeating job starts from ze
 Parents can tick **✅ Needs a parent's OK** on a chore or to-do, or on a prize.
 
 - **When it's ticked:** in the chore form it's at the top. It's ticked automatically when you turn on a Prize Bank reward for a new to-do. New prizes have it ticked by default. Untick it any time.
+- **When a kid logs a chunk of a times or hours job** (30 minutes of weeding, one practice): each chunk waits in ✅ To approve on its own, and the card shows **⏳ 30 min waiting for OK**. It counts once a parent says yes; when the approved chunks reach the goal, the job is checked off. ✗ No takes just that chunk off.
 - **When a kid checks off such a job:** the card shows **⏳ Waiting for a parent's OK**. It doesn't count as done, and doesn't pay its reward, until a parent says yes. The kid can tap ⏳ to take it back.
 - **When a kid claims such a prize:** the claim waits for a parent. Any stars it costs are held until then.
 - **When a parent checks it off:** it counts straight away.
@@ -112,12 +113,14 @@ When the kid finishes the job, the reward goes on their **🎉 Earned to enjoy**
 
 ## 🎁 Prize Bank page
 
-The Prize Bank page looks like the Family Board, with one column for each kid. Each column shows:
+The Prize Bank page shows only prize boxes. Pick **👥 Board** or **🏠 Map**:
 
-- Their ⭐ stars and earned money, with links to their 🏦 Bank and 📜 Past prizes.
-- **🎁 Prize boxes:** what they're working toward, with a progress bar for each job.
-- **🎉 Earned to enjoy:** rewards like "Movie time" from to-dos, until a parent taps ✓ Used.
-- **💪 Jobs that earn rewards:** their chores and to-dos that pay something, and whether each is done today.
+- **👥 Board:** one column per kid with their ⭐ stars and money, links to their 🏦 Bank and 📜 Past prizes, and their **🎁 Prize boxes** with a progress bar for each job.
+- **🏠 Map:** the floor plan with just the prize-box jobs, so kids can walk through them like the regular map.
+
+Rewards from to-dos ("Movie time") wait under **🎉 Earned to enjoy** on the kid's 📜 Past prizes page until a parent taps ✓ Used.
+
+**Floor plans:** the regular floor plan (Chores & Tasks, Family Board) leaves prize-box jobs off; they're on the Prize Bank map. When a kid is picked, either map shows only their own avatar and jobs (plus ones anyone can claim).
 
 ## 🎁 Prize boxes
 
@@ -131,10 +134,8 @@ The Prize Bank page looks like the Family Board, with one column for each kid. E
 - **Emoji:** each prize can have one. Without one, a money prize shows 💲, a stars prize ⭐ and anything else 🎁.
 - **How it's earned:**
   - **Spending stars.**
-  - **Doing chores / to-dos:** one or more jobs, each with how much of it is needed, for example 4 hours of weeding + 4 hours of mulching. An hours job counts the hours put in; any other job counts the times it was done. Pick jobs with the box's job list, or add **+ Add another job**.
+  - **Doing chores / to-dos:** one or more jobs, each with how much of it is needed, for example 4 hours of weeding + 4 hours of mulching. An hours job counts the hours put in; any other job counts the times it was done. Pick jobs with the box's job list, add **+ Add another job**, or make a brand-new one with **+ New chore / to-do** (it's added to the box when saved).
 - **🔁 Can be earned again:** off for new boxes, so once redeemed a box moves to the kid's 📜 Past prizes. Turn it on for something they can earn over and over. Prizes made before this change can all be earned again.
-
-**From a to-do's own reward.** A to-do's reward ("Movie time") is paid each time that one job is done, and shows under 💪 Jobs that earn rewards. To make it need several jobs, a parent taps **🎁 Make it a prize box** on it. That makes a prize box for that kid with the same reward and emoji and this to-do as its first job, then opens it so you can add more. The to-do stops paying the reward by itself, so it isn't given twice.
 
 **From a chore or to-do.** A parent can open a job's ✎ form and use **🎁 Counts toward a prize** to add it to one of that kid's prize boxes, or to start a new one. **Take off** removes it again.
 
@@ -160,6 +161,7 @@ Only new things were added:
   - `prize_requirements`: the jobs a prize needs.
   - `earned_rewards`: custom rewards a kid has earned, and when each was used.
   - `pending_completions`: kids' check-offs waiting for a parent's OK.
+- **Waiting chunks:** `task_progress.pending` (1 while a kid's chunk waits for an OK).
 - **Approval columns:** `tasks.needs_approval`, `prizes.needs_approval`, `prize_redemptions.status` (`'pending'` while waiting).
 - **Prize boxes:** the `prize_members` table (who a prize is for), `prizes.once`, and `prize_redemptions.bank_transaction_id`, `paid_money`, `paid_stars` (what redeeming paid, so it can be undone).
 

@@ -4,6 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { canEditTask, isTaskDoneByAll, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { canPlaceTask, findRoom, refreshFloorplans, roomAt, useFloorplans } from '../utils/floorplans.js';
+import { usePrizeJobIds } from '../utils/prizes.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { FloorplanStage, walkerSpots } from './FloorplanStage.js';
 import { MemberAvatar } from './MemberAvatar.js';
@@ -68,7 +69,8 @@ function readPlanImage(file: File): Promise<string> {
 type DrawMode = 'box' | 'shape';
 
 export function FloorplanView({
-  tasks,
+  tasks: givenTasks,
+  jobs = 'regular',
   onChange,
   onEdit,
   onAdd,
@@ -83,10 +85,22 @@ export function FloorplanView({
   /** Show the parents' tools for adding plans and marking rooms. */
   allowEditing?: boolean;
   defaultThreeD?: boolean;
+  /** 'regular': the everyday jobs (prize-box jobs are left off — they have the Prize Bank's own map);
+   *  'prize': only the jobs that count toward a prize box. */
+  jobs?: 'regular' | 'prize';
 }) {
   const { members, activeProfile } = useFamilyMembers();
   const plans = useFloorplans();
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
+  // A kid sees just themselves: their own avatar and their own jobs (and ones anyone can claim).
+  const me = !isParent && activeProfile ? activeProfile.id : null;
+  const prizeJobIds = usePrizeJobIds();
+  const shown = (list: Task[]) =>
+    list
+      .filter((t) => (jobs === 'prize' ? Boolean(prizeJobIds?.has(t.id)) : !prizeJobIds?.has(t.id)))
+      .filter((t) => !me || t.assignee_ids.length === 0 || t.assignee_ids.includes(me))
+      .map((t) => (me && t.assignee_ids.length > 1 ? { ...t, assignee_ids: [me] } : t));
+  const tasks = shown(givenTasks);
   const canEdit = allowEditing && isParent;
 
   const [planId, setPlanIdState] = useState<string | null>(() => recall(PLAN_KEY));
@@ -151,7 +165,7 @@ export function FloorplanView({
   const loadAll = () =>
     api
       .get<Task[]>('/tasks?all=true')
-      .then(setAllTasks)
+      .then((all) => setAllTasks(shown(all)))
       .catch((err) => setError((err as Error).message));
   useEffect(() => {
     if (placing) loadAll();
