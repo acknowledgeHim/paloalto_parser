@@ -8,6 +8,7 @@ import { FloorplanView } from '../components/FloorplanView.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { PrizeForm } from '../components/PrizeBankSettings.js';
+import { TaskCard } from '../components/TaskCard.js';
 
 function prizeCostLabel(prize: Prize, taskTitle: string | undefined): string {
   if (prize.cost_type === 'stars') return `${prize.star_cost} ⭐`;
@@ -146,6 +147,11 @@ function PrizeColumn({
     act(prize.id, () => api.post(`/prizes/${prize.id}/redeemed`, { family_member_id: member.id, acting_member_id: actingId, redeemed }));
 
   const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
+  // Today's jobs in a prize box, to check off right here (they're kept off the other boards).
+  const todayJobs = (prize: Prize) => {
+    const ids = prize.requirements?.length ? prize.requirements.map((r) => r.task_id) : prize.task_id ? [prize.task_id] : [];
+    return today.filter((t) => ids.includes(t.id) && (t.assignee_ids.length === 0 || t.assignee_ids.includes(member.id)));
+  };
   const current = prizes.filter((p) => !p.done);
   const pastCount = prizes.reduce((n, p) => n + (p.redeemed_count ?? 0), 0);
 
@@ -217,6 +223,9 @@ function PrizeColumn({
                 </div>
               </>
             )}
+            {todayJobs(prize).map((t) => (
+              <TaskCard key={t.id} task={t} onChange={onChanged} hideAssignee viewerId={member.id} />
+            ))}
             {waiting > 0 && <div className="badge badge--waiting">⏳ Claimed — waiting for a parent's OK{waiting > 1 ? ` (${waiting})` : ''}</div>}
             {!prize.once && (prize.redeemed_count ?? 0) > 0 && (
               <div className="hint">

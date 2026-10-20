@@ -8,6 +8,7 @@ import { MemberAvatar } from '../components/MemberAvatar.js';
 import { canEditTask, routineNumber, sortForColumn } from '../utils/tasks.js';
 import { FloorplanView } from '../components/FloorplanView.js';
 import { taskIcon } from '../utils/taskIcons.js';
+import { usePrizeJobIds } from '../utils/prizes.js';
 
 const UNASSIGNED = 'unassigned';
 const VIEW_KEY = 'familyhomecenter.tasks.view';
@@ -109,7 +110,10 @@ export function TasksPage() {
     window.addEventListener('pointerup', onUp);
   };
 
-  const unassigned = sortForColumn(tasks.filter((t) => t.assignee_ids.length === 0));
+  // Prize-box jobs live on the Prize Bank page, not in the people's columns.
+  const prizeJobIds = usePrizeJobIds();
+  const columnTasks = tasks.filter((t) => !prizeJobIds?.has(t.id));
+  const unassigned = sortForColumn(columnTasks.filter((t) => t.assignee_ids.length === 0));
   const draggedTask = dragTaskId ? tasks.find((t) => t.id === dragTaskId) : null;
 
   // 🔢 Putting someone's jobs in the order they should do them (parents, or that person themselves).
@@ -228,7 +232,7 @@ export function TasksPage() {
       {view === 'people' && (
       <div className="tasks-page__columns">
         {members.map((member) => {
-          const memberTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.includes(member.id)), member.id);
+          const memberTasks = sortForColumn(columnTasks.filter((t) => t.assignee_ids.includes(member.id)), member.id);
           const ordering = orderingId === member.id;
           return (
             <section

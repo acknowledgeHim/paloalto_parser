@@ -115,12 +115,12 @@ When the kid finishes the job, the reward goes on their **🎉 Earned to enjoy**
 
 The Prize Bank page shows only prize boxes. Pick **👥 Board** or **🏠 Map**:
 
-- **👥 Board:** one column per kid with their ⭐ stars and money, links to their 🏦 Bank and 📜 Past prizes, and their **🎁 Prize boxes** with a progress bar for each job.
+- **👥 Board:** one column per kid with their ⭐ stars and money, links to their 🏦 Bank and 📜 Past prizes, and their **🎁 Prize boxes** with a progress bar for each job. Under each box are today's jobs for it, to check off (＋ a chunk) right there.
 - **🏠 Map:** the floor plan with just the prize-box jobs, so kids can walk through them like the regular map.
 
 Rewards from to-dos ("Movie time") wait under **🎉 Earned to enjoy** on the kid's 📜 Past prizes page until a parent taps ✓ Used.
 
-**Floor plans:** the regular floor plan (Chores & Tasks, Family Board) leaves prize-box jobs off; they're on the Prize Bank map. When a kid is picked, either map shows only their own avatar and jobs (plus ones anyone can claim).
+**Elsewhere:** prize-box jobs are left off Chores & Tasks and the Family Board, both 👥 by person and the floor plan; they're on the Prize Bank board and map. When a kid is picked, either map shows only their own avatar and jobs (plus ones anyone can claim).
 
 ## 🎁 Prize boxes
 

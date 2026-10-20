@@ -12,6 +12,7 @@ import { isAdventureStyle, progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { FloorplanView } from '../components/FloorplanView.js';
+import { usePrizeJobIds } from '../utils/prizes.js';
 
 // tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
 // recurring task the server only ever attaches completions where completed_on equals that date,
@@ -202,7 +203,10 @@ export function FamilyBoardPage() {
     api.get<CalendarEvent[]>(`/calendar/events?start=${start}&end=${end}`).then(setEvents).catch(console.error);
   }, []);
 
-  const unassignedTasks = sortForColumn(tasks.filter((t) => t.assignee_ids.length === 0));
+  // Prize-box jobs live on the Prize Bank page, not in the people's columns.
+  const prizeJobIds = usePrizeJobIds();
+  const boardTasks = tasks.filter((t) => !prizeJobIds?.has(t.id));
+  const unassignedTasks = sortForColumn(boardTasks.filter((t) => t.assignee_ids.length === 0));
   const familyEvents = events.filter((e) => !e.for_member_id);
 
   return (
@@ -226,7 +230,7 @@ export function FamilyBoardPage() {
 
       <div className="family-board__columns">
         {members.map((member) => {
-          const allMemberTasks = tasks.filter((t) => t.assignee_ids.includes(member.id));
+          const allMemberTasks = boardTasks.filter((t) => t.assignee_ids.includes(member.id));
           // Pending first (still actionable), done ones after — struck through via TaskCard's own
           // "done" styling, same as the main Chores & To-dos page. Columns collapse by default now,
           // so there's no more scroll cost to leaving completed chores visible at a glance.
@@ -234,7 +238,7 @@ export function FamilyBoardPage() {
           const pendingTasks = sortedMemberTasks.filter((t) => !isTaskDoneFor(t, member.id));
           const doneMemberTasks = sortedMemberTasks.filter((t) => isTaskDoneFor(t, member.id));
           const memberEvents = events.filter((e) => e.for_member_id === member.id);
-          const doneToday = completedToday(tasks, member.id).length;
+          const doneToday = completedToday(boardTasks, member.id).length;
           const expanded = expandedIds.has(member.id);
           return (
             <section key={member.id} className={`panel person-column ${expanded ? '' : 'person-column--collapsed'}`}>
@@ -260,7 +264,7 @@ export function FamilyBoardPage() {
                 </button>
               </h2>
 
-              <MemberProgressBars member={member} tasks={tasks} />
+              <MemberProgressBars member={member} tasks={boardTasks} />
 
               {expanded && (
                 <>
