@@ -46,13 +46,29 @@ export function PhotoMap({
   onShowPlace,
   noPlaceCount,
   onShowNoPlace,
+  onlyIds = null,
 }: {
+  /** Only these photos (the Photos filters); null = all. */
+  onlyIds?: Set<string> | null;
   onOpen: (id: string) => void;
   onShowPlace: (where: { country: string | null; state: string | null }) => void;
   noPlaceCount: number | null;
   onShowNoPlace: () => void;
 }) {
-  const [photos, setPhotos] = useState<MapPhoto[] | null>(null);
+  const [allPhotos, setPhotos] = useState<MapPhoto[] | null>(null);
+  const onlyKey = onlyIds ? [...onlyIds].sort().join(',') : '';
+  const photos = useMemo(
+    () => (allPhotos && onlyIds ? allPhotos.filter((p) => onlyIds.has(p.id)) : allPhotos),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allPhotos, onlyKey]
+  );
+  // A different filter: frame what's left (and close a picked circle that may be gone).
+  useEffect(() => {
+    if (!photos) return;
+    setPicked(null);
+    if (photos.length) setView(fit(photos));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onlyKey]);
   const [outlines, setOutlines] = useState<Outlines | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(WORLD);
@@ -100,7 +116,8 @@ export function PhotoMap({
       .get<MapPhoto[]>('/photos/map')
       .then((p) => {
         setPhotos(p);
-        if (p.length) setView(fit(p));
+        const shown = onlyIds ? p.filter((x) => onlyIds.has(x.id)) : p;
+        if (shown.length) setView(fit(shown));
       })
       .catch((e) => setError(e.message));
     outlinesPromise ??= api.get<Outlines>('/photos/places/outlines');
@@ -194,6 +211,7 @@ export function PhotoMap({
       <div className="photo-map__bar">
         <span className="hint">
           {photos ? `${photos.length.toLocaleString()} photo${photos.length === 1 ? '' : 's'} on the map` : 'Loading the map…'}
+          {photos && onlyIds && allPhotos && <> (filtered — {allPhotos.length.toLocaleString()} in all)</>}
           {noPlaceCount != null && noPlaceCount > 0 && (
             <>
               {' · '}
@@ -328,8 +346,9 @@ function fit(ps: Array<{ lat: number; lon: number }>): View {
   const xs = ps.map((p) => p.lon);
   const ys = ps.map((p) => -p.lat);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const w = Math.max(0.2, (x1 - x0) * 1.3);
-  const h = Math.max(0.1, (y1 - y0) * 1.3, w / 2.2);
+  // At least a few hundred km across, so a single trip still shows where it is.
+  const w = Math.max(5, (x1 - x0) * 1.3);
+  const h = Math.max(2.5, (y1 - y0) * 1.3, w / 2.2);
   const ww = Math.max(w, h * 1.6);
   return { x: (x0 + x1) / 2 - ww / 2, y: (y0 + y1) / 2 - h / 2, w: ww, h };
 }

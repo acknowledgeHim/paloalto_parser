@@ -587,6 +587,8 @@ export function PhotosPage() {
   const [sortBy, setSortBy] = useState<'library' | 'date-desc' | 'date-asc' | 'name' | 'country' | 'state'>('library');
   // 📍 Where: '' = anywhere, 'none' = no location, 'c:<country>' or 's:<US state>'.
   const [where, setWhere] = useState('');
+  // 📅 Year: '' = any.
+  const [yearFilter, setYearFilter] = useState('');
   const [albumStatus, setAlbumStatus] = useState<'all' | 'none' | 'some'>('all');
   const [showHidden, setShowHidden] = useState(false);
   // People (face recognition): the filter can come from the People page's "See their photos" link.
@@ -683,6 +685,7 @@ export function PhotosPage() {
             ? list.filter((p) => d(p)?.state === where.slice(2))
             : list.filter((p) => d(p)?.country === where.slice(2));
     }
+    if (yearFilter) list = details ? list.filter((p) => details.get(p.id)?.taken_at?.slice(0, 4) === yearFilter) : [];
     if (sortBy !== 'library' && details) {
       const d = (p: Photo) => details.get(p.id);
       const byDate = (a: Photo, b: Photo) => (d(b)?.taken_at ?? '').localeCompare(d(a)?.taken_at ?? '');
@@ -711,7 +714,20 @@ export function PhotosPage() {
 
   // Reset paging whenever what's shown changes size (refresh, new photos, another album) so stale
   // indexes don't leave the grid showing fewer than PAGE_SIZE.
-  useEffect(() => setVisibleCount(PAGE_SIZE), [albumFilter, albumStatus, sortBy, showHidden, excludeBlurry, personFilter, where]);
+  useEffect(() => setVisibleCount(PAGE_SIZE), [albumFilter, albumStatus, sortBy, showHidden, excludeBlurry, personFilter, where, yearFilter]);
+  // Is anything narrowing the photos down? (The map shows everything when not.)
+  const filtersOn = Boolean(albumFilter || albumStatus !== 'all' || personFilter || where || yearFilter || excludeBlurry || showHidden);
+  // 📅 The years the photos were taken, newest first, with how many.
+  const yearCounts = (() => {
+    if (!details) return [] as Array<[string, number]>;
+    const n = new Map<string, number>();
+    for (const p of photos) {
+      if (p.hidden && !showHidden) continue;
+      const y = details.get(p.id)?.taken_at?.slice(0, 4);
+      if (y) n.set(y, (n.get(y) ?? 0) + 1);
+    }
+    return [...n].sort((a, b) => b[0].localeCompare(a[0]));
+  })();
 
   // 📍 The places the photos were taken, with how many — for the Where filter.
   const placeCounts = (() => {
@@ -814,22 +830,12 @@ export function PhotosPage() {
       )}
 
       {/* Movies and Documents each have their own switch in Settings → Kids' access. */}
-      {tab === 'map' && (
-        <PhotoMap
-          onOpen={(id) => setViewingId(id)}
-          onShowPlace={showWhere}
-          noPlaceCount={placeCounts?.none ?? null}
-          onShowNoPlace={() => {
-            setWhere('none');
-            setTab('photos');
-          }}
-        />
-      )}
       {tab === 'movies' && <MoviesSection />}
       {tab === 'documents' && <DocumentsSection />}
       {tab === 'animate' && <AnimateSection />}
 
-      {tab === 'photos' && (
+      {/* 📷 Photos and 🗺️ Map share the albums and filters below — the map shows just the photos that pass them. */}
+      {(tab === 'photos' || tab === 'map') && (
       <>
 
       {/* Albums — kept only in the app's database; the photos themselves never move. */}
@@ -904,6 +910,7 @@ export function PhotosPage() {
       {albumError && <div className="settings-login__error">{albumError}</div>}
 
       <div className="photos-page__grid-tools">
+        {tab === 'photos' && (
         <label className="member-form__label member-form__label--inline">
           Sort
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}>
@@ -915,6 +922,7 @@ export function PhotosPage() {
             <option value="state">📍 State (A–Z)</option>
           </select>
         </label>
+        )}
         <label className="member-form__label member-form__label--inline">
           📍 Where
           <select value={where} onChange={(e) => setWhere(e.target.value)}>
@@ -940,7 +948,18 @@ export function PhotosPage() {
             )}
           </select>
         </label>
-        {where && !details && <span className="hint">Reading where photos were taken…</span>}
+        <label className="member-form__label member-form__label--inline">
+          📅 Year
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+            <option value="">Any year</option>
+            {yearCounts.map(([y, n]) => (
+              <option key={y} value={y}>
+                {y} ({n})
+              </option>
+            ))}
+          </select>
+        </label>
+        {(where || yearFilter) && !details && <span className="hint">Reading photo dates and places…</span>}
         {sortBy !== 'library' && !details && !detailsFailed && <span className="hint">Reading photo dates… sorts as soon as they're in.</span>}
         {sortBy !== 'library' && detailsFailed && (
           <span className="hint">
@@ -981,7 +1000,7 @@ export function PhotosPage() {
             <option value="exclude">Exclude</option>
           </select>
         </label>
-        {!selecting ? (
+        {tab === 'map' ? null : !selecting ? (
           <button type="button" className="secondary" onClick={() => setSelecting(true)} disabled={visible.length === 0}>
             ☑ Select photos
           </button>
@@ -1044,6 +1063,20 @@ export function PhotosPage() {
         <AlbumChecklist albumsApi={albumsApi} photoIds={[...selected]} onDone={() => setAlbumPanel(null)} />
       )}
 
+      {tab === 'map' && (
+        <PhotoMap
+          onOpen={(id) => setViewingId(id)}
+          onShowPlace={showWhere}
+          onlyIds={filtersOn ? new Set(visible.map((p) => p.id)) : null}
+          noPlaceCount={details ? visible.filter((p) => !details.get(p.id)?.country).length : null}
+          onShowNoPlace={() => {
+            setWhere('none');
+            setTab('photos');
+          }}
+        />
+      )}
+      {tab === 'photos' && (
+      <>
       {loading && <div className="empty-state">Loading photos…</div>}
       {!loading && photos.length === 0 && (
         <div className="empty-state">
@@ -1090,6 +1123,8 @@ export function PhotosPage() {
         <button className="secondary" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
           Show more ({visible.length - visibleCount} left)
         </button>
+      )}
+      </>
       )}
 
       </>
