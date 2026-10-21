@@ -88,6 +88,36 @@ photosRouter.get(
   })
 );
 
+/** GET /recent?days=7 — photos taken in the last few days (newest first, one of each set of
+ *  copies, hidden ones left out) — for the 🎞️ weekly family recap. */
+photosRouter.get(
+  '/recent',
+  asyncHandler(async (req, res) => {
+    const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 31);
+    const since = Date.now() - days * 86400_000;
+    const hidden = hiddenPhotoPaths();
+    const quality = getPhotoQuality();
+    const rel = (abs: string) => path.relative(config.photosDir, abs);
+    const files = (await listPhotos()).filter((f) => !hidden.has(rel(f)) && !quality.get(rel(f))?.blurry);
+    const dated = await mapWithConcurrency(files, 8, async (f) => ({ f, date: await getPhotoDate(f) }));
+    const seen = new Set<unknown>();
+    res.json(
+      dated
+        .filter(({ date }) => date.getTime() >= since && date.getTime() <= Date.now() + 86400_000)
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .filter(({ f }) => {
+          const g = quality.get(rel(f))?.dup_group;
+          if (g == null) return true;
+          if (seen.has(g)) return false;
+          seen.add(g);
+          return true;
+        })
+        .slice(0, 24)
+        .map(({ f, date }) => ({ id: photoIdFor(f), taken_at: date.toISOString() }))
+    );
+  })
+);
+
 /** POST /hidden { add?: ids, remove?: ids } — hide or unhide photos. Only a note in the database;
  *  the files aren't touched. Open to everyone, like adding to an album. */
 photosRouter.post(

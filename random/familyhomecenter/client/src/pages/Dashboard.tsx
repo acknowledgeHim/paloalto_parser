@@ -9,6 +9,7 @@ import { MemberAvatar } from '../components/MemberAvatar.js';
 import { OnThisDay } from '../components/OnThisDay.js';
 import { WhosHome } from '../components/WhosHome.js';
 import { NotesBoard } from '../components/StickyNotes.js';
+import { OPEN_BRIEFING } from '../components/MorningBriefing.js';
 import { useSectionAccess } from '../state/SectionAccess.js';
 import { canEditTask } from '../utils/tasks.js';
 
@@ -45,7 +46,12 @@ export function Dashboard() {
   return (
     <div className="dashboard">
       <header className="dashboard__header">
-        <h1>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
+        <h1>
+          {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+          <button type="button" className="secondary dashboard__briefing" title="Today at a glance" onClick={() => window.dispatchEvent(new Event(OPEN_BRIEFING))}>
+            {new Date().getHours() < 12 ? '☀️' : '📋'} Today
+          </button>
+        </h1>
         <WeatherWidget />
       </header>
 

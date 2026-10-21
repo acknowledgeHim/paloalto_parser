@@ -2391,3 +2391,75 @@ body.fp-full-open { overflow: hidden; }
 .jar__form .task-form__row > button { flex: 0 0 auto; width: auto; }
 /* Small avatars in the who's-home strip: just the hat, glasses and magic — no pet wandering into the next person. */
 .whos-home .dressed__pet, .whos-home .dressed__hand { display: none; }
+
+/* ---- 🎞️ This week (the family recap) ---- */
+.recap { position: relative; min-height: 70vh; border-radius: 20px; overflow: hidden; color: #fff; background: radial-gradient(circle at 20% 10%, #6c5ce7, #2d3436 70%); display: flex; flex-direction: column; }
+.recap--full { position: fixed; inset: 0; z-index: 2100; border-radius: 0; min-height: 0; }
+.recap__progress { display: flex; gap: 4px; padding: 12px 16px 0; }
+.recap__seg { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.25); overflow: hidden; position: relative; }
+.recap__seg--done { background: rgba(255,255,255,0.9); }
+.recap__seg--now::after { content: ''; position: absolute; inset: 0; background: #fff; transform-origin: left; animation: recap-seg linear forwards; }
+.recap--paused .recap__seg--now::after { animation-play-state: paused; }
+@keyframes recap-seg { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.recap__slide { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; animation: recap-in 0.6s ease-out; }
+@keyframes recap-in { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: none; } }
+.recap h1 { font-size: clamp(2em, 6vw, 4em); margin: 0.2em 0; color: #fff; }
+.recap h2 { font-size: clamp(1.8em, 5vw, 3.2em); margin: 0.3em 0 0.1em; color: #fff; }
+.recap__kicker { font-size: clamp(1.1em, 2.6vw, 1.8em); font-weight: 800; letter-spacing: 0.02em; opacity: 0.9; margin-bottom: 12px; }
+.recap__kicker--over { position: absolute; top: 28px; left: 0; right: 0; text-shadow: 0 2px 10px rgba(0,0,0,0.7); }
+.recap__big { font-size: clamp(1.3em, 3.4vw, 2.4em); margin: 0.3em 0; }
+.recap__small { font-size: clamp(1em, 2vw, 1.3em); opacity: 0.85; }
+.recap__avatars { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; margin: 60px 0 20px; }
+.recap__person { display: flex; flex-direction: column; align-items: center; padding-top: 50px; }
+.recap__person .member-avatar { box-shadow: 0 0 0 6px var(--c); }
+.recap__bars { display: flex; gap: 10px; align-items: flex-end; height: 110px; margin: 10px 0; }
+.recap__bar { position: relative; width: 30px; height: 90px; border-radius: 8px; background: rgba(255,255,255,0.18); display: flex; flex-direction: column; justify-content: flex-end; }
+.recap__bar-fill { background: var(--c); border-radius: 8px; animation: recap-grow 1s ease-out; }
+.recap__bar span { position: absolute; bottom: -22px; left: 0; right: 0; font-size: 0.85em; opacity: 0.85; }
+@keyframes recap-grow { from { transform: scaleY(0); transform-origin: bottom; } }
+.recap__chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
+.recap__chips span { background: rgba(255,255,255,0.16); padding: 6px 14px; border-radius: 999px; font-weight: 700; }
+.recap__chips--big span { font-size: 1.3em; }
+.recap__star-burst { padding: 60px 30px 10px; background: radial-gradient(circle, rgba(255,214,0,0.55), transparent 65%); border-radius: 50%; animation: recap-spin-in 1s ease-out; }
+@keyframes recap-spin-in { from { transform: scale(0.2) rotate(-200deg); opacity: 0; } }
+.recap__list { max-width: 900px; }
+.recap__slips { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.recap__slip { background: #fff3bf; color: #333; padding: 16px; border-radius: 6px; font-size: 1.2em; font-weight: 600; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+.recap__slip span { font-size: 0.75em; font-weight: 400; display: flex; align-items: center; gap: 6px; justify-content: center; }
+.recap__photo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; }
+.recap__photo img { max-width: 100%; max-height: 100%; object-fit: contain; animation: recap-kenburns 4s ease-out forwards; }
+@keyframes recap-kenburns { from { transform: scale(1.06); } to { transform: scale(1); } }
+.recap__controls { display: flex; justify-content: center; gap: 10px; padding: 12px; }
+.recap__controls button { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.3); }
+@media (prefers-reduced-motion: reduce) { .recap__slide, .recap__photo img, .recap__star-burst, .recap__bar-fill { animation: none; } }
+
+/* ---- ☀️ Morning briefing ---- */
+.briefing { position: fixed; inset: 0; z-index: 1500; overflow: auto; padding: 28px 36px; background: linear-gradient(160deg, #fff7d6 0%, #ffe3c2 35%, #d7ecff 100%); color: #1d2433; display: flex; flex-direction: column; gap: 16px; animation: briefing-in 0.6s ease-out; }
+@keyframes briefing-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+.briefing__head { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+.briefing__hello { font-size: clamp(2em, 5vw, 3.4em); font-weight: 800; }
+.briefing__date { font-size: 1.4em; opacity: 0.75; }
+.briefing__weather { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.7); padding: 12px 20px; border-radius: 18px; font-size: 1.1em; }
+.briefing__wicon { font-size: 3.4em; line-height: 1; }
+.briefing__temps { font-size: 2em; font-weight: 800; }
+.briefing__temps span { font-weight: 400; opacity: 0.6; font-size: 0.7em; }
+.briefing__tips { display: flex; gap: 10px; flex-wrap: wrap; }
+.briefing__tips span { background: #1d2433; color: #fff; padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 1.1em; }
+.briefing__grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; flex: 1; }
+@media (max-width: 900px) { .briefing__grid { grid-template-columns: 1fr; } .briefing { padding: 16px; } }
+.briefing__card { background: rgba(255,255,255,0.8); border-radius: 18px; padding: 16px 20px; box-shadow: 0 6px 20px rgba(0,0,0,0.06); }
+.briefing__card h2 { margin: 0 0 10px; font-size: 1.3em; }
+.briefing__side { display: flex; flex-direction: column; gap: 16px; }
+.briefing__person { display: flex; gap: 14px; align-items: center; padding: 10px 0 10px 18px; border-top: 1px solid rgba(0,0,0,0.06); }
+.briefing__person:first-of-type { border-top: none; }
+.briefing__person strong { font-size: 1.15em; }
+.briefing__jobs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.briefing__jobs span { background: #f1f3f5; padding: 4px 10px; border-radius: 999px; font-size: 0.95em; }
+.briefing__muted { color: #667085; }
+.briefing__event { padding: 4px 0; font-size: 1.05em; }
+.briefing__time { display: inline-block; min-width: 5.5em; font-weight: 700; }
+.briefing__vote { display: inline-block; margin-top: 8px; padding: 8px 14px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; text-decoration: none; }
+.briefing__notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+.briefing__foot { display: flex; justify-content: flex-end; gap: 12px; }
+.briefing__foot button { font-size: 1.2em; padding: 12px 26px; }
+.dashboard__briefing { margin-left: 14px; font-size: 0.45em; vertical-align: middle; }

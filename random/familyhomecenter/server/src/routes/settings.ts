@@ -8,7 +8,11 @@ export const settingsRouter = Router();
 // address to OpenStreetMap (services/geocodeAddress.ts) — off unless a parent turns it on.
 // weather_off: '1' = no weather at all — nothing is asked of Open-Meteo (routes/weather.ts).
 // weekly_report_off: '1' = no 📬 weekly report emails (services/weeklyReport.ts).
-const KEYS = ['idle_timeout_seconds', 'slideshow_interval_seconds', 'contacts_distance_lookup', 'weather_off', 'weekly_report_off'] as const;
+const KEYS = ['idle_timeout_seconds', 'slideshow_interval_seconds', 'contacts_distance_lookup', 'weather_off', 'weekly_report_off',
+  // ☀️ Morning briefing on the wall screen: '1' = on, and the hours it shows between (start, end).
+  'morning_briefing', 'morning_briefing_start', 'morning_briefing_end',
+  // 🎞️ Weekly recap on the weekend screensaver: '1' = off.
+  'recap_off'] as const;
 
 // GET stays open: every kiosk/phone reads this on load to drive its own idle-screensaver timer,
 // regardless of whether anyone's logged in to Settings.

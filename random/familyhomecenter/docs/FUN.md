@@ -87,6 +87,39 @@ photo. The page shows:
 
 When a measurement is added that week, the weekly report says how much they've grown.
 
+## ☀️ Morning briefing (Settings → ☀️ Wall screen)
+
+Turn it on, and the first time someone wakes the wall screen in the morning (between the hours
+you pick, 5am to 10am by default), a full-screen **Good morning!** comes up. It shows:
+
+- today's weather, with tips like ☔ grab an umbrella, 🧥 bring a jacket, or 🧴 sunscreen
+- everyone's first three jobs
+- today's calendar
+- today's meals, plus a button to vote if a dinner vote is open
+- the sticky notes that are up
+
+**🔊 Read it to me** reads it out loud, and **Let's go!** closes it. It shows once a morning per
+screen. Off by default.
+
+**☀️ Today** next to the date on Home opens it any time.
+
+## 🎞️ This week (Fun ▾)
+
+The family's week as a little story:
+
+- how many jobs everyone did together
+- each person's week, with daily bars, stars, money and prizes
+- 🌟 Star of the week (the kid with the best week)
+- the gratitude jar
+- meals picked by vote
+- who grew
+- the week's photos
+
+It plays on its own. **‹ Back**, **⏸ Pause** and **Next ›** step through it.
+
+**On the weekend screensaver:** on Saturdays and Sundays it plays every 20 minutes or so, between
+photos. Turn this off in Settings → ☀️ Wall screen.
+
 ## The menu
 
 The top menu is grouped so it fits on one line. Each group opens a dropdown:
@@ -113,7 +146,7 @@ Only new things were added:
   - `journal_entries`
   - `heights`
   - `sticky_notes` (taking things down only sets `hidden_at` / `done_at`)
-- **Setting:** `weekly_report_off`.
+- **Settings:** `weekly_report_off`, `morning_briefing`, `morning_briefing_start`, `morning_briefing_end`, `recap_off`.
 - **Weather:** now also asks for sunrise and sunset.
 
 No existing data changes.

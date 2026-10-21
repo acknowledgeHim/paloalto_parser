@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { addDays, todayStr } from '../utils/recurrence.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { buildWeeklyReport, renderWeeklyReport, sendWeeklyReports } from '../services/weeklyReport.js';
@@ -24,3 +25,46 @@ reportsRouter.post(
     res.json({ message: await sendWeeklyReports(req.body?.family_member_id || undefined) });
   })
 );
+
+/**
+ * GET /family-week — 🎞️ the weekly family recap: everyone's week (jobs done, stars and money
+ * earned, prizes), plus the family's gratitude slips, meals picked by vote and heights measured.
+ */
+reportsRouter.get('/family-week', (_req, res) => {
+  const end = todayStr();
+  const start = addDays(end, -6);
+  const since = `${start}T00:00:00`;
+  const members = db.prepare('SELECT * FROM family_members ORDER BY sort_order, created_at').all() as FamilyMember[];
+  const people = members
+    .map((m) => {
+      const r = buildWeeklyReport(m, end);
+      return {
+        id: m.id,
+        done: r.done,
+        total: r.total,
+        days: r.days,
+        stars: r.starsEarned,
+        money: r.moneyEarned,
+        prizes: r.prizes,
+        rewards: r.rewards,
+        top: r.doneTitles.slice(0, 3),
+      };
+    })
+    .filter((p) => p.total > 0 || p.prizes.length);
+  const gratitude = db
+    .prepare(`SELECT family_member_id, text FROM journal_entries WHERE kind = 'gratitude' AND hidden_at IS NULL AND date >= ? AND text IS NOT NULL ORDER BY created_at`)
+    .all(start);
+  const meals = db
+    .prepare(
+      `SELECT o.title, o.emoji, p.date FROM meal_polls p JOIN meal_poll_options o ON o.id = p.winner_option_id
+       WHERE p.closed_at IS NOT NULL AND p.date >= ? AND p.date <= ? ORDER BY p.date`
+    )
+    .all(start, end);
+  const heights = db
+    .prepare('SELECT family_member_id, inches, date FROM heights WHERE hidden_at IS NULL AND date >= ? ORDER BY date')
+    .all(start);
+  const journalDays = (
+    db.prepare(`SELECT COUNT(*) AS n FROM journal_entries WHERE kind = 'journal' AND hidden_at IS NULL AND created_at >= ?`).get(since) as { n: number }
+  ).n;
+  res.json({ start, end, people, gratitude, meals, heights, journalDays });
+});

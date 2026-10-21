@@ -25,6 +25,8 @@ import { DressUpPage } from './pages/DressUpPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { HeightsPage } from './pages/HeightsPage.js';
 import { NotesPage } from './components/StickyNotes.js';
+import { RecapPage } from './components/RecapStory.js';
+import { MorningBriefing, OPEN_BRIEFING, briefingDue, markBriefingShown } from './components/MorningBriefing.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
@@ -36,15 +38,29 @@ export function App() {
   const [idleTimeoutMs, setIdleTimeoutMs] = useState(5 * 60 * 1000);
   const [slideshowIntervalSec, setSlideshowIntervalSec] = useState(12);
   const [dismissed, setDismissed] = useState(false);
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  // ☀️ The morning briefing, over everything until "Let's go!".
+  const [briefing, setBriefing] = useState(false);
 
   useEffect(() => {
-    api
-      .get<{ idle_timeout_seconds: string; slideshow_interval_seconds: string }>('/settings')
-      .then((s) => {
-        setIdleTimeoutMs(Number(s.idle_timeout_seconds) * 1000);
-        setSlideshowIntervalSec(Number(s.slideshow_interval_seconds));
-      })
-      .catch(() => {});
+    const load = () =>
+      api
+        .get<Record<string, string>>('/settings')
+        .then((s) => {
+          setIdleTimeoutMs(Number(s.idle_timeout_seconds) * 1000);
+          setSlideshowIntervalSec(Number(s.slideshow_interval_seconds));
+          setSettings(s);
+        })
+        .catch(() => {});
+    load();
+    // Pick up a change made on another screen (turning the briefing on…) now and then.
+    const t = setInterval(load, 10 * 60_000);
+    const open = () => setBriefing(true);
+    window.addEventListener(OPEN_BRIEFING, open);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener(OPEN_BRIEFING, open);
+    };
   }, []);
 
   // Someone's own phone: no screensaver and no forgetting who's logged in when it sits idle.
@@ -65,14 +81,22 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idle]);
 
+  // The first time the wall screen is woken (or loaded) in the morning, the briefing comes up.
+  useEffect(() => {
+    if (showSlideshow || personal || !briefingDue(settings)) return;
+    markBriefingShown();
+    setBriefing(true);
+  }, [showSlideshow, personal, settings]);
+
   if (showSlideshow) {
-    return <Screensaver intervalSeconds={slideshowIntervalSec} onExit={() => setDismissed(true)} />;
+    return <Screensaver intervalSeconds={slideshowIntervalSec} recap={settings.recap_off !== '1'} onExit={() => setDismissed(true)} />;
   }
 
   return (
     <HashRouter>
       <NavBar />
       <CelebrationHost />
+      {briefing && <MorningBriefing onClose={() => setBriefing(false)} />}
       <main className="page-container">
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -89,6 +113,7 @@ export function App() {
           <Route path="/journal" element={<SectionGate section="board"><JournalPage /></SectionGate>} />
           <Route path="/heights" element={<SectionGate section="board"><HeightsPage /></SectionGate>} />
           <Route path="/notes" element={<SectionGate section="board"><NotesPage /></SectionGate>} />
+          <Route path="/recap" element={<SectionGate section="board"><RecapPage /></SectionGate>} />
           <Route path="/board" element={<SectionGate section="board"><FamilyBoardPage /></SectionGate>} />
           {/* A person's page is reached from the Family Board; their bank from the Prize Bank. */}
           <Route path="/person/:id" element={<SectionGate section="board"><PersonPage /></SectionGate>} />

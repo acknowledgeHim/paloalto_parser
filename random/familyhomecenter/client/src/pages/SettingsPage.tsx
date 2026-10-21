@@ -1,3 +1,4 @@
+import { HomeScreenSettings } from '../components/HomeScreenSettings.js';
 import { WeeklyReportSettings } from '../components/WeeklyReportSettings.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { KidsAccessSettings } from '../components/KidsAccessSettings.js';
@@ -276,6 +277,8 @@ export function SettingsPage() {
       </section>
 
       <WeeklyReportSettings />
+
+      <HomeScreenSettings />
 
       <section className="panel">
         <h2>Screensaver / slideshow</h2>
