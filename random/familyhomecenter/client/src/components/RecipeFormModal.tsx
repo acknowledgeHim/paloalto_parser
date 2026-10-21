@@ -52,6 +52,8 @@ export function RecipeFormModal({ recipe, onClose, onSaved }: Props) {
   const [servings, setServings] = useState(recipe?.servings ?? 4);
   const [category, setCategory] = useState(recipe?.category ?? '');
   const [instructions, setInstructions] = useState(recipe?.instructions ?? '');
+  const [author, setAuthor] = useState(recipe?.author ?? '');
+  const [origin, setOrigin] = useState(recipe?.origin ?? (recipe?.source === 'themealdb' ? 'TheMealDB' : ''));
   // 📷 Its picture: a new one picked (data URL), 'remove', or null = leave as it is.
   const [picture, setPicture] = useState<string | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +71,8 @@ export function RecipeFormModal({ recipe, onClose, onSaved }: Props) {
       servings,
       category: category.trim() || null,
       instructions: instructions.trim() || null,
+      author: author.trim(),
+      origin: origin.trim(),
       ingredients: ingredients.filter((i) => i.name.trim()),
     };
     setSaving(true);
@@ -131,6 +135,10 @@ export function RecipeFormModal({ recipe, onClose, onSaved }: Props) {
               </button>
             )}
           </div>
+        </div>
+        <div className="task-form__row">
+          <input placeholder="Who it's from — e.g. Aunt Mary" value={author} onChange={(e) => setAuthor(e.target.value)} aria-label="Who it's from" />
+          <input placeholder="Where it came from — e.g. Huber Family Cookbook, p. 6" value={origin} onChange={(e) => setOrigin(e.target.value)} aria-label="Where it came from" />
         </div>
         <label className="member-form__label">Category</label>
         <CategoryPicker value={category} onChange={setCategory} />

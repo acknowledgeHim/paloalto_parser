@@ -203,6 +203,10 @@ export interface Recipe {
   servings: number;
   /** Course category (see client/src/utils/recipeCategories.ts) — null groups into "Other" in the meal planner. */
   category: string | null;
+  /** Who it's from — "Aunt Mary", "Grandma Huber". */
+  author?: string | null;
+  /** Where it came from — "Huber Family Cookbook, p. 6", "TheMealDB", a website. */
+  origin?: string | null;
   created_by_id: string | null;
   created_at: string;
 }

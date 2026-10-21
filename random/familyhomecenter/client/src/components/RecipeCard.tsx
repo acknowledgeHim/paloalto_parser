@@ -20,6 +20,13 @@ export function RecipeCard({ recipe, onEdit }: Props) {
           {recipe.title}
           <span className="hint"> · serves {recipe.servings}</span>
           {recipe.category && <span className="badge">{recipe.category}</span>}
+          {(recipe.author || recipe.origin || recipe.source === 'themealdb') && (
+            <div className="recipe-card__credit">
+              {recipe.author && <>👩‍🍳 {recipe.author}</>}
+              {recipe.author && (recipe.origin || recipe.source === 'themealdb') && ' · '}
+              {(recipe.origin || recipe.source === 'themealdb') && <>📕 {recipe.origin || 'TheMealDB'}</>}
+            </div>
+          )}
         </div>
         <button
           type="button"

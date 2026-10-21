@@ -3,6 +3,7 @@ import { api, type Recipe, type RecipeSearchResult } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { RecipeCard } from './RecipeCard.js';
 import { RecipeFormModal } from './RecipeFormModal.js';
+import { RecipePdfImport } from './RecipePdfImport.js';
 
 const NONE = '\u0000none';
 
@@ -18,6 +19,7 @@ export function RecipesTab() {
   // Browsing My recipes: a category tab ('' = all, NONE = no category) and a search.
   const [cat, setCat] = useState('');
   const [find, setFind] = useState('');
+  const [pdfOpen, setPdfOpen] = useState(false);
   // A search result opened to read before deciding to add it.
   const [peek, setPeek] = useState<RecipeSearchResult | null>(null);
   const [adding, setAdding] = useState<Set<string>>(new Set());
@@ -65,7 +67,7 @@ export function RecipesTab() {
   const shown = recipes
     .filter((r) => !cat || catOf(r) === cat)
     .filter((r) => {
-      const text = [r.title, r.category, ...r.ingredients.map((i) => i.name)].join(' ').toLowerCase();
+      const text = [r.title, r.category, r.author, r.origin, ...r.ingredients.map((i) => i.name)].join(' ').toLowerCase();
       return words.every((w) => text.includes(w));
     })
     .sort((a, b) => a.title.localeCompare(b.title));
@@ -83,14 +85,18 @@ export function RecipesTab() {
           +
         </button>
         <h2>My recipes</h2>
+        <button type="button" className="secondary recipes-tab__pdf" onClick={() => setPdfOpen(true)}>
+          📕 Import from a PDF
+        </button>
       </div>
+      {pdfOpen && <RecipePdfImport onClose={() => setPdfOpen(false)} onSaved={load} />}
       {recipes.length === 0 && <div className="empty-state">No recipes yet — add your own or search online below.</div>}
       {recipes.length > 0 && (
         <div className="recipes-browse">
           <input
             type="search"
             className="recipes-browse__search"
-            placeholder="🔍 Search my recipes — name or ingredient"
+            placeholder="🔍 Search my recipes — name, ingredient, or who it's from"
             value={find}
             onChange={(e) => setFind(e.target.value)}
           />

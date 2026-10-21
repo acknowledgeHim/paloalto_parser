@@ -976,6 +976,9 @@ for (const [table, column] of [
   ['family_members', 'presence TEXT'],
   ['family_members', 'presence_note TEXT'],
   ['family_members', 'presence_at TEXT'],
+  // 🍽️ Who a recipe is from ("Aunt Mary") and where it came from ("Huber Family Cookbook, p. 6", "TheMealDB").
+  ['recipes', 'author TEXT'],
+  ['recipes', 'origin TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
