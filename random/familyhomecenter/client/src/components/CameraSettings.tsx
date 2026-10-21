@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, type CameraInfo } from '../api/client.js';
 import { CAMERA_DEVICE_CHANGED, cameraAllowedHere, setThisCamera, thisCamera, type CameraOrders } from './CameraAgent.js';
 import { useActing } from '../pages/CamerasPage.js';
+import { CameraStorageSettings } from './CameraStorageSettings.js';
 
-const mb = (n: number) => (n < 1e9 ? `${Math.round(n / 1e6)} MB` : `${(n / 1e9).toFixed(1)} GB`);
 
 /**
  * Settings → 📹 Cameras: make this tablet a camera (done once, on the tablet), the movement email,
@@ -87,13 +87,14 @@ export function CameraSettings() {
       {status && <div className="hint">{status}</div>}
       <h3>All cameras</h3>
       <p>
-        {info ? `${info.cameras.length} camera${info.cameras.length === 1 ? '' : 's'} · clips use ${mb(info.storage_bytes)} on the Pi` : '…'} ·{' '}
+        {info ? `${info.cameras.length} camera${info.cameras.length === 1 ? '' : 's'}` : '…'} ·{' '}
         <Link to="/cameras">Open 📹 Cameras</Link> to turn them on, watch live and see movement.
       </p>
       <label className="privacy-toggle">
         <input type="checkbox" checked={Boolean(info?.motion_email)} disabled={!info} onChange={(e) => saveEmail(e.target.checked)} />
         Email parents when a camera saves movement (at most one email every 10 minutes per camera)
       </label>
+      <CameraStorageSettings />
     </section>
   );
 }

@@ -167,7 +167,8 @@ Only new things were added:
   - `sticky_notes` (taking things down only sets `hidden_at` / `done_at`)
 - **📹 Cameras** (`docs/ANDROID_TABLET_SETUP.md`): tables `camera_devices` and `camera_clips` (taking
   one away only sets `hidden_at`); clip pictures saved under `server/data/cameras/`; setting
-  `camera_motion_email_off`.
+  `camera_motion_email_off`; storage: new clip columns (archive_file, backed_up_at, downloaded_at, purged_at…), table
+  `camera_purges` (parent removals), settings `camera_min_free_gb`, `camera_compress_off`, `camera_smb_*`. Nothing is removed automatically.
 - **Settings:** `weekly_report_off`, `approval_email_off`, `morning_briefing`, `morning_briefing_start`, `morning_briefing_end`, `recap_off`, `whos_home_off` (Settings → ☀️ Wall screen hides 🏠 Who's home).
 - **Weather:** now also asks for sunrise and sunset.
 

@@ -790,4 +790,31 @@ export interface CameraClip {
   started_at: string;
   ended_at: string;
   frames: number;
+  /** Set once it's over a day old and squeezed into one video (then only frame 1, the thumbnail, is kept). */
+  archive_file: string | null;
+  backed_up_at: string | null;
+  downloaded_at: string | null;
+}
+export interface CameraStorage {
+  free_bytes: number;
+  total_bytes: number;
+  min_free_gb: number;
+  low: boolean;
+  on_network_share: boolean;
+  compress: boolean;
+  clips: { count: number; bytes: number; compressed: number; waiting: number; failed: number; last_error: string | null; backed_up: number; to_back_up: number };
+  downloaded: number;
+  oldest_at: string | null;
+  purged_total: number;
+  purges: Array<{ id: string; at: string; clips: number; bytes: number; backed_up: number; first_at: string | null; last_at: string | null; cameras: string | null; free_before: number; free_after: number; note: string | null }>;
+  smb: {
+    share: string;
+    folder: string;
+    user: string;
+    domain: string;
+    has_password: boolean;
+    auto: boolean;
+    status: { at: string; sent: number; failed: number; error: string | null } | null;
+    smbclient: boolean;
+  };
 }

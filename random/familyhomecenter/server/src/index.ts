@@ -40,6 +40,7 @@ import { mealPollsRouter } from './routes/mealPolls.js';
 import { reportsRouter } from './routes/reports.js';
 import { heightsRouter, journalRouter, notesRouter, presenceRouter } from './routes/familyLife.js';
 import { camerasRouter } from './routes/cameras.js';
+import { startCameraStorage } from './services/cameraStorage.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 import { startInternetSchedule } from './services/internetControl.js';
 import { localizeExistingRecipeImages } from './services/recipeImages.js';
@@ -118,6 +119,7 @@ server.listen(config.port, config.host, () => {
   if (facesEnabled()) allFaces().catch((e) => console.warn('[faces] warm-up failed', e));
   startGroceryEmailSchedule();
   startWeeklyReportSchedule();
+startCameraStorage();
   startInternetSchedule();
   localizeExistingRecipeImages().catch((err) => console.warn('[recipes] picture migration failed', err));
 });

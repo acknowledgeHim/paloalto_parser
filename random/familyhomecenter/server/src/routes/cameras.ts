@@ -8,6 +8,28 @@ import { db, getSetting, setSetting } from '../db.js';
 import { isParentRequest } from '../services/rewards.js';
 import { isEmailConfigured, sendEmail } from '../services/email.js';
 import type { FamilyMember } from '../types.js';
+import { writeZip, ZIP_PART_MAX_BYTES, ZIP_PART_MAX_FILES } from '../utils/zipStream.js';
+import {
+  archivePath,
+  backupClips,
+  cameraStorageTick,
+  clipBytes,
+  clipFolder,
+  diskSpace,
+  clipFiles,
+  downloadParts,
+  lowOnSpace,
+  minFreeBytes,
+  normalShare,
+  onNetworkShare,
+  removeClips,
+  roomToSave,
+  smbclientInstalled,
+  smbSettings,
+  testSmb,
+  thumbPath,
+  type ClipRow,
+} from '../services/cameraStorage.js';
 
 /**
  * 📹 Cameras: a tablet on the wall doubles as a security camera. A parent turns a tablet into a
@@ -79,7 +101,7 @@ function orders(d: CameraDevice) {
 
 /** For the parents' list: everything but the token, plus whether it's online and its clips. */
 function publicView(d: CameraDevice) {
-  const clips = db.prepare('SELECT COUNT(*) AS n, MAX(started_at) AS last FROM camera_clips WHERE device_id = ? AND hidden_at IS NULL').get(d.id) as {
+  const clips = db.prepare('SELECT COUNT(*) AS n, MAX(started_at) AS last FROM camera_clips WHERE device_id = ? AND hidden_at IS NULL AND purged_at IS NULL').get(d.id) as {
     n: number;
     last: string | null;
   };
@@ -198,7 +220,7 @@ camerasRouter.post('/:id/frame', express.raw({ type: 'image/jpeg', limit: '3mb' 
   latest.set(d.id, { jpeg, at: now });
   db.prepare('UPDATE camera_devices SET last_seen_at = ?, status = ? WHERE id = ?').run(nowIso(), 'ok', d.id);
   for (const v of viewers.get(d.id) ?? []) writePart(v, jpeg);
-  if (req.query.motion === '1' && d.motion === 1) saveMotionFrame(d, jpeg, now);
+  if (req.query.motion === '1' && d.motion === 1 && roomToSave()) saveMotionFrame(d, jpeg, now);
   res.json(orders(d));
 });
 
@@ -263,7 +285,8 @@ camerasRouter.patch('/settings', (req, res) => {
 });
 
 /** PATCH /:id { name, enabled, facing, motion, sensitivity, show_badge } */
-camerasRouter.patch('/:id', (req, res) => {
+camerasRouter.patch('/:id', (req, res, nextRoute) => {
+  if (req.params.id === 'storage') return nextRoute(); // PATCH /storage, below
   if (!requireParent(req, res)) return;
   const d = deviceById(req.params.id);
   if (!d || d.hidden_at) return res.status(404).json({ error: 'not found' });
@@ -337,30 +360,34 @@ camerasRouter.get('/clips', (req, res) => {
   const limit = Math.min(500, Number(req.query.limit) || 100);
   const rows =
     typeof req.query.device === 'string' && req.query.device
-      ? db.prepare('SELECT * FROM camera_clips WHERE hidden_at IS NULL AND device_id = ? ORDER BY started_at DESC LIMIT ?').all(req.query.device, limit)
-      : db.prepare('SELECT * FROM camera_clips WHERE hidden_at IS NULL ORDER BY started_at DESC LIMIT ?').all(limit);
+      ? db.prepare('SELECT * FROM camera_clips WHERE hidden_at IS NULL AND purged_at IS NULL AND device_id = ? ORDER BY started_at DESC LIMIT ?').all(req.query.device, limit)
+      : db.prepare('SELECT * FROM camera_clips WHERE hidden_at IS NULL AND purged_at IS NULL ORDER BY started_at DESC LIMIT ?').all(limit);
   res.json(rows);
 });
 
-function clipDir(clipId: string): string | null {
-  const c = db.prepare('SELECT * FROM camera_clips WHERE id = ?').get(clipId) as { device_id: string; started_at: string } | undefined;
-  if (!c) return null;
-  const base = path.join(config.camerasDir, c.device_id);
-  try {
-    const dir = fs.readdirSync(base).find((n) => n.endsWith(`_${clipId.slice(0, 8)}`));
-    return dir ? path.join(base, dir) : null;
-  } catch {
-    return null;
-  }
-}
+const clipById = (id: string) => db.prepare('SELECT * FROM camera_clips WHERE id = ? AND purged_at IS NULL').get(id) as ClipRow | undefined;
 
-/** GET /clips/:id/frames/:n.jpg — one picture of a clip (1-based). */
+/** GET /clips/:id/frames/:n.jpg — one picture of a clip (1-based). Once it's compressed only the first (its thumbnail) is kept. */
 camerasRouter.get('/clips/:id/frames/:n.jpg', (req, res) => {
   if (!requireParent(req, res)) return;
-  const dir = clipDir(req.params.id);
+  const c = clipById(req.params.id);
   const n = Math.max(1, Math.floor(Number(req.params.n) || 1));
-  if (!dir) return res.status(404).end();
-  res.set('Cache-Control', 'private, max-age=86400').sendFile(path.join(dir, `${String(n).padStart(5, '0')}.jpg`), (err) => err && !res.headersSent && res.status(404).end());
+  if (!c) return res.status(404).end();
+  const file = c.archive_file ? (n === 1 ? thumbPath(c) : null) : (() => {
+    const dir = clipFolder(c);
+    return dir ? path.join(dir, `${String(n).padStart(5, '0')}.jpg`) : null;
+  })();
+  if (!file) return res.status(404).end();
+  res.set('Cache-Control', 'private, max-age=86400').sendFile(file, (err) => err && !res.headersSent && res.status(404).end());
+});
+
+/** GET /clips/:id/video — the compressed clip (MP4 or WebM), once it's over a day old. */
+camerasRouter.get('/clips/:id/video', (req, res) => {
+  if (!requireParent(req, res)) return;
+  const c = clipById(req.params.id);
+  const file = c && archivePath(c);
+  if (!file) return res.status(404).end();
+  res.set('Cache-Control', 'private, max-age=86400').sendFile(file, (err) => err && !res.headersSent && res.status(404).end());
 });
 
 /** POST /clips/:id/hide — take a clip off the list (the pictures stay on the Pi). */
@@ -368,4 +395,154 @@ camerasRouter.post('/clips/:id/hide', (req, res) => {
   if (!requireParent(req, res)) return;
   db.prepare('UPDATE camera_clips SET hidden_at = ? WHERE id = ?').run(nowIso(), req.params.id);
   res.json({ ok: true });
+});
+
+// ---- 💾 Storage: compressing, keeping free space, and backing up to an SMB share ----
+
+/** GET /storage — free space, the clips, what was cleared and why, and the backup setup (never the password). */
+camerasRouter.get('/storage', async (req, res) => {
+  if (!requireParent(req, res)) return;
+  let disk = { free: 0, total: 0 };
+  try {
+    disk = diskSpace();
+  } catch {
+    /* unknown */
+  }
+  const n = (sql: string) => (db.prepare(sql).get() as { n: number }).n;
+  const live = 'purged_at IS NULL';
+  const rows = db.prepare(`SELECT * FROM camera_clips WHERE ${live}`).all() as ClipRow[];
+  const s = smbSettings();
+  let status: unknown = null;
+  try {
+    status = JSON.parse(getSetting('camera_backup_status') || 'null');
+  } catch {
+    /* none yet */
+  }
+  res.json({
+    free_bytes: disk.free,
+    total_bytes: disk.total,
+    min_free_gb: minFreeBytes() / 1024 ** 3,
+    clips: {
+      count: rows.length,
+      bytes: rows.reduce((t, c) => t + (c.bytes ?? clipBytes(c)), 0),
+      compressed: rows.filter((c) => c.archive_file).length,
+      waiting: rows.filter((c) => !c.archive_file && !c.archive_error).length,
+      failed: rows.filter((c) => c.archive_error).length,
+      last_error: rows.find((c) => c.archive_error)?.archive_error ?? null,
+      backed_up: rows.filter((c) => c.backed_up_at).length,
+      to_back_up: rows.filter((c) => c.archive_file && !c.backed_up_at).length,
+    },
+    low: lowOnSpace().low,
+    on_network_share: onNetworkShare(),
+    compress: getSetting('camera_compress_off') !== '1',
+    downloaded: rows.filter((c) => (c as ClipRow & { downloaded_at: string | null }).downloaded_at).length,
+    oldest_at: rows.reduce<string | null>((o, c) => (!o || c.started_at < o ? c.started_at : o), null),
+    purged_total: n(`SELECT COUNT(*) AS n FROM camera_clips WHERE purged_at IS NOT NULL`),
+    purges: db.prepare('SELECT * FROM camera_purges ORDER BY at DESC LIMIT 10').all(),
+    smb: { share: s.share, folder: s.folder, user: s.user, domain: s.domain, has_password: Boolean(s.pass), auto: s.auto, status, smbclient: await smbclientInstalled() },
+  });
+});
+
+/** PATCH /storage { min_free_gb, compress, smb_share, smb_folder, smb_user, smb_domain, smb_pass, smb_auto } */
+camerasRouter.patch('/storage', (req, res) => {
+  if (!requireParent(req, res)) return;
+  const b = req.body ?? {};
+  if (b.min_free_gb !== undefined) {
+    const gb = Number(b.min_free_gb);
+    if (!(gb >= 1 && gb <= 10_000)) return res.status(400).json({ error: 'Keep at least 1 GB free' });
+    setSetting('camera_min_free_gb', String(Math.round(gb * 10) / 10));
+  }
+  if (b.smb_share !== undefined) setSetting('camera_smb_share', String(b.smb_share).trim() ? normalShare(String(b.smb_share)) : '');
+  if (b.smb_folder !== undefined) setSetting('camera_smb_folder', String(b.smb_folder).trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''));
+  if (b.smb_user !== undefined) setSetting('camera_smb_user', String(b.smb_user).trim());
+  if (b.smb_domain !== undefined) setSetting('camera_smb_domain', String(b.smb_domain).trim());
+  // Only changed when a new one is typed (it's never sent back to the page).
+  if (typeof b.smb_pass === 'string' && b.smb_pass) setSetting('camera_smb_pass', b.smb_pass);
+  if (b.smb_clear_pass) setSetting('camera_smb_pass', '');
+  if (b.smb_auto !== undefined) setSetting('camera_smb_auto', b.smb_auto ? '1' : '');
+  if (b.compress !== undefined) setSetting('camera_compress_off', b.compress ? '' : '1');
+  res.json({ ok: true });
+});
+
+camerasRouter.post('/storage/test-smb', async (req, res) => {
+  if (!requireParent(req, res)) return;
+  try {
+    res.json({ message: await testSmb() });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+camerasRouter.post('/storage/backup-now', async (req, res) => {
+  if (!requireParent(req, res)) return;
+  const r = await backupClips();
+  res.json({ ...r, message: r.error ? `Sent ${r.sent}. Problem: ${r.error}` : r.sent ? `Backed up ${r.sent} clip${r.sent === 1 ? '' : 's'} ✓` : 'Nothing new to back up ✓' });
+});
+
+/** POST /storage/check-now — compress what's due and check free space right away. */
+camerasRouter.post('/storage/check-now', async (req, res) => {
+  if (!requireParent(req, res)) return;
+  await cameraStorageTick();
+  res.json({ ok: true });
+});
+
+/** `before` from the page (a date, or "days" back) → an ISO time. Default: older than 7 days. */
+function beforeOf(req: Request): string {
+  const raw = (req.query.before ?? req.body?.before) as string | undefined;
+  if (raw && /^\d{4}-\d\d-\d\d/.test(raw)) return new Date(raw.length === 10 ? `${raw}T00:00:00` : raw).toISOString();
+  const days = Number(req.query.days ?? req.body?.days);
+  return new Date(Date.now() - (days >= 0 ? days : 7) * 86400_000).toISOString();
+}
+
+/** GET /storage/download-parts?before=YYYY-MM-DD — the zips it would take (each under 3.5 GB). */
+camerasRouter.get('/storage/download-parts', (req, res) => {
+  if (!requireParent(req, res)) return;
+  const parts = downloadParts(beforeOf(req), ZIP_PART_MAX_BYTES, ZIP_PART_MAX_FILES);
+  res.json(parts.map(({ clips, ...p }) => ({ ...p, clip_count: clips.length })));
+});
+
+/** GET /storage/download.zip?before=YYYY-MM-DD&part=1 — one zip of older clips; marks them downloaded once it's all sent. */
+camerasRouter.get('/storage/download.zip', async (req, res) => {
+  if (!requireParent(req, res)) return;
+  const before = beforeOf(req);
+  const part = downloadParts(before, ZIP_PART_MAX_BYTES, ZIP_PART_MAX_FILES).find((p) => p.part === (Number(req.query.part) || 1));
+  if (!part) return res.status(404).json({ error: 'Nothing to download' });
+  const names = db.prepare('SELECT id, name FROM camera_devices').all() as Array<{ id: string; name: string }>;
+  const files = part.clips.flatMap((id) => {
+    const c = db.prepare('SELECT * FROM camera_clips WHERE id = ?').get(id) as ClipRow;
+    return clipFiles(c, names.find((n) => n.id === c.device_id)?.name ?? 'Camera');
+  });
+  const label = (iso: string) => iso.slice(0, 10);
+  res.writeHead(200, {
+    'Content-Type': 'application/zip',
+    'Content-Disposition': `attachment; filename="camera-clips_${label(part.first)}_to_${label(part.last)}${part.part > 1 ? `_part${part.part}` : ''}.zip"`,
+    'Cache-Control': 'no-store',
+  });
+  let closed = false;
+  req.on('close', () => (closed = !res.writableFinished));
+  try {
+    await writeZip(res, files, () => closed);
+    if (!closed) {
+      const mark = db.prepare('UPDATE camera_clips SET downloaded_at = ? WHERE id = ?');
+      const at = new Date().toISOString();
+      db.transaction(() => part.clips.forEach((id) => mark.run(at, id)))();
+      console.log(`[cameras] Downloaded a zip of ${part.clips.length} clip(s).`);
+    }
+    res.end();
+  } catch (err) {
+    console.error('[cameras] Zip download failed:', err);
+    res.destroy();
+  }
+});
+
+/** POST /storage/remove { before | days, only_saved, dry_run } — a parent frees space (never automatic); dry_run just counts. */
+camerasRouter.post('/storage/remove', (req, res) => {
+  if (!requireParent(req, res)) return;
+  const by = (db.prepare('SELECT name FROM family_members WHERE id = ?').get(acting(req)) as { name: string } | undefined)?.name ?? 'a parent';
+  try {
+    const r = removeClips(beforeOf(req), req.body?.only_saved !== false, by, Boolean(req.body?.dry_run));
+    res.json(r);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
 });

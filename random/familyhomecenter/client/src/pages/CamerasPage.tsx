@@ -171,6 +171,8 @@ export function CamerasPage() {
                   <strong>{nameOf(clip.device_id)}</strong>
                   <br />
                   {when(clip.started_at)} · {Math.max(1, Math.round((Date.parse(clip.ended_at) - Date.parse(clip.started_at)) / 1000))}s
+                  {clip.archive_file ? ' · 🎬' : ''}
+                  {clip.backed_up_at ? ' · ☁️' : ''}
                 </span>
               </button>
             ))}
@@ -210,6 +212,30 @@ function ClipPlayer({ clip, q, name, onHide, onClose }: { clip: CameraClip; q: s
   useEffect(() => {
     for (let k = n + 1; k <= Math.min(clip.frames, n + 4); k++) new Image().src = `/api/cameras/clips/${clip.id}/frames/${k}.jpg?${q}`;
   }, [n, clip, q]);
+  if (clip.archive_file) {
+    // Over a day old: squeezed into one video (2 pictures a second, so it plays twice as fast).
+    const src = `/api/cameras/clips/${clip.id}/video?${q}`;
+    return (
+      <div className="photo-lightbox camera-player" role="dialog" aria-label="Movement clip" onClick={onClose}>
+        <video src={src} controls autoPlay loop playsInline onClick={(e) => e.stopPropagation()} />
+        <button type="button" className="photo-lightbox__close" aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+        <div className="camera-player__bar" onClick={(e) => e.stopPropagation()}>
+          <span>
+            {name} · {when(clip.started_at)}
+            {clip.backed_up_at ? ' · ☁️ backed up' : ''}
+          </span>
+          <a className="secondary camera-player__save" href={src} download={`${name}-${clip.started_at.slice(0, 19)}${clip.archive_file.slice(clip.archive_file.lastIndexOf('.'))}`}>
+            ⬇️ Save video
+          </a>
+          <button type="button" className="secondary" onClick={onHide}>
+            Take off list
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="photo-lightbox camera-player" role="dialog" aria-label="Movement clip" onClick={onClose}>
       <img src={`/api/cameras/clips/${clip.id}/frames/${n}.jpg?${q}`} alt="" onClick={(e) => e.stopPropagation()} />

@@ -199,11 +199,27 @@ does this step on it.
 
 ## 5. Day to day
 
-- **Storage:**
-  - Clips are saved on the Pi in `server/data/cameras/<camera>/<date-time>_<id>/`, one JPEG per
-    second of movement (about 30–60 KB each, so about 100–200 MB per hour of movement).
-  - Settings → 📹 Cameras shows how much they use.
-  - Nothing is deleted automatically. To make room, delete old date folders yourself.
+- **Storage** (Settings → 📹 Cameras → 💾 Storage). **Nothing is ever removed by itself.**
+  - **Where clips are kept:** on the Pi in `server/data/cameras/<camera>/`. Movement is saved as
+    one picture a second (about 30–60 KB each).
+  - **Compress clips older than a day** (on by default): after 24 hours a clip's pictures become one
+    small video (MP4, or WebM), usually 80–95% smaller and still playable on 📹 Cameras. It needs
+    `ffmpeg` on the Pi (`sudo apt install ffmpeg`; the Movies feature uses it too).
+  - **The warning:** when the Pi has less than **8 GB free** (you can change the number), a red
+    warning shows here. Below 1 GB free, new movement simply isn't saved until there's room.
+  - **☁️ Back up to a network share (SMB):**
+    1. Install smbclient on the Pi: `sudo apt install smbclient`.
+    2. Enter the share (e.g. `//192.168.1.20/backups`), an optional folder, and the username and
+       password. The password is never shown again or sent to the page.
+    3. Tap **🔌 Test**, then **☁️ Back up now**, or tick **Back up automatically** (hourly).
+    4. Compressed clips go to `<folder>/<camera>/<date>/` on the share. **Nothing on the share is
+       ever removed from here.**
+  - **⬇️ Download as zip:** clips older than N days, split into zips of up to 3.5 GB that open
+    anywhere. Clips in a finished download are marked "downloaded".
+  - **🗑️ Remove from the Pi:** only when you tap it, after a confirm that says how many clips and
+    how much space. By default it only removes clips already backed up or downloaded. It refuses
+    if the clips folder is itself a network share. **📜 Removed so far** lists every removal, when,
+    by whom, and how much.
 - **Away from home:** 📹 Cameras works on your home network. To look from outside, use a VPN into
   your home network (for example, Tailscale on the Pi and your phone). Don't open the Pi's port to
   the internet.

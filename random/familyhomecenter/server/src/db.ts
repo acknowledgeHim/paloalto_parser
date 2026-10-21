@@ -1172,6 +1172,44 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_camera_clips_device ON camera_clips (device_id, started_at);
 `);
 
+// 📹 Camera storage (services/cameraStorage.ts): after 24h a clip's pictures become one small video
+// (archive_file, relative to the cameras folder); backed_up_at once it's copied to the SMB share;
+// purged_at/purge_reason when a parent removed it to free space (never automatic; the row is kept).
+// camera_purges says what was cleared and why, for Settings → 📹 Cameras.
+for (const column of [
+  'archive_file TEXT',
+  'archived_at TEXT',
+  'archive_error TEXT',
+  'bytes INTEGER',
+  'backed_up_at TEXT',
+  'purged_at TEXT',
+  'purge_reason TEXT',
+  // When a parent last downloaded it in a zip (Settings → 📹 Cameras → Download).
+  'downloaded_at TEXT',
+]) {
+  try {
+    db.exec(`ALTER TABLE camera_clips ADD COLUMN ${column}`);
+  } catch (err) {
+    if (!(err as Error).message.includes('duplicate column')) throw err;
+  }
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS camera_purges (
+    id TEXT PRIMARY KEY,
+    at TEXT NOT NULL,
+    clips INTEGER NOT NULL,
+    bytes INTEGER NOT NULL,
+    backed_up INTEGER NOT NULL DEFAULT 0,
+    first_at TEXT,
+    last_at TEXT,
+    cameras TEXT,
+    free_before INTEGER,
+    free_after INTEGER,
+    min_free INTEGER,
+    note TEXT
+  );
+`);
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;
