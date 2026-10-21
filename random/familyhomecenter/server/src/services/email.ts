@@ -21,7 +21,14 @@ function transporter() {
   return cachedTransporter;
 }
 
-export async function sendEmail(opts: { to: string; subject?: string; text: string; html?: string }): Promise<void> {
+export async function sendEmail(opts: {
+  to: string;
+  subject?: string;
+  text: string;
+  html?: string;
+  /** e.g. a motion snapshot shown in the html with <img src="cid:…">. */
+  attachments?: Array<{ filename: string; content: Buffer; cid?: string; contentType?: string }>;
+}): Promise<void> {
   if (!isEmailConfigured()) throw new Error('SMTP is not configured (SMTP_HOST unset)');
   await transporter().sendMail({ from: config.smtp.from, ...opts });
 }

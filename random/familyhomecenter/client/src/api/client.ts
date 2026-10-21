@@ -762,3 +762,32 @@ export interface PendingPrizeClaim {
   cost_type: 'stars' | 'task_count';
   star_cost: number | null;
 }
+
+// ---- 📹 Cameras ----
+
+export interface CameraInfo {
+  id: string;
+  name: string;
+  user_agent: string | null;
+  /** What the tablet last said: ok, off, starting, needs-https, denied, no-camera, error. */
+  status: string | null;
+  enabled: 0 | 1;
+  facing: 'user' | 'environment';
+  motion: 0 | 1;
+  sensitivity: number;
+  show_badge: 0 | 1;
+  created_at: string;
+  last_seen_at: string | null;
+  online: boolean;
+  watching: number;
+  has_frame: boolean;
+  clip_count: number;
+  last_clip_at: string | null;
+}
+export interface CameraClip {
+  id: string;
+  device_id: string;
+  started_at: string;
+  ended_at: string;
+  frames: number;
+}

@@ -21,6 +21,8 @@ import { SettingsPage } from './pages/SettingsPage.js';
 import { InternetPage } from './pages/InternetPage.js';
 import { PeoplePage } from './pages/PeoplePage.js';
 import { ApprovalsPage } from './pages/ApprovalsPage.js';
+import { CamerasPage } from './pages/CamerasPage.js';
+import { CameraAgent } from './components/CameraAgent.js';
 import { DressUpPage } from './pages/DressUpPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { HeightsPage } from './pages/HeightsPage.js';
@@ -88,11 +90,20 @@ export function App() {
     setBriefing(true);
   }, [showSlideshow, personal, settings]);
 
+  // 📹 A tablet that's a camera keeps being one under the screensaver too (same place in the tree,
+  // so it isn't restarted when the screensaver comes and goes).
   if (showSlideshow) {
-    return <Screensaver intervalSeconds={slideshowIntervalSec} recap={settings.recap_off !== '1'} onExit={() => setDismissed(true)} />;
+    return (
+      <>
+        <CameraAgent />
+        <Screensaver intervalSeconds={slideshowIntervalSec} recap={settings.recap_off !== '1'} onExit={() => setDismissed(true)} />
+      </>
+    );
   }
 
   return (
+    <>
+    <CameraAgent />
     <HashRouter>
       <NavBar />
       <CelebrationHost />
@@ -124,8 +135,10 @@ export function App() {
           <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />
           <Route path="/internet" element={<SectionGate section="internet"><InternetPage /></SectionGate>} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/cameras" element={<CamerasPage />} />
         </Routes>
       </main>
     </HashRouter>
+    </>
   );
 }

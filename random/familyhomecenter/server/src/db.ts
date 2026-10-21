@@ -1143,6 +1143,35 @@ db.exec(`
   );
 `);
 
+// 📹 Cameras: a tablet a parent has turned into a camera (Settings → 📹 Cameras), and the clips it
+// saves when it sees movement. Taking a clip or camera away only sets hidden_at — kept, never deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS camera_devices (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    name TEXT NOT NULL,
+    user_agent TEXT,
+    status TEXT,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    facing TEXT NOT NULL DEFAULT 'user',
+    motion INTEGER NOT NULL DEFAULT 0,
+    sensitivity INTEGER NOT NULL DEFAULT 50,
+    show_badge INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT,
+    hidden_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS camera_clips (
+    id TEXT PRIMARY KEY,
+    device_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    frames INTEGER NOT NULL DEFAULT 0,
+    hidden_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_camera_clips_device ON camera_clips (device_id, started_at);
+`);
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

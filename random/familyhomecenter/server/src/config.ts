@@ -14,6 +14,8 @@ export const config = {
   soundsDir: path.join(__dirname, '..', 'data', 'sounds'),
   kbMediaDir: path.join(__dirname, '..', 'data', 'kb-media'),
   moviesDir: path.join(__dirname, '..', 'data', 'movies'),
+  // 📹 Motion clips from the tablets' cameras (one folder per clip of JPEG frames).
+  camerasDir: process.env.CAMERAS_DIR ?? path.join(__dirname, '..', 'data', 'cameras'),
   clientDistDir: path.join(__dirname, '..', '..', 'client', 'dist'),
 
   google: {

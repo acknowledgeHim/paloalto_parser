@@ -165,6 +165,9 @@ Only new things were added:
   - `journal_entries`
   - `heights`
   - `sticky_notes` (taking things down only sets `hidden_at` / `done_at`)
+- **📹 Cameras** (`docs/ANDROID_TABLET_SETUP.md`): tables `camera_devices` and `camera_clips` (taking
+  one away only sets `hidden_at`); clip pictures saved under `server/data/cameras/`; setting
+  `camera_motion_email_off`.
 - **Settings:** `weekly_report_off`, `approval_email_off`, `morning_briefing`, `morning_briefing_start`, `morning_briefing_end`, `recap_off`.
 - **Weather:** now also asks for sunrise and sunset.
 

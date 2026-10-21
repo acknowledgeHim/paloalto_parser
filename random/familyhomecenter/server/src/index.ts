@@ -39,6 +39,7 @@ import { outfitsRouter } from './routes/outfits.js';
 import { mealPollsRouter } from './routes/mealPolls.js';
 import { reportsRouter } from './routes/reports.js';
 import { heightsRouter, journalRouter, notesRouter, presenceRouter } from './routes/familyLife.js';
+import { camerasRouter } from './routes/cameras.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 import { startInternetSchedule } from './services/internetControl.js';
 import { localizeExistingRecipeImages } from './services/recipeImages.js';
@@ -87,6 +88,7 @@ app.use('/api/journal', journalRouter);
 app.use('/api/heights', heightsRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/presence', presenceRouter);
+app.use('/api/cameras', camerasRouter);
 // Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
 // handles HTTP Range requests, which video playback/seeking needs.
 app.use('/api/kb-media', express.static(config.kbMediaDir));
