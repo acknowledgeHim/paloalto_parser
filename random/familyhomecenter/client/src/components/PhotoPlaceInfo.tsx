@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PHOTO_YEARS_CHANGED } from './ThumbYear.js';
 import { api, type PhotoPlace, type PlaceLists } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
@@ -68,6 +69,7 @@ export function PhotoPlaceInfo({ photoId, onChanged }: { photoId: string; onChan
       setPlace(p);
       setEditing(false);
       onChanged?.(p);
+      window.dispatchEvent(new Event(PHOTO_YEARS_CHANGED));
     } catch (e) {
       setError((e as Error).message);
     } finally {

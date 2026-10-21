@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
 import { api } from '../api/client.js';
 import { placeLabel } from './PhotoPlaceInfo.js';
+import { ThumbYear } from './ThumbYear.js';
 
 interface MapPhoto {
   id: string;
@@ -331,6 +332,7 @@ export function PhotoMap({
             {picked.slice(0, 60).map((p) => (
               <button key={p.id} type="button" onClick={() => onOpen(p.id)}>
                 <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+                <ThumbYear photoId={p.id} />
               </button>
             ))}
           </div>

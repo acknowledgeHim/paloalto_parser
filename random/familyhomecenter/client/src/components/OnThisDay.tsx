@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { ThumbYear } from './ThumbYear.js';
 
 interface OnThisDayPhoto {
   id: string;
@@ -50,6 +51,7 @@ export function OnThisDay() {
         {photos.map((p, i) => (
           <button key={p.id} type="button" className="on-this-day__photo" onClick={() => setViewing(i)}>
             <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
+            <ThumbYear photoId={p.id} />
             <span>{ago(p.year)}</span>
           </button>
         ))}

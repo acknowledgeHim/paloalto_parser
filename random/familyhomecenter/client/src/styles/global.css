@@ -1662,7 +1662,7 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
 /* ---- People: groups + photo by photo ---- */
 .people-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
 .people-face--picked { border-color: var(--accent); }
-.people-face__tick { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.8em; display: flex; align-items: center; justify-content: center; }
+.people-face__tick { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.8em; display: flex; align-items: center; justify-content: center; }
 .people-group__tools { align-items: center; flex-wrap: wrap; gap: 10px; }
 .people-group__tools > * { flex: initial !important; }
 .people-pbp__nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
@@ -2567,7 +2567,7 @@ body.fp-full-open { overflow: hidden; }
 .photo-map__pin--approx text { fill: #b54708; }
 .photo-map__picked h2 { margin: 0; }
 .photo-map__thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin-top: 10px; }
-.photo-map__thumbs button { padding: 0; border: none; background: none; min-height: 0; border-radius: 8px; overflow: hidden; }
+.photo-map__thumbs button { padding: 0; border: none; background: none; min-height: 0; border-radius: 8px; overflow: hidden; position: relative; }
 .photo-map__thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 @media (prefers-color-scheme: dark) {
   .photo-map__svg, .photo-map__sea { fill: #16324a; background: #16324a; }
@@ -2636,3 +2636,9 @@ body.photo-map-full-open { overflow: hidden; }
 .recipe-pdf__edit { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .recipe-pdf__edit textarea { width: 100%; box-sizing: border-box; font-family: inherit; }
 .recipe-pdf__done { font-size: 1.1rem; font-weight: 600; }
+
+/* 📅 Small year tag, top-right of photo and face thumbnails (components/ThumbYear.tsx) — clear of
+   the ✓/✗ buttons along the bottom and the ✓/⭐ marks (top-left). */
+.thumb-year { position: absolute; top: 3px; right: 3px; z-index: 1; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.55rem; font-weight: 600; line-height: 1.35; padding: 0 4px; border-radius: 4px; pointer-events: none; }
+.on-this-day__photo .thumb-year { left: auto; bottom: auto; padding: 0 4px; font-size: 0.6rem; background: rgba(0, 0, 0, 0.6); }
+.photo-quality-tags:has(~ .thumb-year) { right: 40px; }

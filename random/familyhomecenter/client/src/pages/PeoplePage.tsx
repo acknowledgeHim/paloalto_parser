@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ThumbYear } from '../components/ThumbYear.js';
 import { api, type Face, type FaceStatus, type Person, type PhotoDetail } from '../api/client.js';
 
 /**
@@ -218,6 +219,7 @@ function NameGroup({ faces, people, act }: { faces: Face[]; people: Person[]; ac
             onClick={() => toggle(f.id)}
           >
             <img src={`/api/faces/${f.id}/image`} alt="" loading="lazy" />
+            <ThumbYear photoId={f.photo_id} />
             {picked.has(f.id) && <span className="people-face__tick">✓</span>}
           </button>
         ))}
@@ -580,6 +582,7 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
             {detail.suggested.slice(0, showSuggested).map((f) => (
               <div key={f.id} className="people-face people-face--suggested">
                 <img src={`/api/faces/${f.id}/image`} alt="" loading="lazy" />
+                <ThumbYear photoId={f.photo_id} />
                 <span className="people-face__actions">
                   <button type="button" aria-label="Yes" onClick={() => run(() => api.post('/faces/assign', { face_ids: [f.id], person_id: person.id }))}>✓</button>
                   <button type="button" aria-label="No" onClick={() => run(() => api.post('/faces/reject', { face_ids: [f.id], person_id: person.id }))}>✗</button>
@@ -628,6 +631,7 @@ function PersonDetail({ person, people, onClose, act }: { person: Person; people
         {confirmed.slice(0, showConfirmed).map((f) => (
           <div key={f.id} className={`people-face ${f.id === person.cover_face_id ? 'people-face--cover' : ''}`}>
             <img src={`/api/faces/${f.id}/image`} alt="" loading="lazy" />
+            <ThumbYear photoId={f.photo_id} />
             {f.id === person.cover_face_id && <span className="people-face__tick" title={`${person.name}'s picture`}>⭐</span>}
             <span className="people-face__actions">
               {f.id !== person.cover_face_id && (

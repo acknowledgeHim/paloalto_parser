@@ -4,6 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { LibraryBrowser } from './LibraryBrowser.js';
 import { fmtTakenDate, NO_QUALITY_FILTER, passesQualityFilter, splitPhotoPath, type PhotoQualityFilter } from '../utils/photoDetails.js';
 import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js';
+import { ThumbYear } from './ThumbYear.js';
 
 type SelectionMode = 'date-range' | 'name' | 'album' | 'person' | 'random' | 'manual';
 type GridSort = 'movie' | 'album' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
@@ -765,6 +766,7 @@ export function MovieMakerModal({ editing, draftId: initialDraftId, onClose, onC
                       >
                         <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
                         <PhotoQualityTags p={p} />
+                        <ThumbYear photoId={p.id} />
                         <span className="movie-maker__photo-date">{fmtTakenDate(p.taken_at)}</span>
                       </button>
                     ))}

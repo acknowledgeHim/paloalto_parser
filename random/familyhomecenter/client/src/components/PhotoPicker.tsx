@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, type Person, type PhotoAlbum, type PhotoDetail } from '../api/client.js';
 import { fmtTakenDate, NO_QUALITY_FILTER, passesQualityFilter, splitPhotoPath, type PhotoQualityFilter } from '../utils/photoDetails.js';
 import { PhotoQualityOptions, PhotoQualityTags } from './PhotoQualityOptions.js';
+import { ThumbYear } from './ThumbYear.js';
 
 /** The same ways to pick photos as the movie maker, in the same order. */
 type Mode = 'date-range' | 'name' | 'album' | 'person' | 'random' | 'manual';
@@ -225,6 +226,7 @@ export function PhotoPicker({ title, alreadyAdded, onAdd, onClose }: Props) {
       >
         <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
         <PhotoQualityTags p={p} />
+        <ThumbYear photoId={p.id} />
         <span className="movie-maker__photo-date">{added ? 'Already added' : fmtTakenDate(p.taken_at)}</span>
       </button>
     );

@@ -35,6 +35,20 @@ photosRouter.get(
   })
 );
 
+/** GET /years — { photoId: year taken } for every photo: the small year tag on thumbnails
+ *  (faces to check, pickers, the map…). Same dates as /details (a year set by hand wins). */
+photosRouter.get(
+  '/years',
+  asyncHandler(async (_req, res) => {
+    const files = await listPhotos();
+    const years: Record<string, number> = {};
+    await mapWithConcurrency(files, 8, async (f) => {
+      years[photoIdFor(f)] = (await getPhotoDate(f)).getFullYear();
+    });
+    res.json(years);
+  })
+);
+
 /** GET /details — every photo's folder/filename (relative to PHOTOS_DIR) and best-effort date
  *  taken, for sorting/filtering the movie maker's photo grid. Dates come from the same cache as
  *  date-range movie selections (services/photoDates.ts), so only the first call after a restart
