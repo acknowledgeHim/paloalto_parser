@@ -6,6 +6,7 @@ import cron from 'node-cron';
 import { config } from '../config.js';
 import { db } from '../db.js';
 import { getPhotoDate } from './photoDates.js';
+import { getPhotoGps } from './photoPlaces.js';
 import { analyzePhoto } from './photoAnalysis.js';
 import { backfillFaceQuality, recordFaceScanFailure, scanPhotoFaces, scanProgress, upgradeFaceScans } from './faces/index.js';
 
@@ -151,11 +152,15 @@ export async function warmThumbnailCache(): Promise<{ processed: number; failed:
   let failed = 0;
   try {
     const files = await listPhotos();
-    // Dates first, all of them, quickly: the per-photo work below (faces especially) can take hours
+    // Dates (and GPS) first, all of them, quickly: the per-photo work below (faces especially) can take hours
     // on a big library, and sorting Photos by date shouldn't wait for it.
     const queue = [...files];
     await Promise.all(Array.from({ length: 4 }, async () => {
-      for (let f = queue.shift(); f; f = queue.shift()) await getPhotoDate(f).catch(() => null);
+      for (let f = queue.shift(); f; f = queue.shift()) {
+        await getPhotoDate(f).catch(() => null);
+        // …and 📍 GPS, once per photo (kept in the database).
+        await getPhotoGps(f).catch(() => null);
+      }
     }));
     for (const file of files) {
       const mtime = unreadable.has(file) ? await fs.stat(file).then((s) => s.mtimeMs, () => -1) : null;

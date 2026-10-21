@@ -169,6 +169,8 @@ Only new things were added:
   one away only sets `hidden_at`); clip pictures saved under `server/data/cameras/`; setting
   `camera_motion_email_off`; storage: new clip columns (archive_file, backed_up_at, downloaded_at, purged_at…), table
   `camera_purges` (parent removals), settings `camera_min_free_gb`, `camera_compress_off`, `camera_smb_*`. Nothing is removed automatically.
+- **📍 Photo places** (`docs/PHOTOS_SETUP.md`): tables `photo_gps` (read from EXIF once) and `photo_place_edits`
+  (country/state/year set by hand; the photo file is never changed); setting `photo_source_notes` (parents' notes on the photo share — no password).
 - **Settings:** `weekly_report_off`, `approval_email_off`, `morning_briefing`, `morning_briefing_start`, `morning_briefing_end`, `recap_off`, `whos_home_off` (Settings → ☀️ Wall screen hides 🏠 Who's home).
 - **Weather:** now also asks for sunrise and sunset.
 

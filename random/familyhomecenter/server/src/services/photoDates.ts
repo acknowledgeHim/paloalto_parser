@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import exifr from 'exifr';
 import { db } from '../db.js';
+import { withDateFix } from './photoPlaces.js';
 
 // Preference order: DateTimeOriginal (when the shutter actually fired) beats CreateDate/ModifyDate
 // (which some cameras/phones/editors populate instead, or in addition) — any of them beats mtime,
@@ -36,7 +37,8 @@ function loadSavedDates(): void {
 export async function getPhotoDate(absolutePath: string): Promise<Date> {
   loadSavedDates();
   const cached = dateCache.get(absolutePath);
-  if (cached) return cached;
+  // A year (and month) a family member set by hand wins over what the photo says (📍 photoPlaces.ts).
+  if (cached) return withDateFix(absolutePath, cached);
 
   let date: Date;
   try {
@@ -50,5 +52,14 @@ export async function getPhotoDate(absolutePath: string): Promise<Date> {
   }
   dateCache.set(absolutePath, date);
   saveDate.run(absolutePath, date.toISOString());
-  return date;
+  return withDateFix(absolutePath, date);
+}
+
+/** What the photo itself says (before any hand-set year). */
+export async function getOriginalPhotoDate(absolutePath: string): Promise<Date> {
+  loadSavedDates();
+  const cached = dateCache.get(absolutePath);
+  if (cached) return cached;
+  await getPhotoDate(absolutePath);
+  return dateCache.get(absolutePath)!;
 }

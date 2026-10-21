@@ -973,7 +973,8 @@ for (const [table, column] of [
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
   } catch (err) {
-    if (!(err as Error).message.includes('duplicate column')) throw err;
+    // "no such table": a table made further down (on a brand-new or older database) — it gets the column there.
+    if (!/duplicate column|no such table/.test((err as Error).message)) throw err;
   }
 }
 
@@ -1002,6 +1003,12 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS task_progress_task ON task_progress(task_id, family_member_id);
 `);
+// (Its `pending` column is added in the list above too; this covers a database where the table was only just made.)
+try {
+  db.exec('ALTER TABLE task_progress ADD COLUMN pending INTEGER');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 
 // A prize earned by doing several jobs (e.g. 4 h weeding + 4 h mulching + 6 h project work):
 // each row is one job and how much of it (times, or hours for an "hours" job). A prize with rows
@@ -1207,6 +1214,29 @@ db.exec(`
     free_after INTEGER,
     min_free INTEGER,
     note TEXT
+  );
+`);
+
+// 📍 Where a photo was taken (services/photoPlaces.ts), by path relative to PHOTOS_DIR:
+// photo_gps — the GPS read once from the photo's EXIF (lat/lon null = it has none);
+// photo_place_edits — the country/state/year a family member set when it was missing or wrong.
+// The photo files themselves are never changed.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_gps (
+    path TEXT PRIMARY KEY,
+    lat REAL,
+    lon REAL,
+    read_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS photo_place_edits (
+    path TEXT PRIMARY KEY,
+    country TEXT,
+    country_code TEXT,
+    state TEXT,
+    year INTEGER,
+    month INTEGER,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
   );
 `);
 

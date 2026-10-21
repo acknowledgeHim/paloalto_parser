@@ -319,3 +319,41 @@ faces don't show up in the naming lists.
 
 Photos themselves are never changed. Everything is in the app's database, so `npm run backup` covers it
 (face thumbnails and models rebuild/re-download on their own).
+
+## 📍 Where photos were taken, and the 🗺️ map
+
+- **GPS:** many phone photos carry their GPS position (latitude and longitude) in the photo's EXIF
+  data. The Family Home Center reads it once per photo, in the background with the dates, and keeps
+  it in its database (`photo_gps`). The photo files are only ever read, never changed.
+- **Country and US state:** worked out on the Pi itself from built-in borders
+  (`server/geo/places.json`, from Natural Earth, which is public domain). **No photo location is
+  sent anywhere.** A photo taken on a beach or just offshore still counts for the nearest country
+  within about 25 km.
+- **In the photo viewer:** a 📍 line shows the state and country, the date, and the GPS numbers. The
+  numbers are a link to OpenStreetMap, which opens only if you tap it.
+- **Fixing it by hand (✏️):** set the country (and the state, in the US) when the photo has no GPS,
+  or the year (and month) when its date is wrong, for example a scanned print or a camera with the
+  wrong clock.
+  - Saved only in the database (`photo_place_edits`). The photo file isn't changed.
+  - A fixed year counts everywhere: sorting, On this day, and movies.
+  - "Use what the photo says" goes back to the original.
+- **Photos page:**
+  - Sort by **📍 Country** or **📍 State** (photos with no location last).
+  - The **📍 Where** filter picks a country or US state, or **No location set**, to find the
+    photos that still need one.
+- **🗺️ Map tab:**
+  - Every photo with a place is a circle on a map drawn right on the page, with no outside map
+    service. Hollow circles are photos placed by a hand-set country or state.
+  - Drag to move; scroll, pinch or use ＋/－ to zoom.
+  - Tap a circle to see its photos, then "Show all from … in Photos".
+
+## 📁 Settings → Photo library (parents only)
+
+This section shows `PHOTOS_DIR` and, if it's on a network share, the share it's mounted from and
+its `/etc/fstab` line.
+
+- **💾 Save what's set up now** keeps those details in the database, along with your own notes.
+- **How to set it up again** gives the exact commands for rebuilding the mount the same way on a
+  new or rebuilt Pi.
+- The share password is never stored there. It belongs only in the credentials file on the Pi;
+  keep a copy in your password manager.

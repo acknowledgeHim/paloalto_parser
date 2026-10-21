@@ -7,6 +7,12 @@ import { mapWithConcurrency } from '../services/movieSelection.js';
 import { config } from '../config.js';
 import { getPhotoQuality } from '../services/photoAnalysis.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import fsSync from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import { getSetting, setSetting } from '../db.js';
+import { isParentRequest } from '../services/rewards.js';
+import { getOriginalPhotoDate } from '../services/photoDates.js';
+import { getPhotoGps, mapOutlines, middleOf, placeLists, placeOf, placeEdit, savePlaceEdit } from '../services/photoPlaces.js';
 
 export const photosRouter = Router();
 
@@ -47,6 +53,8 @@ photosRouter.get(
         dup_group: q?.dup_group ?? null,
         dup_best: q?.dup_best ?? false,
         hidden: hidden.has(rel),
+        // 📍 Where it was taken (GPS from the photo, or set by hand) — services/photoPlaces.ts.
+        ...placeOf(rel),
       };
     });
     res.json(details);
@@ -137,6 +145,179 @@ photosRouter.post(
     res.json({ ok: true });
   })
 );
+
+// ---- 📍 Where it was taken ----
+
+/** GET /places/lists — every country, and the US states, for the "set where it was taken" pickers. */
+photosRouter.get('/places/lists', (_req, res) => {
+  res.json(placeLists());
+});
+
+/** GET /places/outlines — country and US state borders for drawing the map (no outside map service). */
+let outlinesGz: Buffer | null = null;
+photosRouter.get('/places/outlines', (req, res) => {
+  res.type('application/json').set('Cache-Control', 'public, max-age=86400').set('Vary', 'Accept-Encoding');
+  if (!/\bgzip\b/.test(req.get('accept-encoding') ?? '')) return res.send(mapOutlines());
+  outlinesGz ??= gzipSync(mapOutlines());
+  res.set('Content-Encoding', 'gzip').send(outlinesGz);
+});
+
+/** GET /map — every (not hidden) photo we can put on the map: its GPS, or the middle of the
+ *  country/state someone set for it (approx: true). */
+photosRouter.get(
+  '/map',
+  asyncHandler(async (_req, res) => {
+    const files = await listPhotos();
+    const hidden = hiddenPhotoPaths();
+    const out = [];
+    for (const f of files) {
+      const rel = path.relative(config.photosDir, f);
+      if (hidden.has(rel)) continue;
+      const p = placeOf(rel);
+      if (p.place_source === 'set') {
+        const m = middleOf(p.country, p.state);
+        if (m) out.push({ id: photoIdFor(f), lat: m.lat, lon: m.lon, approx: true, country: p.country, state: p.state });
+      } else if (p.lat != null && p.lon != null) {
+        out.push({ id: photoIdFor(f), lat: p.lat, lon: p.lon, approx: false, country: p.country, state: p.state });
+      }
+    }
+    res.json(out);
+  })
+);
+
+/** GET /:id/place — where and when one photo was taken (and what was set by hand). */
+photosRouter.get(
+  '/:id/place',
+  asyncHandler(async (req, res) => {
+    const abs = await findPhotoById(req.params.id);
+    if (!abs) return res.status(404).json({ error: 'not found' });
+    await getPhotoGps(abs);
+    const rel = path.relative(config.photosDir, abs);
+    const e = placeEdit(rel);
+    res.json({
+      ...placeOf(rel),
+      taken_at: (await getPhotoDate(abs)).toISOString(),
+      photo_taken_at: (await getOriginalPhotoDate(abs)).toISOString(),
+      updated_at: e?.updated_at ?? null,
+      updated_by: e?.updated_by ?? null,
+    });
+  })
+);
+
+/**
+ * PUT /:id/place { country_code, state, year, month, acting_member_id } — set where/when it was
+ * taken when the photo doesn't say (or says wrong). Only kept in the database; the photo file is
+ * never changed. Empty values go back to what the photo says.
+ */
+photosRouter.put(
+  '/:id/place',
+  asyncHandler(async (req, res) => {
+    const abs = await findPhotoById(req.params.id);
+    if (!abs) return res.status(404).json({ error: 'not found' });
+    const rel = path.relative(config.photosDir, abs);
+    const b = req.body ?? {};
+    const lists = placeLists();
+    const country = b.country_code ? lists.countries.find((c) => c.code === b.country_code) : null;
+    if (b.country_code && !country) return res.status(400).json({ error: 'Pick a country from the list' });
+    const state = b.state ? lists.states.find((s) => s.name === b.state || s.code === b.state) : null;
+    if (b.state && (!state || country?.code !== 'US')) return res.status(400).json({ error: 'A state can only be set for the United States' });
+    const year = b.year === '' || b.year == null ? null : Math.round(Number(b.year));
+    if (year !== null && !(year >= 1826 && year <= new Date().getFullYear() + 1)) return res.status(400).json({ error: 'That year doesn\'t look right' });
+    const month = b.month === '' || b.month == null ? null : Math.round(Number(b.month));
+    if (month !== null && !(month >= 1 && month <= 12)) return res.status(400).json({ error: 'Month is 1–12' });
+    savePlaceEdit({
+      path: rel,
+      country: country?.name ?? null,
+      country_code: country?.code ?? null,
+      state: state?.name ?? null,
+      year,
+      month: year ? month : null,
+      updated_at: new Date().toISOString(),
+      updated_by: typeof b.acting_member_id === 'string' ? b.acting_member_id : null,
+    });
+    res.json({ ...placeOf(rel), taken_at: (await getPhotoDate(abs)).toISOString(), photo_taken_at: (await getOriginalPhotoDate(abs)).toISOString() });
+  })
+);
+
+// ---- 📁 Where the photos come from (parents only): so a share can be set up again the same way ----
+
+function mountFor(dir: string) {
+  let real = dir;
+  try {
+    real = fsSync.realpathSync(dir);
+  } catch {
+    /* not there right now */
+  }
+  let best: { source: string; mount_point: string; fstype: string; options: string } | null = null;
+  try {
+    for (const line of fsSync.readFileSync('/proc/mounts', 'utf8').split('\n')) {
+      const [source, mp, fstype, options] = line.split(' ');
+      if (!mp) continue;
+      const point = mp.replace(/\\040/g, ' ');
+      if ((real === point || real.startsWith(point.endsWith('/') ? point : `${point}/`)) && (!best || point.length > best.mount_point.length)) {
+        best = { source: source.replace(/\\040/g, ' '), mount_point: point, fstype, options };
+      }
+    }
+  } catch {
+    /* not Linux */
+  }
+  return { real, mount: best };
+}
+// Never pass a password on.
+const scrub = (opts: string) => opts.split(',').filter((o) => !/^(password|pass|password2)=/i.test(o)).join(',');
+
+/** GET /source — PHOTOS_DIR, the share it's mounted from (if any), its /etc/fstab line, and the saved notes. */
+photosRouter.get('/source', (req, res) => {
+  if (!isParentRequest(req, req.query.acting_member_id)) return res.status(403).json({ error: 'For parents only' });
+  const { real, mount } = mountFor(config.photosDir);
+  const network = Boolean(mount && /^(cifs|smb3?|nfs4?)$/.test(mount.fstype));
+  let fstab: string | null = null;
+  if (mount) {
+    try {
+      fstab =
+        fsSync
+          .readFileSync('/etc/fstab', 'utf8')
+          .split('\n')
+          .find((l) => !l.trim().startsWith('#') && l.split(/\s+/)[1] === mount.mount_point) ?? null;
+    } catch {
+      /* unreadable */
+    }
+  }
+  let saved = null;
+  try {
+    saved = JSON.parse(getSetting('photo_source_notes') || 'null');
+  } catch {
+    /* none */
+  }
+  res.json({
+    photos_dir: config.photosDir,
+    real_path: real,
+    network,
+    mount: mount ? { ...mount, options: scrub(mount.options) } : null,
+    fstab: fstab ? scrub(fstab) : null,
+    credentials_file: mount?.options.match(/(?:^|,)(?:credentials|cred)=([^,]+)/)?.[1] ?? fstab?.match(/(?:credentials|cred)=([^,\s]+)/)?.[1] ?? null,
+    saved,
+  });
+});
+
+/** PUT /source { share, mount_point, options, username, credentials_file, notes } — the parents' own notes (never a password). */
+photosRouter.put('/source', (req, res) => {
+  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'For parents only' });
+  const b = req.body ?? {};
+  const str = (v: unknown, n = 500) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const notes = {
+    share: str(b.share),
+    mount_point: str(b.mount_point),
+    options: scrub(str(b.options, 1000)),
+    username: str(b.username, 200),
+    credentials_file: str(b.credentials_file),
+    notes: str(b.notes, 4000),
+    saved_at: new Date().toISOString(),
+    saved_by: typeof b.acting_member_id === 'string' ? b.acting_member_id : null,
+  };
+  setSetting('photo_source_notes', JSON.stringify(notes));
+  res.json(notes);
+});
 
 photosRouter.get(
   '/random',

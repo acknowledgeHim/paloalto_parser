@@ -1,6 +1,7 @@
 import { HomeScreenSettings } from '../components/HomeScreenSettings.js';
 import { WeeklyReportSettings } from '../components/WeeklyReportSettings.js';
 import { CameraSettings } from '../components/CameraSettings.js';
+import { PhotoSourceSettings } from '../components/PhotoSourceSettings.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { KidsAccessSettings } from '../components/KidsAccessSettings.js';
@@ -286,6 +287,8 @@ export function SettingsPage() {
       <HomeScreenSettings />
 
       <CameraSettings />
+
+      <PhotoSourceSettings />
 
       <section className="panel">
         <h2>Screensaver / slideshow</h2>

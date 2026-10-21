@@ -615,6 +615,40 @@ export interface PhotoDetail {
   dup_best: boolean;
   /** Marked hidden on the Photos page — left out of pickers. */
   hidden: boolean;
+  /** 📍 Where it was taken — see PhotoPlace. */
+  lat?: number | null;
+  lon?: number | null;
+  gps_read?: boolean;
+  country?: string | null;
+  country_code?: string | null;
+  state?: string | null;
+  place_source?: 'gps' | 'set' | null;
+  year_fixed?: number | null;
+  month_fixed?: number | null;
+}
+
+/** 📍 Where and when one photo was taken (GET /photos/:id/place). */
+export interface PhotoPlace {
+  lat: number | null;
+  lon: number | null;
+  gps_read: boolean;
+  country: string | null;
+  country_code: string | null;
+  state: string | null;
+  /** 'gps' from the photo itself; 'set' by someone in the family; null = unknown. */
+  place_source: 'gps' | 'set' | null;
+  year_fixed: number | null;
+  month_fixed: number | null;
+  /** The date used everywhere (with any year set by hand). */
+  taken_at: string;
+  /** What the photo itself says. */
+  photo_taken_at: string;
+  updated_at?: string | null;
+  updated_by?: string | null;
+}
+export interface PlaceLists {
+  countries: Array<{ name: string; code: string }>;
+  states: Array<{ name: string; code: string }>;
 }
 
 /** A rendered photo-slideshow-with-music video. Read-only against the source photos/music that

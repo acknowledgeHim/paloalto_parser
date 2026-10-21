@@ -2535,3 +2535,51 @@ body.fp-full-open { overflow: hidden; }
 .camera-storage__log { margin: 0; padding-left: 20px; font-size: 0.9rem; }
 .camera-storage__msg { font-weight: 600; }
 .camera-storage__inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---- 📍 Where a photo was taken (viewer) and 🗺️ the photo map ---- */
+.photo-place { position: absolute; left: 20px; bottom: 80px; z-index: 3; max-width: min(560px, calc(100vw - 40px)); color: #fff; }
+.photo-place__pill { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; background: rgba(0, 0, 0, 0.65); padding: 6px 8px 6px 14px; border-radius: 16px; font-size: 0.95rem; }
+.photo-place__none { opacity: 0.75; font-style: italic; }
+.photo-place__tag { opacity: 0.85; font-size: 0.85em; }
+.photo-place__link { color: #b9d7ff; font-size: 0.85em; }
+.photo-place__edit { width: 40px; height: 40px; min-height: 0; padding: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.18); color: #fff; }
+.photo-place__form { display: flex; flex-direction: column; gap: 8px; background: rgba(15, 18, 24, 0.92); border: 1px solid rgba(255, 255, 255, 0.2); padding: 12px 14px; border-radius: 14px; }
+.photo-place__row { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo-place__row select, .photo-place__row input { min-height: 40px; }
+.photo-place__hint { font-size: 0.8rem; opacity: 0.8; }
+.photo-place__error { color: #ffb4a8; font-weight: 600; }
+.photo-map { display: flex; flex-direction: column; gap: 8px; }
+.photo-map__bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.photo-map__zoom { display: flex; gap: 6px; }
+.photo-map__zoom button { min-height: 40px; min-width: 44px; padding: 0 12px; }
+.photo-map__svg { width: 100%; height: min(68vh, 640px); border-radius: var(--radius); border: 1px solid var(--border); touch-action: none; cursor: grab; user-select: none; background: #bcd7ec; }
+.photo-map__sea { fill: #bcd7ec; }
+.photo-map__land { fill: #f4f1e8; stroke: #9aa3ad; stroke-width: 0.8; }
+.photo-map__state { fill: none; stroke: #b9b2a2; stroke-width: 0.6; }
+.photo-map__pin { cursor: pointer; }
+.photo-map__pin circle { fill: #e8590c; fill-opacity: 0.85; stroke: #fff; stroke-width: 1.5; }
+.photo-map__pin--approx circle { fill: #fff; fill-opacity: 0.6; stroke: #e8590c; stroke-width: 2.5; }
+.photo-map__pin--on circle { fill: #1c7ed6; }
+.photo-map__pin text { fill: #fff; font-weight: 700; pointer-events: none; font-family: system-ui, sans-serif; }
+.photo-map__pin--approx text { fill: #b54708; }
+.photo-map__picked h2 { margin: 0; }
+.photo-map__thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin-top: 10px; }
+.photo-map__thumbs button { padding: 0; border: none; background: none; min-height: 0; border-radius: 8px; overflow: hidden; }
+.photo-map__thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+@media (prefers-color-scheme: dark) {
+  .photo-map__svg, .photo-map__sea { fill: #16324a; background: #16324a; }
+  .photo-map__land { fill: #2b3340; stroke: #5b6675; }
+  .photo-map__state { stroke: #4a5361; }
+}
+
+/* 📁 Photo library (Settings) */
+.photo-source__facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 8px 0 12px; }
+.photo-source__facts dt { font-weight: 600; }
+.photo-source__facts dd { margin: 0; overflow-wrap: anywhere; }
+.photo-source__code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.photo-source__steps { background: #101828; color: #e4e7ec; padding: 12px 14px; border-radius: 10px; overflow-x: auto; font-size: 0.85rem; white-space: pre; }
+@media (max-width: 600px) { .photo-source__facts { grid-template-columns: 1fr; } }
+.photo-place__form select, .photo-place__form input { color: #101828; background: #fff; }
+.photo-place__form button.secondary { color: #fff; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.35); }
+.photo-source__more { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.photo-source__more textarea, .photo-source__more input { width: 100%; box-sizing: border-box; }

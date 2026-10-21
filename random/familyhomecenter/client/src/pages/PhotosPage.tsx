@@ -13,11 +13,14 @@ import { PhotoFaces } from '../components/PhotoFaces.js';
 import type { Person } from '../api/client.js';
 import { MemberAvatar, avatarChanged } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { PhotoPlaceInfo } from '../components/PhotoPlaceInfo.js';
+import { PhotoMap } from '../components/PhotoMap.js';
 
-type PhotoTab = 'photos' | 'movies' | 'documents' | 'animate';
+type PhotoTab = 'photos' | 'map' | 'movies' | 'documents' | 'animate';
 /** The page's tabs; `access` = the Settings → Kids' access switch that shows it. */
 const PHOTO_TABS: Array<{ id: PhotoTab; label: string; access: 'movies' | 'documents' }> = [
   { id: 'photos', label: '📷 Photos', access: 'movies' },
+  { id: 'map', label: '🗺️ Map', access: 'movies' },
   { id: 'movies', label: '🎬 Movies', access: 'movies' },
   { id: 'animate', label: '✨ Animate', access: 'movies' },
   { id: 'documents', label: '📄 Documents', access: 'documents' },
@@ -578,13 +581,16 @@ export function PhotosPage() {
   // Dates/paths for sorting — loaded after the (quicker) plain photo list.
   const [details, setDetails] = useState<Map<string, PhotoDetail> | null>(null);
   const [detailsFailed, setDetailsFailed] = useState(false);
-  const [sortBy, setSortBy] = useState<'library' | 'date-desc' | 'date-asc' | 'name'>('library');
+  const [sortBy, setSortBy] = useState<'library' | 'date-desc' | 'date-asc' | 'name' | 'country' | 'state'>('library');
+  // 📍 Where: '' = anywhere, 'none' = no location, 'c:<country>' or 's:<US state>'.
+  const [where, setWhere] = useState('');
   const [albumStatus, setAlbumStatus] = useState<'all' | 'none' | 'some'>('all');
   const [showHidden, setShowHidden] = useState(false);
   // People (face recognition): the filter can come from the People page's "See their photos" link.
   const [searchParams, setSearchParams] = useSearchParams();
   // Photos · Movies · Documents · Animate — in the address (?tab=) so Back and links keep it.
-  const tabs = PHOTO_TABS.filter((t) => t.id === 'photos' || canSee(t.access));
+  // 🗺️ Map is part of Photos itself (anyone who sees Photos sees it).
+  const tabs = PHOTO_TABS.filter((t) => t.id === 'photos' || t.id === 'map' || canSee(t.access));
   const tab = tabs.find((t) => t.id === searchParams.get('tab'))?.id ?? 'photos';
   const setTab = (id: PhotoTab) => {
     const next = new URLSearchParams(searchParams);
@@ -663,10 +669,31 @@ export function PhotosPage() {
     if (excludeBlurry) list = list.filter((p) => !p.blurry);
     if (albumStatus === 'none') list = list.filter((p) => !inAnyAlbum(p.id));
     if (albumStatus === 'some') list = list.filter((p) => inAnyAlbum(p.id));
+    if (where) {
+      // Needs the details (where each photo was taken) — nothing shows until they're in.
+      const d = (p: Photo) => details?.get(p.id);
+      list = !details
+        ? []
+        : where === 'none'
+          ? list.filter((p) => !d(p)?.country)
+          : where.startsWith('s:')
+            ? list.filter((p) => d(p)?.state === where.slice(2))
+            : list.filter((p) => d(p)?.country === where.slice(2));
+    }
     if (sortBy !== 'library' && details) {
       const d = (p: Photo) => details.get(p.id);
+      const byDate = (a: Photo, b: Photo) => (d(b)?.taken_at ?? '').localeCompare(d(a)?.taken_at ?? '');
       list = [...list].sort((a, b) => {
         if (sortBy === 'name') return (d(a)?.path ?? '').localeCompare(d(b)?.path ?? '', undefined, { numeric: true, sensitivity: 'base' });
+        if (sortBy === 'country' || sortBy === 'state') {
+          // A–Z by country (then state), photos with no location last; newest first within a place.
+          const key = (p: Photo) => {
+            const x = d(p);
+            if (!x?.country) return '\uffff';
+            return sortBy === 'state' ? `${x.state ?? '\uffee'}|${x.country}` : `${x.country}|${x.state ?? ''}`;
+          };
+          return key(a).localeCompare(key(b)) || byDate(a, b);
+        }
         const cmp = (d(a)?.taken_at ?? '').localeCompare(d(b)?.taken_at ?? '');
         return sortBy === 'date-asc' ? cmp : -cmp;
       });
@@ -681,7 +708,31 @@ export function PhotosPage() {
 
   // Reset paging whenever what's shown changes size (refresh, new photos, another album) so stale
   // indexes don't leave the grid showing fewer than PAGE_SIZE.
-  useEffect(() => setVisibleCount(PAGE_SIZE), [albumFilter, albumStatus, sortBy, showHidden, excludeBlurry, personFilter]);
+  useEffect(() => setVisibleCount(PAGE_SIZE), [albumFilter, albumStatus, sortBy, showHidden, excludeBlurry, personFilter, where]);
+
+  // 📍 The places the photos were taken, with how many — for the Where filter.
+  const placeCounts = (() => {
+    if (!details) return null;
+    const countries = new Map<string, number>();
+    const states = new Map<string, number>();
+    let none = 0;
+    for (const p of photos) {
+      if (p.hidden && !showHidden) continue;
+      const x = details.get(p.id);
+      if (!x?.country) {
+        none++;
+        continue;
+      }
+      countries.set(x.country, (countries.get(x.country) ?? 0) + 1);
+      if (x.state) states.set(x.state, (states.get(x.state) ?? 0) + 1);
+    }
+    const az = (m: Map<string, number>) => [...m].sort((a, b) => a[0].localeCompare(b[0]));
+    return { countries: az(countries), states: az(states), none };
+  })();
+  const showWhere = (w: { country: string | null; state: string | null }) => {
+    setWhere(w.state ? `s:${w.state}` : w.country ? `c:${w.country}` : '');
+    setTab('photos');
+  };
 
   const activeAlbum = albumsApi.albums.find((a) => a.id === albumFilter);
   const viewing = viewingId ? photos.find((p) => p.id === viewingId) : undefined;
@@ -759,6 +810,17 @@ export function PhotosPage() {
       )}
 
       {/* Movies and Documents each have their own switch in Settings → Kids' access. */}
+      {tab === 'map' && (
+        <PhotoMap
+          onOpen={(id) => setViewingId(id)}
+          onShowPlace={showWhere}
+          noPlaceCount={placeCounts?.none ?? null}
+          onShowNoPlace={() => {
+            setWhere('none');
+            setTab('photos');
+          }}
+        />
+      )}
       {tab === 'movies' && <MoviesSection />}
       {tab === 'documents' && <DocumentsSection />}
       {tab === 'animate' && <AnimateSection />}
@@ -845,8 +907,36 @@ export function PhotosPage() {
             <option value="date-desc">Date taken (newest first)</option>
             <option value="date-asc">Date taken (oldest first)</option>
             <option value="name">Folder / filename</option>
+            <option value="country">📍 Country (A–Z)</option>
+            <option value="state">📍 State (A–Z)</option>
           </select>
         </label>
+        <label className="member-form__label member-form__label--inline">
+          📍 Where
+          <select value={where} onChange={(e) => setWhere(e.target.value)}>
+            <option value="">Anywhere</option>
+            <option value="none">No location set{placeCounts ? ` (${placeCounts.none})` : ''}</option>
+            {placeCounts && placeCounts.countries.length > 0 && (
+              <optgroup label="Country">
+                {placeCounts.countries.map(([c, n]) => (
+                  <option key={c} value={`c:${c}`}>
+                    {c} ({n})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {placeCounts && placeCounts.states.length > 0 && (
+              <optgroup label="US state">
+                {placeCounts.states.map(([st, n]) => (
+                  <option key={st} value={`s:${st}`}>
+                    {st} ({n})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </label>
+        {where && !details && <span className="hint">Reading where photos were taken…</span>}
         {sortBy !== 'library' && !details && !detailsFailed && <span className="hint">Reading photo dates… sorts as soon as they're in.</span>}
         {sortBy !== 'library' && detailsFailed && (
           <span className="hint">
@@ -1123,6 +1213,17 @@ export function PhotosPage() {
             {albumPanel === 'viewer' && <AlbumChecklist albumsApi={albumsApi} photoIds={[viewing.id]} onDone={() => setAlbumPanel(null)} />}
           </div>
           {viewing.hidden && <div className="photo-lightbox__badge">🙈 Hidden</div>}
+          <PhotoPlaceInfo
+            photoId={viewing.id}
+            onChanged={(p) =>
+              setDetails((m) => {
+                if (!m) return m;
+                const cur = m.get(viewing.id);
+                if (!cur) return m;
+                return new Map(m).set(viewing.id, { ...cur, ...p, taken_at: p.taken_at });
+              })
+            }
+          />
           <PhotoFaces photoId={viewing.id} people={people} onChange={loadPeople} />
           <button className="photo-lightbox__close" onClick={(e) => { e.stopPropagation(); closeViewer(); }}>
             ✕
