@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { OPEN_BRIEFING } from './MorningBriefing.js';
+import { WHOS_HOME_CHANGED } from './WhosHome.js';
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hourLabel = (h: number) => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' });
 
-/** Settings → ☀️ Wall screen: the morning briefing (on/off and its hours) and the weekend recap. */
+/** Settings → ☀️ Wall screen: the morning briefing (on/off and its hours), the weekend recap, and 🏠 Who's home. */
 export function HomeScreenSettings() {
   const [s, setS] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export function HomeScreenSettings() {
     setS((x) => ({ ...(x ?? {}), ...patch }));
     try {
       setS(await api.patch<Record<string, string>>('/settings', patch));
+      if ('whos_home_off' in patch) window.dispatchEvent(new Event(WHOS_HOME_CHANGED));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -63,6 +65,13 @@ export function HomeScreenSettings() {
         <span>
           <strong>🎞️ Weekly recap on the weekend screensaver</strong>
           <span className="hint"> — on Saturdays and Sundays the screensaver plays "Our week" every so often between photos.</span>
+        </span>
+      </label>
+      <label className="privacy-toggle">
+        <input type="checkbox" checked={s?.whos_home_off !== '1'} disabled={!s} onChange={(e) => save({ whos_home_off: e.target.checked ? '' : '1' })} />
+        <span>
+          <strong>🏠 Who's home</strong>
+          <span className="hint"> — where everyone is (home, school, work…) on Home, the Family Board and the screensaver. Off hides it everywhere; what was set is kept.</span>
         </span>
       </label>
       {error && <div className="settings-login__error">{error}</div>}

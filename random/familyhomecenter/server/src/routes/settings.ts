@@ -14,7 +14,9 @@ const KEYS = ['idle_timeout_seconds', 'slideshow_interval_seconds', 'contacts_di
   // 🎞️ Weekly recap on the weekend screensaver: '1' = off.
   'recap_off',
   // ✅ Email parents when something's waiting for their OK: '1' = off.
-  'approval_email_off'] as const;
+  'approval_email_off',
+  // 🏠 Who's home on Home, the Family Board and the screensaver: '1' = hidden.
+  'whos_home_off'] as const;
 
 // GET stays open: every kiosk/phone reads this on load to drive its own idle-screensaver timer,
 // regardless of whether anyone's logged in to Settings.

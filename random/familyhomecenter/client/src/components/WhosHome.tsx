@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { DressedAvatar } from './DressedAvatar.js';
@@ -21,7 +21,39 @@ const since = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleT
  * 🏠 Who's home: everyone's avatar with where they are. Tap yours on the way out (a parent can tap
  * anyone's) and pick 🏫 School, ⚽ Practice… — with a few words if you like.
  */
+/** Settings → ☀️ Wall screen can hide 🏠 Who's home everywhere (parents only). */
+export const WHOS_HOME_CHANGED = 'whos-home-setting-changed';
+let hiddenCache: Promise<boolean> | null = null;
+const loadHidden = () =>
+  (hiddenCache ??= api
+    .get<Record<string, string>>('/settings')
+    .then((s) => s.whos_home_off === '1')
+    .catch(() => false));
+
 export function WhosHome({ readOnly = false }: { readOnly?: boolean }) {
+  const [hidden, setHidden] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    const check = () => loadHidden().then((h) => live && setHidden(h));
+    const changed = () => {
+      hiddenCache = null;
+      void check();
+    };
+    void check();
+    // Picks up a change made on another screen within a few minutes.
+    const t = setInterval(changed, 5 * 60_000);
+    window.addEventListener(WHOS_HOME_CHANGED, changed);
+    return () => {
+      live = false;
+      clearInterval(t);
+      window.removeEventListener(WHOS_HOME_CHANGED, changed);
+    };
+  }, []);
+  if (hidden !== false) return null;
+  return <WhosHomeBoard readOnly={readOnly} />;
+}
+
+function WhosHomeBoard({ readOnly }: { readOnly: boolean }) {
   const { members, activeProfile, refresh } = useFamilyMembers();
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   const [picking, setPicking] = useState<FamilyMember | null>(null);
