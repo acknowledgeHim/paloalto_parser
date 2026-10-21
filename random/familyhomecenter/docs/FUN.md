@@ -35,15 +35,18 @@ weather has them.
 
 The Meals menu shows a red count while a vote is open.
 
-## 📬 Weekly report (Settings → 📬 Weekly report)
+## 📬 Weekly report (Settings → 📬 Email)
 
 Every Sunday at 6pm, each kid's week is emailed to every parent with an email, and to the kid if
 they have their own. It covers:
 
 - jobs done each day, with a little bar chart
 - what slipped
-- stars, money, rewards and prizes earned
-- where their stars, Prize Bank money and bank accounts stand
+- 🎁 **Prize Bank**, in its own section and not counted in the jobs above: prize-box jobs done and time logged on them, each prize box's progress, stars earned, their star count, rewards earned and prizes redeemed
+
+No money or bank info goes in the email. A money prize box shows as "💲 Money prize", without the amount.
+
+**📬 Send them now** says how each kid's email went, e.g. "Sent 2 of 2: Ava ✓ · Ben ✓", or the reason one failed.
 
 The settings panel has three controls:
 
@@ -52,6 +55,15 @@ The settings panel has three controls:
 - **📬 Send them now.**
 
 It needs email set up on the server (SMTP_HOST, the same as the grocery list).
+
+## ✅ Approval emails (Settings → 📬 Email)
+
+When a kid checks off a job that needs a parent's OK, logs a chunk of one (30 minutes of weeding),
+or claims a prize that needs an OK, every parent with an email gets one.
+
+- **Grouping:** things that come in together share one email, sent about a minute after the first.
+- **Already answered:** if it's been answered or taken back by then, nothing is sent.
+- **Turning it off:** use the switch in Settings → 📬 Email.
 
 ## 🏠 Who's home
 
@@ -119,6 +131,11 @@ It plays on its own. **‹ Back**, **⏸ Pause** and **Next ›** step through i
 **On the weekend screensaver:** on Saturdays and Sundays it plays every 20 minutes or so, between
 photos. Turn this off in Settings → ☀️ Wall screen.
 
+## ⚙️ Settings sections
+
+Each section in Settings is folded down to its heading. Tap a heading to open or close it. The
+screen remembers which ones you left open.
+
 ## The menu
 
 The top menu is grouped so it fits on one line. Each group opens a dropdown:
@@ -145,7 +162,7 @@ Only new things were added:
   - `journal_entries`
   - `heights`
   - `sticky_notes` (taking things down only sets `hidden_at` / `done_at`)
-- **Settings:** `weekly_report_off`, `morning_briefing`, `morning_briefing_start`, `morning_briefing_end`, `recap_off`.
+- **Settings:** `weekly_report_off`, `approval_email_off`, `morning_briefing`, `morning_briefing_start`, `morning_briefing_end`, `recap_off`.
 - **Weather:** now also asks for sunrise and sunset.
 
 No existing data changes.

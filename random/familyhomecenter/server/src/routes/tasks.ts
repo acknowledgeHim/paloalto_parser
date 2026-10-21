@@ -6,6 +6,7 @@ import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME
 import { todayStr } from '../utils/recurrence.js';
 import { assigneesFor, tasksForDate, allActiveTasks, goalUnits, progressFor, waitingProgressFor } from '../services/taskQueries.js';
 import type { Task, TaskCompletion } from '../types.js';
+import { notifyApproval } from '../services/approvalEmail.js';
 import { addPending, creditReward, goalSlots, hasReward, isParentRequest, recordCompletion, removePending } from '../services/rewards.js';
 
 export const tasksRouter = Router();
@@ -493,6 +494,10 @@ tasksRouter.post('/:id/progress', (req, res) => {
     if (!waits && sum >= goal) recordCompletion(task, memberId, date, goalSlots(task));
     return sum;
   })();
+  if (waits) {
+    const chunk = task.goal_type === 'hours' ? (amount < 60 ? `${amount} min` : `${amount / 60} h`) : `${amount} time${amount === 1 ? '' : 's'}`;
+    notifyApproval(memberId, `${task.title} · ${chunk}`);
+  }
   res.status(201).json({ progress: total, goal, done: !waits && total >= goal, pending: waits });
 });
 

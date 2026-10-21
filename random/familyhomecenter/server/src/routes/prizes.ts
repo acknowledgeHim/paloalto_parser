@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
+import { notifyApproval } from '../services/approvalEmail.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { isParentRequest } from '../services/rewards.js';
 import type { FamilyMember, Prize, PrizeRequirement, Task } from '../types.js';
@@ -150,6 +151,21 @@ prizesRouter.get('/', (req, res) => {
     })
   );
 });
+
+/**
+ * A kid's prize boxes still in play (not a one-time box already redeemed), with how far along each
+ * is — for the 📬 weekly report's Prize Bank section.
+ */
+export function prizeBoxesFor(memberId: string) {
+  const prizes = db.prepare('SELECT * FROM prizes ORDER BY created_at ASC').all() as Prize[];
+  return prizes
+    .filter((p) => isFor(p.id, memberId))
+    .filter(
+      (p) =>
+        !(p.once && db.prepare('SELECT 1 FROM prize_redemptions WHERE prize_id = ? AND family_member_id = ? AND status IS NULL').get(p.id, memberId))
+    )
+    .map((p) => ({ prize: p, progress: progressFor(p, memberId) }));
+}
 
 const REWARD_KINDS = ['money', 'stars', 'custom'] as const;
 
@@ -452,5 +468,6 @@ prizesRouter.post('/:id/redeem', (req, res) => {
     ).run(redemption);
     if (!pending) payPrize(prize, memberId, redemption.id);
   })();
+  if (pending) notifyApproval(memberId, `wants to redeem the prize "${prize.title}"`);
   res.status(201).json({ ...redemption, pending });
 });

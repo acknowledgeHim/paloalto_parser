@@ -1,6 +1,7 @@
 import { HomeScreenSettings } from '../components/HomeScreenSettings.js';
 import { WeeklyReportSettings } from '../components/WeeklyReportSettings.js';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { KidsAccessSettings } from '../components/KidsAccessSettings.js';
 import { PrivacySettings } from '../components/PrivacySettings.js';
 import { api, type FamilyMember } from '../api/client.js';
@@ -67,6 +68,9 @@ export function SettingsPage() {
   const { members, activeProfile, refresh } = useFamilyMembers();
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [memberModal, setMemberModal] = useState<FamilyMember | 'new' | null>(null);
+  // Each section folds down to its heading — tap one to open it.
+  const [settingsEl, setSettingsEl] = useState<HTMLDivElement | null>(null);
+  useCollapsibleSections(settingsEl);
   interface TimingSettings {
     idle_timeout_seconds?: string;
     slideshow_interval_seconds?: string;
@@ -183,7 +187,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="settings-page">
+    <div className="settings-page" ref={setSettingsEl}>
       <div className="settings-page__header">
         <h1>Settings</h1>
         {auth.admin_gate_active && <button className="secondary" onClick={logout}>Log out</button>}

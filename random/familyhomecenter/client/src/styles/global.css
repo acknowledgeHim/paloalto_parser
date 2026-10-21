@@ -2472,3 +2472,12 @@ body.fp-full-open { overflow: hidden; }
 .recap__ring-fill { fill: none; stroke: var(--c); stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 1.2s ease-out; animation: recap-ring 1.2s ease-out; }
 @keyframes recap-ring { from { stroke-dashoffset: 214; } }
 .recap__shoutouts { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: clamp(1em, 2.2vw, 1.35em); font-weight: 600; }
+
+/* ---- Settings: sections fold down to their heading ---- */
+.collapsible > .collapsible__head { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 10px; margin-bottom: 0; }
+.collapsible > .collapsible__head::after { content: '▸'; margin-left: auto; font-size: 0.8em; color: var(--text-muted); transition: transform 0.2s; }
+.collapsible--open > .collapsible__head { margin-bottom: 0.6em; }
+.collapsible--open > .collapsible__head::after { transform: rotate(90deg); }
+.collapsible:not(.collapsible--open) > :not(.collapsible__head) { display: none !important; }
+.collapsible:not(.collapsible--open) { padding-top: 14px; padding-bottom: 14px; }
+.collapsible > .collapsible__head:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }

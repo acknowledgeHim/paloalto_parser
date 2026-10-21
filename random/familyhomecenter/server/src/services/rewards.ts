@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME } from './auth.js';
 import type { Task } from '../types.js';
+import { notifyApproval } from './approvalEmail.js';
 
 /** Does completing this pay anything? (money/stars need an amount; a custom reward needs its text) */
 export function hasReward(task: Task | undefined): task is Task {
@@ -106,6 +107,7 @@ export function addPending(task: Task, memberId: string | null, date: string, sl
     slot,
     new Date().toISOString()
   );
+  notifyApproval(memberId, `${task.title}${slot ? ` (${slot})` : ''} — checked off`);
 }
 
 /** Drops this person's waiting check-off(s) — on `date` (or, for a one-time job, any day up to it); one slot or all. */
