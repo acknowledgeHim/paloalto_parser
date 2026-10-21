@@ -15,7 +15,7 @@ import { autoSortOn, canWrite, fileOne, inboxDir, PICTURE_EXTS, registerInbox, s
 import { photosChanged } from '../services/photos.js';
 import { getSetting, setSetting } from '../db.js';
 import { isParentRequest } from '../services/rewards.js';
-import { getOriginalPhotoDate } from '../services/photoDates.js';
+import { getOriginalPhotoDate, photoDateSource } from '../services/photoDates.js';
 import { getPhotoGps, mapOutlines, middleOf, placeLists, placeOf, placeEdit, savePlaceEdit } from '../services/photoPlaces.js';
 
 export const photosRouter = Router();
@@ -222,6 +222,7 @@ photosRouter.get(
       ...placeOf(rel),
       taken_at: (await getPhotoDate(abs)).toISOString(),
       photo_taken_at: (await getOriginalPhotoDate(abs)).toISOString(),
+      date_from: photoDateSource(abs),
       updated_at: e?.updated_at ?? null,
       updated_by: e?.updated_by ?? null,
     });
@@ -259,7 +260,7 @@ photosRouter.put(
       updated_at: new Date().toISOString(),
       updated_by: typeof b.acting_member_id === 'string' ? b.acting_member_id : null,
     });
-    res.json({ ...placeOf(rel), taken_at: (await getPhotoDate(abs)).toISOString(), photo_taken_at: (await getOriginalPhotoDate(abs)).toISOString() });
+    res.json({ ...placeOf(rel), taken_at: (await getPhotoDate(abs)).toISOString(), photo_taken_at: (await getOriginalPhotoDate(abs)).toISOString(), date_from: photoDateSource(abs) });
   })
 );
 

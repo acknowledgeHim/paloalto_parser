@@ -643,6 +643,8 @@ export interface PhotoPlace {
   taken_at: string;
   /** What the photo itself says. */
   photo_taken_at: string;
+  /** Where that came from: 'exif' (inside the photo), 'folder' (its YEAR/Month folder), 'file' (the file's own date). */
+  date_from?: string | null;
   updated_at?: string | null;
   updated_by?: string | null;
 }

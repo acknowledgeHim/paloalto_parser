@@ -7,12 +7,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { db, getSetting } from '../db.js';
 import { photosChanged, skipFolderInLibrary } from './photos.js';
+import { folderDate } from './photoDates.js';
 
 /**
  * 📥 Filing new photos into the library as <YEAR>/<Month>/ — from the 📥 Inbox folder on the share
  * (where a phone's sync app such as PhotoSync / FolderSync uploads), and from 📤 Add photos in the app.
- *  - The date comes from the photo's EXIF (when it was taken), else the date the phone gave the
- *    file (uploads), else the file's own date.
+ *  - The date comes from the photo's EXIF (when it was taken), else a YEAR/Month folder it came in,
+ *    else the date the phone gave the file (uploads), else the file's own date (always last).
  *  - Month folder: an existing one for that month is used whatever it's called ("Aug", "august",
  *    "August"); a new one is always the full name with a capital first letter ("August").
  *  - Nothing is ever deleted. Filing from the Inbox is a move (a rename on the share — the photo is
@@ -51,13 +52,21 @@ export async function monthFolder(when: Date): Promise<string> {
 }
 
 /** When was it taken? EXIF first; then the date the phone gave (uploads); then the file's date. */
-export async function takenDate(file: string, hint?: number | null): Promise<{ date: Date; from: 'photo' | 'phone' | 'file' }> {
+export async function takenDate(file: string, hint?: number | null): Promise<{ date: Date; from: 'photo' | 'folder' | 'phone' | 'file' }> {
   try {
     const tags = await exifr.parse(file, { pick: EXIF_DATES });
     const d = EXIF_DATES.map((k) => tags?.[k]).find((v): v is Date => v instanceof Date && !Number.isNaN(v.getTime()) && v.getFullYear() > 1900);
     if (d) return { date: d, from: 'photo' };
   } catch {
     /* no EXIF */
+  }
+  // No date inside: a YEAR/Month folder it came in (e.g. Inbox/2025/08 from a sync app) wins over
+  // the phone's or the file's own date — the copied date is always the last resort.
+  const f = folderDate(file);
+  if (f) {
+    const mtime = (await fs.stat(file)).mtime;
+    const fits = mtime.getFullYear() === f.year && (f.month === null || mtime.getMonth() === f.month);
+    return { date: fits ? mtime : new Date(f.year, f.month ?? 0, 1, 12), from: 'folder' };
   }
   if (hint && hint > 0) return { date: new Date(hint), from: 'phone' };
   return { date: (await fs.stat(file)).mtime, from: 'file' };

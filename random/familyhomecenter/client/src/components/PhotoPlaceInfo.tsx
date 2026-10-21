@@ -94,9 +94,26 @@ export function PhotoPlaceInfo({ photoId, onChanged }: { photoId: string; onChan
             📍 {where || <span className="photo-place__none">No location</span>}
             {place.place_source === 'set' && <span className="photo-place__tag"> ✍️</span>}
           </span>
-          <span title={place.year_fixed ? `The photo says ${photoSays.toLocaleDateString()}` : 'From the photo'}>
-            📅 {taken.toLocaleDateString(undefined, place.month_fixed || !place.year_fixed ? { year: 'numeric', month: 'short', day: 'numeric' } : { year: 'numeric', month: 'short' })}
+          <span
+            title={
+              place.year_fixed
+                ? `Set by hand — the photo says ${photoSays.toLocaleDateString()}`
+                : place.date_from === 'folder'
+                  ? 'No date inside the photo — from the folder it’s in'
+                  : place.date_from === 'file'
+                    ? 'No date inside the photo — the file’s own date (may be when it was copied)'
+                    : 'From the photo'
+            }
+          >
+            📅 {taken.toLocaleDateString(
+              undefined,
+              (place.year_fixed && !place.month_fixed) || (place.date_from === 'folder' && !place.year_fixed)
+                ? { year: 'numeric', month: 'short' }
+                : { year: 'numeric', month: 'short', day: 'numeric' }
+            )}
             {place.year_fixed ? <span className="photo-place__tag"> ✍️</span> : null}
+            {!place.year_fixed && place.date_from === 'folder' && <span className="photo-place__tag"> 📁</span>}
+            {!place.year_fixed && place.date_from === 'file' && <span className="photo-place__tag"> ❔</span>}
           </span>
           {place.lat != null && place.lon != null && (
             <a

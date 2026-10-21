@@ -728,6 +728,13 @@ db.exec(`
     taken_at TEXT NOT NULL
   );
 `);
+// Where the date came from: 'exif' (the photo), 'folder' (its YEAR/Month folder — no date inside it),
+// or 'file' (the file's own date). NULL on rows from before this was kept (checked again once).
+try {
+  db.exec('ALTER TABLE photo_dates ADD COLUMN source TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
 // is the source of truth for who owns which device and each person's rules; Pi-hole just gets told

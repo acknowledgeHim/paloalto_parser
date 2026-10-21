@@ -415,3 +415,19 @@ uploads the camera roll to the **Inbox** folder on the share over SMB:
      "when charging" (an iOS Shortcuts automation) or arriving home.
   3. Set it to send JPG (or turn on its HEIC → JPG conversion).
 - Several phones can all upload into the same Inbox. Name clashes and duplicates are handled.
+
+## 📅 Which date a photo gets
+
+The first of these that a photo has wins:
+
+1. **Set by hand:** ✏️ in the photo viewer (year, and optionally month).
+2. **Inside the photo:** its EXIF date taken.
+3. **Its folder:** a YEAR/Month folder it's in, such as `2025/August`, `2025/Aug`, `2019/Sept`,
+   `2019/08`, or `2018-07 Beach`. A year-only folder (`2021/Christmas`) gives just the year.
+4. **The file's own date**, which is often only when it was copied, so it's always last. It's used
+   for the day only when it falls inside the folder's month, or when there's no dated folder.
+
+The viewer marks a date that came from a folder with 📁, and one that's only the file's date with ❔.
+Photos read before this was added are checked once more. If their saved date doesn't fit their
+YEAR/Month folder, the folder's date is used, unless the photo has a date inside it. The photo files
+themselves are never changed.
