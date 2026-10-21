@@ -1382,6 +1382,10 @@ textarea {
   gap: 8px;
 }
 .kb-page__media-item { position: relative; }
+.kb-page__media-open { display: block; width: 100%; padding: 0; border: none; background: none; position: relative; cursor: zoom-in; border-radius: 10px; }
+.kb-page__media-zoom { position: absolute; right: 6px; bottom: 6px; background: rgba(0, 0, 0, 0.55); border-radius: 999px; padding: 2px 6px; font-size: 0.9em; }
+.kb-page__lightbox-count { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0, 0, 0, 0.6); border-radius: 999px; padding: 4px 12px; z-index: 1; }
+.photo-lightbox__close, .photo-lightbox__nav { z-index: 1; background: rgba(0, 0, 0, 0.6); border: 2px solid rgba(255, 255, 255, 0.5); }
 .kb-page__media-image {
   width: 100%;
   aspect-ratio: 4 / 3;
