@@ -76,6 +76,21 @@ export function PhotoMap({
     return () => clearTimeout(t);
   }, []);
   const [picked, setPicked] = useState<MapPhoto[] | null>(null);
+  // ⛶ Full screen: the map fills the whole screen (Esc or ✕ to come back).
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (!full) return;
+    const esc = (e: KeyboardEvent) => {
+      // Esc closes an open photo first (the viewer handles that); only leave full screen when none is open.
+      if (e.key === 'Escape' && !document.querySelector('.photo-lightbox')) setFull(false);
+    };
+    window.addEventListener('keydown', esc);
+    document.body.classList.add('photo-map-full-open');
+    return () => {
+      window.removeEventListener('keydown', esc);
+      document.body.classList.remove('photo-map-full-open');
+    };
+  }, [full]);
   const svgRef = useRef<SVGSVGElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const moved = useRef(false);
@@ -175,7 +190,7 @@ export function PhotoMap({
   const pickedPlace = picked ? mostCommon(picked) : null;
 
   return (
-    <div className="photo-map">
+    <div className={`photo-map ${full ? 'photo-map--full' : ''}`}>
       <div className="photo-map__bar">
         <span className="hint">
           {photos ? `${photos.length.toLocaleString()} photo${photos.length === 1 ? '' : 's'} on the map` : 'Loading the map…'}
@@ -200,6 +215,9 @@ export function PhotoMap({
           </button>
           <button type="button" className="secondary" onClick={() => setView(WORLD)}>
             🌍
+          </button>
+          <button type="button" className={full ? '' : 'secondary'} onClick={() => setFull(!full)} aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen (Esc)' : 'Full screen'}>
+            {full ? '✕' : '⛶'}
           </button>
         </span>
       </div>

@@ -2604,3 +2604,10 @@ body.fp-full-open { overflow: hidden; }
 .photo-inbox h3 { margin: 0; }
 .photo-inbox__log ul { margin: 8px 0 0; padding-left: 18px; font-size: 0.88rem; display: flex; flex-direction: column; gap: 4px; }
 .photo-inbox__log code { overflow-wrap: anywhere; }
+
+/* ⛶ The photo map full screen (under the photo viewer, which opens on top of it). */
+.photo-map--full { position: fixed; inset: 0; z-index: 90; background: var(--bg, #f4f5f7); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.photo-map--full .photo-map__svg { flex: 1; height: auto; min-height: 0; }
+.photo-map--full > .hint, .photo-map--full .photo-map__progress { display: none; }
+.photo-map--full .photo-map__picked { position: absolute; left: 12px; right: 12px; bottom: 12px; max-height: 42vh; overflow-y: auto; margin: 0; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); }
+body.photo-map-full-open { overflow: hidden; }
