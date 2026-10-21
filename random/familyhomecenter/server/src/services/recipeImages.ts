@@ -70,3 +70,18 @@ export async function localizeExistingRecipeImages(): Promise<void> {
   }
   if (rows.length) console.log(`[recipes] saved ${rows.length} recipe picture(s) locally.`);
 }
+
+/** A picture a family member added for their own recipe (a data: URL from the page) — saved on the
+ *  Pi like the TheMealDB ones. Returns the new thumbnail_url (with a version, so screens show the new one). */
+export async function saveUploadedRecipeImage(recipeId: string, dataUrl: string): Promise<string> {
+  const m = /^data:image\/(jpeg|png|webp|gif);base64,(.+)$/.exec(dataUrl);
+  if (!m) throw new Error('That isn’t a picture (JPG, PNG, WebP or GIF)');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 15_000_000) throw new Error('That picture is too big');
+  const image = await sharp(buf).rotate().resize({ width: 900, withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+  await fs.mkdir(imagesDir(), { recursive: true });
+  await fs.writeFile(localRecipeImagePath(recipeId), image);
+  const local = `/api/recipes/${recipeId}/image?v=${Date.now()}`;
+  db.prepare('UPDATE recipes SET thumbnail_url = ? WHERE id = ?').run(local, recipeId);
+  return local;
+}

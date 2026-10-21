@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { fetchRecipeImage, localizeRecipeImage, localRecipeImagePath, proxiedRecipeImage, remoteRecipeImage } from '../services/recipeImages.js';
+import { fetchRecipeImage, localizeRecipeImage, localRecipeImagePath, proxiedRecipeImage, remoteRecipeImage, saveUploadedRecipeImage } from '../services/recipeImages.js';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -146,6 +146,25 @@ recipesRouter.get(
     }
   })
 );
+
+/** PUT /:id/image { data_url } — add or replace a recipe's picture (yours, or instead of TheMealDB's). */
+recipesRouter.put(
+  '/:id/image',
+  asyncHandler(async (req, res) => {
+    if (!db.prepare('SELECT 1 FROM recipes WHERE id = ?').get(req.params.id)) return res.status(404).json({ error: 'not found' });
+    try {
+      res.json({ thumbnail_url: await saveUploadedRecipeImage(req.params.id, String(req.body?.data_url ?? '')) });
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  })
+);
+
+/** POST /:id/image/remove — stop showing its picture (the file is kept on the Pi). */
+recipesRouter.post('/:id/image/remove', (req, res) => {
+  db.prepare('UPDATE recipes SET thumbnail_url = NULL WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
 
 /** GET /:id/image — a saved recipe's picture, stored on the Pi. */
 recipesRouter.get('/:id/image', (req, res) => {
