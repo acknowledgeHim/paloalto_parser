@@ -21,9 +21,18 @@ const skipDirs = new Set<string>();
 export function skipFolderInLibrary(dir: string): void {
   skipDirs.add(path.resolve(dir));
 }
-/** New photos were filed — list the library again next time it's asked for. */
+/** New photos were filed — list the library again next time it's asked for, and give them their
+ *  date, 📍 place, thumbnail and faces in a minute rather than at the next half-hourly pass. */
+let soon: NodeJS.Timeout | null = null;
+let again = false;
 export function photosChanged(): void {
   cachedList = null;
+  if (soon) clearTimeout(soon);
+  soon = setTimeout(() => {
+    soon = null;
+    if (warming) again = true;
+    else warmThumbnailCache().catch((e) => console.warn('[photos] warm-up after new photos failed', e));
+  }, 60_000);
 }
 
 /** Recursively find image files under config.photosDir (handles a local dir or an SMB-mounted share alike). */
@@ -203,6 +212,11 @@ export async function warmThumbnailCache(): Promise<{ processed: number; failed:
     }
   } finally {
     warming = false;
+    // New photos came in while this pass was running: go round once more for them.
+    if (again) {
+      again = false;
+      photosChanged();
+    }
     scanProgress.running = false;
   }
   // Faces found before the "facing the camera" score existed get it filled in (once, in the background).
