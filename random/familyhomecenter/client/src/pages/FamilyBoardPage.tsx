@@ -13,6 +13,7 @@ import { timeOfDayIcon } from '../utils/timeOfDay.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { FloorplanView } from '../components/FloorplanView.js';
 import { usePrizeJobIds } from '../utils/prizes.js';
+import { WhosHome } from '../components/WhosHome.js';
 
 // tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
 // recurring task the server only ever attaches completions where completed_on equals that date,
@@ -222,6 +223,8 @@ export function FamilyBoardPage() {
         </button>
       </div>
       </div>
+
+      <WhosHome />
 
       {tab === 'house' && <FloorplanView tasks={tasks} onChange={loadTasks} onEdit={setModalTask} defaultThreeD />}
 

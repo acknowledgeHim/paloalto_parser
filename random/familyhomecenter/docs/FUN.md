@@ -53,6 +53,40 @@ The settings panel has three controls:
 
 It needs email set up on the server (SMTP_HOST, the same as the grocery list).
 
+## 🏠 Who's home
+
+Home and the Family Board show everyone's avatar with where they are: 🏠 home, 🏫 school,
+💼 work, ⚽ practice, 🧑‍🤝‍🧑 at a friend's, 🚗 out, ✈️ away or 😴 sleeping.
+
+- **Setting it:** tap yours on the way out (a parent can tap anyone's), pick a place and add a few words if you like ("back by 5").
+- **On the screensaver:** it shows along the bottom too.
+
+## 📝 Sticky notes
+
+On Home (and **Family ▾ → 📝 Notes**), tap **＋ Note** to leave a note, or draw one.
+
+- **Options:** pick a color, and make it for everyone or for one person.
+- **On the screensaver:** notes show in the corner, a few at a time.
+- **Taking one down:** tap **✓ Done**. The writer, the person it's for or a parent can do this. The note is kept, just taken down.
+
+## 📔 Journal & 🫙 gratitude jar (Family ▾)
+
+- **📔 Journal:** each person writes (or draws) a little each day and picks how they feel. Only they and parents can see it. On the same date in later years, **📅 On this day** shows what they wrote.
+- **🫙 Gratitude jar:** anyone puts in one thing they're thankful for, on a paper slip the whole family sees. **🎲 Pull one out** picks one at random.
+- **In the weekly report:** it says how many days they wrote (with their moods, but never the words) and what they were grateful for.
+- **Taking something out:** **Take out** hides an entry. It's kept, never deleted.
+
+## 📏 Height chart (Family ▾)
+
+**＋ Measure someone** records a height in feet and inches, with a date, a note and an optional
+photo. The page shows:
+
+- a door frame with everyone's latest mark, wearing their 👕 outfit
+- a growth chart over the years
+- each person's history, with how much they grew
+
+When a measurement is added that week, the weekly report says how much they've grown.
+
 ## The menu
 
 The top menu is grouped so it fits on one line. Each group opens a dropdown:
@@ -74,6 +108,11 @@ Only new things were added:
 - **Tables:**
   - `outfit_items`: pieces bought, and what each cost.
   - `meal_polls`, `meal_poll_options` and `meal_poll_votes`.
+- **More columns:** `family_members.presence`, `presence_note`, `presence_at`.
+- **More tables:**
+  - `journal_entries`
+  - `heights`
+  - `sticky_notes` (taking things down only sets `hidden_at` / `done_at`)
 - **Setting:** `weekly_report_off`.
 - **Weather:** now also asks for sunrise and sunset.
 

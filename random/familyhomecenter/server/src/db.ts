@@ -964,6 +964,11 @@ for (const [table, column] of [
   ['task_progress', 'pending INTEGER'],
   // 👕 Dress up: what their avatar has on — {"hat": "crown", "pet": "puppy", …} (see services/outfits.ts).
   ['family_members', 'avatar_outfit TEXT'],
+  // 🏠 Who's home: where they are right now ('home', 'school', 'practice'…), a few words ("at
+  // Jake's"), and when they said so.
+  ['family_members', 'presence TEXT'],
+  ['family_members', 'presence_note TEXT'],
+  ['family_members', 'presence_at TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
@@ -1088,6 +1093,53 @@ db.exec(`
     option_id TEXT NOT NULL REFERENCES meal_poll_options(id) ON DELETE CASCADE,
     voted_at TEXT NOT NULL,
     PRIMARY KEY (poll_id, family_member_id)
+  );
+`);
+
+// 📔 Journal & 🫙 gratitude jar: a few words (and maybe a drawing) a day. Journal entries are
+// private to the writer and parents; gratitude-jar notes are for the whole family to see.
+// hidden_at = taken off the page (kept, never deleted).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS journal_entries (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'journal',
+    date TEXT NOT NULL,
+    text TEXT,
+    mood TEXT,
+    drawing TEXT,
+    created_at TEXT NOT NULL,
+    hidden_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS journal_entries_member ON journal_entries(family_member_id, date);
+`);
+
+// 📏 Height chart: each measurement, in inches, with an optional photo.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS heights (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    inches REAL NOT NULL,
+    note TEXT,
+    photo TEXT,
+    created_at TEXT NOT NULL,
+    hidden_at TEXT
+  );
+`);
+
+// 📝 Sticky notes: for the family (or one person), on Home and the screensaver until someone
+// takes them down (done_at — kept, never deleted).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sticky_notes (
+    id TEXT PRIMARY KEY,
+    text TEXT,
+    drawing TEXT,
+    color TEXT,
+    author_id TEXT,
+    for_member_id TEXT,
+    created_at TEXT NOT NULL,
+    done_at TEXT
   );
 `);
 

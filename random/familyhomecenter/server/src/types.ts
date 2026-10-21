@@ -7,6 +7,10 @@ export interface FamilyMember {
   avatar: string | null;
   /** 👕 Dress up: what the avatar has on, as JSON {slot: item id} (see services/outfits.ts). */
   avatar_outfit?: string | null;
+  /** 🏠 Who's home: where they are, a few words, and when they said so. */
+  presence?: string | null;
+  presence_note?: string | null;
+  presence_at?: string | null;
   is_parent: 0 | 1;
   /** A kid a parent lets put their own chores/to-dos on the floor plan (parents always can). */
   can_place_tasks?: 0 | 1;

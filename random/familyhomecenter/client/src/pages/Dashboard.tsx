@@ -7,6 +7,8 @@ import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { OnThisDay } from '../components/OnThisDay.js';
+import { WhosHome } from '../components/WhosHome.js';
+import { NotesBoard } from '../components/StickyNotes.js';
 import { useSectionAccess } from '../state/SectionAccess.js';
 import { canEditTask } from '../utils/tasks.js';
 
@@ -46,6 +48,9 @@ export function Dashboard() {
         <h1>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
         <WeatherWidget />
       </header>
+
+      <WhosHome />
+      {canSee('board') && <NotesBoard compact />}
 
       {canSee('prizes') && rewardTasks.length > 0 && (
         <section className="panel">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { ScreensaverExtras } from './ScreensaverExtras.js';
 
 interface Props {
   intervalSeconds: number;
@@ -48,6 +49,7 @@ export function Slideshow({ intervalSeconds, onExit }: Props) {
       <div className="slideshow__clock">
         {new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
       </div>
+      <ScreensaverExtras />
       {!photoId && <div className="slideshow__empty">Add photos to PHOTOS_DIR to see them here ✨</div>}
     </div>
   );

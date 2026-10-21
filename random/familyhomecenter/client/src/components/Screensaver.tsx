@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type ScreensaverMovie } from '../api/client.js';
 import { Slideshow } from './Slideshow.js';
+import { ScreensaverExtras } from './ScreensaverExtras.js';
 
 /**
  * What shows when the dashboard goes idle: a movie a parent picked for the screensaver (Photos →
@@ -32,6 +33,7 @@ export function Screensaver({ intervalSeconds, onExit }: { intervalSeconds: numb
   return (
     <div className="screensaver-movie" onClick={onExit}>
       <video ref={videoRef} src={`/api/movies-media/${movie.file_name}`} loop playsInline muted={!movie.sound} />
+      <ScreensaverExtras />
     </div>
   );
 }

@@ -32,6 +32,10 @@ export interface FamilyMember {
   avatar: string | null;
   /** 👕 Dress up: what the avatar has on, as JSON {slot: item id} — see utils/outfits.ts. */
   avatar_outfit?: string | null;
+  /** 🏠 Who's home — see components/WhosHome.tsx. */
+  presence?: string | null;
+  presence_note?: string | null;
+  presence_at?: string | null;
   /** Sound id (see utils/sounds.ts) to play when this person completes a task; null = no sound. */
   complete_sound: string | null;
   /** Visual style id (see utils/progressStyles.ts) for this person's Chores progress bar. */
@@ -363,6 +367,37 @@ export interface Closet {
   owned: string[];
   outfit: Partial<Record<OutfitSlot, string>>;
   star_balance: number;
+}
+
+// ---- 📔 Journal, 📏 heights, 📝 notes ----
+
+export interface JournalEntry {
+  id: string;
+  family_member_id: string;
+  kind: 'journal' | 'gratitude';
+  date: string;
+  text: string | null;
+  mood: string | null;
+  drawing: string | null;
+  created_at: string;
+}
+export interface HeightRow {
+  id: string;
+  family_member_id: string;
+  date: string;
+  inches: number;
+  note: string | null;
+  has_photo: 0 | 1;
+  created_at: string;
+}
+export interface StickyNote {
+  id: string;
+  text: string | null;
+  drawing: string | null;
+  color: string | null;
+  author_id: string | null;
+  for_member_id: string | null;
+  created_at: string;
 }
 
 // ---- 🗳️ Meal votes ----

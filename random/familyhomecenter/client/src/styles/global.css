@@ -2292,3 +2292,102 @@ body.fp-full-open { overflow: hidden; }
   .navbar--open .navbar__links .navbar__menu a.active { background: var(--accent); color: #fff; }
 }
 .fp-walker .dressed__pet { transform: translate(-45%, 40%) scale(0.85); animation: none; }
+
+/* ---- ✏️ Drawing pad ---- */
+.draw-pad { display: flex; flex-direction: column; gap: 6px; }
+.draw-pad__canvas { width: 100%; border: 2px dashed var(--border); border-radius: 12px; touch-action: none; cursor: crosshair; }
+.draw-pad__tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.draw-pad__ink { width: 28px; height: 28px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid var(--border); }
+.draw-pad__ink--on { outline: 3px solid var(--accent); outline-offset: 1px; }
+
+/* ---- 📝 Sticky notes ---- */
+.notes-board h2 { display: flex; align-items: center; gap: 12px; }
+.notes-board__add { margin-left: auto; }
+.notes-board__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; padding: 6px 2px; }
+.notes-board__form { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 6px; margin-bottom: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.15); }
+.notes-board__form textarea { background: transparent; font-size: 1.1em; }
+.sticky-note { position: relative; padding: 14px 12px 10px; min-height: 120px; border-radius: 3px; color: #2b2b2b; box-shadow: 0 6px 14px rgba(0,0,0,0.16); display: flex; flex-direction: column; gap: 6px; font-family: 'Comic Sans MS', 'Chalkboard SE', 'Segoe Print', system-ui, sans-serif; }
+.sticky-note::before { content: ''; position: absolute; top: -8px; left: 50%; width: 46px; height: 16px; transform: translateX(-50%) rotate(-2deg); background: rgba(255,255,255,0.55); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+.sticky-note__for { font-size: 0.8em; font-weight: 700; opacity: 0.75; }
+.sticky-note__text { font-size: 1.15em; white-space: pre-wrap; word-break: break-word; flex: 1; }
+.sticky-note__drawing { width: 100%; border-radius: 4px; }
+.sticky-note__by { display: flex; align-items: center; gap: 4px; font-size: 0.78em; opacity: 0.8; font-family: system-ui, sans-serif; }
+.sticky-note__done { margin-left: auto; font-size: 1em; }
+
+/* ---- 🏠 Who's home ---- */
+.whos-home { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.whos-home__title { font-weight: 700; color: var(--text-muted); margin-right: 4px; }
+.whos-home__person { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 0; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+.whos-home__person:disabled { opacity: 1; cursor: default; }
+.whos-home__person--away { background: var(--bg); }
+.whos-home__person--away .dressed, .whos-home__person--away > .member-avatar { opacity: 0.6; }
+.whos-home__place { position: absolute; left: 28px; bottom: 0; font-size: 1.05em; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
+.whos-home__name { display: flex; flex-direction: column; align-items: flex-start; font-weight: 600; line-height: 1.15; }
+.whos-home__note { font-size: 0.75em; font-weight: 400; color: var(--text-muted); max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.whos-home__places { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.whos-home__places button { justify-content: flex-start; }
+.whos-home__big { font-size: 1.4em; }
+.whos-home--readonly .whos-home__person { background: rgba(0,0,0,0.45); color: #fff; border: none; }
+.whos-home--readonly .whos-home__place { left: 36px; }
+.whos-home--readonly .whos-home__note { color: rgba(255,255,255,0.8); }
+
+/* ---- 📔 Journal & 🫙 jar ---- */
+.journal__moods { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.journal__mood { font-size: 1.8em; min-height: 0; padding: 4px 8px; background: var(--bg); border: 2px solid transparent; border-radius: 12px; }
+.journal__mood--on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.journal__write { display: flex; flex-direction: column; gap: 8px; }
+.journal__write h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.journal__entry header { display: flex; align-items: center; gap: 8px; }
+.journal__entry header .link-button { margin-left: auto; }
+.journal__entry-mood { font-size: 1.6em; }
+.journal__text { white-space: pre-wrap; font-size: 1.05em; }
+.journal__drawing { max-width: 100%; max-height: 320px; border-radius: 10px; border: 1px solid var(--border); }
+.journal__back { background: color-mix(in srgb, #ffd43b 14%, var(--panel)); }
+.jar__add { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.jar__visual { position: relative; font-size: 6em; line-height: 1; }
+.jar__count { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); font-size: 0.24em; font-weight: 800; background: #fff; border-radius: 999px; padding: 0 8px; color: #333; }
+.jar__form { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.jar__form h2 { margin: 0; }
+.jar__form .task-form__row { width: 100%; }
+.jar__form input { flex: 1; }
+.jar__slips { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; padding: 8px 2px; }
+.jar__slip { padding: 12px; border-radius: 6px; color: #2b2b2b; box-shadow: 0 3px 8px rgba(0,0,0,0.12); display: flex; flex-direction: column; gap: 8px; font-size: 1.05em; }
+.jar__picked { max-width: 520px; margin: 18vh auto 0; padding: 32px; border-radius: 10px; box-shadow: 0 20px 50px rgba(0,0,0,0.35); color: #2b2b2b; text-align: center; animation: jar-pop 0.5s ease-out; }
+.jar__picked-text { font-size: 1.8em; font-weight: 700; margin-bottom: 12px; }
+@keyframes jar-pop { from { transform: scale(0.4) rotate(-10deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---- 📏 Height chart ---- */
+.heights__top { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 16px; align-items: stretch; }
+@media (max-width: 800px) { .heights__top { grid-template-columns: 1fr; } }
+.heights__door { padding: 12px; }
+.heights__frame { position: relative; height: 420px; margin: 0 6px; border-left: 14px solid #b08155; border-right: 14px solid #b08155; border-top: 14px solid #9a6c42; background: linear-gradient(90deg, #f6efe4, #fbf7f0); border-radius: 4px 4px 0 0; }
+.heights__tick { position: absolute; left: 0; width: 14px; border-top: 2px solid #9a6c42; }
+.heights__tick span { position: absolute; left: 18px; top: -9px; font-size: 0.75em; color: #7a5532; font-weight: 700; }
+.heights__mark { position: absolute; display: flex; align-items: center; gap: 4px; transform: translateY(50%); }
+.heights__mark::before { content: ''; position: absolute; left: -100vw; right: 100%; }
+.heights__mark-label { font-size: 0.78em; font-weight: 700; background: var(--c); color: #fff; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+.heights__chart-panel h2 { margin-top: 0; }
+.heights__chart { width: 100%; height: auto; }
+.heights__grid { stroke: var(--border); stroke-width: 1; }
+.heights__axis { fill: var(--text-muted); font-size: 11px; }
+.heights__line { fill: none; stroke: currentColor; stroke-width: 3; stroke-linejoin: round; }
+.heights__dot { fill: currentColor; stroke: #fff; stroke-width: 2; }
+.heights__now { font-size: 2em; font-weight: 800; }
+.heights__grew { color: #2f9e44; font-weight: 700; }
+.heights__list { list-style: none; margin: 8px 0 0; padding: 0; }
+.heights__list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.heights__list li > span { flex: 1; }
+.heights__photo { display: block; max-width: 90vw; max-height: 85vh; margin: 5vh auto; border-radius: 12px; }
+.heights__photo-pick { display: inline-flex; align-self: flex-start; padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+
+/* ---- Screensaver extras: notes and who's home ---- */
+.screensaver-notes { position: absolute; top: 32px; right: 32px; z-index: 2; display: flex; flex-direction: column; gap: 22px; width: min(300px, 30vw); pointer-events: none; animation: ss-notes-in 0.8s ease-out; }
+.screensaver-notes .sticky-note { min-height: 90px; font-size: 1.1em; }
+.screensaver-notes .sticky-note__drawing { max-height: 180px; object-fit: contain; }
+@keyframes ss-notes-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+.screensaver-whos { position: absolute; left: 32px; bottom: 32px; z-index: 2; pointer-events: none; max-width: 60vw; }
+.screensaver-whos .whos-home { margin: 0; }
+.screensaver-movie { position: fixed; }
+.jar__form .task-form__row > button { flex: 0 0 auto; width: auto; }
+/* Small avatars in the who's-home strip: just the hat, glasses and magic — no pet wandering into the next person. */
+.whos-home .dressed__pet, .whos-home .dressed__hand { display: none; }

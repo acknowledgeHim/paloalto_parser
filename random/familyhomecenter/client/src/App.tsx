@@ -22,6 +22,9 @@ import { InternetPage } from './pages/InternetPage.js';
 import { PeoplePage } from './pages/PeoplePage.js';
 import { ApprovalsPage } from './pages/ApprovalsPage.js';
 import { DressUpPage } from './pages/DressUpPage.js';
+import { JournalPage } from './pages/JournalPage.js';
+import { HeightsPage } from './pages/HeightsPage.js';
+import { NotesPage } from './components/StickyNotes.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
@@ -83,6 +86,9 @@ export function App() {
           <Route path="/prizes/past/:id" element={<SectionGate section="prizes"><PastPrizesPage /></SectionGate>} />
           <Route path="/dress-up" element={<SectionGate section="prizes"><DressUpPage /></SectionGate>} />
           <Route path="/dress-up/:id" element={<SectionGate section="prizes"><DressUpPage /></SectionGate>} />
+          <Route path="/journal" element={<SectionGate section="board"><JournalPage /></SectionGate>} />
+          <Route path="/heights" element={<SectionGate section="board"><HeightsPage /></SectionGate>} />
+          <Route path="/notes" element={<SectionGate section="board"><NotesPage /></SectionGate>} />
           <Route path="/board" element={<SectionGate section="board"><FamilyBoardPage /></SectionGate>} />
           {/* A person's page is reached from the Family Board; their bank from the Prize Bank. */}
           <Route path="/person/:id" element={<SectionGate section="board"><PersonPage /></SectionGate>} />
