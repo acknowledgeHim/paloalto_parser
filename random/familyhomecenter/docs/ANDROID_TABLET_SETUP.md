@@ -49,8 +49,20 @@ Intercom microphone.
 1. **Give the Pi a fixed address.** In your router's settings, reserve an IP for the Pi (for
    example, `192.168.1.50`). Android tablets often can't resolve `.local` names, so use the IP.
 
-2. **Install Caddy.** Follow step 1 of `docs/INTERCOM_SETUP.md`. Skip this if you already did it
-   for the Intercom.
+2. **Install Caddy.** On Raspberry Pi OS Bookworm (Debian 12) it's in the normal package list:
+
+   ```bash
+   sudo apt update
+   sudo apt install -y caddy
+   caddy version                  # should print v2.x
+   systemctl status caddy         # should say active (running)
+   ```
+
+   Installing it creates `/etc/caddy/Caddyfile` and the `caddy` service for you. **If `/etc/caddy`
+   doesn't exist, or you get "Unit caddy.service not found", Caddy isn't installed yet.** Don't
+   create the folder by hand; run the install above. If apt asks about a Caddyfile you already
+   made, answer **N** to keep yours. On older Raspberry Pi OS, where apt can't find `caddy`, use
+   Caddy's own package list in step 1 of `docs/INTERCOM_SETUP.md`.
 
 3. **Configure Caddy.** Edit `/etc/caddy/Caddyfile` (use your Pi's IP):
 
