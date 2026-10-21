@@ -15,6 +15,7 @@ import { MemberAvatar, avatarChanged } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { PhotoPlaceInfo } from '../components/PhotoPlaceInfo.js';
 import { PhotoMap } from '../components/PhotoMap.js';
+import { AddPhotos } from '../components/AddPhotos.js';
 import { PhotoInfoTags, PhotoQualityTags } from '../components/PhotoQualityOptions.js';
 
 type PhotoTab = 'photos' | 'map' | 'movies' | 'documents' | 'animate';
@@ -572,6 +573,7 @@ export function PhotosPage() {
   // take it out of the filtered list, and it should stay put until you move on. viewPos remembers
   // where it was, so › goes to whatever slid into its place.
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const viewPos = useRef(0);
   const [slideshowOn, setSlideshowOn] = useState(false);
   // The ✨ button on a photo in the viewer: make a living photo from it.
@@ -786,6 +788,7 @@ export function PhotosPage() {
         <h1>Photos</h1>
         {tab === 'photos' && (
           <div className="task-form__row">
+            <button type="button" className="secondary" onClick={() => setAdding(true)}>📤 Add photos</button>
             <Link to="/photos/people" className="movie-maker__download">👥 People</Link>
             <button className="secondary" onClick={load}>Refresh</button>
             <button onClick={() => setSlideshowOn(true)} disabled={photos.length === 0}>▶ Start slideshow</button>
@@ -1092,6 +1095,7 @@ export function PhotosPage() {
       </>
       )}
 
+      {adding && <AddPhotos onClose={() => setAdding(false)} onAdded={load} />}
       {animating && (
         <AnimateMakerModal
           photoId={animating}

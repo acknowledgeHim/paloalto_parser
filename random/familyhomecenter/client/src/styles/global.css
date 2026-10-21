@@ -2589,3 +2589,18 @@ body.fp-full-open { overflow: hidden; }
 .photo-map__progress { display: flex; flex-direction: column; gap: 4px; }
 .photo-map__progress-bar { display: block; height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .photo-map__progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width 0.6s; }
+
+/* 📤 Add photos */
+.modal-panel.add-photos { max-width: 560px; display: flex; flex-direction: column; gap: 10px; }
+.add-photos__sum { font-weight: 600; margin: 0; }
+.add-photos__list { list-style: none; margin: 0; padding: 0; max-height: 45vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+.add-photos__row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+.add-photos__row:last-child { border-bottom: none; }
+.add-photos__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.add-photos__row--filed span:last-child { color: #067647; }
+.add-photos__row--error span:last-child { color: #b42318; }
+.add-photos__row--duplicate span:last-child { opacity: 0.75; }
+.photo-inbox { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+.photo-inbox h3 { margin: 0; }
+.photo-inbox__log ul { margin: 8px 0 0; padding-left: 18px; font-size: 0.88rem; display: flex; flex-direction: column; gap: 4px; }
+.photo-inbox__log code { overflow-wrap: anywhere; }

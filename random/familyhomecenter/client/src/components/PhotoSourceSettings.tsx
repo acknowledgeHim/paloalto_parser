@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { useActing } from '../pages/CamerasPage.js';
+import { PhotoInboxSettings } from './PhotoInboxSettings.js';
 
 interface Source {
   photos_dir: string;
@@ -163,6 +164,7 @@ export function PhotoSourceSettings() {
           <p className="hint">More detail: docs/PHOTOS_SETUP.md.</p>
         </>
       )}
+      <PhotoInboxSettings />
     </section>
   );
 }

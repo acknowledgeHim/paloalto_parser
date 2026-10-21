@@ -9,6 +9,10 @@ import { getPhotoQuality } from '../services/photoAnalysis.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import fsSync from 'node:fs';
 import { gzipSync } from 'node:zlib';
+import express from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import { autoSortOn, canWrite, fileOne, inboxDir, PICTURE_EXTS, registerInbox, sortInbox } from '../services/photoFiling.js';
+import { photosChanged } from '../services/photos.js';
 import { getSetting, setSetting } from '../db.js';
 import { isParentRequest } from '../services/rewards.js';
 import { getOriginalPhotoDate } from '../services/photoDates.js';
@@ -338,6 +342,93 @@ photosRouter.put('/source', (req, res) => {
   setSetting('photo_source_notes', JSON.stringify(notes));
   res.json(notes);
 });
+
+// ---- 📤 Add photos / 📥 Inbox: filed into <YEAR>/<Month> ----
+
+/**
+ * POST /upload (the picture as the body; headers x-filename, x-last-modified, x-acting-member) —
+ * one photo from 📤 Add photos. Saved into the Inbox first, then filed straight away.
+ */
+photosRouter.post(
+  '/upload',
+  express.raw({ type: () => true, limit: '300mb' }),
+  asyncHandler(async (req, res) => {
+    const name = path.basename(decodeURIComponent(String(req.get('x-filename') ?? ''))).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 200) || 'photo.jpg';
+    if (!PICTURE_EXTS.has(path.extname(name).toLowerCase())) return res.status(400).json({ error: `${name}: only pictures (JPG, PNG, HEIC, WebP, GIF)` });
+    const body = req.body as Buffer;
+    if (!Buffer.isBuffer(body) || body.length < 100) return res.status(400).json({ error: `${name}: empty file` });
+    if (!(await canWrite())) return res.status(503).json({ error: "The Family Home Center can't write to the photos folder (check the share allows writing)" });
+    const inbox = inboxDir();
+    await fsSync.promises.mkdir(inbox, { recursive: true });
+    registerInbox();
+    // A dot name while it's written, so the Inbox sorter leaves it alone.
+    const tmp = path.join(inbox, `.upload-${uuidv4()}${path.extname(name).toLowerCase()}`);
+    await fsSync.promises.writeFile(tmp, body);
+    const hint = Number(req.get('x-last-modified')) || null;
+    const by = String(req.get('x-acting-member') ?? '') || null;
+    const r = await fileOne(tmp, 'upload', by, hint, name);
+    if (r.result === 'error') {
+      // Leave it in the Inbox under its own name — the sorter tries again.
+      await fsSync.promises.rename(tmp, path.join(inbox, name)).catch(() => {});
+      return res.status(500).json(r);
+    }
+    if (r.result === 'filed') photosChanged();
+    res.json(r);
+  })
+);
+
+/** GET /inbox — the Inbox, the auto-sort switch, whether the share can be written, and the latest filings (parents). */
+photosRouter.get(
+  '/inbox',
+  asyncHandler(async (req, res) => {
+    if (!isParentRequest(req, req.query.acting_member_id)) return res.status(403).json({ error: 'For parents only' });
+    const dir = inboxDir();
+    let waiting = 0;
+    let other = 0;
+    try {
+      for (const it of await fsSync.promises.readdir(dir, { withFileTypes: true })) {
+        if (!it.isFile() || it.name.startsWith('.')) continue;
+        if (PICTURE_EXTS.has(path.extname(it.name).toLowerCase())) waiting++;
+        else other++;
+      }
+    } catch {
+      /* no Inbox yet */
+    }
+    res.json({
+      inbox_dir: dir,
+      exists: fsSync.existsSync(dir),
+      auto: autoSortOn(),
+      writable: await canWrite(),
+      waiting,
+      other,
+      recent: db.prepare('SELECT * FROM photo_filings ORDER BY at DESC LIMIT 30').all(),
+      totals: db.prepare("SELECT result, COUNT(*) AS n FROM photo_filings GROUP BY result").all(),
+    });
+  })
+);
+
+/** PATCH /inbox { auto, inbox_dir } (parents). */
+photosRouter.patch('/inbox', (req, res) => {
+  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'For parents only' });
+  if (req.body?.auto !== undefined) setSetting('photo_inbox_auto', req.body.auto ? '' : 'off');
+  if (typeof req.body?.inbox_dir === 'string') {
+    const d = req.body.inbox_dir.trim();
+    if (d && !path.isAbsolute(d)) return res.status(400).json({ error: 'Use a full path, e.g. /mnt/family-photos/Inbox' });
+    setSetting('photo_inbox_dir', d);
+    registerInbox();
+  }
+  res.json({ ok: true });
+});
+
+/** POST /inbox/sort-now (parents) — file what's in the Inbox right away (makes the Inbox if it isn't there). */
+photosRouter.post(
+  '/inbox/sort-now',
+  asyncHandler(async (req, res) => {
+    if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'For parents only' });
+    if (!(await canWrite())) return res.status(503).json({ error: "Can't write to the photos folder — check the share allows writing" });
+    res.json(await sortInbox(typeof req.body?.acting_member_id === 'string' ? req.body.acting_member_id : null));
+  })
+);
 
 photosRouter.get(
   '/random',

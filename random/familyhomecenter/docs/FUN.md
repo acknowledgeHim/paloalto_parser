@@ -171,6 +171,7 @@ Only new things were added:
   `camera_purges` (parent removals), settings `camera_min_free_gb`, `camera_compress_off`, `camera_smb_*`. Nothing is removed automatically.
 - **📍 Photo places** (`docs/PHOTOS_SETUP.md`): tables `photo_gps` (read from EXIF once) and `photo_place_edits`
   (country/state/year set by hand; the photo file is never changed); setting `photo_source_notes` (parents' notes on the photo share — no password).
+- **📥 Photo filing** (`docs/PHOTOS_SETUP.md`): table `photo_filings` (what was filed where); settings `photo_inbox_dir`, `photo_inbox_auto`. Photos are moved into YEAR/Month, duplicates into Inbox/Duplicates — nothing deleted.
 - **Settings:** `weekly_report_off`, `approval_email_off`, `morning_briefing`, `morning_briefing_start`, `morning_briefing_end`, `recap_off`, `whos_home_off` (Settings → ☀️ Wall screen hides 🏠 Who's home).
 - **Weather:** now also asks for sunrise and sunset.
 

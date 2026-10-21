@@ -360,3 +360,58 @@ its `/etc/fstab` line.
   new or rebuilt Pi.
 - The share password is never stored there. It belongs only in the credentials file on the Pi;
   keep a copy in your password manager.
+
+## 📤 Add photos and 📥 the Inbox: new photos filed as YEAR/Month
+
+New photos go into the library as `<PHOTOS_DIR>/<YEAR>/<Month>/`, by the date they were taken.
+
+- **The date** comes from the photo itself (EXIF). If the photo has no date: for 📤 Add photos it's
+  the date the phone gives the file; for the Inbox it's the file's own date.
+- **Month folders:** an existing folder for that month is used whatever it's called (`Aug`,
+  `aug`, `August`, `Sept`). A new one is always the full name with a capital first letter
+  (`August`).
+- **Nothing is ever deleted:**
+  - Filing from the Inbox *moves* the photo (a rename on the share), so it's never lost and never
+    stored twice.
+  - An exact copy of a photo already in that month folder is moved to `Inbox/Duplicates/`
+    instead.
+  - Two different photos with the same name are both kept (`IMG_1.jpg`, `IMG_1 (2).jpg`).
+- **The share must be writable.** Use the `rw` mount (the default), with `uid=`/`gid=` set to the
+  user the Family Home Center runs as. The share account also needs write permission on the NAS.
+  Settings → 📁 Photo library warns if it can't write.
+
+### 📤 Add photos (any phone, tablet or computer)
+
+1. Photos → **📤 Add photos** → **📷 Pick photos**, and choose as many as you like.
+2. Each photo shows where it went (`✓ 2025 / August`) or "Already there".
+
+On an iPhone, the browser usually turns HEIC photos into JPG as it sends them. A HEIC file that
+arrives as HEIC is filed, but the Pi can't show HEIC in Photos. Setting the iPhone to
+**Settings → Camera → Formats → Most Compatible** avoids that.
+
+### 📥 The Inbox (automatic, with a sync app on the phone)
+
+The Inbox is `<PHOTOS_DIR>/Inbox`. You can change it in **Settings → 📁 Photo library → 📥 Inbox**.
+
+- Every 5 minutes, the photos in it (and in any folders inside it) are filed.
+- A file copied in during the last minute waits for the next round.
+- Videos and other files are left where they are.
+- The Inbox never shows in the photo library.
+- **Settings → 📁 Photo library → 📥 Inbox** has a switch for this, **Sort the Inbox now**, and a
+  list of what was filed and where.
+
+A web page can't copy photos off a phone by itself. For automatic copying, install a sync app that
+uploads the camera roll to the **Inbox** folder on the share over SMB:
+
+- **Android: FolderSync** (or Autosync, or PhotoSync)
+  1. Add an **SMB** account: the NAS address, share, username and password.
+  2. Make a folder pair: phone `DCIM/Camera` → share `Inbox`, set to **To remote folder**
+     (one-way, upload only).
+  3. Schedule it, for example hourly, on Wi-Fi only.
+  4. **Turn off any "delete source after sync" option.**
+- **iPhone (and Android): PhotoSync**
+  1. Add an **SMB** target (the NAS) and choose the `Inbox` folder.
+  2. Turn on **Autotransfer**. iOS limits background apps, so the most reliable triggers are
+     "when charging" (an iOS Shortcuts automation) or arriving home.
+  3. Set it to send JPG (or turn on its HEIC → JPG conversion).
+- Several phones can all upload into the same Inbox. Name clashes and duplicates are handled.

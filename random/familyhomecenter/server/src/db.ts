@@ -1240,6 +1240,24 @@ db.exec(`
   );
 `);
 
+// 📥 Photos filed into <YEAR>/<Month> from the Inbox or 📤 Add photos (services/photoFiling.ts) —
+// what happened to each one, for Settings → 📁 Photo library.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_filings (
+    id TEXT PRIMARY KEY,
+    at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    dest_path TEXT,
+    taken_at TEXT,
+    date_from TEXT,
+    result TEXT NOT NULL,
+    note TEXT,
+    by_member TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_photo_filings_at ON photo_filings (at);
+`);
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

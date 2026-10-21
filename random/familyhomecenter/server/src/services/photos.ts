@@ -16,8 +16,19 @@ const THUMB_WIDTH = 1920; // downsized for smooth slideshow playback on the Pi's
 let cachedList: { scannedAt: number; files: string[] } | null = null;
 const RESCAN_MS = 5 * 60 * 1000;
 
+/** Folders the library never lists: the 📥 Inbox waiting to be filed (services/photoFiling.ts). */
+const skipDirs = new Set<string>();
+export function skipFolderInLibrary(dir: string): void {
+  skipDirs.add(path.resolve(dir));
+}
+/** New photos were filed — list the library again next time it's asked for. */
+export function photosChanged(): void {
+  cachedList = null;
+}
+
 /** Recursively find image files under config.photosDir (handles a local dir or an SMB-mounted share alike). */
 async function scanDir(dir: string): Promise<string[]> {
+  if (skipDirs.has(path.resolve(dir))) return [];
   let entries;
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
