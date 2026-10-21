@@ -117,7 +117,7 @@ const longDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(unde
 
 export function renderWeeklyReport(r: WeeklyReport): { subject: string; text: string; html: string } {
   const pct = r.total ? Math.round((r.done / r.total) * 100) : 0;
-  const cheer = pct >= 90 ? '🌟 Superstar week!' : pct >= 70 ? '💪 Great week!' : pct >= 40 ? '👍 Good effort' : r.total ? '🌱 Room to grow' : '😴 Quiet week';
+  const cheer = pct >= 90 ? '🌟 Superstar week!' : pct >= 70 ? '💪 Great week!' : pct >= 40 ? '👍 Nice work' : r.done ? '🌱 Every job counts' : r.total ? '😊 Next week is a fresh start' : '😴 Quiet week';
   const subject = `${r.member.name}'s week: ${r.done} of ${r.total} jobs done ${pct >= 70 ? '🎉' : ''}`.trim();
   const color = r.member.color || '#5b8def';
   const bars = r.days

@@ -2463,3 +2463,12 @@ body.fp-full-open { overflow: hidden; }
 .briefing__foot { display: flex; justify-content: flex-end; gap: 12px; }
 .briefing__foot button { font-size: 1.2em; padding: 12px 26px; }
 .dashboard__briefing { margin-left: 14px; font-size: 0.45em; vertical-align: middle; }
+
+.recap__cheer { font-size: clamp(1.4em, 3.6vw, 2.4em); font-weight: 800; margin: 2px 0 6px; }
+.recap__status { display: flex; align-items: center; gap: 16px; }
+.recap__ring { width: 96px; height: 96px; transform: rotate(-90deg); }
+.recap__ring text { transform: rotate(90deg); transform-origin: 42px 42px; fill: #fff; font-size: 17px; font-weight: 800; }
+.recap__ring-bg { fill: none; stroke: rgba(255,255,255,0.18); stroke-width: 9; }
+.recap__ring-fill { fill: none; stroke: var(--c); stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 1.2s ease-out; animation: recap-ring 1.2s ease-out; }
+@keyframes recap-ring { from { stroke-dashoffset: 214; } }
+.recap__shoutouts { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: clamp(1em, 2.2vw, 1.35em); font-weight: 600; }

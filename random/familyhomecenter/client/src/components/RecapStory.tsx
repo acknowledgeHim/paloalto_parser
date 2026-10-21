@@ -29,9 +29,56 @@ const PHOTO_MS = 3500;
 const shortDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const weekday = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'narrow' });
 
+const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long' });
+
 /**
- * 🎞️ This week: the family's week as a little story — everyone's jobs, stars and prizes, the star
- * of the week, the gratitude jar, meals we voted on, who grew, and the week's photos. Plays by
+ * Something nice to say about each person's own week — never compared with anyone else's: a
+ * headline for how it went, and a few shout-outs (days they finished everything, their best day,
+ * getting stronger as the week went on, the job they kept at).
+ */
+export function cheerFor(p: FamilyWeek['people'][number]): { headline: string; shoutouts: string[] } {
+  const pct = p.total ? p.done / p.total : 0;
+  const headline =
+    pct >= 0.9
+      ? '🌟 Superstar week!'
+      : pct >= 0.7
+        ? '💪 Awesome effort!'
+        : pct >= 0.4
+          ? '👍 Nice work this week!'
+          : p.done > 0
+            ? '🌱 Every job counts — great start!'
+            : '😊 Next week is a fresh start!';
+  const out: string[] = [];
+  const fullDays = p.days.filter((d) => d.total > 0 && d.done === d.total).length;
+  if (fullDays) out.push(`✅ Finished everything on ${fullDays} day${fullDays === 1 ? '' : 's'}`);
+  const best = [...p.days].sort((a, b) => b.done - a.done)[0];
+  if (best && best.done >= 2) out.push(`🏅 Best day: ${dayName(best.date)} — ${best.done} jobs`);
+  const half = (ds: typeof p.days) => ds.reduce((n, d) => n + d.done, 0) / Math.max(1, ds.length);
+  if (half(p.days.slice(4)) > half(p.days.slice(0, 3)) && p.done >= 3) out.push('📈 Got stronger as the week went on');
+  const kept = p.top.find((t) => t.n >= 2);
+  if (kept) out.push(`🔁 Kept at it: ${kept.title} ×${kept.n}`);
+  if (!out.length && p.done) out.push(`✨ ${p.done} job${p.done === 1 ? '' : 's'} done — thank you!`);
+  return { headline, shoutouts: out.slice(0, 3) };
+}
+
+/** How much of their week got done, as a ring that fills up. */
+function Ring({ pct }: { pct: number }) {
+  const r = 34;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg className="recap__ring" viewBox="0 0 84 84" aria-label={`${pct}% done`}>
+      <circle cx="42" cy="42" r={r} className="recap__ring-bg" />
+      <circle cx="42" cy="42" r={r} className="recap__ring-fill" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} />
+      <text x="42" y="47" textAnchor="middle">
+        {pct}%
+      </text>
+    </svg>
+  );
+}
+
+/**
+ * 🎞️ This week: the family's week as a little story — everyone's own week with something nice to say
+ * about it (never a ranking), the gratitude jar, meals we voted on, who grew, and the week's photos. Plays by
  * itself (the weekend screensaver), or step through it on Fun ▾ → 🎞️ This week.
  */
 export function RecapStory({ fullScreen = false, onDone, onExit }: { fullScreen?: boolean; onDone?: () => void; onExit?: () => void }) {
@@ -74,6 +121,7 @@ export function RecapStory({ fullScreen = false, onDone, onExit }: { fullScreen?
       const m = who(p.id);
       if (!m) continue;
       const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+      const cheer = cheerFor(p);
       slides.push({
         key: `p-${p.id}`,
         ms: SLIDE_MS,
@@ -81,9 +129,13 @@ export function RecapStory({ fullScreen = false, onDone, onExit }: { fullScreen?
           <div className="recap__person" style={{ ['--c' as string]: m.color }}>
             <DressedAvatar member={m} size={130} />
             <h2>{m.name}</h2>
-            <p className="recap__big">
-              <strong>{p.done}</strong> of {p.total} jobs · {pct}%
-            </p>
+            <div className="recap__cheer">{cheer.headline}</div>
+            <div className="recap__status">
+              <Ring pct={pct} />
+              <p className="recap__big">
+                <strong>{p.done}</strong> of {p.total} jobs
+              </p>
+            </div>
             <div className="recap__bars">
               {p.days.map((d) => (
                 <div key={d.date} className="recap__bar">
@@ -96,33 +148,19 @@ export function RecapStory({ fullScreen = false, onDone, onExit }: { fullScreen?
               {p.stars > 0 && <span>+{p.stars} ⭐</span>}
               {p.money > 0 && <span>+${p.money.toFixed(2)}</span>}
               {p.prizes.map((x) => (
-                <span key={x}>🏆 {x}</span>
+                <span key={x}>{x}</span>
               ))}
               {p.rewards.map((x, k) => (
                 <span key={k}>{x}</span>
               ))}
             </div>
-            {p.top.length > 0 && <p className="recap__small">Most done: {p.top.map((t) => `${t.title}${t.n > 1 ? ` ×${t.n}` : ''}`).join(' · ')}</p>}
-          </div>
-        ),
-      });
-    }
-    const ranked = week.people.filter((p) => p.total >= 3 && who(p.id) && who(p.id)!.is_parent !== 1).sort((a, b) => b.done / b.total - a.done / a.total || b.done - a.done);
-    if (ranked[0]) {
-      const m = who(ranked[0].id)!;
-      slides.push({
-        key: 'star',
-        ms: SLIDE_MS,
-        body: (
-          <div className="recap__star">
-            <div className="recap__kicker">🌟 Star of the week</div>
-            <div className="recap__star-burst">
-              <DressedAvatar member={m} size={150} />
-            </div>
-            <h2>{m.name}!</h2>
-            <p className="recap__big">
-              {ranked[0].done} of {ranked[0].total} jobs done
-            </p>
+            {cheer.shoutouts.length > 0 && (
+              <ul className="recap__shoutouts">
+                {cheer.shoutouts.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            )}
           </div>
         ),
       });

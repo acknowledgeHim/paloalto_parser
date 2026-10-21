@@ -108,8 +108,7 @@ screen. Off by default.
 The family's week as a little story:
 
 - how many jobs everyone did together
-- each person's week, with daily bars, stars, money and prizes
-- 🌟 Star of the week (the kid with the best week)
+- each person's own week: something nice about it, how much they finished (a ring that fills), daily bars, stars, money, prizes and shout-outs like ✅ finished everything on 3 days, 🏅 their best day, 📈 got stronger as the week went on. Nobody is ranked or compared.
 - the gratitude jar
 - meals picked by vote
 - who grew
