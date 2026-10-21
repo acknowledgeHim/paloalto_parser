@@ -52,6 +52,15 @@ export function isParentRequest(req: Request, actingMemberId: unknown): boolean 
   return !db.prepare('SELECT 1 FROM family_members WHERE is_parent = 1 LIMIT 1').get();
 }
 
+/** Is this request from that person themselves (their login, or picked up top when there are no
+ *  logins) or from a parent? For a kid spending their own stars. */
+export function isSelfOrParent(req: Request, memberId: string, actingMemberId: unknown): boolean {
+  if (isParentRequest(req, actingMemberId)) return true;
+  const self = sessionMemberId(req.cookies?.[SESSION_COOKIE_NAME] as string | undefined);
+  if (self) return self === memberId;
+  return actingMemberId === memberId;
+}
+
 /** The completion rows a finished "times"/"hours" job gets: one per time-of-day slot (or one). */
 export function goalSlots(task: Task): Array<string | null> {
   const slots = (task.time_of_day ?? '').split(',').map((x) => x.trim()).filter(Boolean);

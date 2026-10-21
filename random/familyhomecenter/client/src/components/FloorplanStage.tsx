@@ -3,7 +3,8 @@ import type { FamilyMember, Floorplan, FloorplanRoom, Task } from '../api/client
 import { floorplanImage, roomCenter } from '../utils/floorplans.js';
 import { isTaskDoneByAll, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { taskIcon } from '../utils/taskIcons.js';
-import { MemberAvatar } from './MemberAvatar.js';
+import { DressedAvatar } from './DressedAvatar.js';
+import type { Sky } from '../utils/daylight.js';
 
 /**
  * One floor plan with its rooms outlined and labeled (how many jobs are left in each), and each
@@ -92,12 +93,12 @@ export function jobSpot(task: Pick<Task, 'room_x' | 'room_y'>, room: FloorplanRo
 }
 
 /** How much a person's walking legs bend to one side — a little different per person. */
-function bendFor(memberId: string): number {
+export function bendFor(memberId: string): number {
   return 0.06 + (parseInt(memberId.replace(/[^0-9a-f]/gi, '').slice(-2) || '0', 16) % 5) * 0.025;
 }
 
 /** The curve's control point for one leg of a walk (a quadratic Bézier from `a` to `b`). */
-function legControl([x1, y1]: [number, number], [x2, y2]: [number, number], bend: number): [number, number] {
+export function legControl([x1, y1]: [number, number], [x2, y2]: [number, number], bend: number): [number, number] {
   return [(x1 + x2) / 2 - (y2 - y1) * bend, (y1 + y2) / 2 + (x2 - x1) * bend];
 }
 
@@ -195,7 +196,7 @@ function Walker({ spot, x, y, dx, threeD, scale, onClick }: { spot: WalkerSpot; 
     >
       <div className="fp-walker__shadow" />
       <div className="fp-walker__body" style={{ borderColor: spot.member.color }}>
-        <MemberAvatar member={spot.member} size={Math.round((threeD ? 54 : 44) * scale)} />
+        <DressedAvatar member={spot.member} size={Math.round((threeD ? 54 : 44) * scale)} />
         {/* What they're on: smaller than them, so it's still clearly them. */}
         <span className="fp-walker__job" aria-hidden="true">{taskIcon(spot.task)}</span>
       </div>
@@ -203,6 +204,57 @@ function Walker({ spot, x, y, dx, threeD, scale, onClick }: { spot: WalkerSpot; 
         {spot.member.name}
       </div>
     </button>
+  );
+}
+
+/** A made-up but steady "random" 0–1 for the i-th raindrop, so they don't jump on every render. */
+const scatter = (i: number, k: number) => {
+  const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+/**
+ * 🌗 The plan at this time of day: a warm dawn, a pink dusk and a dark night — where rooms with
+ * jobs still left glow with their lights on — plus rain, snow, a storm or fog from the weather.
+ */
+function SkyLayer({ sky, plan, tasks }: { sky: Sky; plan: Floorplan; tasks: Task[] }) {
+  const lit = sky.phase === 'day' ? [] : plan.rooms.filter((r) => openInRoom(tasks, r.id).length > 0);
+  const falling = sky.weather === 'rain' || sky.weather === 'storm' ? 70 : sky.weather === 'snow' ? 45 : 0;
+  return (
+    <>
+      <div className={`fp-sky fp-sky--${sky.phase}`} aria-hidden="true" />
+      {lit.length > 0 && (
+        <svg className="fp-sky__lights" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <filter id="fp-lamp-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="0.012" />
+            </filter>
+          </defs>
+          {lit.map((r) => (
+            <polygon key={r.id} points={r.points.map((p) => p.join(',')).join(' ')} className="fp-sky__lamp" filter="url(#fp-lamp-glow)" />
+          ))}
+        </svg>
+      )}
+      {falling > 0 && (
+        <div className={`fp-weather fp-weather--${sky.weather}`} aria-hidden="true">
+          {Array.from({ length: falling }, (_, i) => (
+            <span
+              key={i}
+              className="fp-weather__drop"
+              style={{
+                left: `${scatter(i, 1) * 100}%`,
+                animationDelay: `${-scatter(i, 2) * 3}s`,
+                animationDuration: `${sky.weather === 'snow' ? 5 + scatter(i, 3) * 4 : 0.7 + scatter(i, 3) * 0.5}s`,
+              }}
+            >
+              {sky.weather === 'snow' ? '❄' : ''}
+            </span>
+          ))}
+        </div>
+      )}
+      {sky.weather === 'storm' && <div className="fp-weather__flash" aria-hidden="true" />}
+      {sky.weather === 'fog' && <div className="fp-weather__fog" aria-hidden="true" />}
+    </>
   );
 }
 
@@ -221,6 +273,7 @@ export function FloorplanStage({
   hidePinIds,
   onPinPointerDown,
   onPinClick,
+  sky,
   children,
 }: {
   plan: Floorplan;
@@ -242,6 +295,8 @@ export function FloorplanStage({
   /** Pressing a pin — the placer starts dragging it to move it. */
   onPinPointerDown?: (task: Task, e: ReactPointerEvent) => void;
   onPinClick?: (task: Task) => void;
+  /** 🌗 Time of day and weather to show on the plan. */
+  sky?: Sky;
   /** Drawn over the plan (inside the tilt) — the editor's drawing layer. */
   children?: ReactNode;
 }) {
@@ -400,6 +455,7 @@ export function FloorplanStage({
           })}
           {showPaths && showWalkers && here.map((s) => <WalkPath key={s.member.id} spot={s} planId={plan.id} />)}
         </svg>
+        {sky && <SkyLayer sky={sky} plan={plan} tasks={tasks} />}
         {plan.rooms.map((r) => {
           const [cx, cy] = labelSpot(r, threeD);
           const open = openInRoom(tasks, r.id).length;

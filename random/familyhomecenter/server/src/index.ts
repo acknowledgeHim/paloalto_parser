@@ -34,6 +34,10 @@ import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
 import { startThumbnailWarmSchedule } from './services/photos.js';
 import { allFaces, facesEnabled } from './services/faces/index.js';
 import { startGroceryEmailSchedule } from './services/groceryEmail.js';
+import { startWeeklyReportSchedule } from './services/weeklyReport.js';
+import { outfitsRouter } from './routes/outfits.js';
+import { mealPollsRouter } from './routes/mealPolls.js';
+import { reportsRouter } from './routes/reports.js';
 import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
 import { startInternetSchedule } from './services/internetControl.js';
 import { localizeExistingRecipeImages } from './services/recipeImages.js';
@@ -75,6 +79,9 @@ app.use('/api/albums', albumsRouter);
 app.use('/api/access', accessRouter);
 app.use('/api/faces', facesRouter);
 app.use('/api/floorplans', floorplansRouter);
+app.use('/api/outfits', outfitsRouter);
+app.use('/api/meal-polls', mealPollsRouter);
+app.use('/api/reports', reportsRouter);
 // Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
 // handles HTTP Range requests, which video playback/seeking needs.
 app.use('/api/kb-media', express.static(config.kbMediaDir));
@@ -103,6 +110,7 @@ server.listen(config.port, config.host, () => {
   // Face suggestions take a few seconds to work out for a big library — do it now, not on first visit.
   if (facesEnabled()) allFaces().catch((e) => console.warn('[faces] warm-up failed', e));
   startGroceryEmailSchedule();
+  startWeeklyReportSchedule();
   startInternetSchedule();
   localizeExistingRecipeImages().catch((err) => console.warn('[recipes] picture migration failed', err));
 });

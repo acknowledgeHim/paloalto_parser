@@ -9,6 +9,8 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { FloorplanStage, walkerSpots } from './FloorplanStage.js';
 import { MemberAvatar } from './MemberAvatar.js';
 import { TaskCard } from './TaskCard.js';
+import { useSky, type SkyMode } from '../utils/daylight.js';
+import { ReplayLayer, replayEvents, replayLength, replayTimeOfDay, useReplayClock, type ReplayEvent } from './FloorplanReplay.js';
 
 /**
  * Chores & Tasks → 🏠 By room, and Family Board → 🏠 House: the floor plans (one per floor, the
@@ -23,6 +25,7 @@ const ROOM_SUGGESTIONS = [
 const PLAN_KEY = 'familyhomecenter.floorplan.active';
 const THREE_D_KEY = 'familyhomecenter.floorplan.3d';
 const PATHS_KEY = 'familyhomecenter.floorplan.paths';
+const SKY_KEY = 'familyhomecenter.floorplan.sky';
 
 const remember = (key: string, value: string) => {
   try {
@@ -122,6 +125,17 @@ export function FloorplanView({
     setShowPathsState(v);
     remember(PATHS_KEY, v ? '1' : '0');
   };
+  // 🌗 Day and night: follows the clock (and the weather), or pinned to day or night.
+  const [skyMode, setSkyModeState] = useState<SkyMode>(() => (recall(SKY_KEY) as SkyMode | null) ?? 'auto');
+  const nextSky = () => {
+    const next: SkyMode = skyMode === 'auto' ? 'day' : skyMode === 'day' ? 'night' : 'auto';
+    setSkyModeState(next);
+    remember(SKY_KEY, next);
+  };
+  const sky = useSky(skyMode);
+  // ▶️ Replay today: everyone's check-offs played back in order.
+  const [replay, setReplay] = useState<ReplayEvent[] | null>(null);
+  const replayT = useReplayClock(Boolean(replay), replay ? replayLength(replay) : 0, () => setReplay(null));
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
   const stageBox = useRef<HTMLDivElement>(null);
@@ -196,6 +210,25 @@ export function FloorplanView({
   }, [tasks]);
   const room = plan?.rooms.find((r) => r.id === selectedRoomId) ?? null;
   const spots = plans ? walkerSpots(tasks, members, plans, threeD) : [];
+  const startReplay = () => {
+    if (!plans) return;
+    const events = replayEvents(tasks, members, plans, threeD);
+    if (!events.length) {
+      setError('Nothing has been checked off in a room yet today — come back later for the replay!');
+      return;
+    }
+    setError(null);
+    setSelectedRoomId(null);
+    setPlanId(events[0].planId);
+    setReplay(events);
+    stageBox.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  // During the replay, show the floor the action is on.
+  const replayPlanId = replay ? (replay.find((e) => e.t + 400 > replayT) ?? replay[replay.length - 1]).planId : null;
+  useEffect(() => {
+    if (replayPlanId && replayPlanId !== plan?.id) setPlanIdState(replayPlanId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replayPlanId]);
 
   const place = async (task: Task, roomId: string | null, at?: [number, number]) => {
     setError(null);
@@ -329,6 +362,26 @@ export function FloorplanView({
           </button>
           <button
             type="button"
+            className={skyMode === 'auto' ? 'secondary' : ''}
+            onClick={nextSky}
+            disabled={editing || placing}
+            aria-label={`Time of day: ${skyMode}`}
+            title={skyMode === 'auto' ? 'Day and night follow the clock — tap to see daytime' : skyMode === 'day' ? 'Always daytime — tap for night' : 'Always night — tap to follow the clock'}
+          >
+            {skyMode === 'auto' ? (full ? '🌗' : `🌗 ${sky.phase === 'night' ? 'Night' : sky.phase === 'dusk' ? 'Dusk' : sky.phase === 'dawn' ? 'Dawn' : 'Day'}`) : skyMode === 'day' ? (full ? '☀️' : '☀️ Day') : full ? '🌙' : '🌙 Night'}
+          </button>
+          <button
+            type="button"
+            className={replay ? '' : 'secondary'}
+            onClick={() => (replay ? setReplay(null) : startReplay())}
+            disabled={editing || placing}
+            aria-label={replay ? 'Stop the replay' : "Replay today's check-offs"}
+            title={replay ? 'Stop the replay' : "Watch today's check-offs played back on the plan"}
+          >
+            {replay ? (full ? '⏹' : '⏹ Stop') : full ? '▶️' : '▶️ Replay today'}
+          </button>
+          <button
+            type="button"
             className={`fp-view__full-toggle ${full ? '' : 'secondary'}`}
             onClick={() => setFull(!full)}
             aria-pressed={full}
@@ -403,17 +456,22 @@ export function FloorplanView({
         plan && (
           <>
             <div ref={stageBox}>
+            {replay && <ReplayHud events={replay} t={replayT} />}
             <FloorplanStage
               plan={plan}
               tasks={tasks}
               spots={spots}
               threeD={threeD}
               big={full}
-              showPaths={showPaths}
+              showPaths={showPaths && !replay}
+              showWalkers={!replay}
+              sky={sky}
               selectedRoomId={selectedRoomId}
               onRoomClick={(r) => setSelectedRoomId(selectedRoomId === r.id ? null : r.id)}
               onWalkerClick={(s) => setPersonId(s.member.id)}
-            />
+            >
+              {replay && <ReplayLayer events={replay} planId={plan.id} t={replayT} threeD={threeD} scale={plan.avatar_scale ?? 1} />}
+            </FloorplanStage>
             </div>
             {plan.rooms.length === 0 && (
               <p className="hint">No rooms marked on this plan yet{canEdit ? ' — tap ✏️ Edit plans to mark them.' : '.'}</p>
@@ -1082,6 +1140,23 @@ function PlanEditor({
         </div>
       )}
       {plan.rooms.length > 0 && !selected && !pending && <p className="hint">Tap a room's name to rename, recolor, redraw or delete it.</p>}
+    </div>
+  );
+}
+
+/** Over the plan during ▶️ Replay: the clock, how far along, and how many jobs so far. */
+function ReplayHud({ events, t }: { events: ReplayEvent[]; t: number }) {
+  const time = replayTimeOfDay(events, t);
+  const done = events.filter((e) => e.t <= t).length;
+  const last = events[events.length - 1].t;
+  const finished = done === events.length && t > last + 300;
+  return (
+    <div className="fp-replay__hud" role="status">
+      <span className="fp-replay__clock">🕐 {time ? new Date(time).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : ''}</span>
+      <div className="progress-bar fp-replay__bar">
+        <div className="progress-bar__fill" style={{ width: `${Math.min(100, (t / (last + 1)) * 100)}%` }} />
+      </div>
+      <span className="fp-replay__count">{finished ? `🎉 ${events.length} job${events.length === 1 ? '' : 's'} done today!` : `✓ ${done} of ${events.length}`}</span>
     </div>
   );
 }

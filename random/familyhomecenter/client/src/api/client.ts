@@ -30,6 +30,8 @@ export interface FamilyMember {
   color: string;
   /** An emoji, the literal string "image" (custom uploaded photo), or null for no avatar. */
   avatar: string | null;
+  /** 👕 Dress up: what the avatar has on, as JSON {slot: item id} — see utils/outfits.ts. */
+  avatar_outfit?: string | null;
   /** Sound id (see utils/sounds.ts) to play when this person completes a task; null = no sound. */
   complete_sound: string | null;
   /** Visual style id (see utils/progressStyles.ts) for this person's Chores progress bar. */
@@ -340,7 +342,50 @@ export interface CalendarEvent {
 export interface WeatherData {
   location: string;
   current: { temperature: number; humidity: number; windSpeed: number; code: number; description: string };
-  daily: Array<{ date: string; code: number; description: string; high: number; low: number; precipChance: number | null }>;
+  daily: Array<{ date: string; code: number; description: string; high: number; low: number; precipChance: number | null; sunrise?: string | null; sunset?: string | null }>;
+}
+
+// ---- 👕 Dress up ----
+
+export type OutfitSlot = 'hat' | 'eyes' | 'hand' | 'pet' | 'magic';
+export interface OutfitItem {
+  id: string;
+  slot: OutfitSlot;
+  emoji: string;
+  name: string;
+  stars: number;
+}
+export interface OutfitCatalog {
+  slots: Array<{ id: OutfitSlot; label: string }>;
+  items: OutfitItem[];
+}
+export interface Closet {
+  owned: string[];
+  outfit: Partial<Record<OutfitSlot, string>>;
+  star_balance: number;
+}
+
+// ---- 🗳️ Meal votes ----
+
+export interface MealPollOption {
+  id: string;
+  title: string;
+  recipe_id: string | null;
+  emoji: string | null;
+  thumbnail_url: string | null;
+  votes: number;
+}
+export interface MealPoll {
+  id: string;
+  date: string;
+  slot: MealSlot;
+  question: string | null;
+  created_at: string;
+  closed_at: string | null;
+  winner_option_id: string | null;
+  meal_id: string | null;
+  options: MealPollOption[];
+  votes: Array<{ family_member_id: string; option_id: string }>;
 }
 
 // ---- Music ----

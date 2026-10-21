@@ -5,6 +5,8 @@ export interface FamilyMember {
   /** An emoji (e.g. "🦄"), the literal string "image" (a custom photo — see routes/familyMembers.ts's
    *  /:id/avatar-image), or null/empty for no avatar (falls back to a colored initial in the client). */
   avatar: string | null;
+  /** 👕 Dress up: what the avatar has on, as JSON {slot: item id} (see services/outfits.ts). */
+  avatar_outfit?: string | null;
   is_parent: 0 | 1;
   /** A kid a parent lets put their own chores/to-dos on the floor plan (parents always can). */
   can_place_tasks?: 0 | 1;

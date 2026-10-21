@@ -7,7 +7,8 @@ export const settingsRouter = Router();
 // contacts_distance_lookup: '1' = look up contacts' distance from home, which sends their street
 // address to OpenStreetMap (services/geocodeAddress.ts) — off unless a parent turns it on.
 // weather_off: '1' = no weather at all — nothing is asked of Open-Meteo (routes/weather.ts).
-const KEYS = ['idle_timeout_seconds', 'slideshow_interval_seconds', 'contacts_distance_lookup', 'weather_off'] as const;
+// weekly_report_off: '1' = no 📬 weekly report emails (services/weeklyReport.ts).
+const KEYS = ['idle_timeout_seconds', 'slideshow_interval_seconds', 'contacts_distance_lookup', 'weather_off', 'weekly_report_off'] as const;
 
 // GET stays open: every kiosk/phone reads this on load to drive its own idle-screensaver timer,
 // regardless of whether anyone's logged in to Settings.

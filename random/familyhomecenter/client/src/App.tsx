@@ -21,6 +21,7 @@ import { SettingsPage } from './pages/SettingsPage.js';
 import { InternetPage } from './pages/InternetPage.js';
 import { PeoplePage } from './pages/PeoplePage.js';
 import { ApprovalsPage } from './pages/ApprovalsPage.js';
+import { DressUpPage } from './pages/DressUpPage.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
@@ -80,6 +81,8 @@ export function App() {
           <Route path="/knowledge-base" element={<SectionGate section="knowledge-base"><KnowledgeBasePage /></SectionGate>} />
           <Route path="/prizes" element={<SectionGate section="prizes"><PrizeBankPage /></SectionGate>} />
           <Route path="/prizes/past/:id" element={<SectionGate section="prizes"><PastPrizesPage /></SectionGate>} />
+          <Route path="/dress-up" element={<SectionGate section="prizes"><DressUpPage /></SectionGate>} />
+          <Route path="/dress-up/:id" element={<SectionGate section="prizes"><DressUpPage /></SectionGate>} />
           <Route path="/board" element={<SectionGate section="board"><FamilyBoardPage /></SectionGate>} />
           {/* A person's page is reached from the Family Board; their bank from the Prize Bank. */}
           <Route path="/person/:id" element={<SectionGate section="board"><PersonPage /></SectionGate>} />

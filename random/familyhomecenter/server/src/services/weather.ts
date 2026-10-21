@@ -27,7 +27,7 @@ export async function getWeather(): Promise<unknown> {
   url.searchParams.set('latitude', (Math.round(config.weather.lat * 10) / 10).toFixed(1));
   url.searchParams.set('longitude', (Math.round(config.weather.lon * 10) / 10).toFixed(1));
   url.searchParams.set('current', 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m');
-  url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
+  url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset');
   url.searchParams.set('temperature_unit', 'fahrenheit');
   url.searchParams.set('wind_speed_unit', 'mph');
   url.searchParams.set('timezone', 'auto');
@@ -53,6 +53,9 @@ export async function getWeather(): Promise<unknown> {
       high: raw.daily.temperature_2m_max[i],
       low: raw.daily.temperature_2m_min[i],
       precipChance: raw.daily.precipitation_probability_max?.[i] ?? null,
+      // Local times like "2026-10-21T07:31" — the floor plan's day and night follows them.
+      sunrise: raw.daily.sunrise?.[i] ?? null,
+      sunset: raw.daily.sunset?.[i] ?? null,
     })),
   };
 

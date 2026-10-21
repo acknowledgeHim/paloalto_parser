@@ -962,6 +962,8 @@ for (const [table, column] of [
   // A kid's chunk of a times/hours job that needs a parent's OK: 1 while it waits in ✅ To approve
   // (it doesn't count yet); NULL = counted.
   ['task_progress', 'pending INTEGER'],
+  // 👕 Dress up: what their avatar has on — {"hat": "crown", "pet": "puppy", …} (see services/outfits.ts).
+  ['family_members', 'avatar_outfit TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
@@ -1044,6 +1046,48 @@ db.exec(`
     completed_on TEXT NOT NULL,
     time_of_day TEXT,
     created_at TEXT NOT NULL
+  );
+`);
+
+// 👕 Dress up: the outfit pieces each person has bought with stars.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS outfit_items (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL,
+    stars INTEGER NOT NULL DEFAULT 0,
+    bought_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, item_id)
+  );
+`);
+
+// 🗳️ What's for dinner: a parent offers a few choices for a meal, everyone votes, and closing the
+// vote puts the winner on the meal plan.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meal_polls (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL,
+    slot TEXT NOT NULL DEFAULT 'dinner',
+    question TEXT,
+    created_by_id TEXT,
+    created_at TEXT NOT NULL,
+    closed_at TEXT,
+    winner_option_id TEXT,
+    meal_id TEXT
+  );
+  CREATE TABLE IF NOT EXISTS meal_poll_options (
+    id TEXT PRIMARY KEY,
+    poll_id TEXT NOT NULL REFERENCES meal_polls(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    recipe_id TEXT,
+    emoji TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS meal_poll_votes (
+    poll_id TEXT NOT NULL REFERENCES meal_polls(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    option_id TEXT NOT NULL REFERENCES meal_poll_options(id) ON DELETE CASCADE,
+    voted_at TEXT NOT NULL,
+    PRIMARY KEY (poll_id, family_member_id)
   );
 `);
 

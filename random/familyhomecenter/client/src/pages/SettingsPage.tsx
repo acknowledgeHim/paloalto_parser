@@ -1,3 +1,4 @@
+import { WeeklyReportSettings } from '../components/WeeklyReportSettings.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { KidsAccessSettings } from '../components/KidsAccessSettings.js';
 import { PrivacySettings } from '../components/PrivacySettings.js';
@@ -273,6 +274,8 @@ export function SettingsPage() {
         </p>
         {!spotify.configured && <p className="hint">See docs/SPOTIFY_SETUP.md — casting from a family member's own Spotify app needs no setup here at all.</p>}
       </section>
+
+      <WeeklyReportSettings />
 
       <section className="panel">
         <h2>Screensaver / slideshow</h2>

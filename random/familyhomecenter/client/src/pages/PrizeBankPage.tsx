@@ -6,7 +6,7 @@ import { amountLabel, prizeEmoji, prizeRewardLabel } from '../utils/prizes.js';
 import { formatHours } from '../utils/tasks.js';
 import { FloorplanView } from '../components/FloorplanView.js';
 import { taskIcon } from '../utils/taskIcons.js';
-import { MemberAvatar } from '../components/MemberAvatar.js';
+import { DressedAvatar } from '../components/DressedAvatar.js';
 import { PrizeForm } from '../components/PrizeBankSettings.js';
 import { TaskCard } from '../components/TaskCard.js';
 
@@ -159,13 +159,14 @@ function PrizeColumn({
     <section className="panel person-column prize-column">
       <h2>
         <span className="person-column__link">
-          <MemberAvatar member={member} /> {member.name}
+          <DressedAvatar member={member} size={30} /> {member.name}
         </span>
       </h2>
       <div className="prize-column__balances">
         <span title="Stars">⭐ {member.star_balance ?? 0}</span>
         <span title="Earned Prize Bank money, not yet in the bank">${(member.money_balance ?? 0).toFixed(2)}</span>
         <Link to={`/person/${member.id}/bank`} className="hint">🏦 Bank</Link>
+        <Link to={`/dress-up/${member.id}`} className="hint">👕 Dress up</Link>
         <Link to={`/prizes/past/${member.id}`} className="hint">📜 Past prizes{pastCount ? ` (${pastCount})` : ''}</Link>
       </div>
 

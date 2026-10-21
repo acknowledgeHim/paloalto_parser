@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { ProfileSwitcher } from './ProfileSwitcher.js';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { useSectionAccess } from '../state/SectionAccess.js';
-import { SECTIONS } from '../utils/sections.js';
+import { useOpenMealPolls } from '../pages/MealsPage.js';
 
 /** Kids' pending requests for more time / a website, shown on the Internet tab for parents (or for
  *  everyone, before any parent is set up). Checked once a minute. */
@@ -52,22 +52,104 @@ function usePendingApprovals(): number {
   return count;
 }
 
+interface NavItem {
+  /** The section a parent can turn off for a kid (utils/sections.ts); none = always there. */
+  section?: string;
+  label: string;
+  path: string;
+  badge?: number;
+  /** Parents only. */
+  parent?: boolean;
+}
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+/**
+ * The menu, grouped so it fits on one line: each group opens a small dropdown (a group with just
+ * one thing left in it — after Kids' access — is a plain link). On a phone ☰ shows everything.
+ */
+function navGroups(pendingRequests: number, pendingApprovals: number, openVotes: number): NavGroup[] {
+  return [
+    {
+      label: '🏡 Family',
+      items: [
+        { section: 'board', label: '👥 Family Board', path: '/board' },
+        { section: 'calendar', label: '📅 Calendar', path: '/calendar' },
+        { section: 'contacts', label: '📇 Contacts', path: '/contacts' },
+        { section: 'intercom', label: '📞 Intercom', path: '/intercom' },
+      ],
+    },
+    {
+      label: '🧹 Chores',
+      items: [
+        { section: 'tasks', label: '🧹 Chores & Tasks', path: '/tasks' },
+        { section: 'prizes', label: '🎁 Prize Bank', path: '/prizes' },
+        { section: 'prizes', label: '👕 Dress up', path: '/dress-up' },
+        { label: '✅ To approve', path: '/approvals', badge: pendingApprovals, parent: true },
+      ],
+    },
+    { label: '🍽️ Meals', items: [{ section: 'meals', label: '🍽️ Meals', path: '/meals', badge: openVotes }] },
+    {
+      label: '🎵 Fun',
+      items: [
+        { section: 'photos', label: '📷 Photos', path: '/photos' },
+        { section: 'music', label: '🎵 Music', path: '/music' },
+      ],
+    },
+    {
+      label: '🛠️ More',
+      items: [
+        { section: 'knowledge-base', label: '📚 Knowledge Base', path: '/knowledge-base' },
+        { section: 'internet', label: '🌐 Internet', path: '/internet', badge: pendingRequests },
+        { label: '⚙️ Settings', path: '/settings' },
+      ],
+    },
+  ];
+}
+
 export function NavBar() {
   const pendingRequests = usePendingInternetRequests();
   const pendingApprovals = usePendingApprovals();
+  const openVotes = useOpenMealPolls();
   const { members, activeProfile } = useFamilyMembers();
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   // Tabs a parent has turned off for whoever's picked are hidden (Settings → Kids' access).
   const { canSee } = useSectionAccess();
   // On a phone the links fold into ☰ — one slim row with the page you're on.
   const [open, setOpen] = useState(false);
+  // Which group's dropdown is open (on a big screen).
+  const [dropped, setDropped] = useState<string | null>(null);
   const location = useLocation();
-  useEffect(() => setOpen(false), [location.pathname]);
-  const sections = SECTIONS.filter((sec) => sec.path && canSee(sec.key));
-  const here =
-    location.pathname === '/' ? 'Home' : location.pathname.startsWith('/settings') ? 'Settings' : location.pathname.startsWith('/approvals') ? '✅ To approve' : sections.find((sec) => location.pathname.startsWith(sec.path!))?.label ?? '';
+  useEffect(() => {
+    setOpen(false);
+    setDropped(null);
+  }, [location.pathname]);
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!dropped) return;
+    const away = (e: PointerEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) setDropped(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setDropped(null);
+    window.addEventListener('pointerdown', away);
+    window.addEventListener('keydown', esc);
+    return () => {
+      window.removeEventListener('pointerdown', away);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [dropped]);
+  const groups = navGroups(pendingRequests, pendingApprovals, openVotes)
+    .map((g) => ({ ...g, items: g.items.filter((i) => (!i.section || canSee(i.section)) && (!i.parent || isParent)) }))
+    .filter((g) => g.items.length > 0);
+  const isHere = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+  const hereItem = groups.flatMap((g) => g.items).find((i) => isHere(i.path));
+  const here = location.pathname === '/' ? 'Home' : hereItem?.label ?? (location.pathname.startsWith('/person') ? '👥 Family Board' : '');
+  const totalBadge = pendingRequests + pendingApprovals + openVotes;
+  const badge = (n?: number) => (n ? <span className="navbar__badge">{n}</span> : null);
   return (
-    <nav className={`navbar ${open ? 'navbar--open' : ''}`}>
+    <nav ref={navRef} className={`navbar ${open ? 'navbar--open' : ''}`}>
       <button
         type="button"
         className="navbar__toggle"
@@ -77,23 +159,45 @@ export function NavBar() {
       >
         <span aria-hidden="true">{open ? '✕' : '☰'}</span>
         <span className="navbar__here">{here}</span>
-        {!open && pendingRequests + pendingApprovals > 0 && <span className="navbar__badge">{pendingRequests + pendingApprovals}</span>}
+        {!open && badge(totalBadge)}
       </button>
       <div className="navbar__links">
-        <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>Home</NavLink>
-        {sections.map((sec) => (
-          <NavLink key={sec.key} to={sec.path!} className={({ isActive }) => (isActive ? 'active' : '')}>
-            {sec.label}
-            {sec.key === 'internet' && pendingRequests > 0 && <span className="navbar__badge">{pendingRequests}</span>}
-          </NavLink>
-        ))}
-        {isParent && (
-          <NavLink to="/approvals" className={({ isActive }) => (isActive ? 'active' : '')}>
-            ✅ To approve
-            {pendingApprovals > 0 && <span className="navbar__badge">{pendingApprovals}</span>}
-          </NavLink>
-        )}
-        <NavLink to="/settings" className={({ isActive }) => (isActive ? 'active' : '')}>Settings</NavLink>
+        <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>🏠 Home</NavLink>
+        {groups.map((g) => {
+          if (g.items.length === 1) {
+            const i = g.items[0];
+            return (
+              <NavLink key={g.label} to={i.path} className={({ isActive }) => (isActive ? 'active' : '')}>
+                {i.label}
+                {badge(i.badge)}
+              </NavLink>
+            );
+          }
+          const active = g.items.some((i) => isHere(i.path));
+          const sum = g.items.reduce((n, i) => n + (i.badge ?? 0), 0);
+          return (
+            <div key={g.label} className={`navbar__group ${dropped === g.label ? 'navbar__group--open' : ''}`}>
+              <button
+                type="button"
+                className={`navbar__group-btn ${active ? 'active' : ''}`}
+                aria-expanded={dropped === g.label}
+                onClick={() => setDropped(dropped === g.label ? null : g.label)}
+              >
+                {g.label}
+                {badge(sum)}
+                <span className="navbar__caret" aria-hidden="true">▾</span>
+              </button>
+              <div className="navbar__menu" role="menu">
+                {g.items.map((i) => (
+                  <NavLink key={i.path} to={i.path} role="menuitem" className={() => (isHere(i.path) ? 'active' : '')}>
+                    {i.label}
+                    {badge(i.badge)}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <ProfileSwitcher />
     </nav>
