@@ -15,6 +15,7 @@ import { MemberAvatar, avatarChanged } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { PhotoPlaceInfo } from '../components/PhotoPlaceInfo.js';
 import { PhotoMap } from '../components/PhotoMap.js';
+import { PhotoInfoTags, PhotoQualityTags } from '../components/PhotoQualityOptions.js';
 
 type PhotoTab = 'photos' | 'map' | 'movies' | 'documents' | 'animate';
 /** The page's tabs; `access` = the Settings → Kids' access switch that shows it. */
@@ -1075,7 +1076,8 @@ export function PhotosPage() {
           >
             <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
             {albumsApi.isIn(p.id, FAVORITES_ID) && <span className="photos-page__star">⭐</span>}
-            {p.blurry && <span className="photos-page__blurry">Possibly blurry</span>}
+            <PhotoQualityTags p={{ blurry: p.blurry, ...(details?.get(p.id) ?? {}) }} />
+            {details?.get(p.id) && <PhotoInfoTags p={details.get(p.id)!} />}
             {p.hidden && <span className="photos-page__hidden-tag">🙈 Hidden</span>}
           </button>
         ))}
