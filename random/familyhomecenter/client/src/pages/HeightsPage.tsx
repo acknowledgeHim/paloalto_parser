@@ -22,6 +22,7 @@ export function HeightsPage() {
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   const [rows, setRows] = useState<HeightRow[]>([]);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<HeightRow | null>(null);
   const [photoOf, setPhotoOf] = useState<HeightRow | null>(null);
   const load = () => api.get<HeightRow[]>('/heights').then(setRows).catch(console.error);
   useEffect(() => {
@@ -39,21 +40,26 @@ export function HeightsPage() {
     <div className="heights-page">
       <div className="family-board__head">
         <h1>📏 Height chart</h1>
-        {(isParent || activeProfile) && !adding && (
+        {isParent && !adding && !editing && (
           <button type="button" onClick={() => setAdding(true)}>
             ＋ Measure someone
           </button>
         )}
       </div>
-      {adding && (
+      {isParent && (adding || editing) && (
         <AddHeight
+          key={editing?.id ?? 'new'}
+          editing={editing}
           onDone={() => {
             setAdding(false);
+            setEditing(null);
             load();
           }}
         />
       )}
-      {rows.length === 0 && !adding && <div className="empty-state">No measurements yet — stand against the wall and ＋ Measure someone!</div>}
+      {rows.length === 0 && !adding && (
+        <div className="empty-state">{isParent ? 'No measurements yet — stand against the wall and ＋ Measure someone!' : 'No measurements yet — ask a parent to measure you!'}</div>
+      )}
       {rows.length > 0 && (
         <div className="heights__top">
           <DoorFrame people={people.map((m) => ({ member: m, inches: latest(m)!.inches }))} />
@@ -94,6 +100,11 @@ export function HeightsPage() {
                       {r.has_photo === 1 && (
                         <button type="button" className="link-button" onClick={() => setPhotoOf(r)}>
                           📷
+                        </button>
+                      )}
+                      {isParent && (
+                        <button type="button" className="link-button" aria-label="Change" onClick={() => (setAdding(false), setEditing(r), window.scrollTo({ top: 0, behavior: 'smooth' }))}>
+                          ✏️
                         </button>
                       )}
                       {isParent && (
@@ -199,28 +210,23 @@ function GrowthChart({ rows, members }: { rows: HeightRow[]; members: FamilyMemb
   );
 }
 
-function AddHeight({ onDone }: { onDone: () => void }) {
+/** Parents only: a new measurement, or fixing one (`editing`). */
+function AddHeight({ editing, onDone }: { editing: HeightRow | null; onDone: () => void }) {
   const { members, activeProfile } = useFamilyMembers();
-  const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
-  const choices = isParent ? members : members.filter((m) => m.id === activeProfile?.id);
-  const [who, setWho] = useState(choices.find((m) => m.is_parent !== 1)?.id ?? choices[0]?.id ?? '');
-  const [date, setDate] = useState(localDate());
-  const [ft, setFt] = useState('4');
-  const [inch, setInch] = useState('0');
-  const [note, setNote] = useState('');
+  const choices = editing ? members.filter((m) => m.id === editing.family_member_id) : members;
+  const [who, setWho] = useState(editing?.family_member_id ?? choices.find((m) => m.is_parent !== 1)?.id ?? choices[0]?.id ?? '');
+  const [date, setDate] = useState(editing?.date ?? localDate());
+  const [ft, setFt] = useState(editing ? String(Math.floor(editing.inches / 12)) : '4');
+  const [inch, setInch] = useState(editing ? String(Math.round((editing.inches % 12) * 4) / 4) : '0');
+  const [note, setNote] = useState(editing?.note ?? '');
   const [photo, setPhoto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const save = async () => {
     setError(null);
     try {
-      await api.post('/heights', {
-        family_member_id: who,
-        date,
-        inches: Number(ft) * 12 + Number(inch),
-        note,
-        photo,
-        acting_member_id: activeProfile?.id ?? null,
-      });
+      const body = { date, inches: Number(ft) * 12 + Number(inch), note, photo, acting_member_id: activeProfile?.id ?? null };
+      if (editing) await api.put(`/heights/${editing.id}`, body);
+      else await api.post('/heights', { ...body, family_member_id: who });
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -228,9 +234,9 @@ function AddHeight({ onDone }: { onDone: () => void }) {
   };
   return (
     <section className="panel">
-      <h2>📏 New measurement</h2>
+      <h2>{editing ? '✏️ Change measurement' : '📏 New measurement'}</h2>
       <div className="task-form__row">
-        <select value={who} onChange={(e) => setWho(e.target.value)} aria-label="Who">
+        <select value={who} onChange={(e) => setWho(e.target.value)} aria-label="Who" disabled={!!editing}>
           {choices.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
@@ -247,7 +253,7 @@ function AddHeight({ onDone }: { onDone: () => void }) {
       </div>
       <input placeholder='Note (optional) — e.g. "first day of 3rd grade"' value={note} onChange={(e) => setNote(e.target.value)} />
       <label className="secondary heights__photo-pick">
-        📷 {photo ? 'Photo added ✓' : 'Add a photo (optional)'}
+        📷 {photo ? 'Photo added ✓' : editing?.has_photo === 1 ? 'Replace the photo (optional)' : 'Add a photo (optional)'}
         <input
           type="file"
           accept="image/*"

@@ -133,7 +133,7 @@ heightsRouter.get('/:id/photo', (req, res) => {
 heightsRouter.post('/', (req, res) => {
   const { family_member_id, date, inches, note, photo, acting_member_id } = req.body ?? {};
   if (!family_member_id) return res.status(400).json({ error: 'Whose height?' });
-  if (!isSelfOrParent(req, family_member_id, acting_member_id)) return res.status(403).json({ error: 'A parent (or they) can add it' });
+  if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can add a measurement' });
   const n = Number(inches);
   if (!(n > 10 && n < 100)) return res.status(400).json({ error: 'How tall? (in inches, e.g. 48½)' });
   let pic: string | null;
@@ -155,6 +155,47 @@ heightsRouter.post('/', (req, res) => {
     `INSERT INTO heights (id, family_member_id, date, inches, note, photo, created_at) VALUES (@id, @family_member_id, @date, @inches, @note, @photo, @created_at)`
   ).run(row);
   res.status(201).json({ ...row, photo: undefined, has_photo: pic ? 1 : 0 });
+});
+
+/**
+ * PUT /:id { date, inches, note, photo?, acting_member_id } — a parent fixes a measurement. Nothing is
+ * overwritten: the old one is hidden and a corrected copy (keeping its photo unless a new one is given)
+ * takes its place.
+ */
+heightsRouter.put('/:id', (req, res) => {
+  const old = db.prepare('SELECT * FROM heights WHERE id = ? AND hidden_at IS NULL').get(req.params.id) as
+    | { family_member_id: string; date: string; inches: number; note: string | null; photo: string | null }
+    | undefined;
+  if (!old) return res.status(404).json({ error: 'not found' });
+  const { date, inches, note, photo, acting_member_id } = req.body ?? {};
+  if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can change a measurement' });
+  const n = inches === undefined ? old.inches : Number(inches);
+  if (!(n > 10 && n < 100)) return res.status(400).json({ error: 'How tall? (in inches, e.g. 48½)' });
+  let pic: string | null = old.photo;
+  if (photo) {
+    try {
+      pic = picture(photo, 3_000_000);
+    } catch (err) {
+      return res.status(400).json({ error: (err as Error).message });
+    }
+  }
+  const now = new Date().toISOString();
+  const row = {
+    id: uuidv4(),
+    family_member_id: old.family_member_id,
+    date: typeof date === 'string' && /^\d{4}-\d\d-\d\d$/.test(date) ? date : old.date,
+    inches: Math.round(n * 100) / 100,
+    note: note === undefined ? old.note : str(note, 300),
+    photo: pic,
+    created_at: now,
+  };
+  db.transaction(() => {
+    db.prepare('UPDATE heights SET hidden_at = ? WHERE id = ?').run(now, req.params.id);
+    db.prepare(
+      `INSERT INTO heights (id, family_member_id, date, inches, note, photo, created_at) VALUES (@id, @family_member_id, @date, @inches, @note, @photo, @created_at)`
+    ).run(row);
+  })();
+  res.json({ ...row, photo: undefined, has_photo: pic ? 1 : 0 });
 });
 
 heightsRouter.post('/:id/hide', (req, res) => {

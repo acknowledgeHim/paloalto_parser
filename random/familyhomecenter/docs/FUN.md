@@ -97,6 +97,9 @@ photo. The page shows:
 - a growth chart over the years
 - each person's history, with how much they grew
 
+Only parents can add, change (✏️) or take off (✕) a measurement; kids can look but not change
+anything. Changing one keeps the original: it is hidden and the corrected copy takes its place.
+
 When a measurement is added that week, the weekly report says how much they've grown.
 
 ## ☀️ Morning briefing (Settings → ☀️ Wall screen)
