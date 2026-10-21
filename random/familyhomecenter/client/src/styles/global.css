@@ -2583,3 +2583,6 @@ body.fp-full-open { overflow: hidden; }
 .photo-place__form button.secondary { color: #fff; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.35); }
 .photo-source__more { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .photo-source__more textarea, .photo-source__more input { width: 100%; box-sizing: border-box; }
+.photo-map__progress { display: flex; flex-direction: column; gap: 4px; }
+.photo-map__progress-bar { display: block; height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.photo-map__progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width 0.6s; }

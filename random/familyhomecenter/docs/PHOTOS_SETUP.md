@@ -341,6 +341,9 @@ Photos themselves are never changed. Everything is in the app's database, so `np
   - Sort by **📍 Country** or **📍 State** (photos with no location last).
   - The **📍 Where** filter picks a country or US state, or **No location set**, to find the
     photos that still need one.
+- **Progress:** the top of the 🗺️ Map tab shows how far reading has got ("Reading where photos
+  were taken: 1,234 of 5,000"), with a bar that updates by itself until it's done, then how many
+  photos have GPS, a place, or no location. Face recognition progress is on 👥 People.
 - **🗺️ Map tab:**
   - Every photo with a place is a circle on a map drawn right on the page, with no outside map
     service. Hollow circles are photos placed by a hand-set country or state.

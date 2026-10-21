@@ -154,6 +154,26 @@ photosRouter.get('/places/lists', (_req, res) => {
 });
 
 /** GET /places/outlines — country and US state borders for drawing the map (no outside map service). */
+/** GET /places/progress — how far reading GPS from the photos has got (it runs in the background with the dates). */
+photosRouter.get(
+  '/places/progress',
+  asyncHandler(async (_req, res) => {
+    const files = await listPhotos();
+    let read = 0;
+    let withGps = 0;
+    let placed = 0;
+    let handSet = 0;
+    for (const f of files) {
+      const p = placeOf(path.relative(config.photosDir, f));
+      if (p.gps_read) read++;
+      if (p.lat != null) withGps++;
+      if (p.country) placed++;
+      if (p.place_source === 'set') handSet++;
+    }
+    res.json({ total: files.length, read, with_gps: withGps, placed, hand_set: handSet, no_location: files.length - placed });
+  })
+);
+
 let outlinesGz: Buffer | null = null;
 photosRouter.get('/places/outlines', (req, res) => {
   res.type('application/json').set('Cache-Control', 'public, max-age=86400').set('Vary', 'Accept-Encoding');

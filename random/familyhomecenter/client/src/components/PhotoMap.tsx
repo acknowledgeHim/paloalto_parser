@@ -56,6 +56,25 @@ export function PhotoMap({
   const [outlines, setOutlines] = useState<Outlines | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(WORLD);
+  const [progress, setProgress] = useState<{ total: number; read: number; with_gps: number; placed: number; hand_set: number; no_location: number } | null>(null);
+  // 📍 How far reading GPS has got — checked every 15 s until it's done (then the map reloads once).
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    let wasDone: boolean | null = null;
+    const check = () =>
+      api
+        .get<NonNullable<typeof progress>>('/photos/places/progress')
+        .then((p) => {
+          setProgress(p);
+          const done = p.read >= p.total;
+          if (wasDone === false && done) api.get<MapPhoto[]>('/photos/map').then(setPhotos).catch(() => {});
+          wasDone = done;
+          if (!done) t = setTimeout(check, 15_000);
+        })
+        .catch(() => (t = setTimeout(check, 60_000)));
+    void check();
+    return () => clearTimeout(t);
+  }, []);
   const [picked, setPicked] = useState<MapPhoto[] | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -184,6 +203,27 @@ export function PhotoMap({
           </button>
         </span>
       </div>
+      {progress && (
+        <div className="photo-map__progress">
+          {progress.read < progress.total ? (
+            <>
+              <span>
+                📍 Reading where photos were taken: <strong>{progress.read.toLocaleString()}</strong> of {progress.total.toLocaleString()} (
+                {Math.floor((progress.read / Math.max(1, progress.total)) * 100)}%) — still going, in the background
+              </span>
+              <span className="photo-map__progress-bar">
+                <span style={{ width: `${(progress.read / Math.max(1, progress.total)) * 100}%` }} />
+              </span>
+            </>
+          ) : (
+            <span>📍 All {progress.total.toLocaleString()} photos read ✓</span>
+          )}
+          <span className="hint">
+            {progress.with_gps.toLocaleString()} have GPS · {progress.placed.toLocaleString()} have a place
+            {progress.hand_set ? ` (${progress.hand_set.toLocaleString()} set by hand)` : ''} · {progress.no_location.toLocaleString()} with no location
+          </span>
+        </div>
+      )}
       {error && <div className="settings-login__error">{error}</div>}
       <svg
         ref={svgRef}
