@@ -51,7 +51,8 @@ export function PhotoPlaceInfo({ photoId, onChanged }: { photoId: string; onChan
 
   const open = () => {
     setForm({
-      country_code: place.country_code ?? '',
+      // No place yet: start on the United States (most of ours are) — still changeable.
+      country_code: place.country_code ?? 'US',
       state: place.state ?? '',
       year: String(place.year_fixed ?? taken.getFullYear()),
       month: place.month_fixed ? String(place.month_fixed) : '',
