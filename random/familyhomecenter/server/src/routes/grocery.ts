@@ -3,10 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { isParentRequest } from '../services/rewards.js';
+import { sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
+import type { Request } from 'express';
 import type { GroceryItem } from '../types.js';
 
-// Viewing and adding are open to everyone, same household-trust default as adding a to-do or
-// calendar event — no reason to gate "we're out of milk" behind a password. Editing an item's
+// Viewing is open to everyone. Adding is for parents, and for kids a parent has allowed
+// (family_members.can_add_grocery — Settings → Kids' access). Editing an item's
 // details is parent-only (requireAdmin, real enforcement once a password exists). Marking one off
 // — ✓ purchased or ✕ ignore — is parent-only too: an item stays on the list until a parent does.
 // Marked-off items are kept (status, who, when), never deleted, and can be put back on the list.
@@ -24,8 +26,16 @@ groceryRouter.get('/', (req, res) => {
   res.json(items);
 });
 
+/** May whoever's asking add to the list? A parent, or a kid with can_add_grocery. */
+function mayAdd(req: Request, actingMemberId: unknown): boolean {
+  if (isParentRequest(req, actingMemberId)) return true;
+  const actor = sessionMemberId(req.cookies?.[SESSION_COOKIE_NAME] as string | undefined) ?? (typeof actingMemberId === 'string' ? actingMemberId : null);
+  return Boolean(actor && db.prepare('SELECT 1 FROM family_members WHERE id = ? AND can_add_grocery = 1').get(actor));
+}
+
 groceryRouter.post('/', (req, res) => {
-  const { name, quantity, requested_by_id, meal_id } = req.body as Partial<GroceryItem>;
+  const { name, quantity, requested_by_id, meal_id, acting_member_id } = req.body as Partial<GroceryItem> & { acting_member_id?: string };
+  if (!mayAdd(req, acting_member_id)) return res.status(403).json({ error: 'Ask a parent to let you add to the grocery list (Settings → Kids’ access)' });
   if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
 
   const item: GroceryItem = {

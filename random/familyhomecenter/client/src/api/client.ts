@@ -47,6 +47,8 @@ export interface FamilyMember {
   is_parent: 0 | 1;
   /** A kid a parent lets put their own chores/to-dos on the floor plan (parents always can). */
   can_place_tasks?: 0 | 1;
+  /** A kid a parent lets add to the grocery list (parents always can). */
+  can_add_grocery?: 0 | 1;
   /** Prize Bank running totals. */
   star_balance: number;
   money_balance: number;

@@ -60,6 +60,7 @@ export function GroceryListTab() {
         quantity: quantity.trim() || null,
         requested_by_id: requestedById || null,
         meal_id: mealId || null,
+        acting_member_id: acting.id || null,
       });
       setName('');
       setQuantity('');
@@ -80,6 +81,8 @@ export function GroceryListTab() {
     load();
   };
 
+  // Parents can always add; a kid once a parent allows it (Settings → Kids' access).
+  const canAdd = acting.isParent || activeProfile?.can_add_grocery === 1;
   const memberFor = (id: string | null) => (id ? members.find((m) => m.id === id) ?? null : null);
   const mealFor = (id: string | null) => (id ? meals.find((m) => m.id === id) ?? null : null);
 
@@ -87,32 +90,35 @@ export function GroceryListTab() {
     <div className="grocery-tab">
       <section className="panel">
         <h2>🛒 Grocery List</h2>
-        <form className="task-form grocery-tab__form" onSubmit={submit}>
-          <div className="task-form__row grocery-tab__add">
-            <input autoFocus placeholder="Add an item — e.g. Milk" value={name} onChange={(e) => setName(e.target.value)} aria-label="Item" className="grocery-tab__add-name" />
-            <input placeholder="How much? (optional)" value={quantity} onChange={(e) => setQuantity(e.target.value)} aria-label="How much" />
-            <button type="submit" disabled={!name.trim()}>＋ Add</button>
-          </div>
-          <button type="button" className="link-button grocery-tab__more" onClick={() => setMore(!more)}>
-            {more ? 'Fewer options' : 'Who’s asking / for a meal…'}
-          </button>
-          {more && (
-            <div className="task-form__row">
-              <select value={requestedById} onChange={(e) => setRequestedById(e.target.value)} aria-label="Who's asking">
-                <option value="">Who's asking?</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-              <select value={mealId} onChange={(e) => setMealId(e.target.value)} aria-label="For a meal">
-                <option value="">Not for a specific meal</option>
-                {meals.map((m) => (
-                  <option key={m.id} value={m.id}>{mealLabel(m)}</option>
-                ))}
-              </select>
+        {!canAdd && <p className="hint">🔒 Ask a parent if you'd like to add things to the grocery list.</p>}
+        {canAdd && (
+          <form className="task-form grocery-tab__form" onSubmit={submit}>
+            <div className="task-form__row grocery-tab__add">
+              <input autoFocus placeholder="Add an item — e.g. Milk" value={name} onChange={(e) => setName(e.target.value)} aria-label="Item" className="grocery-tab__add-name" />
+              <input placeholder="How much? (optional)" value={quantity} onChange={(e) => setQuantity(e.target.value)} aria-label="How much" />
+              <button type="submit" disabled={!name.trim()}>＋ Add</button>
             </div>
-          )}
-        </form>
+            <button type="button" className="link-button grocery-tab__more" onClick={() => setMore(!more)}>
+              {more ? 'Fewer options' : 'Who’s asking / for a meal…'}
+            </button>
+            {more && (
+              <div className="task-form__row">
+                <select value={requestedById} onChange={(e) => setRequestedById(e.target.value)} aria-label="Who's asking">
+                  <option value="">Who's asking?</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <select value={mealId} onChange={(e) => setMealId(e.target.value)} aria-label="For a meal">
+                  <option value="">Not for a specific meal</option>
+                  {meals.map((m) => (
+                    <option key={m.id} value={m.id}>{mealLabel(m)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </form>
+        )}
         {error && <div className="settings-login__error">{error}</div>}
 
         {items.length === 0 && <div className="empty-state">Nothing on the list right now.</div>}
