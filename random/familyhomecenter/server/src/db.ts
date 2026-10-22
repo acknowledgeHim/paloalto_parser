@@ -1012,6 +1012,12 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `);
+// The chore made alongside it ("Also put it on their chores") — same days; retired with it.
+try {
+  db.exec('ALTER TABLE meal_cooks ADD COLUMN task_id TEXT');
+} catch (err) {
+  if (!/duplicate column/.test((err as Error).message)) throw err;
+}
 
 // The order each person does their chores/to-dos in (1st, 2nd, …) — their routine; the floor plan's
 // avatar walks from one to the next in this order. Per person, since a shared job can sit at a

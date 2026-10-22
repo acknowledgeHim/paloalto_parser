@@ -10,8 +10,9 @@ const SLOTS: Array<{ id: MealSlot; label: string }> = [
   { id: 'dinner', label: '🌙 Dinner' },
 ];
 
+/** Local date (YYYY-MM-DD) — not toISOString(), which is already tomorrow on a US evening. */
 function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function MealPlanTab() {

@@ -27,6 +27,7 @@ export interface CookRow {
   stopped_at: string | null;
   created_by_id: string | null;
   created_at: string;
+  task_id?: string | null;
 }
 
 const dayStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -92,6 +93,7 @@ mealCooksRouter.post('/rules', (req, res) => {
     end_date?: string;
     note?: string;
     acting_member_id?: string;
+    as_chore?: boolean;
   };
   if (!isParentRequest(req, b.acting_member_id)) return res.status(403).json({ error: 'Only a parent can set who cooks' });
   if (!SLOTS.includes(b.slot as Slot)) return res.status(400).json({ error: 'slot must be breakfast, lunch, or dinner' });
@@ -121,12 +123,18 @@ mealCooksRouter.post('/rules', (req, res) => {
   };
   db.transaction(() => {
     // A new one-off for the same meal replaces the earlier one (kept, marked stopped).
-    if (row.date) db.prepare('UPDATE meal_cooks SET stopped_at = ? WHERE date = ? AND slot = ? AND stopped_at IS NULL').run(row.created_at, row.date, row.slot);
+    if (row.date) {
+      const earlier = db.prepare('SELECT * FROM meal_cooks WHERE date = ? AND slot = ? AND stopped_at IS NULL').all(row.date, row.slot) as CookRow[];
+      db.prepare('UPDATE meal_cooks SET stopped_at = ? WHERE date = ? AND slot = ? AND stopped_at IS NULL').run(row.created_at, row.date, row.slot);
+      earlier.forEach(retireChore);
+    }
+    row.task_id = b.as_chore && row.member_id ? makeChore(row) : null;
     db.prepare(
-      `INSERT INTO meal_cooks (id, member_id, slot, date, weekdays, start_date, end_date, note, stopped_at, created_by_id, created_at)
-       VALUES (@id, @member_id, @slot, @date, @weekdays, @start_date, @end_date, @note, @stopped_at, @created_by_id, @created_at)`
+      `INSERT INTO meal_cooks (id, member_id, slot, date, weekdays, start_date, end_date, note, stopped_at, created_by_id, created_at, task_id)
+       VALUES (@id, @member_id, @slot, @date, @weekdays, @start_date, @end_date, @note, @stopped_at, @created_by_id, @created_at, @task_id)`
     ).run(row);
   })();
+  syncCookChores();
   res.status(201).json(row);
 });
 
@@ -137,6 +145,7 @@ mealCooksRouter.post('/rules/:id/stop', (req, res) => {
   if (!isParentRequest(req, b.acting_member_id)) return res.status(403).json({ error: 'Only a parent can change who cooks' });
   const row = db.prepare('SELECT * FROM meal_cooks WHERE id = ?').get(req.params.id) as CookRow | undefined;
   if (!row) return res.status(404).json({ error: 'not found' });
+  retireChore(row);
   if (row.date) {
     db.prepare('UPDATE meal_cooks SET stopped_at = ? WHERE id = ?').run(new Date().toISOString(), row.id);
   } else {
@@ -146,5 +155,53 @@ mealCooksRouter.post('/rules/:id/stop', (req, res) => {
     if (row.start_date && row.start_date > dayStr(y)) db.prepare('UPDATE meal_cooks SET stopped_at = ? WHERE id = ?').run(new Date().toISOString(), row.id);
     else db.prepare('UPDATE meal_cooks SET end_date = ? WHERE id = ?').run(dayStr(y), row.id);
   }
+  syncCookChores();
   res.json({ ok: true });
 });
+
+// ---- "Also put it on their chores" ----
+
+const DAY_CODES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const SLOT_TIME: Record<Slot, string> = { breakfast: 'morning', lunch: 'afternoon', dinner: 'evening' };
+
+/** A chore for the cook on the same days: "🍳 Plan & make dinner", weekly on those days (or once,
+ *  on that date), at that time of day. A parent can give it a reward like any chore. */
+function makeChore(row: CookRow): string {
+  const id = uuidv4();
+  const recurrence = row.date ? 'once' : `weekly:${(row.weekdays ?? '').split(',').map((d) => DAY_CODES[Number(d)]).join(',')}`;
+  db.prepare(
+    `INSERT INTO tasks (id, kind, title, notes, created_by_id, recurrence, due_date, time_of_day, icon, active, created_at)
+     VALUES (?, 'chore', ?, ?, ?, ?, ?, ?, '🍳', 1, ?)`
+  ).run(
+    id,
+    `Plan & make ${row.slot}`,
+    'Pick what to make (Meals → Meal Plan) and help make it. Set in Meals → Who’s cooking.',
+    row.created_by_id,
+    recurrence,
+    row.date,
+    SLOT_TIME[row.slot],
+    row.created_at
+  );
+  db.prepare('INSERT INTO task_assignees (task_id, family_member_id) VALUES (?, ?)').run(id, row.member_id);
+  return id;
+}
+
+/** The cook's chore goes off the chore lists (active = 0 — kept, with its check-offs). */
+function retireChore(row: Pick<CookRow, 'task_id'>): void {
+  if (row.task_id) db.prepare('UPDATE tasks SET active = 0 WHERE id = ?').run(row.task_id);
+}
+
+/** Chores of schedules that have reached their end date come off the lists; one that hasn't
+ *  started yet waits (active = 0) until its start date. Runs on start and every hour. */
+export function syncCookChores(): void {
+  const today = todayStr();
+  for (const r of db.prepare('SELECT * FROM meal_cooks WHERE task_id IS NOT NULL AND date IS NULL').all() as CookRow[]) {
+    const on = !r.stopped_at && (!r.start_date || r.start_date <= today) && (!r.end_date || today <= r.end_date);
+    db.prepare('UPDATE tasks SET active = ? WHERE id = ? AND active != ?').run(on ? 1 : 0, r.task_id, on ? 1 : 0);
+  }
+}
+
+export function startCookChoreSync(): void {
+  syncCookChores();
+  setInterval(syncCookChores, 60 * 60_000);
+}

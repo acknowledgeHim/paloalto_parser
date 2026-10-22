@@ -888,4 +888,6 @@ export interface MealCookRule {
   end_date: string | null;
   note: string | null;
   created_at: string;
+  /** The chore made with it ("Also put it on their chores"), if any. */
+  task_id?: string | null;
 }

@@ -14,7 +14,7 @@ import { settingsRouter } from './routes/settings.js';
 import { musicRouter } from './routes/music.js';
 import { authRouter } from './routes/auth.js';
 import { mealsRouter } from './routes/meals.js';
-import { mealCooksRouter } from './routes/mealCooks.js';
+import { mealCooksRouter, startCookChoreSync } from './routes/mealCooks.js';
 import { recipesRouter } from './routes/recipes.js';
 import { prizesRouter } from './routes/prizes.js';
 import { bankRouter } from './routes/bank.js';
@@ -121,6 +121,7 @@ server.listen(config.port, config.host, () => {
   // Face suggestions take a few seconds to work out for a big library — do it now, not on first visit.
   if (facesEnabled()) allFaces().catch((e) => console.warn('[faces] warm-up failed', e));
   startGroceryEmailSchedule();
+  startCookChoreSync();
   startWeeklyReportSchedule();
 startCameraStorage();
 startInboxSorting();

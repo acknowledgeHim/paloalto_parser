@@ -2667,3 +2667,12 @@ body.photo-map-full-open { overflow: hidden; }
 .meal-cooks__days button { min-width: 3.2em; padding: 6px 8px; }
 .meal-cooks__inline { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 520px) { .meal-cooks__upcoming li { grid-template-columns: 6.8em 3.6em 1fr; font-size: 0.92em; } }
+
+/* 👩‍🍳 Home: who's cooking today (components/MealCooks.tsx TodaysCook) */
+.todays-cook { display: flex; flex-direction: column; gap: 8px; }
+.todays-cook__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.todays-cook__row--mine { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 12px; padding: 10px 12px; }
+.todays-cook__emoji { font-size: 1.8rem; }
+.todays-cook__text { flex: 1; min-width: 12em; display: flex; flex-direction: column; gap: 2px; }
+.todays-cook__row--mine .todays-cook__text strong { font-size: 1.15em; }
+.todays-cook .button-link { background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 10px; font-weight: 600; text-decoration: none; }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type FamilyMember, type MealCook, type MealCookRule, type MealSlot } from '../api/client.js';
+import { api, type FamilyMember, type Meal, type MealCook, type MealCookRule, type MealSlot } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { useActing } from '../pages/CamerasPage.js';
 import { MemberAvatar } from './MemberAvatar.js';
@@ -128,6 +128,7 @@ export function CooksPanel() {
   const [date, setDate] = useState(dayStr(today));
   const [startDate, setStartDate] = useState(dayStr(today));
   const [endDate, setEndDate] = useState('');
+  const [asChore, setAsChore] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadRules = () => api.get<MealCookRule[]>('/meal-cooks/rules').then(setRules).catch(() => setRules([]));
@@ -144,8 +145,8 @@ export function CooksPanel() {
       await api.post(
         '/meal-cooks/rules',
         mode === 'once'
-          ? { member_id: memberId, slot, date, acting_member_id: acting.id || null }
-          : { member_id: memberId, slot, weekdays: days, start_date: startDate, end_date: endDate || null, acting_member_id: acting.id || null }
+          ? { member_id: memberId, slot, date, as_chore: asChore, acting_member_id: acting.id || null }
+          : { member_id: memberId, slot, weekdays: days, start_date: startDate, end_date: endDate || null, as_chore: asChore, acting_member_id: acting.id || null }
       );
       setAdding(false);
       setDays([]);
@@ -210,6 +211,7 @@ export function CooksPanel() {
                       <span className="hint">
                         {r.start_date && r.start_date > dayStr(today) ? ` · from ${niceDate(r.start_date)}` : ''}
                         {r.end_date ? ` · until ${niceDate(r.end_date)}` : ''}
+                        {r.task_id ? ' · 🍳 on their chores' : ''}
                       </span>
                     </span>
                     <button type="button" className="secondary" onClick={() => stop(r.id)}>
@@ -222,6 +224,7 @@ export function CooksPanel() {
                     <span>
                       <strong>{name(r.member_id)}</strong> — {SLOT_NAME[r.slot]} on {niceDate(r.date!)}
                       {!r.member_id && <span className="hint"> (skips the schedule that day)</span>}
+                      {r.task_id && <span className="hint"> · 🍳 on their chores</span>}
                     </span>
                     <button type="button" className="secondary" onClick={() => stop(r.id)}>
                       Call off
@@ -284,6 +287,17 @@ export function CooksPanel() {
               ) : (
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Date" />
               )}
+              <label className="privacy-toggle">
+                <input type="checkbox" checked={asChore} onChange={(e) => setAsChore(e.target.checked)} />
+                <span>
+                  <strong>Also put it on {members.find((m) => m.id === memberId)?.name ?? 'their'}{memberId ? '’s' : ''} chores</strong>
+                  <span className="hint">
+                    {' '}
+                    — “Plan &amp; make {slot}” {mode === 'every' ? 'on the same days' : 'on that day'}, to check off like any chore (add a reward to it in Chores if you
+                    like). Stopping this takes the chore off too.
+                  </span>
+                </span>
+              </label>
               <div className="task-form__row">
                 <button type="button" onClick={save} disabled={!memberId || (mode === 'every' && days.length === 0)}>
                   Save
@@ -297,6 +311,50 @@ export function CooksPanel() {
         </>
       )}
       {error && <div className="settings-login__error">{error}</div>}
+    </section>
+  );
+}
+
+/** Home screen: "👩‍🍳 You're cooking dinner tonight!" for whoever's picked (and who's cooking, for
+ *  everyone else) — with what's planned, or a link to pick it. */
+export function TodaysCook() {
+  const { members, activeProfile } = useFamilyMembers();
+  const today = dayStr(new Date());
+  const cooks = useMealCooks(today, today).filter((c) => c.member_ids.length > 0);
+  const [meals, setMeals] = useState<Meal[]>([]);
+  useEffect(() => {
+    if (cooks.length === 0) return;
+    api.get<Meal[]>(`/meals?start=${today}&end=${today}`).then(setMeals).catch(() => setMeals([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cooks.length, today]);
+  if (cooks.length === 0) return null;
+  const when: Record<MealSlot, string> = { breakfast: 'breakfast this morning', lunch: 'lunch today', dinner: 'dinner tonight' };
+
+  return (
+    <section className="panel todays-cook">
+      {cooks.map((c) => {
+        const mine = Boolean(activeProfile && c.member_ids.includes(activeProfile.id));
+        const names = c.member_ids.map((id) => members.find((m) => m.id === id)?.name).filter(Boolean) as string[];
+        const others = mine ? names.filter((n) => n !== activeProfile!.name) : names;
+        const planned = meals.filter((m) => m.slot === c.slot);
+        return (
+          <div key={c.slot} className={`todays-cook__row ${mine ? 'todays-cook__row--mine' : ''}`}>
+            <span className="todays-cook__emoji">👩‍🍳</span>
+            <div className="todays-cook__text">
+              <strong>
+                {mine ? `You're cooking ${when[c.slot]}!` : `${others.join(' & ')} ${others.length > 1 ? 'are' : 'is'} cooking ${when[c.slot]}`}
+                {mine && others.length > 0 && <span className="hint"> (with {others.join(' & ')})</span>}
+              </strong>
+              <span className="hint">
+                {planned.length > 0 ? `On the menu: ${planned.map((m) => m.title).join(', ')}` : mine ? 'Nothing picked yet — choose what to make.' : 'Nothing picked yet.'}
+              </span>
+            </div>
+            <a className={mine && planned.length === 0 ? 'button-link' : 'link-button'} href="#/meals">
+              {mine && planned.length === 0 ? '＋ Pick what to make' : 'See the meal plan'}
+            </a>
+          </div>
+        );
+      })}
     </section>
   );
 }

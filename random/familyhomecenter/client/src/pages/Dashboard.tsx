@@ -8,6 +8,7 @@ import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { OnThisDay } from '../components/OnThisDay.js';
 import { WhosHome } from '../components/WhosHome.js';
+import { TodaysCook } from '../components/MealCooks.js';
 import { NotesBoard } from '../components/StickyNotes.js';
 import { OPEN_BRIEFING } from '../components/MorningBriefing.js';
 import { useSectionAccess } from '../state/SectionAccess.js';
@@ -56,6 +57,7 @@ export function Dashboard() {
       </header>
 
       <WhosHome />
+      {canSee('meals') && <TodaysCook />}
       {canSee('board') && <NotesBoard compact />}
 
       {canSee('prizes') && rewardTasks.length > 0 && (
