@@ -35,9 +35,9 @@ itself still works either way, this only controls the nightly email.
 ## What gets sent
 
 Every item currently on the list, with its quantity, who asked for it, and which upcoming meal
-it's linked to (if any) — same information shown in the Grocery List tab. Checking an item off (or
-deleting it) removes it from the list immediately, so only what's still needed shows up in that
-night's email. When the list is empty, no email is sent that night (the server log says
+it's linked to (if any) — same information shown in the Grocery List tab. An item stays on the
+list (and in the email) until a parent marks it ✓ Purchased or ✕ Ignore; marked-off items are
+kept under "Marked off" in the tab and left out of the email. When the list is empty, no email is sent that night (the server log says
 `[grocery] The grocery list is empty — no digest tonight.`) — so to check the setup works, put
 something on the list.
 

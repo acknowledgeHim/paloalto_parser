@@ -405,8 +405,8 @@ export interface LivingOptions {
   regions?: Array<{ effect: 'water' | 'flames' | 'sway' | 'shimmer' | 'clouds' | 'twinkle'; direction: 'down' | 'up' | 'left' | 'right' }>;
 }
 
-/** A grocery-list entry — see routes/grocery.ts. Getting checked off deletes it (no purchased
- *  history kept); requested_by_id/meal_id are both optional. */
+/** A grocery-list entry — see routes/grocery.ts. It stays on the list until a parent marks it
+ *  'purchased' or 'ignored' (kept, never deleted); requested_by_id/meal_id are both optional. */
 export interface GroceryItem {
   id: string;
   name: string;
@@ -414,6 +414,10 @@ export interface GroceryItem {
   requested_by_id: string | null;
   meal_id: string | null;
   created_at: string;
+  /** null = still on the list. */
+  status: 'purchased' | 'ignored' | null;
+  done_at: string | null;
+  done_by_id: string | null;
 }
 
 /** Something earned that isn't money or stars (a custom chore/to-do reward, or a claimed prize). */

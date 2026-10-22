@@ -2,21 +2,25 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { isParentRequest } from '../services/rewards.js';
 import type { GroceryItem } from '../types.js';
 
 // Viewing and adding are open to everyone, same household-trust default as adding a to-do or
 // calendar event — no reason to gate "we're out of milk" behind a password. Editing an item's
-// details is parent-only (requireAdmin, real enforcement once a password exists). Removing one is
-// self-or-parent (whoever requested it, or a parent) — but unlike editing, that can't be enforced
-// server-side for a kid with no password (same limitation as canEditTask elsewhere in this app:
-// there's no session to verify a passwordless kid's identity against), so it stays open here and
-// the client (GroceryListTab) hides the button instead.
+// details is parent-only (requireAdmin, real enforcement once a password exists). Marking one off
+// — ✓ purchased or ✕ ignore — is parent-only too: an item stays on the list until a parent does.
+// Marked-off items are kept (status, who, when), never deleted, and can be put back on the list.
 export const groceryRouter = Router();
 
-/** GET / — every current item, requester-first-then-oldest so the newest asks sink to the bottom
- *  rather than jumping to the top and reordering the list while someone's mid-shop. */
-groceryRouter.get('/', (_req, res) => {
-  const items = db.prepare('SELECT * FROM grocery_items ORDER BY created_at ASC').all() as GroceryItem[];
+/** GET / — what's on the list, oldest first so the newest asks sink to the bottom rather than
+ *  jumping to the top and reordering the list while someone's mid-shop. ?done=1 — the marked-off
+ *  ones instead, newest first (?limit, default 50). */
+groceryRouter.get('/', (req, res) => {
+  if (req.query.done) {
+    const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 50));
+    return res.json(db.prepare('SELECT * FROM grocery_items WHERE status IS NOT NULL ORDER BY done_at DESC LIMIT ?').all(limit) as GroceryItem[]);
+  }
+  const items = db.prepare('SELECT * FROM grocery_items WHERE status IS NULL ORDER BY created_at ASC').all() as GroceryItem[];
   res.json(items);
 });
 
@@ -31,6 +35,9 @@ groceryRouter.post('/', (req, res) => {
     requested_by_id: requested_by_id ?? null,
     meal_id: meal_id ?? null,
     created_at: new Date().toISOString(),
+    status: null,
+    done_at: null,
+    done_by_id: null,
   };
   db.prepare(
     `INSERT INTO grocery_items (id, name, quantity, requested_by_id, meal_id, created_at)
@@ -57,10 +64,33 @@ groceryRouter.patch('/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
-/** DELETE /:id — "got it" and "never mind, don't need it after all" are the same action: it's off
- *  the list either way, no purchased-vs-cancelled distinction kept. Self-or-parent, enforced
- *  client-side only — see the router comment above. */
+/** POST /:id/mark { status: 'purchased' | 'ignored' | null, acting_member_id } — a parent marks
+ *  it off the list (kept, with who and when), or puts it back on (status null). */
+groceryRouter.post('/:id/mark', (req, res) => {
+  const body = req.body as { status?: string | null; acting_member_id?: string };
+  if (!isParentRequest(req, body.acting_member_id)) return res.status(403).json({ error: 'Only a parent can mark things off the grocery list' });
+  const status = body.status === 'purchased' || body.status === 'ignored' ? body.status : null;
+  if (body.status != null && !status) return res.status(400).json({ error: "status is 'purchased', 'ignored' or null" });
+  const existing = db.prepare('SELECT * FROM grocery_items WHERE id = ?').get(req.params.id) as GroceryItem | undefined;
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  const by = typeof body.acting_member_id === 'string' && body.acting_member_id ? body.acting_member_id : null;
+  db.prepare('UPDATE grocery_items SET status = ?, done_at = ?, done_by_id = ? WHERE id = ?').run(
+    status,
+    status ? new Date().toISOString() : null,
+    status ? by : null,
+    req.params.id
+  );
+  res.json(db.prepare('SELECT * FROM grocery_items WHERE id = ?').get(req.params.id));
+});
+
+/** DELETE /:id — kept for older screens: now a parent marking it "purchased" (never a real delete). */
 groceryRouter.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM grocery_items WHERE id = ?').run(req.params.id);
+  const acting = (req.query.acting_member_id as string | undefined) ?? (req.body as { acting_member_id?: string } | undefined)?.acting_member_id;
+  if (!isParentRequest(req, acting)) return res.status(403).json({ error: 'Only a parent can mark things off the grocery list' });
+  db.prepare("UPDATE grocery_items SET status = 'purchased', done_at = ?, done_by_id = ? WHERE id = ? AND status IS NULL").run(
+    new Date().toISOString(),
+    acting || null,
+    req.params.id
+  );
   res.status(204).end();
 });

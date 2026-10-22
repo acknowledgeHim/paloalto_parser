@@ -979,6 +979,11 @@ for (const [table, column] of [
   // 🍽️ Who a recipe is from ("Aunt Mary") and where it came from ("Huber Family Cookbook, p. 6", "TheMealDB").
   ['recipes', 'author TEXT'],
   ['recipes', 'origin TEXT'],
+  // 🛒 A grocery item stays on the list until a parent marks it off: 'purchased' or 'ignored'
+  // (NULL = still on the list). Kept afterwards, with who and when, instead of being deleted.
+  ['grocery_items', 'status TEXT'],
+  ['grocery_items', 'done_at TEXT'],
+  ['grocery_items', 'done_by_id TEXT'],
 ]) {
   try {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);

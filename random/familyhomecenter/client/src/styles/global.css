@@ -1115,7 +1115,16 @@ textarea {
 .grocery-tab__item-name { font-weight: 600; }
 .grocery-tab__item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
 .grocery-tab__requester { display: inline-flex; align-items: center; gap: 4px; }
-.grocery-tab__form { margin-top: 8px; }
+.grocery-tab__form { margin: 8px 0 12px; }
+.grocery-tab__add { flex-wrap: wrap; }
+.grocery-tab__add input { flex: 1 1 9em; min-width: 0; }
+.grocery-tab__add .grocery-tab__add-name { flex: 2 1 12em; }
+.grocery-tab__more { align-self: flex-start; font-size: 0.85em; }
+.grocery-tab__marks { display: flex; gap: 6px; flex-shrink: 0; }
+.grocery-tab__bought { background: #16a34a; color: #fff; }
+.grocery-tab__done summary { cursor: pointer; color: var(--muted, #667085); margin-top: 8px; }
+.grocery-tab__row--done .grocery-tab__item-name { text-decoration: line-through; opacity: 0.7; }
+@media (max-width: 520px) { .grocery-tab__row { flex-wrap: wrap; } .grocery-tab__marks { width: 100%; } .grocery-tab__marks button { flex: 1; } }
 
 .member-form__label--inline {
   display: flex;

@@ -54,7 +54,7 @@ export async function sendGroceryListEmail(): Promise<void> {
     return;
   }
 
-  const items = db.prepare('SELECT * FROM grocery_items ORDER BY created_at ASC').all() as GroceryItem[];
+  const items = db.prepare('SELECT * FROM grocery_items WHERE status IS NULL ORDER BY created_at ASC').all() as GroceryItem[];
   // Nothing to buy — no email tonight.
   if (items.length === 0) {
     console.log('[grocery] The grocery list is empty — no digest tonight.');

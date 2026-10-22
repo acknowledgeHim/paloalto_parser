@@ -573,7 +573,8 @@ export interface Contact {
 
 // ---- Grocery list ----
 
-/** A grocery-list entry. Checking it off deletes it — no purchased-history is kept. */
+/** A grocery-list entry. It stays on the list until a parent marks it purchased or ignored
+ *  (then it's kept under "Marked off", never deleted). */
 export interface GroceryItem {
   id: string;
   name: string;
@@ -582,6 +583,10 @@ export interface GroceryItem {
   /** Optional link to an upcoming meal this item is for. */
   meal_id: string | null;
   created_at: string;
+  /** null = still on the list. */
+  status: 'purchased' | 'ignored' | null;
+  done_at: string | null;
+  done_by_id: string | null;
 }
 
 // ---- Photos ----
