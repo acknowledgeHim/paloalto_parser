@@ -17,10 +17,6 @@ function buildBody(items: GroceryItem[], members: FamilyMember[], meals: Meal[])
     return `${meal.title} (${date})`;
   };
 
-  if (items.length === 0) {
-    return { text: 'The grocery list is empty tonight.', html: '<p>The grocery list is empty tonight.</p>' };
-  }
-
   const lines = items.map((item) => {
     const bits = [item.quantity, memberName(item.requested_by_id) && `for ${memberName(item.requested_by_id)}`, mealLabel(item.meal_id)]
       .filter(Boolean)
@@ -44,7 +40,8 @@ function buildBody(items: GroceryItem[], members: FamilyMember[], meals: Meal[])
 
 /** Builds and sends tonight's grocery-list digest to every parent with an email set. Exported
  *  separately from the cron wiring so it's directly testable/triggerable without waiting for
- *  midnight. No-op (logged, not thrown) if SMTP isn't configured or no parent has an email. */
+ *  midnight. No-op (logged, not thrown) if SMTP isn't configured, no parent has an email, or the
+ *  list is empty. */
 export async function sendGroceryListEmail(): Promise<void> {
   if (!isEmailConfigured()) {
     console.log('[grocery] SMTP not configured (SMTP_HOST unset) — skipping nightly digest.');
@@ -58,11 +55,16 @@ export async function sendGroceryListEmail(): Promise<void> {
   }
 
   const items = db.prepare('SELECT * FROM grocery_items ORDER BY created_at ASC').all() as GroceryItem[];
+  // Nothing to buy — no email tonight.
+  if (items.length === 0) {
+    console.log('[grocery] The grocery list is empty — no digest tonight.');
+    return;
+  }
   const members = db.prepare('SELECT * FROM family_members').all() as FamilyMember[];
   const meals = db.prepare('SELECT * FROM meals').all() as Meal[];
   const { text, html } = buildBody(items, members, meals);
 
-  const subject = items.length === 0 ? 'Grocery list — nothing on it tonight' : `Grocery list — ${items.length} item${items.length === 1 ? '' : 's'}`;
+  const subject = `Grocery list — ${items.length} item${items.length === 1 ? '' : 's'}`;
   await sendEmail({ to: recipients.map((r) => r.email).join(', '), subject, text, html });
   console.log(`[grocery] Sent nightly digest (${items.length} item${items.length === 1 ? '' : 's'}) to ${recipients.length} parent${recipients.length === 1 ? '' : 's'}.`);
 }

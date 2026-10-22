@@ -37,8 +37,9 @@ itself still works either way, this only controls the nightly email.
 Every item currently on the list, with its quantity, who asked for it, and which upcoming meal
 it's linked to (if any) — same information shown in the Grocery List tab. Checking an item off (or
 deleting it) removes it from the list immediately, so only what's still needed shows up in that
-night's email. An empty list still sends a short "nothing on it tonight" email rather than staying
-silent, so a misconfigured setup doesn't quietly look like "nothing to buy."
+night's email. When the list is empty, no email is sent that night (the server log says
+`[grocery] The grocery list is empty — no digest tonight.`) — so to check the setup works, put
+something on the list.
 
 ## How it works
 
