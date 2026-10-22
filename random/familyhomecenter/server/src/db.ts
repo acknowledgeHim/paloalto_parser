@@ -993,6 +993,26 @@ for (const [table, column] of [
   }
 }
 
+// 👩‍🍳 Who's cooking (planning + making) a meal: once (date set) or on a repeating schedule
+// (weekdays "2,4" = every Tuesday & Thursday, from start_date until end_date if set). A one-off on
+// a day with a repeating cook takes its place that day; member_id NULL there = "nobody this time".
+// Stopping a schedule sets end_date (one-offs: stopped_at) — rows are kept, never deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meal_cooks (
+    id TEXT PRIMARY KEY,
+    member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    slot TEXT NOT NULL CHECK (slot IN ('breakfast', 'lunch', 'dinner')),
+    date TEXT,
+    weekdays TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    note TEXT,
+    stopped_at TEXT,
+    created_by_id TEXT,
+    created_at TEXT NOT NULL
+  );
+`);
+
 // The order each person does their chores/to-dos in (1st, 2nd, …) — their routine; the floor plan's
 // avatar walks from one to the next in this order. Per person, since a shared job can sit at a
 // different point in each person's routine. Jobs not in it come after, in the usual order.

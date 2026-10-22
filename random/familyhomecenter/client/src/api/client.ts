@@ -863,3 +863,29 @@ export interface CameraStorage {
     smbclient: boolean;
   };
 }
+
+// ---- 👩‍🍳 Who's cooking (routes/mealCooks.ts) ----
+
+/** Who's cooking one meal on one day. */
+export interface MealCook {
+  date: string;
+  slot: MealSlot;
+  /** Empty = nobody this time (a parent skipped the schedule that day). */
+  member_ids: string[];
+  rule_ids: string[];
+  /** Set just for that day (rather than by a repeating schedule). */
+  once: boolean;
+}
+
+/** A cook set once (date) or on a repeating schedule (weekdays "2,4" = every Tue & Thu). */
+export interface MealCookRule {
+  id: string;
+  member_id: string | null;
+  slot: MealSlot;
+  date: string | null;
+  weekdays: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  note: string | null;
+  created_at: string;
+}

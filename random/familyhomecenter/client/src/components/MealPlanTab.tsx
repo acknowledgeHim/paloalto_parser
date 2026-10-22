@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type Meal, type MealSlot } from '../api/client.js';
 import { MealCard } from './MealCard.js';
 import { MealFormModal } from './MealFormModal.js';
+import { CookLine, CooksPanel, useMealCooks } from './MealCooks.js';
 
 const SLOTS: Array<{ id: MealSlot; label: string }> = [
   { id: 'breakfast', label: '🌅 Breakfast' },
@@ -17,6 +18,7 @@ export function MealPlanTab() {
   const [date, setDate] = useState(toDateStr(new Date()));
   const [meals, setMeals] = useState<Meal[]>([]);
   const [modal, setModal] = useState<{ meal: Meal | null; slot: MealSlot } | null>(null);
+  const cooks = useMealCooks(date, date);
 
   const load = () => {
     api.get<Meal[]>(`/meals?start=${date}&end=${date}`).then(setMeals).catch(console.error);
@@ -66,6 +68,13 @@ export function MealPlanTab() {
               </button>
               <h2>{slot.label}</h2>
             </div>
+            <CookLine
+              date={date}
+              slot={slot.id}
+              cook={cooks.find((c) => c.slot === slot.id)}
+              planned={slotMeals.length > 0}
+              onPlan={() => setModal({ meal: null, slot: slot.id })}
+            />
             {slotMeals.length === 0 && <div className="empty-state">Nothing planned</div>}
             {slotMeals.map((m) => (
               <MealCard key={m.id} meal={m} onEdit={(meal) => setModal({ meal, slot: meal.slot })} />
@@ -73,6 +82,8 @@ export function MealPlanTab() {
           </section>
         );
       })}
+
+      <CooksPanel />
 
       {modal && (
         <MealFormModal

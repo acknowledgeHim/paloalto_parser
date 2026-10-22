@@ -2651,3 +2651,19 @@ body.photo-map-full-open { overflow: hidden; }
 .thumb-year { position: absolute; top: 3px; right: 3px; z-index: 1; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.55rem; font-weight: 600; line-height: 1.35; padding: 0 4px; border-radius: 4px; pointer-events: none; }
 .on-this-day__photo .thumb-year { left: auto; bottom: auto; padding: 0 4px; font-size: 0.6rem; background: rgba(0, 0, 0, 0.6); }
 .photo-quality-tags:has(~ .thumb-year) { right: 40px; }
+
+/* 👩‍🍳 Who's cooking (components/MealCooks.tsx) */
+.meal-cook { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.meal-cook--mine { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 10px; padding: 6px 10px; }
+.meal-cook__who { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600; }
+.meal-cook__person { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; }
+.meal-cook__edit { display: inline-flex; gap: 6px; align-items: center; }
+.meal-cooks__upcoming, .meal-cooks__rules { list-style: none; padding: 0; margin: 8px 0 12px; }
+.meal-cooks__upcoming li { display: grid; grid-template-columns: 7.5em 5em 1fr; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.meal-cooks__date { font-weight: 600; }
+.meal-cooks__rules li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.meal-cooks__form { display: flex; flex-direction: column; gap: 8px; }
+.meal-cooks__days { display: flex; flex-wrap: wrap; gap: 6px; }
+.meal-cooks__days button { min-width: 3.2em; padding: 6px 8px; }
+.meal-cooks__inline { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 520px) { .meal-cooks__upcoming li { grid-template-columns: 6.8em 3.6em 1fr; font-size: 0.92em; } }
