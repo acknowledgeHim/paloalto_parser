@@ -12,6 +12,8 @@ interface CertInfo {
   name?: string;
   fingerprint?: string;
   expires?: string;
+  problems?: string[];
+  copy_path?: string;
 }
 
 type Platform = 'ios' | 'android' | 'windows' | 'mac' | 'chromeos' | 'linux';
@@ -90,9 +92,27 @@ export function DeviceCertificateSettings() {
       </p>
       {info === null && <p className="hint">Checking…</p>}
       {info && !info.available && (
-        <p className="empty-state">
-          No certificate found on the Pi — set up Caddy first (docs/ANDROID_TABLET_SETUP.md, step 2).
-        </p>
+        <div className="device-cert__missing">
+          <p className="empty-state">The app can't get the Pi's certificate yet.</p>
+          {info.problems && info.problems.length > 0 && (
+            <ul className="hint">
+              {info.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          <p className="hint">
+            Caddy keeps it in a folder only Caddy can read, so copy it where the app can (run on the
+            Pi), then reload this page — no restart needed:
+          </p>
+          <pre className="device-cert__cmd">
+            sudo install -m 644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt {info.copy_path ?? 'server/data/caddy-root.crt'}
+          </pre>
+          <p className="hint">
+            If that says the file isn't there, Caddy isn't set up yet — see docs/ANDROID_TABLET_SETUP.md,
+            step 2. You can remove CADDY_ROOT_CERT from .env; the copy is found by itself.
+          </p>
+        </div>
       )}
       {info?.available && (
         <>

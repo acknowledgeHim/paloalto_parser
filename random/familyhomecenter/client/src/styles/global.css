@@ -2685,3 +2685,5 @@ body.photo-map-full-open { overflow: hidden; }
 .device-cert__steps { margin: 12px 0; padding-left: 22px; line-height: 1.5; }
 .device-cert__steps li { margin-bottom: 6px; }
 .device-cert__check code { word-break: break-all; font-size: 0.8rem; }
+.device-cert__missing ul { margin: 6px 0; padding-left: 20px; overflow-wrap: anywhere; }
+.device-cert__cmd { white-space: pre-wrap; word-break: break-all; background: var(--surface-2, rgba(127,127,127,0.12)); padding: 10px; border-radius: 8px; font-size: 0.8rem; user-select: all; }

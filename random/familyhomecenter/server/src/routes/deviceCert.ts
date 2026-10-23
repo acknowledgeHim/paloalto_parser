@@ -1,49 +1,67 @@
 import { Router } from 'express';
 import fs from 'node:fs';
+import path from 'node:path';
 import { X509Certificate } from 'node:crypto';
+import { config } from '../config.js';
 
 // Settings → This device's certificate: hands out Caddy's local root certificate (the one behind
 // https://<pi-ip> — see docs/ANDROID_TABLET_SETUP.md) so a phone, tablet or computer can trust it
 // once and stop warning. It's the public certificate only — no private key — so it's open to
 // everyone, which also means a device can fetch it before anyone's logged in on it.
 //
-// Where it comes from, first that works: CADDY_ROOT_CERT (a file path) → Caddy's admin API on the
-// Pi (localhost:2019, on by default) → Caddy's usual file (often not readable by the app's user).
+// Where it comes from, first that works: CADDY_ROOT_CERT (a file path) → server/data/caddy-root.crt
+// (a copy — see docs/ANDROID_TABLET_SETUP.md) → Caddy's admin API on the Pi (127.0.0.1:2019, on by
+// default) → Caddy's own file (usually not readable by the app's user, which is why the copy exists).
+// When none work, /info says what each one ran into, so Settings can show why.
 export const deviceCertRouter = Router();
 
 const CADDY_FILE = '/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt';
-let cached: { at: number; cert: X509Certificate | null } | null = null;
+const COPY_FILE = path.join(config.dataDir, 'caddy-root.crt');
+let cached: { at: number; cert: X509Certificate } | null = null;
+let lastProblems: string[] = [];
 
 async function rootCert(): Promise<X509Certificate | null> {
+  // Only a found certificate is remembered — a miss is retried on the next visit, so fixing it
+  // (copying the file, starting Caddy) works without restarting the app.
   if (cached && Date.now() - cached.at < 10 * 60_000) return cached.cert;
-  let pem: string | null = null;
+  const problems: string[] = [];
+  const fromFile = (file: string, label: string): string | null => {
+    try {
+      return fs.readFileSync(file, 'utf8');
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      problems.push(
+        `${label} ${file}: ` +
+          (code === 'EACCES' ? "no permission to read it (the app doesn't run as root)" : code === 'ENOENT' ? 'not there' : String(code ?? err)),
+      );
+      return null;
+    }
+  };
   const fromEnv = process.env.CADDY_ROOT_CERT;
-  if (fromEnv) pem = readFile(fromEnv);
+  let pem = fromEnv ? fromFile(fromEnv, 'CADDY_ROOT_CERT') : null;
+  if (!pem) pem = fromFile(COPY_FILE, 'Copy');
   if (!pem) {
     try {
       const resp = await fetch('http://127.0.0.1:2019/pki/ca/local', { signal: AbortSignal.timeout(3000) });
       if (resp.ok) pem = ((await resp.json()) as { root_certificate?: string }).root_certificate ?? null;
+      else problems.push(`Caddy admin API: answered ${resp.status}`);
     } catch {
-      // Caddy not installed / admin API off — try the file next.
+      problems.push("Caddy admin API (127.0.0.1:2019): no answer — Caddy not running, or its admin API is off");
     }
   }
-  if (!pem) pem = readFile(CADDY_FILE);
-  let cert: X509Certificate | null = null;
-  try {
-    if (pem) cert = new X509Certificate(pem);
-  } catch {
-    cert = null;
+  if (!pem) pem = fromFile(CADDY_FILE, "Caddy's file");
+  if (pem) {
+    try {
+      const cert = new X509Certificate(pem);
+      cached = { at: Date.now(), cert };
+      lastProblems = [];
+      return cert;
+    } catch {
+      problems.push("Found a file but it isn't a certificate (expected Caddy's root.crt)");
+    }
   }
-  cached = { at: Date.now(), cert };
-  return cert;
-}
-
-function readFile(file: string): string | null {
-  try {
-    return fs.readFileSync(file, 'utf8');
-  } catch {
-    return null;
-  }
+  lastProblems = problems;
+  return null;
 }
 
 /** A stable UUID from the certificate, so installing the profile again replaces the old one. */
@@ -55,7 +73,7 @@ function uuidFrom(hex: string): string {
 /** GET /info — is there a certificate to hand out, and what to check it against. */
 deviceCertRouter.get('/info', async (_req, res) => {
   const cert = await rootCert();
-  if (!cert) return res.json({ available: false });
+  if (!cert) return res.json({ available: false, problems: lastProblems, copy_path: COPY_FILE });
   res.json({
     available: true,
     name: cert.subject.replace(/^CN=/m, '').split('\n')[0],

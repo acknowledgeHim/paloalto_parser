@@ -89,6 +89,13 @@ Intercom microphone.
 
 **Easiest:** on the tablet (or any phone/computer), open the app → **Settings → 🔒 This device's
 certificate** → **📥 Get the certificate**, and follow the 2–3 steps it shows for that device.
+If it says it can't get the certificate, copy it where the app can read it (Caddy's folder is
+Caddy-only), then reload the page:
+
+```bash
+sudo install -m 644 /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt \
+  ~/paloalto_parser/random/familyhomecenter/server/data/caddy-root.crt
+```
 
 Or by hand:
 
