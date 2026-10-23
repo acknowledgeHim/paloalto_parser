@@ -5,7 +5,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
-import { canEditTask, routineNumber, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
 import { FloorplanView } from '../components/FloorplanView.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { usePrizeJobIds } from '../utils/prizes.js';
@@ -115,6 +115,27 @@ export function TasksPage() {
   const columnTasks = tasks.filter((t) => !prizeJobIds?.has(t.id));
   const unassigned = sortForColumn(columnTasks.filter((t) => t.assignee_ids.length === 0));
   const draggedTask = dragTaskId ? tasks.find((t) => t.id === dragTaskId) : null;
+
+  // Each person's box is collapsed by default, like the Family Board — just their name and how many
+  // are left; ▼ opens that one. A job can still be dragged onto a collapsed box.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpandedIds((ids) => {
+      const next = new Set(ids);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const expandButton = (id: string, name: string, expanded: boolean) => (
+    <button
+      type="button"
+      className="person-column__expand"
+      aria-label={expanded ? `Collapse ${name}'s box` : `Expand ${name}'s box`}
+      onClick={() => toggleExpanded(id)}
+    >
+      {expanded ? '▲' : '▼'}
+    </button>
+  );
 
   // 🔢 Putting someone's jobs in the order they should do them (parents, or that person themselves).
   const [orderingId, setOrderingId] = useState<string | null>(null);
@@ -234,17 +255,21 @@ export function TasksPage() {
         {members.map((member) => {
           const memberTasks = sortForColumn(columnTasks.filter((t) => t.assignee_ids.includes(member.id)), member.id);
           const ordering = orderingId === member.id;
+          const expanded = ordering || expandedIds.has(member.id);
+          const left = memberTasks.filter((t) => !isTaskDoneFor(t, member.id)).length;
           return (
             <section
               key={member.id}
               data-column-id={member.id}
-              className={`panel person-column ${dropTargetId === member.id ? 'person-column--drop-target' : ''}`}
+              className={`panel person-column ${expanded ? '' : 'person-column--collapsed'} ${dropTargetId === member.id ? 'person-column--drop-target' : ''}`}
             >
               <h2>
                 <Link to={`/person/${member.id}`} className="person-column__link">
                   <MemberAvatar member={member} /> {member.name}
                 </Link>
-                <span className="person-column__count">{memberTasks.length}</span>
+                <span className="person-column__count" title={`${left} left of ${memberTasks.length}`}>
+                  {left < memberTasks.length ? `${left} / ${memberTasks.length}` : memberTasks.length}
+                </span>
                 {canOrder(member.id) && (
                   <button
                     type="button"
@@ -256,8 +281,9 @@ export function TasksPage() {
                     {ordering ? '✓' : '🔢'}
                   </button>
                 )}
+                {!ordering && expandButton(member.id, member.name, expanded)}
               </h2>
-              {ordering ? (
+              {!expanded ? null : ordering ? (
                 <div className="task-order">
                   <p className="hint">
                     The order {member.name} does them in — their avatar on the floor plan walks from one to the next. ↑ ↓ to move.
@@ -290,14 +316,19 @@ export function TasksPage() {
 
         <section
           data-column-id={UNASSIGNED}
-          className={`panel person-column person-column--unassigned ${dropTargetId === UNASSIGNED ? 'person-column--drop-target' : ''}`}
+          className={`panel person-column person-column--unassigned ${expandedIds.has(UNASSIGNED) ? '' : 'person-column--collapsed'} ${dropTargetId === UNASSIGNED ? 'person-column--drop-target' : ''}`}
         >
           <h2>
             Unassigned
             <span className="person-column__count">{unassigned.length}</span>
+            {expandButton(UNASSIGNED, 'Unassigned', expandedIds.has(UNASSIGNED))}
           </h2>
-          {unassigned.length === 0 && <div className="empty-state">Nothing unclaimed</div>}
-          {unassigned.map((t) => renderTask(t))}
+          {expandedIds.has(UNASSIGNED) && (
+            <>
+              {unassigned.length === 0 && <div className="empty-state">Nothing unclaimed</div>}
+              {unassigned.map((t) => renderTask(t))}
+            </>
+          )}
         </section>
       </div>
       )}

@@ -120,6 +120,9 @@ function PrizeColumn({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Collapsed by default, like the Family Board: name, stars/money and a one-line summary of their
+  // prize boxes; ▼ opens the boxes themselves.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     api.get<Prize[]>(`/prizes?family_member_id=${member.id}`).then(setPrizes).catch(console.error);
@@ -154,13 +157,24 @@ function PrizeColumn({
   };
   const current = prizes.filter((p) => !p.done);
   const pastCount = prizes.reduce((n, p) => n + (p.redeemed_count ?? 0), 0);
+  const readyCount = current.filter((p) => p.eligible && !(p.waiting ?? 0)).length;
+  const waitingCount = current.reduce((n, p) => n + (p.waiting ?? 0), 0);
 
   return (
-    <section className="panel person-column prize-column">
+    <section className={`panel person-column prize-column ${expanded ? '' : 'person-column--collapsed'}`}>
       <h2>
         <span className="person-column__link">
           <DressedAvatar member={member} size={30} /> {member.name}
         </span>
+        <span className="person-column__count" title="Prize boxes">🎁 {current.length}</span>
+        <button
+          type="button"
+          className="person-column__expand"
+          aria-label={expanded ? `Collapse ${member.name}'s prize boxes` : `Expand ${member.name}'s prize boxes`}
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {expanded ? '▲' : '▼'}
+        </button>
       </h2>
       <div className="prize-column__balances">
         <span title="Stars">⭐ {member.star_balance ?? 0}</span>
@@ -173,6 +187,18 @@ function PrizeColumn({
       {error && <div className="settings-login__error">{error}</div>}
       {notice && <div className="hint prize-bank-page__notice">{notice}</div>}
 
+      {!expanded && (
+        <button type="button" className="link-button prize-column__summary" onClick={() => setExpanded(true)}>
+          {current.length === 0
+            ? 'No prize boxes right now'
+            : `🎁 ${current.length} prize box${current.length === 1 ? '' : 'es'}`}
+          {readyCount > 0 && ` · 🎉 ${readyCount} ready to redeem`}
+          {waitingCount > 0 && ` · ⏳ ${waitingCount} waiting for OK`}
+        </button>
+      )}
+
+      {expanded && (
+      <>
       <h3>🎁 Prize boxes</h3>
       {current.length === 0 && <div className="empty-state">No prize boxes right now.</div>}
       {current.map((prize) => {
@@ -268,6 +294,8 @@ function PrizeColumn({
         <button type="button" className="secondary prize-column__add" onClick={() => setEditing('new')}>
           + Add a prize box
         </button>
+      )}
+      </>
       )}
       {/* Adding or changing a prize box opens in a pop-up — roomier than the column. */}
       {isParent && editing && (editing === 'new' || prizes.some((p) => p.id === editing)) && (
