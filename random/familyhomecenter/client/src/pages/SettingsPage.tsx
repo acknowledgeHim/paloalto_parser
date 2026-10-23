@@ -12,6 +12,7 @@ import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { PrizeBankSettings } from '../components/PrizeBankSettings.js';
+import { DeviceCertificateSettings } from '../components/DeviceCertificateSettings.js';
 
 interface AuthStatus {
   member_id: string | null;
@@ -287,6 +288,8 @@ export function SettingsPage() {
       <HomeScreenSettings />
 
       <CameraSettings />
+
+      <DeviceCertificateSettings />
 
       <PhotoSourceSettings />
 

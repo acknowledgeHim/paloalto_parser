@@ -2677,3 +2677,11 @@ body.photo-map-full-open { overflow: hidden; }
 .todays-cook__text { flex: 1; min-width: 12em; display: flex; flex-direction: column; gap: 2px; }
 .todays-cook__row--mine .todays-cook__text strong { font-size: 1.15em; }
 .todays-cook .button-link { background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 10px; font-weight: 600; text-decoration: none; }
+
+/* Settings → This device's certificate */
+.device-cert__platforms { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.device-cert__platforms button { padding: 6px 10px; font-size: 0.9rem; }
+.device-cert__get { display: inline-block; background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; }
+.device-cert__steps { margin: 12px 0; padding-left: 22px; line-height: 1.5; }
+.device-cert__steps li { margin-bottom: 6px; }
+.device-cert__check code { word-break: break-all; font-size: 0.8rem; }

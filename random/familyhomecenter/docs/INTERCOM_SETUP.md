@@ -46,6 +46,9 @@ it — no internet/public domain needed for a home network.
 
 ### 3. Trust Caddy's local CA on family members' phones
 
+**Easiest:** on each phone, open the app → **Settings → 🔒 This device's certificate** → **📥 Get
+the certificate**, and follow the steps it shows for that phone.
+
 The first time, phones will show a certificate warning (the CA is locally-generated, not
 publicly trusted). Two options:
 

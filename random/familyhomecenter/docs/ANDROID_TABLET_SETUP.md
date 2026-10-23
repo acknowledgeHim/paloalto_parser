@@ -87,6 +87,11 @@ Intercom microphone.
 
 **Optional: trust the certificate properly** so there's no warning at all.
 
+**Easiest:** on the tablet (or any phone/computer), open the app → **Settings → 🔒 This device's
+certificate** → **📥 Get the certificate**, and follow the 2–3 steps it shows for that device.
+
+Or by hand:
+
 1. Copy Caddy's root certificate off the Pi:
 
    ```bash
