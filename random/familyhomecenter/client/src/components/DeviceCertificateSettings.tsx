@@ -50,8 +50,8 @@ const STEPS: Record<Platform, string[]> = {
   ],
   windows: [
     'Click the button and open the downloaded FamilyHomeCenter.crt.',
-    'Install Certificate → Current User → “Place all certificates in the following store” → Browse → Trusted Root Certification Authorities → Next → Finish → Yes.',
-    'Close and reopen the browser. (Firefox: if it still warns, Settings → search “certificates” → View Certificates → Authorities → Import.)',
+    'Install Certificate → Current User → “Place all certificates in the following store” → Browse → Trusted Root Certification Authorities → Next → Finish → Yes. (Not “Automatically select” — that puts it in the wrong place.) Or, in PowerShell: Import-Certificate -FilePath "$env:USERPROFILE\\Downloads\\FamilyHomeCenter.crt" -CertStoreLocation Cert:\\CurrentUser\\Root',
+    'Fully quit the browser — Brave, Chrome and Edge keep running in the system tray (right-click the tray icon → Exit), or just restart Windows — then open it again. A refresh isn’t enough. (Firefox: Settings → search “certificates” → View Certificates → Authorities → Import.)',
   ],
   mac: [
     'Click the button and open the downloaded FamilyHomeCenter.crt — Keychain Access adds it.',
