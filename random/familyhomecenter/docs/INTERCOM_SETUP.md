@@ -14,6 +14,9 @@ Browsers only allow microphone access (`getUserMedia`) on a **secure context** �
 reverse proxy in front of the app. **Caddy** is the simplest option — it can mint and serve a locally
 trusted certificate with almost no config.
 
+> **Tired of certificate warnings?** `docs/LETSENCRYPT_SETUP.md` gets a free, trusted Let's
+> Encrypt certificate (renews itself) instead of the local one below — no trusting needed on phones.
+
 ### 1. Install Caddy
 
 ```bash

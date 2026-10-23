@@ -41,6 +41,10 @@ SPOTIFY_CLIENT_SECRET=your-client-secret
 SPOTIFY_REDIRECT_URI=http://<pi-hostname-or-ip>:3000/api/music/spotify/callback
 ```
 
+Spotify now only accepts **https** redirect URIs (except `127.0.0.1`). Set up the free trusted
+certificate in `docs/LETSENCRYPT_SETUP.md` first, then use
+`https://<name>.duckdns.org/api/music/spotify/callback` both here and in the Spotify dashboard.
+
 Restart the server.
 
 ### 3. Connect

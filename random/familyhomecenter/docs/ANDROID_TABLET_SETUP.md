@@ -46,6 +46,9 @@ Browsers only let a web page use the camera over **HTTPS**. The plain `http://<p
 works for everything else, but the camera stays blocked there. It's the same requirement as the
 Intercom microphone.
 
+> **Easier:** `docs/LETSENCRYPT_SETUP.md` gets a free, trusted certificate (renews itself), so the
+> tablets never warn and you can skip "Ignore SSL errors" and the certificate install below.
+
 1. **Give the Pi a fixed address.** In your router's settings, reserve an IP for the Pi (for
    example, `192.168.1.50`). Android tablets often can't resolve `.local` names, so use the IP.
 
