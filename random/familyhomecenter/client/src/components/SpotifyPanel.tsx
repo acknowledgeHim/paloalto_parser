@@ -265,7 +265,7 @@ function Playlists({ onPlay, onQueue }: { onPlay: PlayFn; onQueue: (uri: string)
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
-  const [tracks, setTracks] = useState<Record<string, SpTrack[] | 'error'>>({});
+  const [tracks, setTracks] = useState<Record<string, SpTrack[] | { error: string }>>({});
 
   useEffect(() => {
     api
@@ -286,7 +286,7 @@ function Playlists({ onPlay, onQueue }: { onPlay: PlayFn; onQueue: (uri: string)
           [p.id]: (r.items ?? []).map((it) => it.track ?? it.item ?? null).filter((x): x is SpTrack => !!x?.uri && x.uri.startsWith('spotify:track:')),
         })),
       )
-      .catch(() => setTracks((t) => ({ ...t, [p.id]: 'error' })));
+      .catch((err) => setTracks((t) => ({ ...t, [p.id]: { error: (err as Error).message } })));
   };
 
   if (error) return <div className="settings-login__error">{error}</div>;
@@ -318,7 +318,13 @@ function Playlists({ onPlay, onQueue }: { onPlay: PlayFn; onQueue: (uri: string)
             {open && (
               <div className="spotify__tracks">
                 {list === undefined && <p className="hint">Loading songs…</p>}
-                {list === 'error' && <p className="hint">Spotify won't list this playlist's songs here — ▶ still plays it.</p>}
+                {list && !Array.isArray(list) && (
+                  <p className="hint">
+                    Spotify won't list this playlist's songs here (it only shows songs for playlists this account made) — ▶ still plays it.
+                    <br />
+                    <small>{list.error}</small>
+                  </p>
+                )}
                 {Array.isArray(list) && list.length === 0 && <p className="hint">No songs.</p>}
                 {Array.isArray(list) &&
                   list.map((t, i) => (

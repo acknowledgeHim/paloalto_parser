@@ -103,24 +103,36 @@ export class SpotifyError extends Error {
   }
 }
 
-async function check(resp: Response): Promise<Response> {
+async function check(resp: Response, what: string): Promise<Response> {
   if (resp.ok) return resp;
-  let msg = `Spotify said ${resp.status}`;
+  const text = await resp.text().catch(() => '');
+  // Spotify's whole answer goes to the log (journalctl -u familyhomecenter) for anything unexpected.
+  console.warn(`[spotify] ${what} → ${resp.status} ${text.slice(0, 500)}`);
+  let message = '';
+  let reason = '';
   try {
-    const body = (await resp.json()) as { error?: { message?: string; reason?: string } | string };
-    const e = typeof body.error === 'string' ? body.error : body.error?.message;
-    if (e) msg = e;
-    if (typeof body.error === 'object' && body.error?.reason === 'NO_ACTIVE_DEVICE') msg = 'No speaker picked — choose one under "Play on"';
-    if (typeof body.error === 'object' && body.error?.reason === 'PREMIUM_REQUIRED') msg = 'Controlling playback needs Spotify Premium';
+    const body = JSON.parse(text) as { error?: { message?: string; reason?: string } | string; error_description?: string };
+    message = (typeof body.error === 'string' ? body.error_description ?? body.error : body.error?.message) ?? '';
+    reason = typeof body.error === 'object' ? body.error?.reason ?? '' : '';
   } catch {
-    // not JSON — keep the status
+    message = text.trim().slice(0, 200); // sometimes plain text, e.g. the "user may not be registered" answer
   }
-  if (resp.status === 404 && /device/i.test(msg)) msg = "That speaker isn't available right now — is it on? Tap ↻ to refresh the list.";
+  let msg = message ? `Spotify said: ${message}` : `Spotify said ${resp.status}`;
+  if (reason === 'NO_ACTIVE_DEVICE') msg = 'No speaker picked — choose one under "Play on"';
+  else if (reason === 'PREMIUM_REQUIRED' || /premium/i.test(message)) msg = 'Controlling playback needs Spotify Premium on the connected account';
+  else if (/not be registered|not registered/i.test(message))
+    msg = 'This Spotify account isn’t on your Spotify app’s list — developer.spotify.com → your app → User Management → add it, then Settings → Spotify → Reconnect';
+  else if (/restriction violated/i.test(message))
+    msg = "That speaker won't take that right now (some can only be controlled from their own app, or it's mid-ad) — try another speaker, or press play in the Spotify app once first";
+  else if (/insufficient client scope|scope/i.test(message)) msg = 'Spotify needs permission again — Settings → Spotify → Reconnect';
+  else if (resp.status === 404 && /device/i.test(message)) msg = "That speaker isn't available right now — is it on? Tap ↻ to refresh the list.";
+  else if (resp.status === 403)
+    msg = `${msg} (403 — Spotify refused. Usually: the account needs Premium, or isn't added under User Management in your Spotify developer app.)`;
   throw new SpotifyError(msg, resp.status);
 }
 
 async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T | null> {
-  const resp = await check(await apiRequest(path, init));
+  const resp = await check(await apiRequest(path, init), `${init.method ?? 'GET'} ${path.split('?')[0]}`);
   if (resp.status === 204) return null;
   const text = await resp.text();
   return text ? (JSON.parse(text) as T) : null;
@@ -220,7 +232,7 @@ export async function getPlaylistTracks(playlistId: string): Promise<unknown> {
   try {
     return await apiJson(`/playlists/${id}/items?limit=100`);
   } catch (err) {
-    if (err instanceof SpotifyError && err.status === 404) return apiJson(`/playlists/${id}/tracks?limit=100`);
+    if (err instanceof SpotifyError && (err.status === 404 || err.status === 403)) return apiJson(`/playlists/${id}/tracks?limit=100`);
     throw err;
   }
 }
