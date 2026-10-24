@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { api, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TIME_OF_DAY_OPTIONS, parseTimeOfDaySlots, type TimeOfDaySlot } from '../utils/timeOfDay.js';
@@ -173,6 +174,9 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    // React still passes events up to whatever opened this (even through the portal) — keep Save
+    // from also submitting an outer form, like the prize form.
+    e.stopPropagation();
     if (!title.trim()) return;
     if (isParent && rotating && recurrence !== 'once' && rotationOrder.length < 2) return;
     if (recurrence === 'weekly' && weeklyDays.length === 0) return;
@@ -265,7 +269,9 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
     onSaved();
   };
 
-  return (
+  // Rendered on the page body, not where it's used: the Prize Bank opens this from inside its own
+  // prize form, and a form inside a form made the browser reload the page on Save (nothing saved).
+  return createPortal(
     <div className="modal-overlay" onClick={close}>
       <form className="modal-panel task-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h2>{task ? 'Edit task' : 'Add a task'}</h2>
@@ -623,6 +629,7 @@ export function TaskFormModal({ task, defaultAssigneeId, defaultRoomId, onClose,
           </button>
         )}
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }
