@@ -179,37 +179,47 @@ musicRouter.get(
     }
   })
 );
-musicRouter.get(
-  '/spotify/devices',
-  asyncHandler(async (_req, res) => {
-    res.json(await spotify.listDevices());
-  })
-);
-musicRouter.get(
-  '/spotify/playback',
-  asyncHandler(async (_req, res) => {
-    res.json(await spotify.getCurrentPlayback());
-  })
-);
+// Everyday Spotify control is open to everyone, like the zones above. A Spotify refusal ("no active
+// device", "Premium required") goes back as { error } with Spotify's words, not a bare 500.
+const spotifyRoute =
+  (run: (req: import('express').Request) => Promise<unknown>) =>
+  async (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
+    try {
+      const out = await run(req);
+      if (out === undefined) res.status(204).end();
+      else res.json(out);
+    } catch (err) {
+      if (err instanceof spotify.SpotifyError) return res.status(err.status >= 500 ? 502 : 400).json({ error: err.message });
+      if ((err as Error).message === 'Spotify not connected') return res.status(400).json({ error: 'Spotify isn’t connected — Settings → Spotify → Connect' });
+      next(err);
+    }
+  };
+const deviceOf = (req: import('express').Request) => (typeof req.body?.deviceId === 'string' && req.body.deviceId) || undefined;
+
+musicRouter.get('/spotify/devices', spotifyRoute(() => spotify.listDevices()));
+musicRouter.get('/spotify/playback', spotifyRoute(async () => (await spotify.getCurrentPlayback()) ?? null));
 musicRouter.post(
   '/spotify/transfer',
-  asyncHandler(async (req, res) => {
+  spotifyRoute(async (req) => {
     await spotify.transferPlayback(req.body.deviceId, req.body.play !== false);
-    res.status(204).end();
-  })
+  }),
 );
-musicRouter.get(
-  '/spotify/search',
-  asyncHandler(async (req, res) => {
-    res.json(await spotify.search((req.query.q as string) || ''));
-  })
+musicRouter.get('/spotify/search', spotifyRoute(async (req) => (await spotify.search((req.query.q as string) || '')) ?? {}));
+musicRouter.get('/spotify/playlists', spotifyRoute(() => spotify.getUserPlaylists()));
+musicRouter.get('/spotify/playlists/:id/tracks', spotifyRoute((req) => spotify.getPlaylistTracks(req.params.id)));
+/** { deviceId?, contextUri?, uris?, offsetUri? } — nothing but deviceId = resume there. */
+musicRouter.post(
+  '/spotify/play',
+  spotifyRoute(async (req) => {
+    const { contextUri, uris, offsetUri } = req.body ?? {};
+    await spotify.play(deviceOf(req), contextUri || undefined, Array.isArray(uris) ? uris : undefined, offsetUri || undefined);
+  }),
 );
-musicRouter.get(
-  '/spotify/playlists',
-  asyncHandler(async (_req, res) => {
-    res.json(await spotify.getUserPlaylists());
-  })
-);
+musicRouter.post('/spotify/pause', spotifyRoute(async (req) => void (await spotify.pause(deviceOf(req)))));
+musicRouter.post('/spotify/next', spotifyRoute(async (req) => void (await spotify.next(deviceOf(req)))));
+musicRouter.post('/spotify/previous', spotifyRoute(async (req) => void (await spotify.previous(deviceOf(req)))));
+musicRouter.post('/spotify/volume', spotifyRoute(async (req) => void (await spotify.setVolume(deviceOf(req), Number(req.body.percent)))));
+musicRouter.post('/spotify/queue', spotifyRoute(async (req) => void (await spotify.addToQueue(String(req.body.uri), deviceOf(req)))));
 
 // ---- Internal: librespot --onevent hook posts here (see scripts/librespot-event.sh) ----
 musicRouter.post('/internal/spotify-event/:zoneId', (req, res) => {

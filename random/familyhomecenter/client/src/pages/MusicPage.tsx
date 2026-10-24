@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, type Zone, type ZoneGroup, type ZoneStatus, type Track, type LibraryStatus } from '../api/client.js';
 import { LibraryBrowser } from '../components/LibraryBrowser.js';
+import { SpotifyPanel } from '../components/SpotifyPanel.js';
+import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 
 function fmtTime(seconds: number | null): string {
   if (seconds === null) return '';
@@ -25,6 +27,9 @@ export function MusicPage() {
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus | null>(null);
 
   const [spotify, setSpotify] = useState<{ configured: boolean; connected: boolean }>({ configured: false, connected: false });
+  // Each section starts folded to its heading (tap to open); which are open is remembered on this screen.
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+  useCollapsibleSections(pageEl, 'familyhomecenter.music.open');
 
   const loadZones = () => {
     api.get<Zone[]>('/music/zones').then(setZones).catch(console.error);
@@ -92,9 +97,11 @@ export function MusicPage() {
   };
 
   return (
-    <div className="music-page">
+    <div className="music-page" ref={setPageEl}>
       <h1>Music</h1>
 
+      <section className="panel">
+      <h2>🔊 Speakers</h2>
       <div className="music-page__zones">
         {zones.map((zone) => {
           const status = statuses[zone.id];
@@ -162,9 +169,10 @@ export function MusicPage() {
         </button>
         <button className="secondary" onClick={ungroupAll}>Ungroup all</button>
       </div>
+      </section>
 
       <section className="panel">
-        <h2>Your music library</h2>
+        <h2>💿 Your music library</h2>
         {libraryStatus && !libraryStatus.connected && (
           <div className="empty-state">
             Can't reach the music library (MPD) right now{libraryStatus.error ? ` — ${libraryStatus.error}` : ''}.
@@ -223,7 +231,7 @@ export function MusicPage() {
       </section>
 
       <section className="panel">
-        <h2>Spotify</h2>
+        <h2>🟢 Spotify</h2>
         <p className="hint">
           Anyone can cast from their own Spotify app right now — open Spotify, tap the speaker/devices icon,
           and pick a zone (e.g. "Family Hub Zone 1"). No login needed here for that.
@@ -233,6 +241,7 @@ export function MusicPage() {
           {spotify.configured && !spotify.connected && <span className="hint"> — connect it from Settings</span>}
         </p>
         {!spotify.configured && <p className="hint">See docs/SPOTIFY_SETUP.md to enable in-dashboard playback control (requires Spotify Premium).</p>}
+        {spotify.connected && <SpotifyPanel />}
       </section>
     </div>
   );

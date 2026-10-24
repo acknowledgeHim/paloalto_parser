@@ -2,16 +2,16 @@ import { useEffect } from 'react';
 
 const KEY = 'familyhomecenter.settings.open';
 
-function openSet(): Set<string> {
+function openSet(key: string): Set<string> {
   try {
-    return new Set(JSON.parse(localStorage.getItem(KEY) ?? '[]'));
+    return new Set(JSON.parse(localStorage.getItem(key) ?? '[]'));
   } catch {
     return new Set();
   }
 }
-function saveOpen(s: Set<string>) {
+function saveOpen(key: string, s: Set<string>) {
   try {
-    localStorage.setItem(KEY, JSON.stringify([...s]));
+    localStorage.setItem(key, JSON.stringify([...s]));
   } catch {
     /* not remembered — fine */
   }
@@ -20,12 +20,13 @@ function saveOpen(s: Set<string>) {
 /**
  * Every section (a `.panel` straight inside `root` with an <h2>) starts folded down to its
  * heading; tap the heading to open or close it. Which ones are open is remembered on this screen.
- * Works on sections that show up later too (each part of Settings loads on its own).
+ * Works on sections that show up later too (each part of Settings loads on its own). `storageKey`
+ * keeps each page's open sections separate (Settings, Music…).
  */
-export function useCollapsibleSections(root: HTMLElement | null) {
+export function useCollapsibleSections(root: HTMLElement | null, storageKey = KEY) {
   useEffect(() => {
     if (!root) return;
-    const open = openSet();
+    const open = openSet(storageKey);
     const titleOf = (h: Element) => (h.textContent ?? '').trim().slice(0, 60);
     const apply = () => {
       root.querySelectorAll(':scope > .panel').forEach((sec) => {
@@ -44,7 +45,7 @@ export function useCollapsibleSections(root: HTMLElement | null) {
       const t = titleOf(h);
       if (open.has(t)) open.delete(t);
       else open.add(t);
-      saveOpen(open);
+      saveOpen(storageKey, open);
       apply();
     };
     const onClick = (e: MouseEvent) => {
@@ -71,5 +72,5 @@ export function useCollapsibleSections(root: HTMLElement | null) {
       root.removeEventListener('click', onClick);
       root.removeEventListener('keydown', onKey);
     };
-  }, [root]);
+  }, [root, storageKey]);
 }

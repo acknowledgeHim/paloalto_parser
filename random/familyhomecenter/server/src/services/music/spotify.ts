@@ -92,74 +92,135 @@ async function apiRequest(path: string, init: RequestInit = {}): Promise<Respons
   });
 }
 
+/** Spotify's own words when a call fails ("No active device found", "Premium required"…), so the
+ *  Music page can show them instead of a bare 500. */
+export class SpotifyError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function check(resp: Response): Promise<Response> {
+  if (resp.ok) return resp;
+  let msg = `Spotify said ${resp.status}`;
+  try {
+    const body = (await resp.json()) as { error?: { message?: string; reason?: string } | string };
+    const e = typeof body.error === 'string' ? body.error : body.error?.message;
+    if (e) msg = e;
+    if (typeof body.error === 'object' && body.error?.reason === 'NO_ACTIVE_DEVICE') msg = 'No speaker picked — choose one under "Play on"';
+    if (typeof body.error === 'object' && body.error?.reason === 'PREMIUM_REQUIRED') msg = 'Controlling playback needs Spotify Premium';
+  } catch {
+    // not JSON — keep the status
+  }
+  if (resp.status === 404 && /device/i.test(msg)) msg = "That speaker isn't available right now — is it on? Tap ↻ to refresh the list.";
+  throw new SpotifyError(msg, resp.status);
+}
+
+async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T | null> {
+  const resp = await check(await apiRequest(path, init));
+  if (resp.status === 204) return null;
+  const text = await resp.text();
+  return text ? (JSON.parse(text) as T) : null;
+}
+
+const withDevice = (path: string, deviceId?: string) =>
+  deviceId ? `${path}${path.includes('?') ? '&' : '?'}device_id=${encodeURIComponent(deviceId)}` : path;
+
 export interface SpotifyDevice {
   id: string;
   name: string;
+  type?: string;
   is_active: boolean;
+  is_restricted?: boolean;
   volume_percent: number | null;
 }
 
 /** Every Spotify Connect device visible to this account — includes our librespot zones once "seen" by the app. */
 export async function listDevices(): Promise<SpotifyDevice[]> {
   if (!isSpotifyConnected()) return [];
-  const resp = await apiRequest('/me/player/devices');
-  if (!resp.ok) return [];
-  const data = await resp.json();
-  return data.devices ?? [];
+  const data = await apiJson<{ devices?: SpotifyDevice[] }>('/me/player/devices');
+  return data?.devices ?? [];
 }
 
 export async function getCurrentPlayback(): Promise<unknown> {
   if (!isSpotifyConnected()) return null;
-  const resp = await apiRequest('/me/player');
-  if (resp.status === 204) return null;
-  if (!resp.ok) return null;
-  return resp.json();
+  return apiJson('/me/player');
 }
 
 export async function transferPlayback(deviceId: string, play = true): Promise<void> {
-  await apiRequest('/me/player', {
+  await apiJson('/me/player', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ device_ids: [deviceId], play }),
   });
 }
 
-export async function play(deviceId: string, contextUri?: string, uris?: string[]): Promise<void> {
-  await apiRequest(`/me/player/play?device_id=${encodeURIComponent(deviceId)}`, {
+/** Play a playlist/album/artist (contextUri — optionally starting at offsetUri), some songs (uris),
+ *  or just resume (neither) — on deviceId, or wherever Spotify is already playing. */
+export async function play(deviceId?: string, contextUri?: string, uris?: string[], offsetUri?: string): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (contextUri) body.context_uri = contextUri;
+  if (uris?.length) body.uris = uris;
+  if (contextUri && offsetUri) body.offset = { uri: offsetUri };
+  await apiJson(withDevice('/me/player/play', deviceId), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: contextUri || uris ? JSON.stringify({ context_uri: contextUri, uris }) : undefined,
+    body: Object.keys(body).length ? JSON.stringify(body) : undefined,
   });
 }
 
-export async function pause(deviceId: string): Promise<void> {
-  await apiRequest(`/me/player/pause?device_id=${encodeURIComponent(deviceId)}`, { method: 'PUT' });
+export async function pause(deviceId?: string): Promise<void> {
+  await apiJson(withDevice('/me/player/pause', deviceId), { method: 'PUT' });
 }
 
-export async function next(deviceId: string): Promise<void> {
-  await apiRequest(`/me/player/next?device_id=${encodeURIComponent(deviceId)}`, { method: 'POST' });
+export async function next(deviceId?: string): Promise<void> {
+  await apiJson(withDevice('/me/player/next', deviceId), { method: 'POST' });
 }
 
-export async function previous(deviceId: string): Promise<void> {
-  await apiRequest(`/me/player/previous?device_id=${encodeURIComponent(deviceId)}`, { method: 'POST' });
+export async function previous(deviceId?: string): Promise<void> {
+  await apiJson(withDevice('/me/player/previous', deviceId), { method: 'POST' });
 }
 
-export async function setVolume(deviceId: string, percent: number): Promise<void> {
-  await apiRequest(`/me/player/volume?volume_percent=${Math.round(percent)}&device_id=${encodeURIComponent(deviceId)}`, {
+export async function setVolume(deviceId: string | undefined, percent: number): Promise<void> {
+  await apiJson(withDevice(`/me/player/volume?volume_percent=${Math.max(0, Math.min(100, Math.round(percent)))}`, deviceId), {
     method: 'PUT',
   });
 }
 
-export async function search(query: string, limit = 20): Promise<unknown> {
-  if (!isSpotifyConnected()) return null;
-  const resp = await apiRequest(`/search?q=${encodeURIComponent(query)}&type=track,album,playlist&limit=${limit}`);
-  if (!resp.ok) return null;
-  return resp.json();
+/** Add a song to the end of what's playing. */
+export async function addToQueue(uri: string, deviceId?: string): Promise<void> {
+  await apiJson(withDevice(`/me/player/queue?uri=${encodeURIComponent(uri)}`, deviceId), { method: 'POST' });
 }
 
-export async function getUserPlaylists(): Promise<unknown> {
-  if (!isSpotifyConnected()) return null;
-  const resp = await apiRequest('/me/playlists?limit=50');
-  if (!resp.ok) return null;
-  return resp.json();
+// Spotify caps search at 10 per type for apps in development mode, so ask for 10.
+export async function search(query: string, limit = 10): Promise<unknown> {
+  if (!isSpotifyConnected() || !query.trim()) return null;
+  return apiJson(`/search?q=${encodeURIComponent(query)}&type=track,album,playlist,artist&limit=${limit}`);
+}
+
+/** All of this account's playlists (theirs and followed), a page of 50 at a time. */
+export async function getUserPlaylists(): Promise<unknown[]> {
+  if (!isSpotifyConnected()) return [];
+  const all: unknown[] = [];
+  let path: string | null = '/me/playlists?limit=50';
+  for (let page = 0; path && page < 10; page++) {
+    const data: { items?: unknown[]; next?: string | null } | null = await apiJson(path);
+    all.push(...(data?.items ?? []).filter(Boolean));
+    path = data?.next ? data.next.replace('https://api.spotify.com/v1', '') : null;
+  }
+  return all;
+}
+
+/** A playlist's songs (first 100). Spotify renamed /tracks to /items — try the new one first. */
+export async function getPlaylistTracks(playlistId: string): Promise<unknown> {
+  const id = encodeURIComponent(playlistId);
+  try {
+    return await apiJson(`/playlists/${id}/items?limit=100`);
+  } catch (err) {
+    if (err instanceof SpotifyError && err.status === 404) return apiJson(`/playlists/${id}/tracks?limit=100`);
+    throw err;
+  }
 }
