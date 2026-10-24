@@ -85,6 +85,7 @@ export function SettingsPage() {
   interface SpotifyStatus {
     configured: boolean;
     connected: boolean;
+    redirect_uri?: string;
   }
   const [settings, setSettings] = useState<TimingSettings>({});
   const [sources, setSources] = useState<CalendarSources>({});
@@ -276,10 +277,11 @@ export function SettingsPage() {
         <h2>Spotify</h2>
         <p>
           In-dashboard playback control: {spotify.connected ? 'Connected ✅' : spotify.configured ? 'Not connected' : 'Not configured'}
-          {spotify.configured && !spotify.connected && (
-            <button className="link-button" onClick={connectSpotify}>Connect</button>
+          {spotify.configured && (
+            <button className="link-button" onClick={connectSpotify}>{spotify.connected ? 'Reconnect' : 'Connect'}</button>
           )}
         </p>
+        {spotify.configured && spotify.redirect_uri && <SpotifyRedirectHint uri={spotify.redirect_uri} />}
         {!spotify.configured && <p className="hint">See docs/SPOTIFY_SETUP.md — casting from a family member's own Spotify app needs no setup here at all.</p>}
       </section>
 
@@ -335,6 +337,44 @@ export function SettingsPage() {
           Anyone can currently open Settings — including the Prize Bank reward amounts above.
           Have a parent set their own password (🔑 icon in the name switcher up top) to require a
           login here. See docs/SETTINGS_LOGIN.md.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Spotify only accepts a redirect address that's https://, or http:// on 127.0.0.1 (the device
+ * itself) — not "localhost", not http://<pi-ip>. Shows the one in use (to paste into Spotify's
+ * dashboard exactly) and what's wrong with it, if anything.
+ */
+function SpotifyRedirectHint({ uri }: { uri: string }) {
+  let url: URL | null = null;
+  try {
+    url = new URL(uri);
+  } catch {
+    url = null;
+  }
+  const loopback = url?.hostname === '127.0.0.1' || url?.hostname === '[::1]';
+  const here = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+  let problem: string | null = null;
+  if (!url) problem = "That isn't a full web address.";
+  else if (url.hostname === 'localhost') problem = 'Spotify no longer accepts "localhost" — use 127.0.0.1 instead (same thing).';
+  else if (url.protocol === 'http:' && !loopback) problem = 'Spotify only accepts https:// here (or http://127.0.0.1) — change it to the https address.';
+  else if (!url.pathname.endsWith('/api/music/spotify/callback')) problem = 'It should end in /api/music/spotify/callback.';
+  return (
+    <div className="hint">
+      <p>
+        Redirect URI in use (SPOTIFY_REDIRECT_URI) — add exactly this under Redirect URIs in your app at
+        developer.spotify.com:
+        <br />
+        <code style={{ userSelect: 'all', wordBreak: 'break-all' }}>{uri}</code>
+      </p>
+      {problem && <p className="settings-login__error">⚠️ {problem}</p>}
+      {!problem && loopback && !here && (
+        <p>
+          It's a 127.0.0.1 address, so press Connect on the Pi's own screen — on another device,
+          Spotify would send you back to that device instead of the Pi.
         </p>
       )}
     </div>

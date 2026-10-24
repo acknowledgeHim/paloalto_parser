@@ -150,7 +150,8 @@ musicRouter.post(
 // ---- Spotify OAuth + Web API control (these genuinely throw when not connected/configured —
 // asyncHandler turns that into a 500 via the global error handler instead of crashing the process) ----
 musicRouter.get('/spotify/status', (_req, res) => {
-  res.json({ configured: spotify.isSpotifyConfigured(), connected: spotify.isSpotifyConnected() });
+  // redirect_uri isn't a secret — Settings shows it so it can be matched in Spotify's dashboard.
+  res.json({ configured: spotify.isSpotifyConfigured(), connected: spotify.isSpotifyConnected(), redirect_uri: config.spotify.redirectUri });
 });
 // Gated: connecting a Spotify account is configuration, not everyday playback (which stays open below).
 musicRouter.get('/spotify/auth-url', requireAdmin, (_req, res) => {
@@ -160,12 +161,21 @@ musicRouter.get('/spotify/auth-url', requireAdmin, (_req, res) => {
 musicRouter.get(
   '/spotify/callback',
   asyncHandler(async (req, res) => {
+    const page = (msg: string) =>
+      `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>` +
+      `<body style="font-family:sans-serif;padding:24px;max-width:600px">${msg}<p><a href="/#/settings">← Back to Settings</a></p></body></html>`;
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    // Spotify sends ?error=access_denied when someone taps Cancel on its consent screen.
+    if (req.query.error) return res.status(400).send(page(`<h2>Spotify wasn't connected</h2><p>Spotify said: <b>${esc(String(req.query.error))}</b></p>`));
+    if (!req.query.code) return res.status(400).send(page('<h2>Spotify wasn\'t connected</h2><p>No code came back from Spotify — start again from Settings → Spotify → Connect.</p>'));
     try {
       await spotify.handleSpotifyCallback(req.query.code as string);
-      res.send('<html><body>Spotify connected — you can close this tab.</body></html>');
+      res.send(page('<h2>✅ Spotify connected</h2><p>You can close this tab.</p>'));
     } catch (err) {
       console.error(err);
-      res.status(500).send('Failed to connect Spotify. Check server logs.');
+      res
+        .status(500)
+        .send(page(`<h2>Spotify wasn't connected</h2><p>${esc((err as Error).message)}</p><p>"Invalid redirect URI" means SPOTIFY_REDIRECT_URI in .env doesn't exactly match a Redirect URI in your Spotify app's settings.</p>`));
     }
   })
 );

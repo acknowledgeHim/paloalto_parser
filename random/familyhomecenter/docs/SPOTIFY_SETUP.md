@@ -41,9 +41,17 @@ SPOTIFY_CLIENT_SECRET=your-client-secret
 SPOTIFY_REDIRECT_URI=http://<pi-hostname-or-ip>:3000/api/music/spotify/callback
 ```
 
-Spotify now only accepts **https** redirect URIs (except `127.0.0.1`). Set up the free trusted
-certificate in `docs/LETSENCRYPT_SETUP.md` first, then use
-`https://<name>.duckdns.org/api/music/spotify/callback` both here and in the Spotify dashboard.
+Spotify only accepts a redirect URI that's **https://**, or **http://127.0.0.1** — not
+`localhost`, and not `http://<pi-ip>`. Two ways that work:
+
+- **Easiest — connect from the Pi itself:** `SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/music/spotify/callback`,
+  then press Settings → Spotify → Connect *on the Pi's own screen* (or from a laptop through
+  `ssh -L 3000:127.0.0.1:3000 pi@<pi-ip>` and opening `http://127.0.0.1:3000`). You only connect once;
+  after that every device can use it.
+- **Through Caddy's https:** `SPOTIFY_REDIRECT_URI=https://<pi-ip>/api/music/spotify/callback`. If the
+  device shows a certificate warning when Spotify sends it back, click through it — it still connects.
+
+Settings → Spotify shows the redirect URI the Pi is using and warns if Spotify won't accept it.
 
 Restart the server.
 
