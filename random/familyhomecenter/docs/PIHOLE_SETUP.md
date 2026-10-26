@@ -200,8 +200,8 @@ tap **📧 Send it now**.
 - **Blocked** — what was blocked most.
 
 It's all estimated from lookups, like the daily allowance. Time per site and time of day are recorded
-from the update that added them; daily totals go back further. Nothing is deleted, so the history keeps
-growing. A kid logged in as themselves sees only their own.
+from the update that added them; daily totals go back further. Time on each site and what was blocked
+are kept for 6 months (180 days); daily totals and time of day are kept for good. A kid logged in as themselves sees only their own.
 
 ## Closing the gaps (optional)
 

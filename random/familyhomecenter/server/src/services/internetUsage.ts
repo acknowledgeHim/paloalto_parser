@@ -15,6 +15,9 @@ import { BLOCKED_STATUSES, localDay, siteForDomain, type InternetDevice } from '
  */
 
 const ACTIVE_LOOKUPS = 3;
+/** Per-site history (lookups and minutes) is kept this long — a parent asked for 6 months. Daily
+ *  totals and time of day are kept for good. */
+const SITE_HISTORY_DAYS = 180;
 
 /** Lookups devices make on their own, not because someone's using them. */
 const BACKGROUND = [
@@ -116,6 +119,7 @@ export function usageSite(site: string): string | null {
 }
 
 let lastCheck = Math.floor(Date.now() / 1000) - 60;
+let lastPruneDay = '';
 
 export async function trackUsageMinute(): Promise<void> {
   if (!pihole.isPiholeConfigured()) return;
@@ -185,5 +189,12 @@ export async function trackUsageMinute(): Promise<void> {
       }
       for (const [site, c] of sites) addSite.run({ m: memberId, day, site, ...c });
     })();
+  }
+
+  if (lastPruneDay !== day) {
+    lastPruneDay = day;
+    const cutoff = localDay(new Date(Date.now() - SITE_HISTORY_DAYS * 86_400_000));
+    db.prepare('DELETE FROM internet_site_counts WHERE day < ?').run(cutoff);
+    db.prepare('DELETE FROM internet_site_minutes WHERE day < ?').run(cutoff);
   }
 }
