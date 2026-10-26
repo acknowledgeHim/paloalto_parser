@@ -2773,3 +2773,113 @@ body.photo-map-full-open { overflow: hidden; }
 .passwords-page__go { display: inline-block; padding: 14px 22px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; font-size: 1.15em; text-decoration: none; }
 .passwords-page__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
 .passwords-page__steps code { overflow-wrap: anywhere; }
+
+/* ⌨️ Typing (pages/TypingPage.tsx) */
+.typing-page { display: flex; flex-direction: column; gap: 14px; }
+.typing-page__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.typing-page__who { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.typing-page__tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.typing-page__tabs button { min-height: 44px; padding: 0 16px; }
+.typing-page__recent ul { list-style: none; margin: 0; padding: 0; }
+.typing-page__recent li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.typing-page__recent li:last-child { border-bottom: none; }
+.typing-catcher { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; left: 0; bottom: 0; }
+kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--panel); font-size: 0.9em; }
+
+.typing-lessons__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.typing-lesson {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; min-height: 0;
+  text-align: left; border-radius: 14px; background: var(--panel); color: var(--text); border: 2px solid var(--border);
+}
+.typing-lesson--done { border-color: #22a06b; }
+.typing-lesson--locked { opacity: 0.45; }
+.typing-lesson__n { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; }
+.typing-lesson--done .typing-lesson__n { background: #22a06b; }
+.typing-lesson--locked .typing-lesson__n { background: var(--bg); }
+.typing-lesson__name { font-weight: 700; }
+.typing-lesson__keys { font-family: ui-monospace, monospace; font-size: 1.1em; letter-spacing: 0.05em; }
+
+.typing-round, .balloon, .race { position: relative; display: flex; flex-direction: column; gap: 14px; }
+.typing-round__top, .balloon__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.typing-round__hint { margin: 0; text-align: center; color: var(--text-muted); }
+.typing-text {
+  font-family: ui-monospace, 'DejaVu Sans Mono', monospace; font-size: clamp(1.3rem, 3.4vw, 2.1rem); line-height: 1.6;
+  padding: 16px; border-radius: 12px; background: var(--bg); overflow-wrap: anywhere; cursor: text;
+}
+.typing-text__done { color: #22a06b; }
+.typing-text__cur { background: var(--accent); color: #fff; border-radius: 4px; animation: typing-blink 1s steps(2) infinite; }
+.typing-text__cur--wrong { background: #d64545; animation: typing-shake 0.25s; }
+@keyframes typing-blink { 50% { opacity: 0.65; } }
+@keyframes typing-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+
+.typing-kb { display: flex; flex-direction: column; align-items: center; gap: 5px; user-select: none; }
+.typing-kb__row { display: flex; gap: 5px; }
+.typing-kb__row--2 { margin-left: 18px; }
+.typing-kb__row--3 { margin-left: 0; }
+.typing-kb__key {
+  display: inline-flex; align-items: center; justify-content: center; width: clamp(26px, 6vw, 46px); height: clamp(30px, 6vw, 46px);
+  border-radius: 8px; font-weight: 700; font-size: clamp(0.7rem, 1.8vw, 1rem); color: #1f2937;
+  background: color-mix(in srgb, var(--f) 35%, white); border: 2px solid transparent;
+}
+.typing-kb__key--bump { text-decoration: underline; text-underline-offset: 4px; }
+.typing-kb__key--wide { width: clamp(34px, 9vw, 64px); }
+.typing-kb__key--space { width: clamp(160px, 40vw, 320px); font-weight: 500; }
+.typing-kb__key--next { background: var(--f); border-color: #1f2937; transform: scale(1.12); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); }
+.typing-kb--wrong .typing-kb__key--next { animation: typing-shake 0.25s; }
+
+.typing-result { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 10px 0; }
+.typing-result h2 { margin: 0; }
+.typing-result p { margin: 0; }
+.typing-result__big { font-size: 3.4rem; line-height: 1; }
+.typing-result__stars { font-weight: 800; color: #b7791f; font-size: 1.15em; }
+.typing-result__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.typing-result__actions button { min-height: 46px; padding: 0 18px; }
+
+.balloon__sky {
+  position: relative; height: min(60vh, 460px); overflow: hidden; border-radius: 14px;
+  background: linear-gradient(#bfe3ff, #eaf6ff 70%, #c9f0c9); cursor: text;
+}
+.balloon__sky--miss { animation: typing-shake 0.25s; }
+.balloon__b { position: absolute; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+.balloon__b::before {
+  content: ''; width: 58px; height: 70px; border-radius: 50% 50% 48% 48%; background: var(--c);
+  box-shadow: inset -8px -10px 0 rgba(0, 0, 0, 0.08);
+}
+.balloon__b::after { content: ''; width: 1px; height: 26px; background: #64748b; }
+.balloon__word {
+  position: absolute; top: 20px; padding: 2px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.92); color: #1f2937;
+  font: 700 1.1rem ui-monospace, monospace; white-space: nowrap;
+}
+.balloon__typed { color: #22a06b; text-decoration: underline; }
+.balloon__overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 16px; text-align: center; background: rgba(255, 255, 255, 0.7); color: #1f2937;
+}
+.balloon__overlay h2, .balloon__overlay p { margin: 0; }
+.balloon__overlay button { min-height: 52px; padding: 0 26px; font-size: 1.1em; }
+.balloon__typing { margin: 0; text-align: center; font: 700 1.5rem ui-monospace, monospace; min-height: 2rem; }
+
+.race__pick { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.race__pick h2 { margin: 0; }
+.race__rivals { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.race__rivals button { display: inline-flex; align-items: center; gap: 6px; min-height: 52px; padding: 0 14px; }
+.race__icon { font-size: 1.6em; }
+.race__go { min-height: 56px; padding: 0 34px; font-size: 1.2em; }
+.race__track { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: #9ca3af; }
+.race__lane { position: relative; height: 52px; border-radius: 8px; background: repeating-linear-gradient(90deg, #4b5563 0 30px, #52525b 30px 60px); }
+.race__runner { position: absolute; top: 4px; font-size: 2.2rem; line-height: 1; transform: translateX(-10%); transition: left 0.1s linear; }
+.race__flip { display: inline-block; transform: scaleX(-1); }
+.race__flag { position: absolute; right: 4px; top: 8px; font-size: 1.8rem; }
+.race__count { text-align: center; font-size: 4rem; font-weight: 900; color: var(--accent); }
+
+.typing-stars__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 18px; }
+.typing-stars__grid label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.typing-stars__grid input { width: 80px; min-height: 40px; text-align: center; }
+.race__speed { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; max-width: 480px; }
+.race__speed-label { font-weight: 700; }
+.race__scale { display: flex; align-items: center; gap: 10px; width: 100%; font-size: 0.9em; color: var(--text-muted); }
+.race__scale input { flex: 1; min-height: 0; accent-color: var(--accent); }
+.race__speed-value { font-weight: 700; }
+.race__ghost { opacity: 0.5; filter: grayscale(0.6); }
+.typing-stars__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.typing-stars__actions button { min-height: 44px; padding: 0 20px; }

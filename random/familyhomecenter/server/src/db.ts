@@ -1327,6 +1327,26 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// ⌨️ Typing practice (routes/typing.ts): every finished lesson or game, for progress and stars.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS typing_results (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    at TEXT NOT NULL,
+    day TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    level INTEGER NOT NULL DEFAULT 0,
+    wpm REAL NOT NULL DEFAULT 0,
+    accuracy REAL NOT NULL DEFAULT 0,
+    chars INTEGER NOT NULL DEFAULT 0,
+    seconds INTEGER NOT NULL DEFAULT 0,
+    score INTEGER NOT NULL DEFAULT 0,
+    passed INTEGER NOT NULL DEFAULT 0,
+    stars INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_typing_results_member ON typing_results (family_member_id, at);
+`);
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

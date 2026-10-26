@@ -100,6 +100,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { section: 'photos', label: '📷 Photos', path: '/photos' },
         { section: 'music', label: '🎵 Music', path: '/music' },
         { section: 'board', label: '🎞️ This week', path: '/recap' },
+        { label: '⌨️ Typing', path: '/typing' },
       ],
     },
     {

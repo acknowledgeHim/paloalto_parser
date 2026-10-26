@@ -20,6 +20,7 @@ import { IntercomPage } from './pages/IntercomPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { InternetPage } from './pages/InternetPage.js';
 import { PasswordsPage } from './pages/PasswordsPage.js';
+import { TypingPage } from './pages/TypingPage.js';
 import { PeoplePage } from './pages/PeoplePage.js';
 import { ApprovalsPage } from './pages/ApprovalsPage.js';
 import { CamerasPage } from './pages/CamerasPage.js';
@@ -136,6 +137,7 @@ export function App() {
           <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />
           <Route path="/internet" element={<SectionGate section="internet"><InternetPage /></SectionGate>} />
           <Route path="/passwords" element={<PasswordsPage />} />
+          <Route path="/typing" element={<TypingPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/cameras" element={<CamerasPage />} />
         </Routes>

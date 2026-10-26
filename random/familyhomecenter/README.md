@@ -170,6 +170,7 @@ Optional integrations, each with its own guide:
 - [docs/MUSIC_SETUP.md](docs/MUSIC_SETUP.md) (HiFiBerry DAC8x, ALSA zone mapping, MPD + librespot)
 - [docs/LETSENCRYPT_SETUP.md](docs/LETSENCRYPT_SETUP.md) (free trusted HTTPS that renews itself — no certificate warnings)
 - [docs/PASSWORDS_SETUP.md](docs/PASSWORDS_SETUP.md) (🔑 a private password manager for each person — Vaultwarden on the Pi)
+- [docs/TYPING.md](docs/TYPING.md) (⌨️ typing lessons and games with stars — plus free desktop typing apps for the Pi)
 - [docs/SPOTIFY_SETUP.md](docs/SPOTIFY_SETUP.md) (in-dashboard playback control, needs Premium)
 - [docs/INTERCOM_SETUP.md](docs/INTERCOM_SETUP.md) (HTTPS via Caddy — required for phone
   microphone access — and installing the dashboard as a phone app)
