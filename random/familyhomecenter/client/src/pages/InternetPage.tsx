@@ -3,6 +3,7 @@ import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
+import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 
 // ---- API shapes (server/src/routes/internet.ts) ----
 
@@ -188,6 +189,9 @@ export function InternetPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [message, setMessage] = useState<{ kind: 'error' | 'warning'; text: string } | null>(null);
+  // Requests, This week, Devices, Kid web filter fold to their headings (tap to open), remembered here.
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+  useCollapsibleSections(pageEl, 'familyhomecenter.internet.open');
 
   const load = () => api.get<Overview>('/internet/overview').then(setOverview).catch((err) => setMessage({ kind: 'error', text: err.message }));
 
@@ -245,7 +249,7 @@ export function InternetPage() {
   const ph = overview.pihole;
 
   return (
-    <div className="internet-page">
+    <div className="internet-page" ref={setPageEl}>
       <div className="internet-page__header">
         <h1>Internet</h1>
         {canManage && kids.length > 0 && (
@@ -337,6 +341,25 @@ function PersonCard({
 }) {
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [editingLimit, setEditingLimit] = useState(false);
+  // Folded to name + status by default, like the Family Board; ▼ opens it (remembered on this screen).
+  const openKey = `familyhomecenter.internet.person.${member.id}`;
+  const [expanded, setExpanded] = useState(() => {
+    try {
+      return localStorage.getItem(openKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleExpanded = () => {
+    setExpanded((v) => {
+      try {
+        localStorage.setItem(openKey, v ? '0' : '1');
+      } catch {
+        /* not remembered — fine */
+      }
+      return !v;
+    });
+  };
   const s = member.state;
   const base = `/internet/members/${member.id}`;
   const blocked = s.paused;
@@ -349,7 +372,18 @@ function PersonCard({
           <strong>{member.name}</strong>
           <span className={`badge ${blocked ? 'internet-badge--off' : 'internet-badge--on'}`}>{statusText(s)}</span>
         </div>
+        <button
+          type="button"
+          className="person-column__expand internet-person__expand"
+          aria-label={expanded ? `Collapse ${member.name}'s box` : `Expand ${member.name}'s box`}
+          aria-expanded={expanded}
+          onClick={toggleExpanded}
+        >
+          {expanded ? '▲' : '▼'}
+        </button>
       </div>
+      {expanded && (
+      <>
 
       {devices.length === 0 ? (
         <p className="hint">No devices yet — add them under Devices below.</p>
@@ -470,6 +504,8 @@ function PersonCard({
           />
         )}
       </div>
+      </>
+      )}
     </section>
   );
 }

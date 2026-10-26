@@ -27,7 +27,8 @@ export function useCollapsibleSections(root: HTMLElement | null, storageKey = KE
   useEffect(() => {
     if (!root) return;
     const open = openSet(storageKey);
-    const titleOf = (h: Element) => (h.textContent ?? '').trim().slice(0, 60);
+    // A count in the heading ("Requests (3)") doesn't make it a different section.
+    const titleOf = (h: Element) => (h.textContent ?? '').trim().replace(/\s*\(\d+\)$/, '').slice(0, 60);
     const apply = () => {
       root.querySelectorAll(':scope > .panel').forEach((sec) => {
         const h = sec.querySelector(':scope > h2');

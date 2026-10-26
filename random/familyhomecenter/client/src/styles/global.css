@@ -2721,3 +2721,5 @@ body.photo-map-full-open { overflow: hidden; }
   .spotify__now img { width: 56px; height: 56px; }
   .spotify__transport { grid-column: 1 / -1; justify-content: center; }
 }
+.internet-person__expand { margin-left: auto; }
+.internet-page__people { align-items: start; }
