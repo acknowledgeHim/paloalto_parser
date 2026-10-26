@@ -20,12 +20,17 @@ export function PasswordsPage() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [vaultUrl, setVaultUrl] = useState<string>(`https://${location.hostname}:8443`);
+  /** Is Vaultwarden answering on the Pi? null = still checking. */
+  const [running, setRunning] = useState<boolean | null>(null);
 
   useEffect(() => {
     api
-      .get<{ url: string | null }>('/passwords/info')
-      .then((r) => r.url && setVaultUrl(r.url))
-      .catch(() => {});
+      .get<{ url: string | null; running: boolean }>('/passwords/info')
+      .then((r) => {
+        if (r.url) setVaultUrl(r.url);
+        setRunning(r.running);
+      })
+      .catch(() => setRunning(null));
   }, []);
 
   // A different person picked up top, or a couple of minutes gone by: ask again.
@@ -104,6 +109,18 @@ export function PasswordsPage() {
         </section>
       ) : (
         <>
+          {running === false && (
+            <section className="panel passwords-page__missing">
+              <h2>The password vault isn't running on the Pi yet</h2>
+              <p>A parent sets it up once, on the Pi:</p>
+              <pre className="device-cert__cmd">cd ~/paloalto_parser/random/familyhomecenter{'\n'}git pull{'\n'}sudo ./scripts/setup-vaultwarden.sh</pre>
+              <p className="hint">
+                It ends with “Done: https://…:8443”. If it was set up before, check it's running:{' '}
+                <code>sudo docker ps</code> (should list vaultwarden) — and <code>sudo docker logs vaultwarden</code>. Steps:
+                docs/PASSWORDS_SETUP.md.
+              </p>
+            </section>
+          )}
           <section className="panel passwords-page__open">
             <a className="passwords-page__go" href={vaultUrl} target="_blank" rel="noopener noreferrer">
               🔑 Open {activeProfile.name}'s passwords
@@ -111,6 +128,11 @@ export function PasswordsPage() {
             <p className="hint">
               Opens your vault in a new tab. It asks for your <strong>master password</strong> — the one only you
               know. This page locks itself again in 2 minutes.
+            </p>
+            <p className="hint">
+              Page won't open? Check it's <code>{vaultUrl}</code> (https, port 8443 — the setup script prints it). A
+              certificate warning means this device needs the Pi's certificate (Settings → 🔒 This device's certificate);
+              “can't be reached” means Caddy isn't serving that address — see docs/PASSWORDS_SETUP.md → Troubleshooting.
             </p>
             <button type="button" className="link-button" onClick={() => setUnlocked(false)}>
               🔒 Lock now

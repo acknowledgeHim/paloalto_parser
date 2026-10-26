@@ -91,3 +91,39 @@ Then set these, restart Vaultwarden, and restart the app:
 - **Logs:** `sudo docker logs vaultwarden`
 - **The vault's admin page is off.** No admin token is set, so there's no page that can list or
   manage accounts.
+
+## Troubleshooting: the vault tab says "This page cannot be displayed"
+
+Run these on the Pi, in order:
+
+1. **Is Vaultwarden running?** The 🔑 Passwords page also says so when it isn't.
+
+   ```bash
+   sudo docker ps --filter name=vaultwarden     # should list one line
+   curl -s http://127.0.0.1:8222/alive          # should print a date
+   ```
+
+   If nothing comes back, run `sudo ./scripts/setup-vaultwarden.sh`. If it fails, look at
+   `sudo docker logs vaultwarden`.
+
+2. **Is Caddy serving port 8443?**
+
+   ```bash
+   grep -n 8443 /etc/caddy/Caddyfile            # should show https://<pi-ip>:8443 {
+   sudo ss -ltnp | grep 8443                    # should show caddy listening
+   curl -sk https://<pi-ip>:8443/alive          # should print a date
+   ```
+
+   If there's no 8443 block, run the setup script again. If the block is there but Caddy isn't
+   listening, run `sudo systemctl restart caddy` and then check `journalctl -u caddy -n 30 --no-pager`.
+
+3. **Is the address the same one you open the app with?** Caddy only serves the exact address in
+   the Caddyfile. If you open the app as `https://familyhub.local` but the block says
+   `https://192.168.1.50:8443`, the tab can't load. Either use the IP, or run the script with that
+   name: `sudo ./scripts/setup-vaultwarden.sh familyhub.local`. Then set `VAULTWARDEN_URL` in `.env`
+   to match.
+
+4. **Is a firewall blocking it?** If `sudo ufw status` says active, run `sudo ufw allow 8443/tcp`.
+
+5. **Is it the certificate?** A certificate warning (rather than "can't be displayed") means the
+   device needs the Pi's certificate: **Settings → 🔒 This device's certificate**.
