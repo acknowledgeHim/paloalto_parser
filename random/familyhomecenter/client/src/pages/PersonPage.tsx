@@ -9,6 +9,7 @@ import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
 import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
+import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { canEditHistoricalTask, canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
@@ -104,6 +105,9 @@ export function PersonPage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [detailDate, setDetailDate] = useState<string | null>(null);
   const [showInternet, setShowInternet] = useState(false);
+  // Every section folds to its heading (tap to open), collapsed by default and remembered.
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+  useCollapsibleSections(pageEl, 'familyhomecenter.person.open');
 
   // strugglingTasks only carries the summary fields (title/kind/counts), not the full Task
   // TaskFormModal needs to edit — fetch it on demand rather than growing that endpoint's payload
@@ -145,7 +149,7 @@ export function PersonPage() {
   const canEditProfile = Boolean(activeProfile && (activeProfile.id === member.id || activeProfile.is_parent === 1));
 
   return (
-    <div className="person-page">
+    <div className="person-page" ref={setPageEl}>
       <Link to="/board" className="link-button">‹ Back to Family Board</Link>
 
       <header className="person-page__header">

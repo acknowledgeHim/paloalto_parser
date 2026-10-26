@@ -14,6 +14,8 @@ import { taskIcon } from '../utils/taskIcons.js';
 import { FloorplanView } from '../components/FloorplanView.js';
 import { usePrizeJobIds } from '../utils/prizes.js';
 import { WhosHome } from '../components/WhosHome.js';
+import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
+import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 
 // tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
 // recurring task the server only ever attaches completions where completed_on equals that date,
@@ -162,6 +164,10 @@ export function FamilyBoardPage() {
   // next row of columns far down the page. Collapsed shows just the avatar + progress bars;
   // clicking expands that one person's column to the full detail.
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // 🌐 Your time online — just for whoever's picked up top, folded to its heading until tapped.
+  const [showInternet, setShowInternet] = useState(false);
+  const [usageEl, setUsageEl] = useState<HTMLDivElement | null>(null);
+  useCollapsibleSections(usageEl, 'familyhomecenter.board.open');
   const toggleExpanded = (id: string) => {
     setExpandedIds((ids) => {
       const next = new Set(ids);
@@ -323,6 +329,21 @@ export function FamilyBoardPage() {
           ))}
         </section>
       </div>
+
+      {activeProfile && (
+        <div ref={setUsageEl} style={showInternet ? undefined : { display: 'none' }}>
+          <section className="panel">
+            <h2>🌐 Your time online</h2>
+            <InternetUsageCharts
+              key={activeProfile.id}
+              memberId={activeProfile.id}
+              color={activeProfile.color}
+              hideWhenUnused
+              onLoaded={(h) => setShowInternet(Boolean(h && (h.has_devices || h.days.some((d) => d.minutes > 0))))}
+            />
+          </section>
+        </div>
+      )}
 
       {/* Below everyone's cards, so the people come first on the screen. */}
       <section className="panel family-board__everyone">
