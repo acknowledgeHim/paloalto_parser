@@ -75,3 +75,33 @@ authRouter.post('/logout', (req, res) => {
   res.clearCookie(SESSION_COOKIE_NAME);
   res.status(204).end();
 });
+
+// A few wrong guesses per person per 5 minutes, then wait — the 🔑 Passwords page's check shouldn't
+// be a way to try passwords quickly.
+const verifyTries = new Map<string, { count: number; since: number }>();
+
+/**
+ * POST /api/auth/verify { family_member_id, password } — "type your password again" before the
+ * 🔑 Passwords page shows its link. Only checks; it doesn't log anyone in or change the session.
+ */
+authRouter.post('/verify', (req, res) => {
+  const { family_member_id, password } = req.body as { family_member_id?: string; password?: string };
+  if (!family_member_id) return res.status(400).json({ error: 'Pick who you are up top first' });
+  const member = db.prepare('SELECT id, password_hash FROM family_members WHERE id = ?').get(family_member_id) as
+    | { id: string; password_hash: string | null }
+    | undefined;
+  if (!member) return res.status(404).json({ error: 'No such person' });
+  if (!member.password_hash) return res.status(400).json({ error: 'no_password' });
+  const now = Date.now();
+  const tries = verifyTries.get(member.id);
+  if (tries && now - tries.since < 5 * 60_000 && tries.count >= 5) {
+    return res.status(429).json({ error: 'Too many wrong tries — wait a few minutes' });
+  }
+  if (!verifyMemberPassword(password ?? '', member.password_hash)) {
+    const fresh = !tries || now - tries.since >= 5 * 60_000;
+    verifyTries.set(member.id, { count: fresh ? 1 : tries.count + 1, since: fresh ? now : tries.since });
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+  verifyTries.delete(member.id);
+  res.json({ ok: true });
+});

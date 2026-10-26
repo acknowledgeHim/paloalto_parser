@@ -19,6 +19,7 @@ import { PhotosPage } from './pages/PhotosPage.js';
 import { IntercomPage } from './pages/IntercomPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { InternetPage } from './pages/InternetPage.js';
+import { PasswordsPage } from './pages/PasswordsPage.js';
 import { PeoplePage } from './pages/PeoplePage.js';
 import { ApprovalsPage } from './pages/ApprovalsPage.js';
 import { CamerasPage } from './pages/CamerasPage.js';
@@ -134,6 +135,7 @@ export function App() {
           <Route path="/photos/people" element={<SectionGate section="photos"><PeoplePage /></SectionGate>} />
           <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />
           <Route path="/internet" element={<SectionGate section="internet"><InternetPage /></SectionGate>} />
+          <Route path="/passwords" element={<PasswordsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/cameras" element={<CamerasPage />} />
         </Routes>

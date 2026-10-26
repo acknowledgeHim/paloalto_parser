@@ -2763,3 +2763,13 @@ body.photo-map-full-open { overflow: hidden; }
 .kb-page__parents { background: #fdecc8; color: #8a5300; text-transform: none; }
 .kb-form__parents { display: flex; align-items: flex-start; gap: 8px; font-size: 0.95em; }
 .kb-form__parents input { width: 22px; height: 22px; min-height: 0; flex-shrink: 0; margin-top: 1px; }
+
+/* 🔑 Passwords (pages/PasswordsPage.tsx) */
+.passwords-page { display: flex; flex-direction: column; gap: 16px; max-width: 720px; }
+.passwords-page__lock { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.passwords-page__form { display: flex; gap: 8px; width: 100%; max-width: 420px; }
+.passwords-page__form input { flex: 1; min-width: 0; min-height: 48px; }
+.passwords-page__open { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.passwords-page__go { display: inline-block; padding: 14px 22px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; font-size: 1.15em; text-decoration: none; }
+.passwords-page__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.passwords-page__steps code { overflow-wrap: anywhere; }

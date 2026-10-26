@@ -24,6 +24,16 @@ PHOTOS_DIR / MUSIC_LIBRARY_DIR — back those up wherever they live), and Pi-hol
 password and your router settings — everything *this app* put into Pi-hole can be rebuilt with
 **Repair Pi-hole setup** on the Internet page).
 
+**🔑 Password vaults (Vaultwarden) are not in this backup** — they live in `/var/lib/vaultwarden`,
+owned by root. They're already encrypted with each person's master password, so a copy is safe to
+keep anywhere. Back them up with:
+
+```bash
+sudo tar czf ~/vaultwarden-$(date +%F).tar.gz -C /var/lib vaultwarden
+```
+
+See [PASSWORDS_SETUP.md](PASSWORDS_SETUP.md).
+
 ## Run a backup
 
 ```bash
