@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { useTypeCatcher, type RoundResult } from '../components/typingInput.js';
+import {
+  DailyChallenge,
+  MeteorDefense,
+  SentenceLock,
+  ShoppingSpree,
+  SillyStory,
+  TowerBuilder,
+  WhackAKey,
+  WordSnake,
+} from '../components/TypingGames.js';
 import {
   FINGER_COLORS,
   FINGER_NAMES,
@@ -10,6 +21,7 @@ import {
   PASS_ACCURACY,
   SENTENCES,
   fingerFor,
+  gameKeys,
   gameWords,
   lessonText,
   needsShift,
@@ -18,7 +30,10 @@ import {
 } from '../utils/typing.js';
 
 /**
- * ⌨️ Typing — learn to type from the home row up (📘 Lessons), then play 🎈 Balloon Pop and 🏁 Race.
+ * ⌨️ Typing — learn to type from the home row up (📘 Lessons), then play: 🔨 Whack-a-Key, ☄️ Meteor
+ * Defense, 🎈 Balloon Pop, 🐍 Word Snake, 🏁 Race and 🛒 Shopping Spree straight away, and 🧱 Tower
+ * Builder, 📖 Silly Story and 🏆 the Daily Challenge once every lesson is passed (or for a parent).
+ * The games are in components/TypingGames.tsx.
  * Progress is saved per person, and a parent picks the ⭐ each lesson and game is worth (server:
  * routes/typing.ts). Works with a real keyboard, or a tablet's on-screen one.
  */
@@ -28,6 +43,11 @@ interface Progress {
   best_wpm: number;
   balloon_best: number;
   race_best_wpm: number;
+  /** Each game's best: top score, or for race/story the fastest win. */
+  game_bests: Record<string, number>;
+  /** Every lesson passed, or a parent: Tower, Story and the Daily Challenge are open. */
+  sentences_open: boolean;
+  daily_done_today: boolean;
   stars_today: number;
   paid_games_today: number;
   recent: Array<{ at: string; mode: string; level: number; wpm: number; accuracy: number; score: number; passed: number; stars: number }>;
@@ -37,21 +57,32 @@ interface Rewards {
   levels: number[];
   balloon_best: number;
   race_best: number;
+  whack_best: number;
+  meteor_best: number;
+  tower_best: number;
+  snake_best: number;
+  story_best: number;
+  daily: number;
+  daily_enabled: boolean;
   games_per_day: number;
 }
 
-interface RoundResult {
-  mode: 'lesson' | 'balloon' | 'race';
-  level: number;
-  wpm: number;
-  accuracy: number;
-  chars: number;
-  seconds: number;
-  score: number;
-  passed: boolean;
-}
+/** Name of each kind of round, for the tabs and the "Lately" list. */
+const MODE_LABELS: Record<string, string> = {
+  whack: '🔨 Whack-a-Key',
+  meteor: '☄️ Meteor Defense',
+  balloon: '🎈 Balloon Pop',
+  snake: '🐍 Word Snake',
+  race: '🏁 Race',
+  shop: '🛒 Shopping Spree',
+  tower: '🧱 Tower Builder',
+  story: '📖 Silly Story',
+  daily: '🏆 Daily Challenge',
+};
+/** Open once every lesson is passed (or for a parent). */
+const LOCKED_TABS = ['tower', 'story', 'daily'];
 
-type Tab = 'lessons' | 'balloon' | 'race' | 'stars';
+type Tab = 'lessons' | 'whack' | 'meteor' | 'balloon' | 'snake' | 'race' | 'shop' | 'tower' | 'story' | 'daily' | 'stars';
 
 export function TypingPage() {
   const { members, activeProfile } = useFamilyMembers();
@@ -72,6 +103,13 @@ export function TypingPage() {
 
   const passed = new Set(progress?.levels.filter((l) => l.passed).map((l) => l.level) ?? []);
   const highestPassed = Math.max(0, ...passed);
+  const others = members.filter((m) => m.id !== activeProfile?.id);
+  const bestOf = (mode: string) => progress?.game_bests?.[mode] ?? 0;
+  const lockedOut = (t: Tab) => LOCKED_TABS.includes(t) && !progress?.sentences_open;
+  // The Daily Challenge tab goes away when a parent turns it off (Settings → ⌨️ Typing).
+  useEffect(() => {
+    if (tab === 'daily' && rewards && !rewards.daily_enabled) setTab('lessons');
+  }, [tab, rewards]);
 
   /** Saves a finished round; answers with what it earned (or null when nobody's picked). */
   const save = async (r: RoundResult): Promise<{ stars: number; reason: string | null } | null> => {
@@ -112,13 +150,12 @@ export function TypingPage() {
           {(
             [
               ['lessons', '📘 Lessons'],
-              ['balloon', '🎈 Balloon Pop'],
-              ['race', '🏁 Race'],
+              ...(Object.entries(MODE_LABELS) as Array<[Tab, string]>).filter(([k]) => k !== 'daily' || rewards?.daily_enabled),
               ...(canManage ? [['stars', '⭐ Stars']] : []),
             ] as Array<[Tab, string]>
           ).map(([key, label]) => (
             <button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? '' : 'secondary'} onClick={() => setTab(key)}>
-              {label}
+              {lockedOut(key) ? `🔒 ${label.replace(/^\S+ /, '')}` : label}
             </button>
           ))}
         </div>
@@ -135,6 +172,36 @@ export function TypingPage() {
         />
       ) : tab === 'lessons' ? (
         <LessonList progress={progress} rewards={rewards} passed={passed} onPlay={setPlaying} />
+      ) : lockedOut(tab) ? (
+        <SentenceLock title={MODE_LABELS[tab]} passed={passed.size} total={LEVELS.length} nobody={!activeProfile} />
+      ) : tab === 'whack' ? (
+        <WhackAKey keys={gameKeys(highestPassed)} best={bestOf('whack')} stars={rewards?.whack_best ?? 0} onSave={save} />
+      ) : tab === 'meteor' ? (
+        <MeteorDefense
+          keys={gameKeys(highestPassed)}
+          words={gameWords(highestPassed)}
+          useWords={highestPassed >= 8}
+          player={activeProfile}
+          best={bestOf('meteor')}
+          stars={rewards?.meteor_best ?? 0}
+          onSave={save}
+        />
+      ) : tab === 'snake' ? (
+        <WordSnake words={gameWords(highestPassed)} best={bestOf('snake')} stars={rewards?.snake_best ?? 0} onSave={save} />
+      ) : tab === 'shop' ? (
+        <ShoppingSpree words={gameWords(highestPassed)} player={activeProfile} best={bestOf('shop')} onSave={save} />
+      ) : tab === 'tower' ? (
+        <TowerBuilder words={gameWords(highestPassed)} player={activeProfile} best={bestOf('tower')} stars={rewards?.tower_best ?? 0} onSave={save} />
+      ) : tab === 'story' && activeProfile ? (
+        <SillyStory player={activeProfile} family={others} best={bestOf('story')} stars={rewards?.story_best ?? 0} onSave={save} />
+      ) : tab === 'daily' && activeProfile ? (
+        <DailyChallenge
+          player={activeProfile}
+          members={members}
+          stars={rewards?.daily ?? 0}
+          doneToday={progress?.daily_done_today ?? false}
+          onSave={save}
+        />
       ) : tab === 'balloon' ? (
         <BalloonPop words={gameWords(highestPassed)} best={progress?.balloon_best ?? 0} stars={rewards?.balloon_best ?? 0} onSave={save} />
       ) : tab === 'race' ? (
@@ -143,7 +210,7 @@ export function TypingPage() {
           best={progress?.race_best_wpm ?? 0}
           stars={rewards?.race_best ?? 0}
           player={activeProfile}
-          family={members.filter((m) => m.id !== activeProfile?.id)}
+          family={others}
           onSave={save}
         />
       ) : (
@@ -157,12 +224,12 @@ export function TypingPage() {
             {progress.recent.slice(0, 8).map((r) => (
               <li key={r.at}>
                 <span>
-                  {r.mode === 'lesson' ? `📘 Lesson ${r.level}` : r.mode === 'balloon' ? '🎈 Balloon Pop' : '🏁 Race'}
+                  {r.mode === 'lesson' ? `📘 Lesson ${r.level}` : (MODE_LABELS[r.mode] ?? r.mode)}
                   {r.passed && r.mode === 'lesson' ? ' ✓' : ''}
-                  {r.passed && r.mode === 'race' ? ' 🏆' : ''}
+                  {r.passed && (r.mode === 'race' || r.mode === 'daily') ? ' 🏆' : ''}
                 </span>
                 <span className="hint">
-                  {r.mode === 'balloon' ? `${r.score} points · ` : ''}
+                  {r.mode === 'shop' ? `spent $${r.score} · ` : r.mode === 'tower' ? `${r.score} ${r.score === 1 ? 'block' : 'blocks'} · ` : ['balloon', 'whack', 'meteor', 'snake'].includes(r.mode) ? `${r.score} points · ` : ''}
                   {Math.round(r.wpm)} wpm · {Math.round(r.accuracy)}%{r.stars ? ` · +${r.stars} ⭐` : ''}
                 </span>
               </li>
@@ -172,48 +239,6 @@ export function TypingPage() {
       )}
     </div>
   );
-}
-
-// ---- Typing input: a real keyboard, or a tablet's on-screen one ----
-
-/** An invisible box that keeps focus and turns key presses into onChar / onBack. Tap the play area
- *  to bring the on-screen keyboard up on a tablet. */
-function useTypeCatcher(onChar: (c: string) => void, onBack?: () => void, active = true) {
-  const ref = useRef<HTMLInputElement>(null);
-  const focus = () => ref.current?.focus({ preventScroll: true });
-  useEffect(() => {
-    if (active) focus();
-  }, [active]);
-  const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      onBack?.();
-    } else if (e.key.length === 1) {
-      e.preventDefault();
-      onChar(e.key);
-    }
-    // Anything else ('Unidentified' from a tablet keyboard) arrives through onInput.
-  };
-  const onInput = (e: React.FormEvent<HTMLInputElement>) => {
-    const data = (e.nativeEvent as InputEvent).data;
-    if (data) for (const c of data) onChar(c);
-    e.currentTarget.value = '';
-  };
-  const input = (
-    <input
-      ref={ref}
-      className="typing-catcher"
-      aria-label="Type here"
-      autoCapitalize="off"
-      autoCorrect="off"
-      autoComplete="off"
-      spellCheck={false}
-      onKeyDown={onKeyDown}
-      onInput={onInput}
-    />
-  );
-  return { input, focus };
 }
 
 // ---- 📘 Lessons ----
@@ -967,16 +992,49 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
           <span>🏁 Race — win at a new best speed</span>
           <input type="number" min={0} inputMode="numeric" value={draft.race_best} onChange={(e) => setDraft({ ...draft, race_best: num(e.target.value) })} />
         </label>
+        {(
+          [
+            ['whack_best', '🔨 Whack-a-Key — new best'],
+            ['meteor_best', '☄️ Meteor Defense — new best'],
+            ['snake_best', '🐍 Word Snake — new best'],
+            ['tower_best', '🧱 Tower Builder — new best'],
+            ['story_best', '📖 Silly Story — new best speed'],
+            ['daily', '🏆 Daily Challenge — finishing it (once a day)'],
+          ] as Array<[keyof Rewards, string]>
+        ).map(([k, label]) => (
+          <label key={k}>
+            <span>{label}</span>
+            <input type="number" min={0} inputMode="numeric" value={draft[k] as number} onChange={(e) => setDraft({ ...draft, [k]: num(e.target.value) })} />
+          </label>
+        ))}
         <label>
-          <span>Game rounds that can pay ⭐ each day</span>
+          <span>Game rounds that can pay ⭐ each day (not the Daily Challenge)</span>
           <input type="number" min={0} inputMode="numeric" value={draft.games_per_day} onChange={(e) => setDraft({ ...draft, games_per_day: num(e.target.value) })} />
         </label>
       </div>
+      <p className="hint">🛒 Shopping Spree never pays ⭐ — its money is pretend, just for fun.</p>
+      <label className="typing-stars__toggle">
+        <input type="checkbox" checked={draft.daily_enabled} onChange={(e) => setDraft({ ...draft, daily_enabled: e.target.checked })} />
+        Show the 🏆 Daily Challenge (its tab here, and today's results on the Family Board)
+      </label>
       <div className="typing-stars__actions">
         <button type="button" onClick={save}>
           Save
         </button>
-        <button type="button" className="secondary" onClick={() => setDraft({ ...draft, levels: draft.levels.map(() => 0), balloon_best: 0, race_best: 0 })}>
+        <button type="button" className="secondary" onClick={() =>
+            setDraft({
+              ...draft,
+              levels: draft.levels.map(() => 0),
+              balloon_best: 0,
+              race_best: 0,
+              whack_best: 0,
+              meteor_best: 0,
+              tower_best: 0,
+              snake_best: 0,
+              story_best: 0,
+              daily: 0,
+            })
+          }>
           All 0
         </button>
         {status && <span className="hint">{status}</span>}

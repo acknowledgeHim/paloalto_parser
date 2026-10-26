@@ -16,6 +16,7 @@ import { usePrizeJobIds } from '../utils/prizes.js';
 import { WhosHome } from '../components/WhosHome.js';
 import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
+import { DailyStandings, type DailyBoard } from '../components/TypingGames.js';
 
 // tasks (from GET /api/tasks, no ?date=) is already scoped to "what applies today" — for a
 // recurring task the server only ever attaches completions where completed_on equals that date,
@@ -166,6 +167,12 @@ export function FamilyBoardPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   // 🌐 Your time online — just for whoever's picked up top, folded to its heading until tapped.
   const [showInternet, setShowInternet] = useState(false);
+  // ⌨️ Today's typing challenge — when it's on (Settings → ⌨️ Typing) and someone's played today.
+  const [daily, setDaily] = useState<DailyBoard | null>(null);
+  useEffect(() => {
+    api.get<DailyBoard>('/typing/daily').then(setDaily).catch(() => setDaily(null));
+  }, []);
+  const showDaily = Boolean(daily?.enabled && daily.board.length);
   const [usageEl, setUsageEl] = useState<HTMLDivElement | null>(null);
   useCollapsibleSections(usageEl, 'familyhomecenter.board.open');
   const toggleExpanded = (id: string) => {
@@ -330,9 +337,19 @@ export function FamilyBoardPage() {
         </section>
       </div>
 
-      {activeProfile && (
-        <div ref={setUsageEl} style={showInternet ? undefined : { display: 'none' }}>
-          <section className="panel">
+      {(activeProfile || showDaily) && (
+        <div ref={setUsageEl} style={showInternet || showDaily ? undefined : { display: 'none' }}>
+          {showDaily && daily && (
+            <section className="panel">
+              <h2>🏆 Today's typing challenge</h2>
+              <DailyStandings daily={daily} members={members} />
+              <p className="hint">
+                <Link to="/typing">Typing</Link> → 🏆 Daily Challenge to have a go.
+              </p>
+            </section>
+          )}
+          {activeProfile && (
+          <section className="panel" style={showInternet ? undefined : { display: 'none' }}>
             <h2>🌐 Your time online</h2>
             <InternetUsageCharts
               key={activeProfile.id}
@@ -342,6 +359,7 @@ export function FamilyBoardPage() {
               onLoaded={(h) => setShowInternet(Boolean(h && (h.has_devices || h.days.some((d) => d.minutes > 0))))}
             />
           </section>
+          )}
         </div>
       )}
 

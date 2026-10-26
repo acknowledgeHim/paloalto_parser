@@ -13,6 +13,7 @@ import { ConfirmButton } from '../components/ConfirmButton.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { PrizeBankSettings } from '../components/PrizeBankSettings.js';
 import { DeviceCertificateSettings } from '../components/DeviceCertificateSettings.js';
+import { TypingSettings } from '../components/TypingSettings.js';
 
 interface AuthStatus {
   member_id: string | null;
@@ -254,6 +255,8 @@ export function SettingsPage() {
       <PrizeBankSettings />
 
       <PrivacySettings />
+
+      <TypingSettings />
 
       <section className="panel">
         <h2>Calendar sources</h2>

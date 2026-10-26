@@ -2883,3 +2883,113 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .race__ghost { opacity: 0.5; filter: grayscale(0.6); }
 .typing-stars__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .typing-stars__actions button { min-height: 44px; padding: 0 20px; }
+
+/* ⌨️ More typing games (components/TypingGames.tsx) */
+.typing-stars__toggle { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0; }
+.typing-stars__toggle input { width: 22px; height: 22px; flex: none; margin-top: 2px; }
+
+.typing-lock { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 26px 16px; }
+.typing-lock h2, .typing-lock p { margin: 0; }
+.typing-lock__bar { width: min(320px, 100%); height: 12px; border-radius: 6px; background: var(--bg); overflow: hidden; border: 1px solid var(--border); }
+.typing-lock__bar span { display: block; height: 100%; background: #22a06b; }
+
+/* 🔨 Whack-a-Key */
+.whack { position: relative; overflow: hidden; min-height: min(56vh, 420px); display: flex; align-items: center; justify-content: center; border-radius: 14px; background: linear-gradient(#a7e3a1, #6cc16a); padding: 20px 6px; cursor: text; }
+.whack__kb { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.whack__row { display: flex; gap: clamp(2px, 0.8vw, 8px); }
+.whack__row--1 { margin-left: clamp(6px, 3vw, 28px); }
+.whack__row--2 { margin-left: clamp(10px, 5vw, 60px); }
+.whack__hole {
+  position: relative; width: clamp(20px, 6.4vw, 58px); height: clamp(36px, 10vw, 70px); border-radius: 50% 50% 12px 12px / 30% 30% 12px 12px;
+  background: radial-gradient(ellipse at 50% 85%, #3f2a14 0 45%, #5b3d1e 46% 60%, transparent 61%); overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+}
+.whack__hole--off { opacity: 0.25; }
+.whack__mole { position: absolute; bottom: -60%; font-size: clamp(22px, 6vw, 40px); line-height: 1; transition: bottom 0.12s ease-out; }
+.whack__hole--up .whack__mole, .whack__hole--hit .whack__mole { bottom: 30%; }
+.whack__hole--miss { animation: typing-shake 0.25s; }
+.whack__key { position: relative; z-index: 1; font: 800 clamp(0.75rem, 2.4vw, 1.05rem) ui-monospace, monospace; color: #fff; text-shadow: 0 1px 2px #000; padding-bottom: 2px; }
+.whack__hole--up .whack__key { color: #fde047; }
+
+/* ☄️ Meteor Defense */
+.meteor__space {
+  position: relative; height: min(60vh, 460px); overflow: hidden; border-radius: 14px; cursor: text;
+  background: radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 2px) 0 0 / 90px 90px, radial-gradient(circle at 70% 60%, #cbd5e1 0 1px, transparent 2px) 0 0 / 130px 130px, linear-gradient(#0b1026, #1e1b4b);
+}
+.meteor__rock { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+.meteor__fire { font-size: 2rem; line-height: 1; }
+.meteor__word { padding: 1px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.92); color: #1f2937; font: 700 1.1rem ui-monospace, monospace; white-space: nowrap; }
+.meteor__boom { position: absolute; transform: translate(-50%, -50%); font-size: 2.6rem; animation: meteor-boom 0.45s ease-out forwards; pointer-events: none; }
+@keyframes meteor-boom { from { transform: translate(-50%, -50%) scale(0.5); } to { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } }
+.meteor__laser { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.meteor__laser line { stroke: #f43f5e; stroke-width: 0.8; stroke-linecap: round; }
+.meteor__planet {
+  position: absolute; left: -10%; right: -10%; bottom: -150px; height: 220px; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 20%, #4ade80, #15803d 60%); box-shadow: 0 0 0 6px rgba(96, 165, 250, 0.45);
+}
+.meteor__player { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); font-size: 2.2rem; }
+
+/* 🧱 Tower Builder */
+.tower { position: relative; height: min(64vh, 500px); border-radius: 14px; overflow: hidden; background: linear-gradient(#bfe3ff, #eaf6ff 75%); display: flex; flex-direction: column; align-items: center; cursor: text; }
+.tower__word { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 14px; }
+.tower__text { font-size: 2rem; background: rgba(255, 255, 255, 0.85); padding: 4px 14px; border-radius: 10px; color: #1f2937; }
+.tower__time { width: 200px; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.12); overflow: hidden; }
+.tower__time span { display: block; height: 100%; background: #22a06b; transition: width 0.1s linear; }
+.tower__stack { margin-top: auto; display: flex; flex-direction: column; align-items: center; transform-origin: 50% 100%; transform: rotate(var(--tilt, 0deg)); transition: transform 0.3s; }
+.tower__stack--shake { animation: tower-wobble 0.5s; }
+@keyframes tower-wobble { 25% { transform: rotate(calc(var(--tilt) + 5deg)); } 60% { transform: rotate(calc(var(--tilt) - 4deg)); } }
+.tower__stack--fall { animation: tower-fall 0.9s ease-in forwards; }
+@keyframes tower-fall { to { transform: rotate(75deg) translateY(40px); opacity: 0.5; } }
+.tower__top { font-size: 2rem; line-height: 1; margin-bottom: 2px; }
+.tower__block { min-width: 110px; padding: 6px 14px; margin-top: -1px; border: 2px solid rgba(0, 0, 0, 0.25); border-radius: 4px; color: #1f2937; font: 700 1rem ui-monospace, monospace; text-align: center; }
+.tower__ground { width: 260px; height: 14px; background: #65a30d; border-radius: 4px 4px 0 0; }
+
+/* 🐍 Word Snake */
+.snake { position: relative; aspect-ratio: 16 / 10; max-height: 62vh; border-radius: 14px; overflow: hidden; cursor: text; background: repeating-conic-gradient(#a3d977 0 25%, #93cf66 0 50%) 0 0 / 40px 40px; }
+.snake__food { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+.snake__food--chosen .meteor__word { background: #fde047; }
+.snake__icon { font-size: 1.8rem; line-height: 1; }
+.snake__seg { position: absolute; width: 22px; height: 22px; border-radius: 50%; transform: translate(-50%, -50%); background: #15803d; border: 2px solid #166534; }
+.snake__head { position: absolute; width: 30px; height: 26px; border-radius: 50% 60% 60% 50%; background: #16a34a; border: 2px solid #166534; z-index: 1; }
+.snake__eyes { position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: 50%; background: #111; box-shadow: 0 10px 0 #111; }
+.snake__hunger { display: inline-flex; align-items: center; gap: 6px; }
+.snake__hunger > span { display: inline-block; width: 110px; height: 10px; border-radius: 5px; background: var(--bg); border: 1px solid var(--border); overflow: hidden; }
+.snake__hunger > span > span { display: block; height: 100%; background: #22a06b; }
+
+/* 📖 Silly Story */
+.story { display: flex; flex-direction: column; gap: 12px; }
+.story__page { min-height: 120px; padding: 16px 18px; border-radius: 12px; background: #fffbea; color: #3b2f1e; font: 1.15rem/1.6 Georgia, serif; border: 1px solid #f1e3b0; }
+.story__end { font-weight: 700; }
+.story__more { color: #b8a77a; }
+
+/* 🏆 Daily Challenge */
+.daily__preview { margin: 0; font: 1.2rem/1.5 Georgia, serif; max-width: 640px; }
+.daily__board { list-style: none; margin: 0; padding: 0; }
+.daily__board li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.daily__board li:last-child { border-bottom: none; }
+.daily__rank { width: 30px; text-align: center; font-size: 1.3em; }
+.daily__name { font-weight: 700; }
+.daily__score { margin-left: auto; text-align: right; }
+.daily__row--try { opacity: 0.6; }
+
+/* 🛒 Shopping Spree */
+.shop { position: relative; min-height: min(60vh, 460px); display: flex; flex-direction: column; gap: 14px; padding: 14px; border-radius: 14px; background: linear-gradient(#fff7ed, #ffedd5); color: #1f2937; cursor: text; }
+.shop__shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 16px 8px; padding: 10px; border-radius: 10px; background: repeating-linear-gradient(#fff 0 66px, #d6a96b 66px 72px); }
+.shop__item { position: relative; display: flex; flex-direction: column; align-items: center; padding-top: 6px; border-radius: 10px; }
+.shop__item--want { background: rgba(250, 204, 21, 0.35); outline: 2px solid #f59e0b; }
+.shop__icon { font-size: 1.9rem; line-height: 1.1; }
+.shop__price { font-weight: 800; font-size: 0.85rem; color: #166534; }
+.shop__shopper { position: absolute; top: -22px; right: -8px; z-index: 1; animation: shop-bob 0.6s ease-in-out infinite alternate; }
+@keyframes shop-bob { to { transform: translateY(-4px); } }
+.shop__grab { width: 90%; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.12); overflow: hidden; margin-top: 2px; }
+.shop__grab span { display: block; height: 100%; background: #dc2626; }
+.shop__work { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.shop__work .hint { margin: 0; color: #6b4f2a; }
+.shop__next { color: #9ca3af; font-size: 0.7em; }
+.shop__cart { font-size: 1.4rem; word-break: break-all; }
+.shop__money { position: relative; font-size: 1.5rem; font-weight: 900; color: #15803d; }
+.shop__money--low { color: #dc2626; }
+.shop__flash { position: absolute; left: 100%; top: -6px; margin-left: 8px; font-size: 1rem; white-space: nowrap; animation: shop-flash 0.7s ease-out forwards; }
+.shop__flash--earn { color: #15803d; }
+.shop__flash--spend { color: #dc2626; }
+@keyframes shop-flash { to { transform: translateY(-16px); opacity: 0; } }

@@ -172,3 +172,93 @@ export function wpmOf(chars: number, ms: number): number {
   if (ms <= 0) return 0;
   return Math.round((chars / 5 / (ms / 60_000)) * 10) / 10;
 }
+
+// ---- Games ----
+
+/** The letters a game can use: what's been learned so far, at least the home row. */
+export function gameKeys(highestPassed: number): string[] {
+  const level = LEVELS[Math.max(4, Math.min(12, highestPassed - 1))];
+  return [...level.keys];
+}
+
+/** A number from a string (the same every time) — the Daily Challenge picks its text from the day. */
+function hashOf(s: string): number {
+  let h = 2166136261;
+  for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
+/** Today's Daily Challenge: the same two sentences for everyone in the family. */
+export function dailyText(day: string): string {
+  const h = hashOf(day);
+  const a = h % SENTENCES.length;
+  const b = (a + 1 + ((h >>> 8) % (SENTENCES.length - 1))) % SENTENCES.length;
+  return `${SENTENCES[a]} ${SENTENCES[b]}`;
+}
+
+// 📖 Silly Story — sentences with blanks filled from the family and a few silly lists.
+const STORIES: string[][] = [
+  [
+    '{me} woke up and found {animal} eating {food} in the kitchen.',
+    '"Is that my breakfast?" asked {me}.',
+    'The {animal2} just smiled and asked {fam} for more.',
+    'So they all went to {place} to buy a mountain of {food}.',
+  ],
+  [
+    'One day {fam} built a rocket out of {thing}.',
+    '{me} climbed in and pressed the big red button.',
+    'The rocket zoomed past the moon and landed on {place}.',
+    'A friendly alien gave them {food} and a high five.',
+  ],
+  [
+    '{me} and {fam} went to {place} to look for treasure.',
+    'They dug a hole and found {thing} inside an old box.',
+    'Then {animal} popped out and sang a funny song.',
+    'Everyone danced until the sun went down.',
+  ],
+  [
+    'There was a dragon at {place} who only ate {food}.',
+    '{fam} was not scared and walked right up to it.',
+    '"Would you like to play a game?" asked {me}.',
+    'The dragon laughed so hard it sneezed out {thing}.',
+  ],
+  [
+    'At school, {me} found {animal} sitting at the teacher\'s desk.',
+    'It wore glasses and was reading a book about {food}.',
+    '{fam} said, "That is the best teacher we ever had!"',
+    'The whole class got {thing} for homework.',
+  ],
+];
+const ANIMALS = ['a purple hippo', 'a dancing penguin', 'a tiny giraffe', 'a sleepy bear', 'a silly goose', 'a polka dot cow', 'a giant frog'];
+const FOODS = ['pickles', 'spaghetti', 'pancakes', 'ice cream', 'cheese pizza', 'jelly beans', 'broccoli', 'tacos'];
+const PLACES = ['the zoo', 'the beach', 'the moon', 'a candy shop', 'the library', 'a castle', 'the park'];
+const THINGS = ['a rubber duck', 'a rainbow sock', 'a magic hat', 'a box of crayons', 'a golden spoon', 'a squeaky toy', 'a sparkly rock'];
+
+export const STORY_ENDINGS: Array<{ wpm: number; text: string }> = [
+  { wpm: 30, text: 'And because {me} typed so fast, everyone got a medal and a parade. The end!' },
+  { wpm: 15, text: 'And {me} told the whole story at dinner, and everyone laughed. The end!' },
+  { wpm: 0, text: 'And they all took a long nap, because it had been a very busy day. The end!' },
+];
+
+function pickOne<T>(list: T[]): T {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+/** A new silly story: four sentences starring `me` and someone else in the family. */
+export function makeStory(me: string, family: string[]): { sentences: string[]; fill: (s: string) => string } {
+  const animal = pickOne(ANIMALS);
+  const words: Record<string, string> = {
+    me,
+    fam: family.length ? pickOne(family) : 'Grandma',
+    animal,
+    animal2: animal.replace(/^an? /, ''),
+    food: pickOne(FOODS),
+    place: pickOne(PLACES),
+    thing: pickOne(THINGS),
+  };
+  const fill = (s: string) => {
+    const out = s.replace(/\{(\w+)\}/g, (_, k: string) => words[k] ?? k);
+    return out.charAt(0).toUpperCase() + out.slice(1);
+  };
+  return { sentences: pickOne(STORIES).map(fill), fill };
+}
