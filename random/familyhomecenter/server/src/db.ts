@@ -1319,6 +1319,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_photo_filings_at ON photo_filings (at);
 `);
 
+// 🔒 Knowledge base articles only parents can see (routes/knowledgeBase.ts). Existing articles stay
+// visible to everyone (0).
+try {
+  db.exec('ALTER TABLE kb_articles ADD COLUMN parents_only INTEGER NOT NULL DEFAULT 0');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? fallback;

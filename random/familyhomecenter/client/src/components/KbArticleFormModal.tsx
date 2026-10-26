@@ -16,6 +16,7 @@ export function KbArticleFormModal({ article, onClose, onSaved }: Props) {
   const [title, setTitle] = useState(article?.title ?? '');
   const [category, setCategory] = useState(article?.category ?? '');
   const [body, setBody] = useState(article?.body ?? '');
+  const [parentsOnly, setParentsOnly] = useState(article?.parents_only === 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +26,12 @@ export function KbArticleFormModal({ article, onClose, onSaved }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const body_ = { title: title.trim(), category: category.trim() || null, body: body.trim() || null };
+      const body_ = {
+        title: title.trim(),
+        category: category.trim() || null,
+        body: body.trim() || null,
+        parents_only: parentsOnly,
+      };
       const saved = article
         ? await api.patch<KbArticle>(`/knowledge-base/${article.id}`, body_)
         : await api.post<KbArticle>('/knowledge-base', { ...body_, created_by_id: activeProfile?.id ?? null });
@@ -49,6 +55,12 @@ export function KbArticleFormModal({ article, onClose, onSaved }: Props) {
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
+        <label className="kb-form__parents">
+          <input type="checkbox" checked={parentsOnly} onChange={(e) => setParentsOnly(e.target.checked)} />
+          <span>
+            🔒 Parents only — kids won't see it at all (and only a parent can change it, like every article)
+          </span>
+        </label>
         {error && <div className="settings-login__error">{error}</div>}
         <div className="task-form__row">
           <button type="submit" disabled={saving}>{article ? 'Save' : 'Add'}</button>

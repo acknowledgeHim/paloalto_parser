@@ -212,6 +212,7 @@ function ArticleCard({
         >
           <h2>{article.title}</h2>
           <span className="kb-page__meta">
+            {article.parents_only === 1 && <span className="badge kb-page__parents">🔒 Parents only</span>}
             {article.category && <span className="badge">{article.category}</span>}
             {photos > 0 && <span className="hint">📷 {photos}</span>}
             {videos > 0 && <span className="hint">🎬 {videos}</span>}
@@ -311,7 +312,10 @@ export function KnowledgeBasePage() {
   const load = () => {
     api.get<KbArticle[]>('/knowledge-base').then(setArticles).catch(console.error);
   };
-  useEffect(load, []);
+  // Who's picked up top decides what the server sends (a parent's login gets the 🔒 ones too).
+  useEffect(load, [activeProfile?.id]);
+  // Before parents have passwords the server can't tell who's asking — hide 🔒 ones from kids here.
+  const visible = canManage ? articles : articles.filter((a) => a.parents_only !== 1);
 
   return (
     <div className="kb-page">
@@ -321,17 +325,20 @@ export function KnowledgeBasePage() {
         )}
         <h1>Knowledge Base</h1>
       </div>
-      <p className="hint">How-to guides for the house — everyone can read these, only a parent can add or change one. Tap a guide to open it.</p>
-      {articles.length > 1 && (
+      <p className="hint">
+        How-to guides for the house — everyone can read these (except 🔒 Parents only ones), only a parent can add or change one.
+        Tap a guide to open it.
+      </p>
+      {visible.length > 1 && (
         <div className="kb-page__all">
-          <button type="button" className="link-button" onClick={() => setOpenIds(new Set(articles.map((a) => a.id)))}>Open all</button>
+          <button type="button" className="link-button" onClick={() => setOpenIds(new Set(visible.map((a) => a.id)))}>Open all</button>
           <button type="button" className="link-button" onClick={() => setOpenIds(new Set())} disabled={openIds.size === 0}>Close all</button>
         </div>
       )}
 
-      {articles.length === 0 && <div className="empty-state">Nothing here yet{canManage ? ' — add one above.' : '.'}</div>}
+      {visible.length === 0 && <div className="empty-state">Nothing here yet{canManage ? ' — add one above.' : '.'}</div>}
       <div className="kb-page__grid">
-        {articles.map((a) => (
+        {visible.map((a) => (
           <ArticleCard
             key={a.id}
             article={a}

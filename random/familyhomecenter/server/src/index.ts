@@ -22,7 +22,7 @@ import { bankRouter } from './routes/bank.js';
 import { bankTransfersRouter } from './routes/bankTransfers.js';
 import { groceryRouter } from './routes/grocery.js';
 import { contactsRouter } from './routes/contacts.js';
-import { knowledgeBaseRouter } from './routes/knowledgeBase.js';
+import { kbMediaGate, knowledgeBaseRouter } from './routes/knowledgeBase.js';
 import { callingRouter } from './routes/calling.js';
 import { moviesRouter } from './routes/movies.js';
 import { internetRouter } from './routes/internet.js';
@@ -97,7 +97,7 @@ app.use('/api/presence', presenceRouter);
 app.use('/api/cameras', camerasRouter);
 // Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
 // handles HTTP Range requests, which video playback/seeking needs.
-app.use('/api/kb-media', express.static(config.kbMediaDir));
+app.use('/api/kb-media', kbMediaGate, express.static(config.kbMediaDir));
 app.use('/api/movies-media', express.static(config.moviesDir));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

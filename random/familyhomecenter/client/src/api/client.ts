@@ -547,6 +547,8 @@ export interface KbArticle {
   title: string;
   category: string | null;
   body: string | null;
+  /** 1 = 🔒 only parents can see it. */
+  parents_only: number;
   created_by_id: string | null;
   created_at: string;
   updated_at: string;

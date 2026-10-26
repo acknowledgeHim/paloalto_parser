@@ -2760,3 +2760,6 @@ body.photo-map-full-open { overflow: hidden; }
 @media (max-width: 520px) {
   .usage__sites li { grid-template-columns: minmax(0, 8em) 1fr auto; gap: 8px; }
 }
+.kb-page__parents { background: #fdecc8; color: #8a5300; text-transform: none; }
+.kb-form__parents { display: flex; align-items: flex-start; gap: 8px; font-size: 0.95em; }
+.kb-form__parents input { width: 22px; height: 22px; min-height: 0; flex-shrink: 0; margin-top: 1px; }
