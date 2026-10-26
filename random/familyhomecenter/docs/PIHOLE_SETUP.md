@@ -125,6 +125,13 @@ on each kid's device set DNS by hand to the Pi's address:
 Only if neither works for you. Having wired and Wi-Fi devices doesn't complicate it (it's one
 network), but it does mean turning off the Linksys's DHCP server — skip it unless you need it.
 
+### Watertight — the Pi as the router
+
+To make it impossible to get around Pi-hole (even a device set to 8.8.8.8 by hand), put the Pi
+between the border/ISP router and the Wi-Fi router, with the Wi-Fi router in access point mode. The
+Pi does DHCP, shares the connection, and forces every DNS lookup through Pi-hole. Step by step,
+with the way back: **[PI_ROUTER_SETUP.md](PI_ROUTER_SETUP.md)**.
+
 ## 5. Add the kids' devices
 
 On the Internet page (logged in as a parent): **Find devices Pi-hole has seen**, name each one,

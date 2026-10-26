@@ -183,6 +183,7 @@ Optional integrations, each with its own guide:
   Word document)
 - [docs/PIHOLE_SETUP.md](docs/PIHOLE_SETUP.md) (Pi-hole install, Linksys router DNS setup, and
   per-kid internet controls)
+- [docs/PI_ROUTER_SETUP.md](docs/PI_ROUTER_SETUP.md) (the Pi as the home router — Wi-Fi router in access point mode, Pi does DHCP, nothing gets around Pi-hole)
 - [docs/PRIVACY.md](docs/PRIVACY.md) (exactly what can leave the Pi, and how it was verified — by
   default, nothing beyond the weather, which can be switched off)
 - [docs/EMOJI_FONT.md](docs/EMOJI_FONT.md) (getting newer emoji to show on the Pi — avatars and
