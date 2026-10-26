@@ -157,23 +157,104 @@ function escapeHtml(s: string): string {
 
 const dayLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
 
+const hourLabel = (h: number) => (h === 0 ? '12a' : h === 12 ? '12p' : h < 12 ? `${h}a` : `${h - 12}p`);
+
+/**
+ * The Time online graphs for the email, drawn with plain table cells (no images or scripts — most
+ * mail apps block those): minutes per day with the daily limit, time of day, and time on each site.
+ */
+function chartsHtml(h: UsageHistory, color: string): string {
+  const MUTED = '#667085';
+  const limitFor = (day: string) => ([0, 6].includes(new Date(`${day}T12:00:00`).getDay()) ? h.limit.weekend : h.limit.weekday);
+  const maxDay = Math.max(30, ...h.days.map((d) => Math.max(d.minutes, limitFor(d.day) ?? 0)));
+  const DAY_PX = 110;
+  const dayCols = h.days
+    .map((d) => {
+      const limit = limitFor(d.day);
+      const over = limit !== null && d.minutes > limit;
+      const barPx = d.minutes > 0 ? Math.max(3, Math.round((d.minutes / maxDay) * DAY_PX)) : 0;
+      const title = `${fmtMinutes(d.minutes)}${limit !== null ? ` of ${fmtMinutes(limit)}` : ''}`;
+      return (
+        `<td valign="bottom" align="center" style="padding:0 4px;width:44px">` +
+        `<div style="font-size:11px;color:${over ? '#d64545' : MUTED};white-space:nowrap">${d.minutes ? fmtMinutes(d.minutes) : ''}</div>` +
+        (barPx ? `<div title="${title}" style="height:${barPx}px;width:28px;background:${over ? '#d64545' : color};border-radius:3px 3px 0 0"></div>` : '') +
+        `</td>`
+      );
+    })
+    .join('');
+  const dayLabels = h.days.map((d) => `<td align="center" style="font-size:11px;color:${MUTED};padding:2px 4px">${dayLabel(d.day)}</td>`).join('');
+  const limits = [
+    h.limit.weekday !== null ? `weekdays ${fmtMinutes(h.limit.weekday)}` : '',
+    h.limit.weekend !== null ? `weekends ${fmtMinutes(h.limit.weekend)}` : '',
+  ].filter(Boolean);
+
+  const maxHour = Math.max(1, ...h.hours);
+  const HOUR_PX = 60;
+  const hourCols = h.hours
+    .map((m) => {
+      const px = m > 0 ? Math.max(3, Math.round((m / maxHour) * HOUR_PX)) : 0;
+      return `<td valign="bottom" style="padding:0 1px;width:14px;height:${HOUR_PX}px">${px ? `<div style="height:${px}px;width:12px;background:${color}"></div>` : ''}</td>`;
+    })
+    .join('');
+  const hourLabels = h.hours
+    .map((_, i) => `<td style="font-size:10px;color:${MUTED};white-space:nowrap">${i % 3 === 0 ? hourLabel(i) : ''}</td>`)
+    .join('');
+
+  const sites = h.sites.filter((x) => x.minutes > 0).slice(0, 10);
+  const maxSite = Math.max(1, ...sites.map((x) => x.minutes));
+  const siteRows = sites
+    .map(
+      (x) =>
+        `<tr><td style="font-size:13px;padding:2px 10px 2px 0;white-space:nowrap">${escapeHtml(x.site)}</td>` +
+        `<td style="width:220px;padding:2px 0"><div style="height:10px;width:${Math.max(2, Math.round((x.minutes / maxSite) * 220))}px;background:${color};border-radius:5px"></div></td>` +
+        `<td style="font-size:13px;padding:2px 0 2px 10px;text-align:right;white-space:nowrap">${fmtMinutes(x.minutes)}</td></tr>`
+    )
+    .join('');
+
+  return (
+    `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:6px"><tr>${dayCols}</tr><tr>${dayLabels}</tr></table>` +
+    (limits.length ? `<p style="margin:2px 0;font-size:12px;color:${MUTED}">Daily limit: ${limits.join(', ')} — red = went over.</p>` : '') +
+    (h.hours.some((m) => m > 0)
+      ? `<p style="margin:12px 0 2px;font-weight:bold;font-size:14px">🕒 Time of day</p>` +
+        `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>${hourCols}</tr><tr>${hourLabels}</tr></table>`
+      : '') +
+    (siteRows
+      ? `<p style="margin:12px 0 2px;font-weight:bold;font-size:14px">🌐 Time on each site</p>` +
+        `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse">${siteRows}</table>`
+      : '')
+  );
+}
+
 function renderReport(report: WeeklyReport): { subject: string; text: string; html: string } {
   const text: string[] = [];
   const html: string[] = [];
   for (const k of report.kids) {
+    const h = buildUsageHistory(k.member_id, report.from, report.to);
+    const color = (db.prepare('SELECT color FROM family_members WHERE id = ?').get(k.member_id) as { color: string } | undefined)?.color ?? '#5b8def';
+    const timed = h ? h.sites.filter((x) => x.minutes > 0).slice(0, 10) : [];
     text.push(`${k.name} — ${fmtMinutes(k.total_minutes)} online this week`);
     text.push('  ' + k.days.map((d) => `${dayLabel(d.day)} ${fmtMinutes(d.minutes)}`).join(' · '));
-    if (k.top_sites.length) text.push('  Most used: ' + k.top_sites.map((s) => s.site).join(', '));
+    if (timed.length) text.push('  Time on each site: ' + timed.map((x) => `${x.site} ${fmtMinutes(x.minutes)}`).join(', '));
+    else if (k.top_sites.length) text.push('  Most used: ' + k.top_sites.map((s) => s.site).join(', '));
+    if (h && h.hours.some((m) => m > 0)) {
+      const busiest = h.hours
+        .map((m, i) => ({ m, i }))
+        .sort((a, b) => b.m - a.m)
+        .slice(0, 3)
+        .filter((x) => x.m > 0)
+        .map((x) => `${hourLabel(x.i)} (${fmtMinutes(x.m)})`);
+      text.push('  Busiest hours: ' + busiest.join(', '));
+    }
     if (k.top_blocked.length) text.push('  Blocked most: ' + k.top_blocked.map((s) => `${s.site} (${s.blocked})`).join(', '));
     text.push('');
     html.push(
-      `<h3 style="margin:18px 0 4px">${escapeHtml(k.name)} — ${fmtMinutes(k.total_minutes)} online this week</h3>` +
-        `<table style="border-collapse:collapse;font-size:14px"><tr>${k.days
-          .map((d) => `<td style="padding:2px 10px;text-align:center;color:#667085">${dayLabel(d.day)}</td>`)
-          .join('')}</tr><tr>${k.days.map((d) => `<td style="padding:2px 10px;text-align:center">${fmtMinutes(d.minutes)}</td>`).join('')}</tr></table>` +
-        (k.top_sites.length ? `<p style="margin:6px 0"><strong>Most used:</strong> ${k.top_sites.map((s) => escapeHtml(s.site)).join(', ')}</p>` : '') +
+      `<h3 style="margin:22px 0 4px">${escapeHtml(k.name)} — ${fmtMinutes(k.total_minutes)} online this week</h3>` +
+        (h ? chartsHtml(h, color) : '') +
+        (!timed.length && k.top_sites.length
+          ? `<p style="margin:6px 0"><strong>Most used:</strong> ${k.top_sites.map((s) => escapeHtml(s.site)).join(', ')}</p>`
+          : '') +
         (k.top_blocked.length
-          ? `<p style="margin:6px 0;color:#9b1c1c"><strong>Blocked most:</strong> ${k.top_blocked.map((s) => `${escapeHtml(s.site)} (${s.blocked})`).join(', ')}</p>`
+          ? `<p style="margin:8px 0;color:#9b1c1c"><strong>Blocked most:</strong> ${k.top_blocked.map((s) => `${escapeHtml(s.site)} (${s.blocked})`).join(', ')}</p>`
           : '')
     );
   }

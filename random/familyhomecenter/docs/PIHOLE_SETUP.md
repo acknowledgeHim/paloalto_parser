@@ -182,7 +182,8 @@ When a kid is picked in the switcher, the Internet page shows **🙋 Ask a paren
 ## Weekly report
 
 **📊 This week** on the Internet page shows each kid's time online per day, most-used sites, and
-most-blocked sites. Every Sunday at 6pm it's also emailed to every parent with an email address
+most-blocked sites. Every Sunday at 6pm it's also emailed, with the Time online graphs for the week
+(minutes per day against the limit, time of day, time on each site), to every parent with an email address
 (same email setup as the grocery list — see [GROCERY_EMAIL_SETUP.md](GROCERY_EMAIL_SETUP.md)), or
 tap **📧 Send it now**.
 
