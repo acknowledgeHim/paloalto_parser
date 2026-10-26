@@ -22,6 +22,20 @@ export function isPiholeConfigured(): boolean {
   return Boolean(config.pihole.url);
 }
 
+/** Why a fetch failed, in words — Node only says "fetch failed" and hides the real reason in `cause`. */
+function unreachable(err: unknown): PiholeError {
+  const e = err as Error & { cause?: { code?: string; message?: string } };
+  const code = e.cause?.code ?? (e.name === 'TimeoutError' ? 'TIMEOUT' : '');
+  const why: Record<string, string> = {
+    ECONNREFUSED: "nothing is listening on that port — Pi-hole's web server isn't running there (pihole status; check its port)",
+    TIMEOUT: "no answer in time — Pi-hole may be busy, stopped, or blocked by a firewall",
+    ENOTFOUND: "that host name doesn't resolve — use http://localhost or the Pi's IP",
+    EHOSTUNREACH: "that address isn't reachable from the Pi",
+  };
+  const detail = why[code] ?? e.cause?.message ?? e.message;
+  return new PiholeError(`Can't reach Pi-hole at ${baseUrl()} (${code ? `${code}: ` : ''}${detail})`);
+}
+
 function baseUrl(): string {
   return config.pihole.url.replace(/\/+$/, '').replace(/\/admin$/, '');
 }
@@ -36,7 +50,7 @@ async function login(): Promise<void> {
       signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
-    throw new PiholeError(`Can't reach Pi-hole at ${baseUrl()} (${(err as Error).message})`);
+    throw unreachable(err);
   }
   const body = (await resp.json().catch(() => ({}))) as { session?: { valid?: boolean; sid?: string | null } };
   if (!resp.ok || !body.session?.valid) {
@@ -60,7 +74,7 @@ async function request<T>(method: string, path: string, body?: unknown, retried 
       signal: AbortSignal.timeout(path.startsWith('/action/gravity') ? 600_000 : 15_000),
     });
   } catch (err) {
-    throw new PiholeError(`Can't reach Pi-hole at ${baseUrl()} (${(err as Error).message})`);
+    throw unreachable(err);
   }
   if (resp.status === 401 && !retried) {
     sid = undefined;
