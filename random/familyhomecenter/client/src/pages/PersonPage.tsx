@@ -8,6 +8,7 @@ import { TaskFormModal } from '../components/TaskFormModal.js';
 import { FamilyMemberFormModal } from '../components/FamilyMemberFormModal.js';
 import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
+import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
 import { canEditHistoricalTask, canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
@@ -102,6 +103,7 @@ export function PersonPage() {
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [detailDate, setDetailDate] = useState<string | null>(null);
+  const [showInternet, setShowInternet] = useState(false);
 
   // strugglingTasks only carries the summary fields (title/kind/counts), not the full Task
   // TaskFormModal needs to edit — fetch it on demand rather than growing that endpoint's payload
@@ -183,6 +185,18 @@ export function PersonPage() {
           <span style={{ color: member.color }}>■</span> done &nbsp;
           <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>■</span> not done — tap a day for details.
         </p>
+      </section>
+
+      {/* Their own time online (Internet page) — only for someone with a device set up there. */}
+      <section className="panel" style={showInternet ? undefined : { display: 'none' }}>
+        <h2>🌐 Time online</h2>
+        <InternetUsageCharts
+          key={member.id}
+          memberId={member.id}
+          color={member.color}
+          hideWhenUnused
+          onLoaded={(h) => setShowInternet(Boolean(h && (h.has_devices || h.days.some((d) => d.minutes > 0))))}
+        />
       </section>
 
       {stats.lateByDay.some((d) => d.count > 0) && (

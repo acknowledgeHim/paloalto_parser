@@ -186,6 +186,23 @@ most-blocked sites. Every Sunday at 6pm it's also emailed to every parent with a
 (same email setup as the grocery list — see [GROCERY_EMAIL_SETUP.md](GROCERY_EMAIL_SETUP.md)), or
 tap **📧 Send it now**.
 
+## Time online graphs
+
+**📈 Time online** on the Internet page (pick a person) and on each person's own page (Family Board
+→ their name) shows:
+
+- **Minutes online per day** for Today / 7 / 30 / 90 days. A dashed line marks their daily limit, and
+  days that went over are red. Tap a day to see just that day.
+- **Time of day** — which hours they're online.
+- **Time on each site** — the pieces a site loads from elsewhere count as the site itself (watching
+  YouTube is youtube.com, not googlevideo.com), and behind-the-scenes plumbing (Google APIs, CDNs,
+  Apple/iCloud background) is left out. A minute can count for two sites at once.
+- **Blocked** — what was blocked most.
+
+It's all estimated from lookups, like the daily allowance. Time per site and time of day are recorded
+from the update that added them; daily totals go back further. Nothing is deleted, so the history keeps
+growing. A kid logged in as themselves sees only their own.
+
 ## Closing the gaps (optional)
 
 - **Cellular data** — use the phone's own parental controls (Screen Time / Family Link), which work

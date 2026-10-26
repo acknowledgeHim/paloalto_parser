@@ -15,7 +15,6 @@ import { BLOCKED_STATUSES, localDay, siteForDomain, type InternetDevice } from '
  */
 
 const ACTIVE_LOOKUPS = 3;
-const SITE_COUNT_DAYS = 60;
 
 /** Lookups devices make on their own, not because someone's using them. */
 const BACKGROUND = [
@@ -43,8 +42,80 @@ function isBackground(domain: string): boolean {
   return BACKGROUND.some((re) => re.test(domain.toLowerCase()));
 }
 
+/**
+ * For "time on each site": the pieces a site or app loads from other names, so watching YouTube
+ * counts as youtube.com rather than googlevideo.com + ytimg.com.
+ */
+const APP_PARTS: Record<string, string> = {
+  'googlevideo.com': 'youtube.com',
+  'ytimg.com': 'youtube.com',
+  'youtu.be': 'youtube.com',
+  'youtube-nocookie.com': 'youtube.com',
+  'youtubekids.com': 'youtube.com',
+  'tiktokcdn.com': 'tiktok.com',
+  'tiktokcdn-us.com': 'tiktok.com',
+  'tiktokv.com': 'tiktok.com',
+  'tiktokv.us': 'tiktok.com',
+  'ibyteimg.com': 'tiktok.com',
+  'byteoversea.com': 'tiktok.com',
+  'musical.ly': 'tiktok.com',
+  'rbxcdn.com': 'roblox.com',
+  'rbx.com': 'roblox.com',
+  'robloxlabs.com': 'roblox.com',
+  'mojang.com': 'minecraft.net',
+  'minecraftservices.com': 'minecraft.net',
+  'nflxvideo.net': 'netflix.com',
+  'nflximg.net': 'netflix.com',
+  'nflxso.net': 'netflix.com',
+  'nflxext.com': 'netflix.com',
+  'cdninstagram.com': 'instagram.com',
+  'fbcdn.net': 'facebook.com',
+  'sc-cdn.net': 'snapchat.com',
+  'snapkit.com': 'snapchat.com',
+  'snap-dev.net': 'snapchat.com',
+  'discordapp.com': 'discord.com',
+  'discordapp.net': 'discord.com',
+  'discord.gg': 'discord.com',
+  'discord.media': 'discord.com',
+  'epicgames.dev': 'epicgames.com',
+  'fortnite.com': 'epicgames.com',
+  'scdn.co': 'spotify.com',
+  'spotifycdn.com': 'spotify.com',
+  'ttvnw.net': 'twitch.tv',
+  'jtvnw.net': 'twitch.tv',
+  'bamgrid.com': 'disneyplus.com',
+  'dssott.com': 'disneyplus.com',
+  'disney-plus.net': 'disneyplus.com',
+  'pinimg.com': 'pinterest.com',
+  'redd.it': 'reddit.com',
+  'redditmedia.com': 'reddit.com',
+  'redditstatic.com': 'reddit.com',
+  'twimg.com': 'x.com',
+  'twitter.com': 'x.com',
+  'whatsapp.net': 'whatsapp.com',
+  'xboxlive.com': 'xbox.com',
+  'playstation.net': 'playstation.com',
+  'nintendo.net': 'nintendo.com',
+};
+
+/** Behind-the-scenes plumbing every site and app uses — never what someone was actually doing. */
+const PLUMBING = new Set([
+  'gstatic.com', 'googleapis.com', 'gvt1.com', 'gvt2.com', 'googleusercontent.com', 'google-analytics.com',
+  'googletagmanager.com', 'googlesyndication.com', 'doubleclick.net', 'app-measurement.com', 'crashlytics.com',
+  'firebaseio.com', 'cloudfront.net', 'akamaihd.net', 'akamaized.net', 'akamaiedge.net', 'akamai.net',
+  'edgekey.net', 'edgesuite.net', 'fastly.net', 'fastly-edge.com', 'cloudflare.com', 'cloudflare.net',
+  'amazonaws.com', 'azureedge.net', 'msedge.net', 'trafficmanager.net', 'icloud.com', 'apple.com',
+  'aaplimg.com', 'mzstatic.com', 'cdn-apple.com', 'jsdelivr.net', 'cloudflare-dns.com', 'digicert.com',
+  'sentry.io', 'branch.io', 'appsflyer.com', 'adjust.com',
+]);
+
+/** The site a lookup's time counts toward, or null for plumbing. */
+export function usageSite(site: string): string | null {
+  const s = APP_PARTS[site] ?? site;
+  return PLUMBING.has(s) ? null : s;
+}
+
 let lastCheck = Math.floor(Date.now() / 1000) - 60;
-let lastPruneDay = '';
 
 export async function trackUsageMinute(): Promise<void> {
   if (!pihole.isPiholeConfigured()) return;
@@ -69,6 +140,15 @@ export async function trackUsageMinute(): Promise<void> {
     `INSERT INTO internet_usage (family_member_id, day, minutes) VALUES (?, ?, 1)
      ON CONFLICT(family_member_id, day) DO UPDATE SET minutes = minutes + 1`
   );
+  const addHour = db.prepare(
+    `INSERT INTO internet_usage_hours (family_member_id, day, hour, minutes) VALUES (?, ?, ?, 1)
+     ON CONFLICT(family_member_id, day, hour) DO UPDATE SET minutes = minutes + 1`
+  );
+  const addSiteMinute = db.prepare(
+    `INSERT INTO internet_site_minutes (family_member_id, day, site, minutes) VALUES (?, ?, ?, 1)
+     ON CONFLICT(family_member_id, day, site) DO UPDATE SET minutes = minutes + 1`
+  );
+  const hour = new Date(now * 1000).getHours();
   const addSite = db.prepare(
     `INSERT INTO internet_site_counts (family_member_id, day, site, lookups, blocked) VALUES (@m, @day, @site, @lookups, @blocked)
      ON CONFLICT(family_member_id, day, site) DO UPDATE SET lookups = lookups + excluded.lookups, blocked = blocked + excluded.blocked`
@@ -92,14 +172,18 @@ export async function trackUsageMinute(): Promise<void> {
       }
     }
     db.transaction(() => {
-      if (active >= ACTIVE_LOOKUPS) addMinute.run(memberId, day);
+      if (active >= ACTIVE_LOOKUPS) {
+        addMinute.run(memberId, day);
+        addHour.run(memberId, day, hour);
+        // This minute counts toward every site that was in use during it (not blocked, not plumbing).
+        const used = new Set<string>();
+        for (const [site, c] of sites) {
+          const u = c.lookups > 0 ? usageSite(site) : null;
+          if (u) used.add(u);
+        }
+        for (const u of used) addSiteMinute.run(memberId, day, u);
+      }
       for (const [site, c] of sites) addSite.run({ m: memberId, day, site, ...c });
     })();
-  }
-
-  if (lastPruneDay !== day) {
-    lastPruneDay = day;
-    const cutoff = localDay(new Date(Date.now() - SITE_COUNT_DAYS * 86_400_000));
-    db.prepare('DELETE FROM internet_site_counts WHERE day < ?').run(cutoff);
   }
 }

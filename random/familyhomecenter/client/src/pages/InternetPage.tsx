@@ -4,6 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
+import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
 
 // ---- API shapes (server/src/routes/internet.ts) ----
 
@@ -311,6 +312,7 @@ export function InternetPage() {
         ))}
       </div>
 
+      <UsageSection members={overview.members.filter((m) => overview.devices.some((d) => d.family_member_id === m.id))} />
       {canManage && <ReportSection />}
       <DevicesSection overview={overview} canManage={canManage} act={act} />
       <FilterSection overview={overview} canManage={canManage} act={act} />
@@ -1057,6 +1059,31 @@ function AskPanel({ overview, memberId, reload }: { overview: Overview; memberId
 }
 
 // ---- Weekly report ----
+
+/** 📈 Time online — graphs for one person at a time (kids first). */
+function UsageSection({ members }: { members: OverviewMember[] }) {
+  const { activeProfile } = useFamilyMembers();
+  const sorted = [...members].sort((a, b) => (a.is_parent ?? 0) - (b.is_parent ?? 0));
+  const [picked, setPicked] = useState<string | null>(null);
+  if (sorted.length === 0) return null;
+  // A kid sees their own first; everyone else starts on the first kid.
+  const current = sorted.find((m) => m.id === picked) ?? sorted.find((m) => m.id === activeProfile?.id) ?? sorted[0];
+  return (
+    <section className="panel internet-section">
+      <h2>📈 Time online</h2>
+      {sorted.length > 1 && (
+        <div className="usage__people" role="group" aria-label="Whose time">
+          {sorted.map((m) => (
+            <button key={m.id} type="button" className={m.id === current.id ? '' : 'secondary'} onClick={() => setPicked(m.id)}>
+              <MemberAvatar member={m} size={24} /> {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <InternetUsageCharts key={current.id} memberId={current.id} color={current.color} />
+    </section>
+  );
+}
 
 function ReportSection() {
   const [report, setReport] = useState<WeeklyReport | null>(null);

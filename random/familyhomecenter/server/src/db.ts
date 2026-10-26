@@ -824,7 +824,7 @@ db.exec(`
     minutes INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (family_member_id, day)
   );
-  -- Lookups per site per member per day, for the weekly report (pruned after 60 days).
+  -- Lookups per site per member per day, for the weekly report and the Time online graphs.
   CREATE TABLE IF NOT EXISTS internet_site_counts (
     family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
     day TEXT NOT NULL,
@@ -832,6 +832,23 @@ db.exec(`
     lookups INTEGER NOT NULL DEFAULT 0,
     blocked INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (family_member_id, day, site)
+  );
+  -- Time online graphs (services/internetUsage.ts): minutes a member's devices were online with a
+  -- site in use (a minute can count for more than one site — a video page and a chat at once), and
+  -- online minutes per hour of the day. Added later; they fill in from when they were added.
+  CREATE TABLE IF NOT EXISTS internet_site_minutes (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    site TEXT NOT NULL,
+    minutes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day, site)
+  );
+  CREATE TABLE IF NOT EXISTS internet_usage_hours (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    hour INTEGER NOT NULL,
+    minutes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day, hour)
   );
   -- A kid asking a parent for more time or for a website.
   CREATE TABLE IF NOT EXISTS internet_requests (

@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { isEmailConfigured, sendEmail } from './email.js';
-import { localDay } from './internetControl.js';
+import { getMemberRow, localDay } from './internetControl.js';
+import { usageSite } from './internetUsage.js';
 
 /** One kid's week online, for the Internet page and the Sunday email. */
 export interface KidWeek {
@@ -61,6 +62,87 @@ export function buildWeeklyReport(now = new Date()): WeeklyReport {
           .all(k.id, from, to) as Array<{ site: string; blocked: number }>,
       };
     }),
+  };
+}
+
+/** One person's time online between two days (inclusive), for the Time online graphs. */
+export interface UsageHistory {
+  member_id: string;
+  name: string;
+  from: string;
+  to: string;
+  /** Their current daily limits, for a line on the graph (null = none). */
+  limit: { weekday: number | null; weekend: number | null };
+  days: Array<{ day: string; minutes: number }>;
+  total_minutes: number;
+  /** Minutes online in each hour of the day (0 = midnight–1am), added up over the range. */
+  hours: number[];
+  /** Time on each site (minutes) plus how often it was looked up, most time first. */
+  sites: Array<{ site: string; minutes: number; lookups: number }>;
+  blocked: Array<{ site: string; blocked: number }>;
+  /** The first day time-per-site and time-of-day were recorded (they were added later). */
+  detail_since: string | null;
+  /** Whether any device is assigned to them on the Internet page (nothing is tracked otherwise). */
+  has_devices: boolean;
+}
+
+export function buildUsageHistory(memberId: string, from: string, to: string): UsageHistory | null {
+  const member = db.prepare('SELECT id, name FROM family_members WHERE id = ?').get(memberId) as { id: string; name: string } | undefined;
+  if (!member) return null;
+  const days: string[] = [];
+  const end = new Date(`${to}T12:00:00`);
+  for (let d = new Date(`${from}T12:00:00`); d <= end && days.length < 400; d = new Date(d.getTime() + 86_400_000)) days.push(localDay(d));
+  const usage = new Map(
+    (db.prepare('SELECT day, minutes FROM internet_usage WHERE family_member_id = ? AND day BETWEEN ? AND ?').all(memberId, from, to) as Array<{
+      day: string;
+      minutes: number;
+    }>).map((r) => [r.day, r.minutes])
+  );
+  const perDay = days.map((day) => ({ day, minutes: usage.get(day) ?? 0 }));
+
+  const hours = new Array<number>(24).fill(0);
+  for (const r of db
+    .prepare('SELECT hour, SUM(minutes) AS minutes FROM internet_usage_hours WHERE family_member_id = ? AND day BETWEEN ? AND ? GROUP BY hour')
+    .all(memberId, from, to) as Array<{ hour: number; minutes: number }>) {
+    if (r.hour >= 0 && r.hour < 24) hours[r.hour] = r.minutes;
+  }
+
+  const sites = new Map<string, { site: string; minutes: number; lookups: number }>();
+  const entry = (site: string) => sites.get(site) ?? sites.set(site, { site, minutes: 0, lookups: 0 }).get(site)!;
+  for (const r of db
+    .prepare('SELECT site, SUM(minutes) AS minutes FROM internet_site_minutes WHERE family_member_id = ? AND day BETWEEN ? AND ? GROUP BY site')
+    .all(memberId, from, to) as Array<{ site: string; minutes: number }>) {
+    entry(r.site).minutes += r.minutes;
+  }
+  for (const r of db
+    .prepare(
+      'SELECT site, SUM(lookups) AS lookups FROM internet_site_counts WHERE family_member_id = ? AND day BETWEEN ? AND ? GROUP BY site HAVING lookups > 0'
+    )
+    .all(memberId, from, to) as Array<{ site: string; lookups: number }>) {
+    const u = usageSite(r.site);
+    if (u) entry(u).lookups += r.lookups;
+  }
+
+  const row = getMemberRow(memberId);
+  return {
+    member_id: member.id,
+    name: member.name,
+    from,
+    to,
+    limit: { weekday: row.daily_minutes, weekend: row.weekend_minutes },
+    days: perDay,
+    total_minutes: perDay.reduce((n, d) => n + d.minutes, 0),
+    hours,
+    sites: [...sites.values()].sort((a, b) => b.minutes - a.minutes || b.lookups - a.lookups).slice(0, 40),
+    blocked: db
+      .prepare(
+        `SELECT site, SUM(blocked) AS blocked FROM internet_site_counts WHERE family_member_id = ? AND day BETWEEN ? AND ?
+         GROUP BY site HAVING blocked > 0 ORDER BY blocked DESC LIMIT 15`
+      )
+      .all(memberId, from, to) as Array<{ site: string; blocked: number }>,
+    detail_since:
+      (db.prepare('SELECT MIN(day) AS d FROM internet_usage_hours WHERE family_member_id = ?').get(memberId) as { d: string | null }).d ?? null,
+    has_devices: Boolean(db.prepare('SELECT 1 FROM internet_devices WHERE family_member_id = ?').get(memberId)),
   };
 }
 

@@ -16,6 +16,7 @@ import {
   setMemberMode,
   syncAllowEntries,
   recentBlockedSites,
+  localDay,
   addExtraMinutes,
   pauseMember,
   resumeMember,
@@ -33,8 +34,8 @@ import {
   type InternetMode,
   type MemberSite,
 } from '../services/internetControl.js';
-import { buildWeeklyReport, sendWeeklyReport } from '../services/internetReport.js';
-import { sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
+import { buildUsageHistory, buildWeeklyReport, sendWeeklyReport } from '../services/internetReport.js';
+import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME } from '../services/auth.js';
 
 // Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. Viewing
 // is open to everyone (a kid can see "paused until 7:00 AM" and why); every change is parent-only
@@ -388,6 +389,27 @@ internetRouter.post('/requests/:id/deny', requireAdmin, (req, res) => {
 
 internetRouter.get('/report', requireAdmin, (_req, res) => {
   res.json(buildWeeklyReport());
+});
+
+/**
+ * GET /members/:memberId/history?from=YYYY-MM-DD&to=YYYY-MM-DD — time online per day, per hour of
+ * the day and per site (Internet page graphs, and each kid's own profile). Viewing is open like the
+ * rest of this page, except a kid logged in as themselves only gets their own.
+ */
+internetRouter.get('/members/:memberId/history', (req, res) => {
+  const session = req.cookies?.[SESSION_COOKIE_NAME];
+  const me = sessionMemberId(session);
+  if (isAdminGateActive() && me && me !== req.params.memberId && !isRequestAdmin(session)) {
+    return res.status(403).json({ error: 'You can only see your own time online' });
+  }
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const today = localDay();
+  const to = isDay(req.query.to) ? req.query.to : today;
+  const from = isDay(req.query.from) ? req.query.from : localDay(new Date(Date.now() - 6 * 86_400_000));
+  if (from > to) return res.status(400).json({ error: 'from is after to' });
+  const history = buildUsageHistory(req.params.memberId, from, to);
+  if (!history) return res.status(404).json({ error: 'No such person' });
+  res.json(history);
 });
 
 /** POST /report/email — send the weekly report now (it also goes out by itself Sunday 6pm). */
