@@ -154,13 +154,24 @@ typingRouter.get('/daily', (_req, res) => {
   res.json({ enabled: readRewards().daily_enabled, day, accuracy_needed: DAILY_ACCURACY, board });
 });
 
-/** GET /bests — everyone's best speed (at 90%+ right), so family can be raced as rivals. */
+/** Someone's speed where they're at: their best passing speed on the highest lesson they've passed
+ *  (a short game round can be much faster than real typing, so games don't count). */
+const LEVEL_SPEED_SQL = `
+  SELECT r.family_member_id AS member_id, r.level, MAX(r.wpm) AS best_wpm
+  FROM typing_results r
+  WHERE r.mode = 'lesson' AND r.passed = 1
+    AND r.level = (SELECT MAX(x.level) FROM typing_results x WHERE x.family_member_id = r.family_member_id AND x.mode = 'lesson' AND x.passed = 1)`;
+
+function levelSpeed(memberId: string): { level: number; best_wpm: number } | null {
+  const row = db.prepare(`${LEVEL_SPEED_SQL} AND r.family_member_id = ? GROUP BY r.family_member_id`).get(memberId) as
+    | { level: number; best_wpm: number }
+    | undefined;
+  return row ? { level: row.level, best_wpm: row.best_wpm } : null;
+}
+
+/** GET /bests — everyone's speed on the last lesson they passed, so family can be raced as rivals. */
 typingRouter.get('/bests', (_req, res) => {
-  res.json(
-    db
-      .prepare('SELECT family_member_id AS member_id, MAX(wpm) AS best_wpm FROM typing_results WHERE accuracy >= 90 GROUP BY family_member_id')
-      .all()
-  );
+  res.json(db.prepare(`${LEVEL_SPEED_SQL} GROUP BY r.family_member_id`).all());
 });
 
 /** GET /:memberId — their progress: lessons passed, bests, recent rounds. Open, like the board. */
@@ -178,6 +189,8 @@ typingRouter.get('/:memberId', (req, res) => {
   res.json({
     levels,
     best_wpm: (db.prepare('SELECT MAX(wpm) AS v FROM typing_results WHERE family_member_id = ? AND accuracy >= 90').get(id) as { v: number | null }).v ?? 0,
+    /** Speed on the last lesson passed — what the page shows as their speed. */
+    level_speed: levelSpeed(id),
     balloon_best: best('balloon', 'score'),
     race_best_wpm: best('race', 'wpm'),
     game_bests: Object.fromEntries(MODES.filter((m) => m !== 'lesson' && m !== 'daily').map((m) => [m, bestOf(id, m) ?? 0])),

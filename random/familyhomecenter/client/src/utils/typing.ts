@@ -262,3 +262,47 @@ export function makeStory(me: string, family: string[]): { sentences: string[]; 
   };
   return { sentences: pickOne(STORIES).map(fill), fill };
 }
+
+// ---- ×2 / ×3 points: harder words ----
+
+/** Longer words for the ×2 and ×3 rounds (used only when made of letters already learned). */
+const LONG_WORDS = `ladder salads flasks alfalfa falafel kidded skidded fiddle saddle riddle
+ sailed failed aisles ladies dealer leader seller filler killer refill kidder sidekick
+ slider desires dresser fireside sidewalk likewise skillful
+ tiger turtle little letter kettle bottle rattle toilet tissue ticket rocket pocket jacket
+ river rider heater theater feather leather weather thirty though throughout together
+ yellow window willow pillow hollow follow shadow widow eyelid tidy
+ picture popcorn puppet pepper puzzle jigsaw kitchen chicken pickup quiet quilt quarter
+ elephant butterfly adventure chocolate dinosaur volcano spaghetti kangaroo hamburger
+ playground watermelon strawberry basketball skateboard trampoline astronaut telescope
+ microphone helicopter submarine jellyfish crocodile penguin computer keyboard treasure
+ pyramid lightning thunder rainbow galaxy planet mystery wizard pirate unicorn octopus
+ squirrel giraffe pumpkin blueberry pineapple sandwich breakfast homework birthday fireworks
+ snowflake sunflower waterfall mountain backpack notebook scissors calendar quickly zigzag
+ jackpot marshmallow caterpillar grasshopper hippopotamus thermometer refrigerator
+ everybody wonderful beautiful dangerous mysterious invisible incredible imagination`
+  .split(/\s+/)
+  .filter(Boolean);
+
+/** Every word a game can use with the letters learned so far — short and long. */
+export function gamePool(highestPassed: number): string[] {
+  const keys = new Set(gameKeys(highestPassed));
+  const long = LONG_WORDS.filter((w) => [...w].every((c) => keys.has(c)));
+  return [...new Set([...gameWords(highestPassed), ...long])];
+}
+
+export type PointsTier = 1 | 2 | 3;
+
+/** The words for a points level: ×1 everyday short words, ×2 longer ones, ×3 the longest. When
+ *  there aren't enough long words with the letters learned so far, it takes the longest there are. */
+export function wordsForTier(pool: string[], tier: PointsTier): string[] {
+  const byLen = [...pool].sort((a, b) => a.length - b.length);
+  const pickLen = (min: number, max: number, fallback: () => string[]) => {
+    const list = byLen.filter((w) => w.length >= min && w.length <= max);
+    return list.length >= 8 ? list : fallback();
+  };
+  const n = byLen.length;
+  if (tier === 1) return pickLen(2, 5, () => byLen.slice(0, Math.max(8, Math.ceil(n / 2))));
+  if (tier === 2) return pickLen(6, 7, () => byLen.slice(Math.floor(n / 2)));
+  return pickLen(8, 99, () => byLen.slice(Math.floor((n * 3) / 4)));
+}

@@ -2993,3 +2993,13 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .shop__flash--earn { color: #15803d; }
 .shop__flash--spend { color: #dc2626; }
 @keyframes shop-flash { to { transform: translateY(-16px); opacity: 0; } }
+
+/* ×2 / ×3 points (components/TypingGames.tsx PointsPicker) */
+.points-pick { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.points-pick__opt {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 120px; min-height: 56px; padding: 6px 12px;
+  border-radius: 12px; border: 2px solid #cbd5e1; background: #fff; color: #1f2937;
+}
+.points-pick__opt span { font: 600 0.8rem ui-monospace, monospace; color: #64748b; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.points-pick__opt--on { border-color: #f59e0b; background: #fef3c7; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35); }
+.points-badge { display: inline-block; padding: 0 7px; border-radius: 999px; background: #f59e0b; color: #fff; font-weight: 800; font-size: 0.85em; }

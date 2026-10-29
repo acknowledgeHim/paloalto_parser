@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
@@ -6,12 +6,15 @@ import { useTypeCatcher, type RoundResult } from '../components/typingInput.js';
 import {
   DailyChallenge,
   MeteorDefense,
+  PointsPicker,
   SentenceLock,
   ShoppingSpree,
   SillyStory,
+  TierBadge,
   TowerBuilder,
   WhackAKey,
   WordSnake,
+  useTier,
 } from '../components/TypingGames.js';
 import {
   FINGER_COLORS,
@@ -22,6 +25,7 @@ import {
   SENTENCES,
   fingerFor,
   gameKeys,
+  gamePool,
   gameWords,
   lessonText,
   needsShift,
@@ -41,6 +45,8 @@ import {
 interface Progress {
   levels: Array<{ level: number; best_wpm: number; best_accuracy: number; passed: number; tries: number }>;
   best_wpm: number;
+  /** Best passing speed on the last lesson passed — "where they're at". */
+  level_speed: { level: number; best_wpm: number } | null;
   balloon_best: number;
   race_best_wpm: number;
   /** Each game's best: top score, or for race/story the fastest win. */
@@ -103,6 +109,8 @@ export function TypingPage() {
 
   const passed = new Set(progress?.levels.filter((l) => l.passed).map((l) => l.level) ?? []);
   const highestPassed = Math.max(0, ...passed);
+  // Every word the games can use with the letters learned so far (the games pick ×1 / ×2 / ×3 from it).
+  const pool = useMemo(() => gamePool(highestPassed), [highestPassed]);
   const others = members.filter((m) => m.id !== activeProfile?.id);
   const bestOf = (mode: string) => progress?.game_bests?.[mode] ?? 0;
   const lockedOut = (t: Tab) => LOCKED_TABS.includes(t) && !progress?.sentences_open;
@@ -136,7 +144,8 @@ export function TypingPage() {
             {progress && (
               <span className="hint">
                 {' '}
-                · {passed.size}/{LEVELS.length} lessons · best {Math.round(progress.best_wpm)} wpm
+                · {passed.size}/{LEVELS.length} lessons
+                {progress.level_speed ? ` · ${Math.round(progress.level_speed.best_wpm)} wpm (lesson ${progress.level_speed.level})` : ''}
               </span>
             )}
           </span>
@@ -179,7 +188,7 @@ export function TypingPage() {
       ) : tab === 'meteor' ? (
         <MeteorDefense
           keys={gameKeys(highestPassed)}
-          words={gameWords(highestPassed)}
+          words={pool}
           useWords={highestPassed >= 8}
           player={activeProfile}
           best={bestOf('meteor')}
@@ -187,11 +196,11 @@ export function TypingPage() {
           onSave={save}
         />
       ) : tab === 'snake' ? (
-        <WordSnake words={gameWords(highestPassed)} best={bestOf('snake')} stars={rewards?.snake_best ?? 0} onSave={save} />
+        <WordSnake words={pool} best={bestOf('snake')} stars={rewards?.snake_best ?? 0} onSave={save} />
       ) : tab === 'shop' ? (
-        <ShoppingSpree words={gameWords(highestPassed)} player={activeProfile} best={bestOf('shop')} onSave={save} />
+        <ShoppingSpree words={pool} player={activeProfile} best={bestOf('shop')} onSave={save} />
       ) : tab === 'tower' ? (
-        <TowerBuilder words={gameWords(highestPassed)} player={activeProfile} best={bestOf('tower')} stars={rewards?.tower_best ?? 0} onSave={save} />
+        <TowerBuilder words={pool} player={activeProfile} best={bestOf('tower')} stars={rewards?.tower_best ?? 0} onSave={save} />
       ) : tab === 'story' && activeProfile ? (
         <SillyStory player={activeProfile} family={others} best={bestOf('story')} stars={rewards?.story_best ?? 0} onSave={save} />
       ) : tab === 'daily' && activeProfile ? (
@@ -203,7 +212,7 @@ export function TypingPage() {
           onSave={save}
         />
       ) : tab === 'balloon' ? (
-        <BalloonPop words={gameWords(highestPassed)} best={progress?.balloon_best ?? 0} stars={rewards?.balloon_best ?? 0} onSave={save} />
+        <BalloonPop words={pool} best={progress?.balloon_best ?? 0} stars={rewards?.balloon_best ?? 0} onSave={save} />
       ) : tab === 'race' ? (
         <Race
           highestPassed={highestPassed}
@@ -227,9 +236,10 @@ export function TypingPage() {
                   {r.mode === 'lesson' ? `📘 Lesson ${r.level}` : (MODE_LABELS[r.mode] ?? r.mode)}
                   {r.passed && r.mode === 'lesson' ? ' ✓' : ''}
                   {r.passed && (r.mode === 'race' || r.mode === 'daily') ? ' 🏆' : ''}
+                  {['balloon', 'meteor', 'snake', 'tower', 'shop'].includes(r.mode) && r.level > 1 ? ` ×${r.level}` : ''}
                 </span>
                 <span className="hint">
-                  {r.mode === 'shop' ? `spent $${r.score} · ` : r.mode === 'tower' ? `${r.score} ${r.score === 1 ? 'block' : 'blocks'} · ` : ['balloon', 'whack', 'meteor', 'snake'].includes(r.mode) ? `${r.score} points · ` : ''}
+                  {r.mode === 'shop' ? `${r.score} points · ` : r.mode === 'tower' ? `${r.score} ${r.score === 1 ? 'point' : 'points'} · ` : ['balloon', 'whack', 'meteor', 'snake'].includes(r.mode) ? `${r.score} points · ` : ''}
                   {Math.round(r.wpm)} wpm · {Math.round(r.accuracy)}%{r.stars ? ` · +${r.stars} ⭐` : ''}
                 </span>
               </li>
@@ -495,7 +505,7 @@ interface Balloon {
 const BALLOON_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#60a5fa', '#a78bfa', '#f472b6'];
 
 function BalloonPop({
-  words,
+  words: pool,
   best,
   stars,
   onSave,
@@ -506,6 +516,7 @@ function BalloonPop({
   onSave: (r: RoundResult) => Promise<{ stars: number; reason: string | null } | null>;
 }) {
   const [state, setState] = useState<'ready' | 'playing' | 'over'>('ready');
+  const { tier, setTier, words, pickByKey } = useTier(pool);
   const [balloons, setBalloons] = useState<Balloon[]>([]);
   const [typed, setTyped] = useState('');
   const typedRef = useRef('');
@@ -537,7 +548,7 @@ function BalloonPop({
     const ms = Date.now() - s.started;
     onSave({
       mode: 'balloon',
-      level: 0,
+      level: tier,
       wpm: wpmOf(s.chars, ms),
       accuracy: Math.round((s.right / Math.max(1, s.right + s.wrong)) * 1000) / 10,
       chars: s.chars,
@@ -545,7 +556,7 @@ function BalloonPop({
       score: live.current.score,
       passed: false,
     }).then(setEarned);
-  }, [onSave]);
+  }, [onSave, tier]);
 
   // The game loop: balloons float up; one reaching the top costs a life. Faster as you pop more.
   useEffect(() => {
@@ -598,6 +609,7 @@ function BalloonPop({
   const onChar = (c: string) => {
     if (state !== 'playing') {
       if (c === ' ' || c === 'Enter') start();
+      else pickByKey(c);
       return;
     }
     const s = stats.current;
@@ -616,7 +628,7 @@ function BalloonPop({
       s.chars += hit.word.length + 1;
       s.popped++;
       live.current.balloons = live.current.balloons.filter((b) => b.id !== hit.id);
-      live.current.score += hit.word.length;
+      live.current.score += hit.word.length * tier;
       setBalloons(live.current.balloons);
       setScore(live.current.score);
       setTypedBoth('');
@@ -630,7 +642,7 @@ function BalloonPop({
     <section className="panel balloon" onClick={focus}>
       <div className="balloon__top">
         <span>
-          Score <strong>{score}</strong>
+          Score <strong>{score}</strong> <TierBadge tier={tier} />
         </span>
         <span>{'❤️'.repeat(Math.max(0, lives))}</span>
         <span className="hint">
@@ -675,6 +687,7 @@ function BalloonPop({
                 <p>Type a balloon's word to pop it before it floats away. Three get away and it's over!</p>
               </>
             )}
+            <PointsPicker tier={tier} onChange={setTier} pool={pool} />
             <button type="button" onClick={start}>
               {state === 'ready' ? '▶ Start' : '↻ Play again'}
             </button>
@@ -695,7 +708,7 @@ interface Rival {
   wpm: number;
   icon?: string;
   member?: FamilyMember;
-  /** "their best" for family; nothing for the animals. */
+  /** "their speed" (on the last lesson passed) for family; nothing for the animals. */
   note?: string;
 }
 
@@ -738,17 +751,22 @@ function Race({
   family: FamilyMember[];
   onSave: (r: RoundResult) => Promise<{ stars: number; reason: string | null } | null>;
 }) {
+  // Each person's speed on the last lesson they passed (games don't count — short rounds run fast).
   const [bests, setBests] = useState<Record<string, number>>({});
+  const [bestLevels, setBestLevels] = useState<Record<string, number>>({});
   useEffect(() => {
     api
-      .get<Array<{ member_id: string; best_wpm: number }>>('/typing/bests')
-      .then((rows) => setBests(Object.fromEntries(rows.map((r) => [r.member_id, r.best_wpm]))))
+      .get<Array<{ member_id: string; best_wpm: number; level: number }>>('/typing/bests')
+      .then((rows) => {
+        setBests(Object.fromEntries(rows.map((r) => [r.member_id, r.best_wpm])));
+        setBestLevels(Object.fromEntries(rows.map((r) => [r.member_id, r.level])));
+      })
       .catch(() => {});
   }, []);
   // Family (and yourself) race with their avatars; anyone without a best yet races on the scale.
   const people: Rival[] = [
-    ...(player ? [{ key: player.id, name: 'Yourself', wpm: 0, member: player, note: 'your best' }] : []),
-    ...family.map((m) => ({ key: m.id, name: m.name, wpm: 0, member: m, note: 'their best' })),
+    ...(player ? [{ key: player.id, name: 'Yourself', wpm: 0, member: player, note: 'your speed' }] : []),
+    ...family.map((m) => ({ key: m.id, name: m.name, wpm: 0, member: m, note: 'their speed' })),
   ];
   const [rival, setRival] = useState<Rival>(ANIMALS[0]);
   /** 'best' = the person's own best speed; a number = a level on the Easy → Hard scale. */
@@ -876,10 +894,10 @@ function Race({
             <span className="race__speed-label">How fast?</span>
             {memberBest ? (
               <button type="button" className={useBest ? '' : 'secondary'} onClick={() => setSpeed('best')}>
-                {rival.note === 'your best' ? 'Your' : 'Their'} best · {Math.round(memberBest)} wpm
+                {rival.note === 'your speed' ? 'Your' : 'Their'} speed · {Math.round(memberBest)} wpm (lesson {bestLevels[rival.member!.id]})
               </button>
             ) : rival.member ? (
-              <span className="hint">{rival.name === 'Yourself' ? "You haven't" : `${rival.name} hasn't`} typed here yet — pick a level:</span>
+              <span className="hint">{rival.name === 'Yourself' ? "You haven't" : `${rival.name} hasn't`} passed a lesson yet — pick a level:</span>
             ) : null}
             <label className="race__scale">
               <span>Easy</span>

@@ -32,6 +32,16 @@ keyboard. Pick who you are in the profile switcher (top right) to save progress 
   Score = dollars spent. **The money is pretend** — it never touches anyone's bank or stars, and this
   game pays no ⭐.
 
+**×2 / ×3 points:** Balloon Pop, Meteor Defense, Word Snake, Tower Builder and Shopping Spree ask
+before each round: **Normal**, **Double ×2** (longer words) or **Triple ×3** (the longest words).
+They can tap one or press **1 2 3**. Every point (or dollar spent, in Shopping Spree) counts double
+or triple. The words still come only from letters already learned; early on, "longer" just means
+the longest words those letters can make.
+
+**Speed shown for each person** (next to their name, and as "their speed" when raced) is their best
+passing speed on the **last lesson they passed**. That reflects where they really are; a short game
+round can be much faster than real typing, so games don't count toward it.
+
 **Open once all 16 lessons are passed** (a parent can always play) — until then the tab shows 🔒 and
 how many lessons are left (the server refuses saving them too):
 

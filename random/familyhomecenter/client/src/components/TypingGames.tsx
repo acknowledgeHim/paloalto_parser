@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type FamilyMember } from '../api/client.js';
 import { MemberAvatar } from './MemberAvatar.js';
 import { useTypeCatcher, type Earned, type SaveRound } from './typingInput.js';
-import { KEY_ROWS, STORY_ENDINGS, dailyText, makeStory, wpmOf } from '../utils/typing.js';
+import { KEY_ROWS, STORY_ENDINGS, dailyText, makeStory, wordsForTier, wpmOf, type PointsTier } from '../utils/typing.js';
 
 /**
  * ⌨️ More typing games (pages/TypingPage.tsx): 🔨 Whack-a-Key and ☄️ Meteor Defense (single letters,
@@ -39,7 +39,9 @@ function Overlay({
   best,
   earned,
   onStart,
+  children,
 }: {
+  children?: React.ReactNode;
   state: 'ready' | 'playing' | 'over';
   title: string;
   intro: string;
@@ -66,11 +68,64 @@ function Overlay({
           <p>{intro}</p>
         </>
       )}
+      {children}
       <button type="button" onClick={onStart}>
         {state === 'ready' ? '▶ Start' : '↻ Play again'}
       </button>
     </div>
   );
+}
+
+// ---- ×2 / ×3 points ----
+
+const TIERS: Array<{ tier: PointsTier; label: string }> = [
+  { tier: 1, label: 'Normal' },
+  { tier: 2, label: 'Double ×2' },
+  { tier: 3, label: 'Triple ×3' },
+];
+
+/** Normal, or harder words for double / triple points. Picked before a round (or keys 1 2 3). */
+export function PointsPicker({ tier, onChange, pool }: { tier: PointsTier; onChange: (t: PointsTier) => void; pool: string[] }) {
+  return (
+    <div className="points-pick" role="radiogroup" aria-label="Points">
+      {TIERS.map((t) => {
+        const list = wordsForTier(pool, t.tier);
+        const sample = [list[Math.floor(list.length / 3)], list[Math.floor((list.length * 2) / 3)]].filter(Boolean);
+        return (
+          <button
+            key={t.tier}
+            type="button"
+            role="radio"
+            aria-checked={tier === t.tier}
+            className={`points-pick__opt ${tier === t.tier ? 'points-pick__opt--on' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange(t.tier);
+            }}
+          >
+            <strong>{t.label}</strong>
+            <span>{[...new Set(sample)].join(', ')}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The points level for a word game, and its words. */
+export function useTier(pool: string[]) {
+  const [tier, setTier] = useState<PointsTier>(1);
+  const words = useMemo(() => wordsForTier(pool, tier), [pool, tier]);
+  /** Keys 1 2 3 pick it on the start / game-over card. */
+  const pickByKey = (c: string) => {
+    if (c === '1' || c === '2' || c === '3') setTier(Number(c) as PointsTier);
+  };
+  return { tier, setTier, words, pickByKey };
+}
+
+/** "×2" next to the score while playing a double / triple round. */
+export function TierBadge({ tier }: { tier: PointsTier }) {
+  return tier > 1 ? <span className="points-badge">×{tier}</span> : null;
 }
 
 // ---- 🔨 Whack-a-Key ----
@@ -232,7 +287,7 @@ interface Meteor {
 
 export function MeteorDefense({
   keys,
-  words,
+  words: pool,
   useWords,
   player,
   best,
@@ -259,6 +314,9 @@ export function MeteorDefense({
   const [earned, setEarned] = useState<Earned | null>(null);
   const live = useRef({ meteors: [] as Meteor[], typed: '', lives: 3, score: 0, destroyed: 0, right: 0, wrong: 0, chars: 0, started: 0, lastSpawn: 0, nextId: 1 });
   const letters = keys.filter((k) => /[a-z]/.test(k));
+  const { tier, setTier, words, pickByKey } = useTier(pool);
+  /** How often a meteor carries a word: never early on at ×1, mostly at ×2, always at ×3. */
+  const wordShare = tier === 3 ? 1 : tier === 2 ? 0.75 : useWords ? 0.5 : 0;
 
   const start = () => {
     live.current = { meteors: [], typed: '', lives: 3, score: 0, destroyed: 0, right: 0, wrong: 0, chars: 0, started: Date.now(), lastSpawn: 0, nextId: 1 };
@@ -276,7 +334,7 @@ export function MeteorDefense({
     const ms = Date.now() - L.started;
     onSave({
       mode: 'meteor',
-      level: 0,
+      level: tier,
       wpm: wpmOf(L.chars, ms),
       accuracy: accuracyOf(L.right, L.wrong),
       chars: L.chars,
@@ -284,7 +342,7 @@ export function MeteorDefense({
       score: L.score,
       passed: false,
     }).then(setEarned);
-  }, [onSave]);
+  }, [onSave, tier]);
 
   // Meteors fall toward the planet; one that lands cracks the shield (a heart). Faster as you go.
   useEffect(() => {
@@ -299,7 +357,7 @@ export function MeteorDefense({
       let list = L.meteors;
       if (t - L.lastSpawn > Math.max(700, 2200 - level * 130) && list.length < 7) {
         L.lastSpawn = t;
-        const word = useWords && Math.random() < 0.5 ? pick(words) : pick(letters);
+        const word = Math.random() < wordShare ? pick(words) : pick(letters);
         list = [...list, { id: L.nextId++, word, x: 8 + Math.random() * 84, y: -6, speed: (word.length > 1 ? 6 : 9) + level * 1.3 + Math.random() * 3 }];
       }
       let landed = 0;
@@ -330,11 +388,12 @@ export function MeteorDefense({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [state, words, useWords, letters.join(''), finish]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, words, wordShare, letters.join(''), finish]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onChar = (c: string) => {
     if (state !== 'playing') {
       if (c === ' ') start();
+      else pickByKey(c);
       return;
     }
     const L = live.current;
@@ -357,7 +416,7 @@ export function MeteorDefense({
     if (hit.word === next) {
       L.chars += hit.word.length + 1;
       L.destroyed++;
-      L.score += hit.word.length;
+      L.score += hit.word.length * tier;
       L.meteors = L.meteors.filter((m) => m.id !== hit.id);
       L.typed = '';
       setMeteors(L.meteors);
@@ -381,7 +440,7 @@ export function MeteorDefense({
     <section className="panel balloon" onClick={focus}>
       <div className="balloon__top">
         <span>
-          Score <strong>{score}</strong>
+          Score <strong>{score}</strong> <TierBadge tier={tier} />
         </span>
         <span>{'🛡️'.repeat(Math.max(0, lives))}</span>
         <BestLine best={best} stars={stars} />
@@ -430,9 +489,11 @@ export function MeteorDefense({
           best={best}
           earned={earned}
           onStart={start}
-        />
+        >
+          <PointsPicker tier={tier} onChange={setTier} pool={pool} />
+        </Overlay>
       </div>
-      {state === 'playing' && useWords && <p className="balloon__typing">{typed || <span className="hint">type a letter or word…</span>}</p>}
+      {state === 'playing' && wordShare > 0 && <p className="balloon__typing">{typed || <span className="hint">type a letter or word…</span>}</p>}
       {input}
     </section>
   );
@@ -444,7 +505,7 @@ const BLOCK_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#2dd4bf', '#6
 const MAX_WOBBLE = 3;
 
 export function TowerBuilder({
-  words,
+  words: pool,
   player,
   best,
   stars,
@@ -464,6 +525,7 @@ export function TowerBuilder({
   const [shake, setShake] = useState(0);
   const [timeLeft, setTimeLeft] = useState(1);
   const [earned, setEarned] = useState<Earned | null>(null);
+  const { tier, setTier, words, pickByKey } = useTier(pool);
   const live = useRef({ word: '', pos: 0, height: 0, wobble: 0, streak: 0, right: 0, wrong: 0, chars: 0, started: 0, wordAt: 0, wordMs: 0 });
 
   /** Longer words get longer; a taller tower gets less time (but never under 40%). */
@@ -494,15 +556,15 @@ export function TowerBuilder({
     const ms = Date.now() - L.started;
     onSave({
       mode: 'tower',
-      level: 0,
+      level: tier,
       wpm: wpmOf(L.chars, ms),
       accuracy: accuracyOf(L.right, L.wrong),
       chars: L.chars,
       seconds: Math.round(ms / 1000),
-      score: L.height,
+      score: L.height * tier,
       passed: false,
     }).then(setEarned);
-  }, [onSave]);
+  }, [onSave, tier]);
 
   /** A typo or running out of time: the tower wobbles. Too many wobbles and it falls. */
   const wobbleOnce = () => {
@@ -532,6 +594,7 @@ export function TowerBuilder({
   const onChar = (c: string) => {
     if (state !== 'playing') {
       if (c === ' ') start();
+      else pickByKey(c);
       return;
     }
     const L = live.current;
@@ -568,9 +631,15 @@ export function TowerBuilder({
       <div className="balloon__top">
         <span>
           Height <strong>{blocks.length}</strong>
+          {tier > 1 && (
+            <>
+              {' '}
+              <TierBadge tier={tier} /> = <strong>{blocks.length * tier}</strong> points
+            </>
+          )}
         </span>
         <span title="Wobbles">{'🟨'.repeat(Math.max(0, MAX_WOBBLE - wobble))}{'⬛'.repeat(Math.min(MAX_WOBBLE, wobble))}</span>
-        <BestLine best={best} stars={stars} unit={best === 1 ? " block" : " blocks"} />
+        <BestLine best={best} stars={stars} unit={best === 1 ? ' point' : ' points'} />
       </div>
       <div className="tower">
         {state === 'playing' && (
@@ -604,11 +673,13 @@ export function TowerBuilder({
           state={state}
           title="🧱 Tower Builder"
           intro="Type each word to add a block. A typo or running out of time makes the tower wobble — three wobbles and it falls! Five good words in a row steady it."
-          score={blocks.length}
+          score={blocks.length * tier}
           best={best}
           earned={earned}
           onStart={start}
-        />
+        >
+          <PointsPicker tier={tier} onChange={setTier} pool={pool} />
+        </Overlay>
       </div>
       {input}
     </section>
@@ -631,7 +702,8 @@ const FOOD_ICONS = ['🍎', '🍌', '🍓', '🍇', '🍪', '🧀', '🥕', '�
 const FIELD_W = 160;
 const FIELD_H = 100;
 
-export function WordSnake({ words, best, stars, onSave }: { words: string[]; best: number; stars: number; onSave: SaveRound }) {
+export function WordSnake({ words: pool, best, stars, onSave }: { words: string[]; best: number; stars: number; onSave: SaveRound }) {
+  const { tier, setTier, words, pickByKey } = useTier(pool);
   const [state, setState] = useState<'ready' | 'playing' | 'over'>('ready');
   const [, setFrame] = useState(0);
   const [typed, setTyped] = useState('');
@@ -684,7 +756,7 @@ export function WordSnake({ words, best, stars, onSave }: { words: string[]; bes
     const ms = Date.now() - L.started;
     onSave({
       mode: 'snake',
-      level: 0,
+      level: tier,
       wpm: wpmOf(L.chars, ms),
       accuracy: accuracyOf(L.right, L.wrong),
       chars: L.chars,
@@ -692,7 +764,7 @@ export function WordSnake({ words, best, stars, onSave }: { words: string[]; bes
       score: L.score,
       passed: false,
     }).then(setEarned);
-  }, [onSave]);
+  }, [onSave, tier]);
 
   // The snake slithers about by itself; a typed word sends it to that food. It gets hungrier the
   // longer it is — an empty tummy ends the game.
@@ -750,6 +822,7 @@ export function WordSnake({ words, best, stars, onSave }: { words: string[]; bes
   const onChar = (c: string) => {
     if (state !== 'playing') {
       if (c === ' ') start();
+      else pickByKey(c);
       return;
     }
     const L = live.current;
@@ -773,7 +846,7 @@ export function WordSnake({ words, best, stars, onSave }: { words: string[]; bes
       done.chosen = true;
       L.queue.push(done.id);
       L.chars += done.word.length + 1;
-      L.score += done.word.length;
+      L.score += done.word.length * tier;
       L.typed = '';
     } else {
       L.typed = next;
@@ -794,7 +867,7 @@ export function WordSnake({ words, best, stars, onSave }: { words: string[]; bes
     <section className="panel balloon" onClick={focus}>
       <div className="balloon__top">
         <span>
-          Score <strong>{state === 'ready' ? 0 : L.score}</strong> · length {L.length}
+          Score <strong>{state === 'ready' ? 0 : L.score}</strong> <TierBadge tier={tier} /> · length {L.length}
         </span>
         <span className="snake__hunger" title="Tummy">
           🍽️ <span><span style={{ width: `${L.hunger}%`, background: L.hunger < 25 ? '#d64545' : undefined }} /></span>
@@ -834,7 +907,9 @@ export function WordSnake({ words, best, stars, onSave }: { words: string[]; bes
           best={best}
           earned={earned}
           onStart={start}
-        />
+        >
+          <PointsPicker tier={tier} onChange={setTier} pool={pool} />
+        </Overlay>
       </div>
       {state === 'playing' && <p className="balloon__typing">{typed || <span className="hint">type a snack's word…</span>}</p>}
       {input}
@@ -1168,7 +1243,7 @@ const STORE: Array<{ icon: string; name: string; price: number }> = [
 const SHOP_START_MONEY = 10;
 
 export function ShoppingSpree({
-  words,
+  words: pool,
   player,
   best,
   onSave,
@@ -1182,6 +1257,7 @@ export function ShoppingSpree({
   const [, setFrame] = useState(0);
   const [flash, setFlash] = useState<{ id: number; text: string; kind: 'earn' | 'spend' } | null>(null);
   const [earned, setEarned] = useState<Earned | null>(null);
+  const { tier, setTier, words, pickByKey } = useTier(pool);
   const fresh = () => ({
     money: SHOP_START_MONEY,
     spent: 0,
@@ -1234,15 +1310,15 @@ export function ShoppingSpree({
     const ms = Date.now() - L.started;
     onSave({
       mode: 'shop',
-      level: 0,
+      level: tier,
       wpm: wpmOf(L.chars, ms),
       accuracy: accuracyOf(L.right, L.wrong),
       chars: L.chars,
       seconds: Math.round(ms / 1000),
-      score: L.spent,
+      score: L.spent * tier,
       passed: false,
     }).then(setEarned);
-  }, [onSave]);
+  }, [onSave, tier]);
 
   // The shopper keeps grabbing things off the shelf and paying for them; can't pay → game over.
   useEffect(() => {
@@ -1271,6 +1347,7 @@ export function ShoppingSpree({
   const onChar = (c: string) => {
     if (state !== 'playing') {
       if (c === ' ') start();
+      else pickByKey(c);
       return;
     }
     const L = live.current;
@@ -1311,7 +1388,8 @@ export function ShoppingSpree({
           {flash && <span className={`shop__flash shop__flash--${flash.kind}`}>{flash.text}</span>}
         </span>
         <span className="hint">
-          Spent ${L.spent} · best ${Math.round(best)} · pretend money, just for fun
+          Spent ${L.spent}
+          {tier > 1 ? ` ×${tier} = ${L.spent * tier} points` : ''} · best {Math.round(best)} points · pretend money, just for fun
         </span>
       </div>
       <div className="shop">
@@ -1358,7 +1436,13 @@ export function ShoppingSpree({
                 <h2>Out of money!</h2>
                 <p>
                   {player?.name ?? 'Your shopper'} bought <strong>{L.cart.length}</strong> things for <strong>${L.spent}</strong>
-                  {L.spent > best && L.spent > 0 ? ' — a new best!' : ''}
+                  {tier > 1 ? (
+                    <>
+                      {' '}
+                      — ×{tier} = <strong>{L.spent * tier}</strong> points
+                    </>
+                  ) : null}
+                  {L.spent * tier > best && L.spent > 0 ? ' — a new best!' : ''}
                 </p>
                 <EarnedLine earned={earned} />
               </>
@@ -1372,6 +1456,7 @@ export function ShoppingSpree({
                 <p className="hint">Pretend money — it's not your bank or your stars.</p>
               </>
             )}
+            <PointsPicker tier={tier} onChange={setTier} pool={pool} />
             <button type="button" onClick={start}>
               {state === 'ready' ? '▶ Start' : '↻ Shop again'}
             </button>
