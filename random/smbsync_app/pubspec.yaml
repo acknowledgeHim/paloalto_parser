@@ -1,0 +1,29 @@
+name: smbsync
+description: Copy or move files from your phone to a folder on an SMB (Windows / NAS) share.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Pure-Dart SMB client (SMB 1 / 2.0 / 2.1) — same code on Android and iPhone.
+  smb_connect: 0.0.9
+  photo_manager: ^3.12.0
+  permission_handler: ^13.0.2
+  flutter_secure_storage: ^11.2.0
+  shared_preferences: ^2.5.6
+  file_picker: ^13.3.2
+  wakelock_plus: ^1.8.2
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
