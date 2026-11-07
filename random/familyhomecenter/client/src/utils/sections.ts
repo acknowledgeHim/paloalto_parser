@@ -18,6 +18,7 @@ export const SECTIONS: AppSection[] = [
   { key: 'board', label: 'Family Board', path: '/board' },
   { key: 'music', label: 'Music', path: '/music' },
   { key: 'photos', label: 'Photos', path: '/photos' },
+  { key: 'movie-library', label: 'Movies (watching)', path: '/movies' },
   { key: 'movies', label: 'Movies (making/editing)' },
   { key: 'documents', label: 'Documents (making/editing)' },
   { key: 'intercom', label: 'Intercom', path: '/intercom' },

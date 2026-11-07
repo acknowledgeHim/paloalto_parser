@@ -21,7 +21,12 @@ import { folderDate } from './photoDates.js';
 export const CONVERT_EXTS = new Set(['.mov', '.qt']);
 export const VIDEO_EXTS = new Set([...CONVERT_EXTS, '.mp4', '.m4v']);
 
-export const videosDir = () => getSetting('video_dest_dir') || config.videosDir;
+import { resolveShare } from './sharePaths.js';
+
+/** Where videos go, as written (a share location like /share/media/movies/takk, or a Pi folder). */
+export const videosLocation = () => getSetting('video_dest_dir') || config.videosDir;
+/** …and that folder on the Pi (the mounted share, services/sharePaths.ts). */
+export const videosDir = () => resolveShare(videosLocation()).local;
 
 const ffprobePath = () => process.env.FFPROBE_PATH || config.movies.ffmpegPath.replace(/ffmpeg(\.exe)?$/i, 'ffprobe$1');
 
@@ -47,6 +52,9 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<string> {
     });
   });
 }
+
+/** Can videos be filed now? The movies folder must already exist (a mounted share), so nothing is ever made on the Pi's own disk by mistake. */
+export const videosFolderReady = () => fsSync.existsSync(videosDir());
 
 /** Is ffmpeg there? Checked once per Inbox round, so a Pi without it just leaves videos waiting. */
 export async function haveFfmpeg(): Promise<boolean> {
@@ -173,6 +181,7 @@ export async function fileVideo(file: string, inbox: string, dateHint?: number |
     const converting = CONVERT_EXTS.has(ext);
     const p = await probe(file);
     const { date, from } = await recordedDate(file, p, dateHint);
+    if (!fsSync.existsSync(videosDir())) throw new Error(`The movies folder ${videosLocation()} isn't there — is that share mounted on the Pi?`);
     const dir = path.join(videosDir(), String(date.getFullYear()));
     await fs.mkdir(dir, { recursive: true });
     const mp4Name = converting ? `${path.basename(name, path.extname(name))}.mp4` : name;

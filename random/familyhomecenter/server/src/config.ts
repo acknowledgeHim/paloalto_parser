@@ -39,6 +39,8 @@ export const config = {
   // 🎬 Videos from the 📥 Inbox are filed into <VIDEOS_DIR>/<YYYY>/ (.mov turned into .mp4) —
   // services/videoFiling.ts. Can be changed in Settings → 📁 Photo library → 📥 Inbox.
   videosDir: process.env.VIDEOS_DIR ?? '/share/media/movies/takk',
+  // 🎬 The Movies section lists every video under here (services/movieLibrary.ts); read-only.
+  movieLibraryDir: process.env.MOVIE_LIBRARY_DIR ?? '/share/media/movies',
 
   music: {
     libraryDir: process.env.MUSIC_LIBRARY_DIR ?? path.join(__dirname, '..', '..', 'sample-music'),

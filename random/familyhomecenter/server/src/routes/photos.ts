@@ -12,7 +12,7 @@ import { gzipSync } from 'node:zlib';
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { autoSortOn, canWrite, fileOne, fileVideoAndRecord, inboxDir, PICTURE_EXTS, registerInbox, sortInbox } from '../services/photoFiling.js';
-import { haveFfmpeg, VIDEO_EXTS, videosDir } from '../services/videoFiling.js';
+import { haveFfmpeg, VIDEO_EXTS, videosDir, videosFolderReady, videosLocation } from '../services/videoFiling.js';
 import { photosChanged } from '../services/photos.js';
 import { getSetting, setSetting } from '../db.js';
 import { isParentRequest } from '../services/rewards.js';
@@ -361,6 +361,16 @@ photosRouter.put('/source', (req, res) => {
 
 // ---- 📤 Add photos / 📥 Inbox: filed into <YEAR>/<Month> ----
 
+/** A name not taken yet in the Inbox (so a waiting upload never replaces another file). */
+async function freeInboxName(dir: string, name: string): Promise<string> {
+  const ext = path.extname(name);
+  const base = path.basename(name, ext);
+  for (let i = 1; ; i++) {
+    const n = i === 1 ? name : `${base} (${i})${ext}`;
+    if (!fsSync.existsSync(path.join(dir, n))) return n;
+  }
+}
+
 /**
  * POST /upload (the picture as the body; headers x-filename, x-last-modified, x-acting-member) —
  * one photo from 📤 Add photos. Saved into the Inbox first, then filed straight away.
@@ -385,14 +395,16 @@ photosRouter.post(
     const hint = Number(req.get('x-last-modified')) || null;
     const by = String(req.get('x-acting-member') ?? '') || null;
     // 🎬 A video: .mov → .mp4 into <VIDEOS_DIR>/<YYYY>. Without ffmpeg it waits in the Inbox for it.
-    if (video && !(await haveFfmpeg())) {
-      await fsSync.promises.rename(tmp, path.join(inbox, name)).catch(() => {});
-      return res.status(503).json({ error: `${name}: saved in the Inbox — videos are filed once ffmpeg is installed on the Family Home Center` });
+    if (video && (!(await haveFfmpeg()) || !videosFolderReady())) {
+      await fsSync.promises.rename(tmp, path.join(inbox, await freeInboxName(inbox, name))).catch(() => {});
+      return res.status(503).json({
+        error: `${name}: saved in the Inbox — it's filed once ${!videosFolderReady() ? `the movies folder ${videosLocation()} is mounted on the Pi` : 'ffmpeg is installed on the Family Home Center'}`,
+      });
     }
     const r = video ? await fileVideoAndRecord(tmp, 'upload', by, hint, name) : await fileOne(tmp, 'upload', by, hint, name);
     if (r.result === 'error') {
       // Leave it in the Inbox under its own name — the sorter tries again.
-      await fsSync.promises.rename(tmp, path.join(inbox, name)).catch(() => {});
+      await fsSync.promises.rename(tmp, path.join(inbox, await freeInboxName(inbox, name))).catch(() => {});
       return res.status(500).json(r);
     }
     if (r.result === 'filed') photosChanged();
@@ -427,7 +439,9 @@ photosRouter.get(
       waiting,
       videos,
       other,
-      video_dir: videosDir(),
+      video_dir: videosLocation(),
+      video_dir_local: videosDir(),
+      video_dir_ok: fsSync.existsSync(videosDir()),
       ffmpeg: await haveFfmpeg(),
       recent: db.prepare('SELECT * FROM photo_filings ORDER BY at DESC LIMIT 30').all(),
       totals: db.prepare("SELECT result, COUNT(*) AS n FROM photo_filings GROUP BY result").all(),
@@ -447,7 +461,7 @@ photosRouter.patch('/inbox', (req, res) => {
   }
   if (typeof req.body?.video_dir === 'string') {
     const d = req.body.video_dir.trim();
-    if (d && !path.isAbsolute(d)) return res.status(400).json({ error: 'Use a full path, e.g. /share/media/movies/takk' });
+    if (d && !/^(\/|\\\\|smb:)/i.test(d)) return res.status(400).json({ error: 'Use the share location, e.g. /share/media/movies/takk' });
     setSetting('video_dest_dir', d);
   }
   res.json({ ok: true });

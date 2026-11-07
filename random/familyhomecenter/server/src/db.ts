@@ -1319,6 +1319,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_photo_filings_at ON photo_filings (at);
 `);
 
+// 🎬 Movies section (services/movieLibrary.ts): what ffprobe said about each video on the movies
+// share — length, picture size, when it was recorded — so it's read once, not on every visit.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS movie_library_info (
+    rel_path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    mtime_ms INTEGER NOT NULL,
+    duration REAL,
+    width INTEGER,
+    height INTEGER,
+    video_codec TEXT,
+    recorded_at TEXT,
+    probed_at TEXT NOT NULL,
+    error TEXT
+  );
+`);
+
 // 🔒 Knowledge base articles only parents can see (routes/knowledgeBase.ts). Existing articles stay
 // visible to everyone (0).
 try {

@@ -8,7 +8,7 @@ import { config } from '../config.js';
 import { db, getSetting } from '../db.js';
 import { photosChanged, skipFolderInLibrary } from './photos.js';
 import { folderDate } from './photoDates.js';
-import { fileVideo, haveFfmpeg, VIDEO_EXTS } from './videoFiling.js';
+import { fileVideo, haveFfmpeg, VIDEO_EXTS, videosFolderReady, videosLocation } from './videoFiling.js';
 
 /**
  * 📥 Filing new photos into the library as <YEAR>/<Month>/ — from the 📥 Inbox folder on the share
@@ -189,6 +189,7 @@ export async function sortInbox(by: string | null = null): Promise<{ filed: numb
       return files;
     };
     let ffmpeg: boolean | null = null;
+    let noFolder: boolean | null = null;
     for (const f of await walk(dir)) {
       const ext = path.extname(f).toLowerCase();
       const video = VIDEO_EXTS.has(ext);
@@ -198,7 +199,8 @@ export async function sortInbox(by: string | null = null): Promise<{ filed: numb
       }
       if (video) {
         ffmpeg ??= await haveFfmpeg();
-        if (!ffmpeg) {
+        noFolder ??= !videosFolderReady();
+        if (!ffmpeg || noFolder) {
           out.left++;
           continue;
         }
@@ -216,6 +218,7 @@ export async function sortInbox(by: string | null = null): Promise<{ filed: numb
       else out.errors++;
     }
     if (out.filed) photosChanged();
+    if (noFolder) console.warn(`[photos] 📥 Inbox: videos are waiting — the movies folder ${videosLocation()} isn't there (is the share mounted?).`);
     if (ffmpeg === false) console.warn('[photos] 📥 Inbox: videos are waiting but ffmpeg/ffprobe isn\'t installed (sudo apt install -y ffmpeg).');
     if (out.filed || out.videos || out.duplicates || out.errors)
       console.log(`[photos] 📥 Inbox: ${out.filed} photo(s) and ${out.videos} video(s) filed, ${out.duplicates} duplicate(s), ${out.errors} problem(s).`);

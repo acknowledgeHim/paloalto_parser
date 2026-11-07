@@ -98,6 +98,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
       label: '🎵 Fun',
       items: [
         { section: 'photos', label: '📷 Photos', path: '/photos' },
+        { section: 'movie-library', label: '🎬 Movies', path: '/movies' },
         { section: 'music', label: '🎵 Music', path: '/music' },
         { section: 'board', label: '🎞️ This week', path: '/recap' },
         { label: '⌨️ Typing', path: '/typing' },

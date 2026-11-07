@@ -21,6 +21,7 @@ import { SettingsPage } from './pages/SettingsPage.js';
 import { InternetPage } from './pages/InternetPage.js';
 import { PasswordsPage } from './pages/PasswordsPage.js';
 import { PhoneAppsPage } from './pages/PhoneAppsPage.js';
+import { MovieLibraryPage } from './pages/MovieLibraryPage.js';
 import { TypingPage } from './pages/TypingPage.js';
 import { PeoplePage } from './pages/PeoplePage.js';
 import { ApprovalsPage } from './pages/ApprovalsPage.js';
@@ -133,6 +134,7 @@ export function App() {
           <Route path="/person/:id" element={<SectionGate section="board"><PersonPage /></SectionGate>} />
           <Route path="/person/:id/bank" element={<SectionGate section="prizes"><BankPage /></SectionGate>} />
           <Route path="/music" element={<SectionGate section="music"><MusicPage /></SectionGate>} />
+          <Route path="/movies" element={<SectionGate section="movie-library"><MovieLibraryPage /></SectionGate>} />
           <Route path="/photos" element={<SectionGate section="photos"><PhotosPage /></SectionGate>} />
           <Route path="/photos/people" element={<SectionGate section="photos"><PeoplePage /></SectionGate>} />
           <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />
