@@ -45,6 +45,8 @@ g = Path("android/app/build.gradle.kts")
 s = g.read_text()
 if "SMBSYNC_KEYSTORE" not in s:
     s = must_sub(s, r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 24", "minSdk")
+    # permission_handler_android needs to be compiled against Android 37
+    s = must_sub(s, r"compileSdk\s*=\s*flutter\.compileSdkVersion", "compileSdk = 37", "compileSdk")
     signing = '''signingConfigs {
         create("release") {
             val ks = System.getenv("SMBSYNC_KEYSTORE")
@@ -65,6 +67,10 @@ if "SMBSYNC_KEYSTORE" not in s:
                  'signingConfigs.getByName("release") else signingConfigs.getByName("debug")',
                  "release signingConfig")
     g.write_text(s)
+    gp = Path("android/gradle.properties")
+    t = gp.read_text()
+    if "suppressUnsupportedCompileSdk" not in t:
+        gp.write_text(t.rstrip("\n") + "\nandroid.suppressUnsupportedCompileSdk=37\n")
 
 # ---------------- iOS Info.plist ----------------
 p = Path("ios/Runner/Info.plist")
@@ -83,52 +89,15 @@ d.update({
 })
 p.write_bytes(plistlib.dumps(d))
 
-# ---------------- iOS deployment target (file_picker needs 14) ----------------
+# ---------------- iOS deployment target (Flutter 3.47 wants 15) ----------------
 pod = Path("ios/Podfile")
-if not pod.exists():
-    # Same as the Podfile the Flutter tool writes on first build, but with the
-    # platform line set up front.
-    pod.write_text("""platform :ios, '14.0'
-ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-project 'Runner', { 'Debug' => :debug, 'Profile' => :release, 'Release' => :release }
-
-def flutter_root
-  generated = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
-  raise "#{generated} must exist. Run flutter pub get first" unless File.exist?(generated)
-  File.foreach(generated) do |line|
-    matches = line.match(/FLUTTER_ROOT\\=(.*)/)
-    return matches[1].strip if matches
-  end
-  raise "FLUTTER_ROOT not found in #{generated}"
-end
-
-require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
-flutter_ios_podfile_setup
-
-target 'Runner' do
-  use_frameworks!
-  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-  target 'RunnerTests' do
-    inherit! :search_paths
-  end
-end
-
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    flutter_additional_ios_build_settings(target)
-    target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
-    end
-  end
-end
-""")
-else:
+if pod.exists():  # only when some plugin still needs CocoaPods
     s = pod.read_text()
-    s = re.sub(r"^#?\s*platform :ios, '[0-9.]+'", "platform :ios, '14.0'", s, flags=re.M)
+    s = re.sub(r"^#?\s*platform :ios, '[0-9.]+'", "platform :ios, '15.0'", s, flags=re.M)
     pod.write_text(s)
 pbx = Path("ios/Runner.xcodeproj/project.pbxproj")
 s = pbx.read_text()
-s = re.sub(r"IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;", "IPHONEOS_DEPLOYMENT_TARGET = 14.0;", s)
+s = re.sub(r"IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;", "IPHONEOS_DEPLOYMENT_TARGET = 15.0;", s)
 pbx.write_text(s)
 print("setup_platforms: android/ and ios/ ready")
 PY
