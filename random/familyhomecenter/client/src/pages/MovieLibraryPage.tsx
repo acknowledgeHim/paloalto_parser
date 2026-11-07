@@ -94,11 +94,25 @@ const CODEC_TYPES: Record<string, string> = {
 let probeEl: HTMLVideoElement | null = null;
 function playsHere(m: LibraryMovie): boolean {
   if (!m.playable) return false;
-  if (!m.video_codec) return true;
+  // H.264 plays in every browser (some answer "no" to an exact profile string while playing it fine).
+  if (!m.video_codec || m.video_codec === 'h264') return true;
   const type = CODEC_TYPES[m.video_codec];
   if (!type) return false;
   probeEl ??= document.createElement('video');
   return probeEl.canPlayType(type) !== '';
+}
+
+/** What the browser said when a video didn't play. */
+function mediaProblem(v: HTMLVideoElement): string {
+  const e = v.error;
+  if (!e) return 'it stopped';
+  const why: Record<number, string> = {
+    1: 'loading was stopped',
+    2: "the Family Home Center couldn't send it (network / share problem)",
+    3: "the browser couldn't decode the picture or sound",
+    4: "the browser doesn't support this file (or the server couldn't open it)",
+  };
+  return `${why[e.code] ?? `error ${e.code}`}${e.message ? ` — ${e.message}` : ''}`;
 }
 
 export function MovieLibraryPage() {
@@ -283,7 +297,7 @@ export function MovieLibraryPage() {
         </>
       )}
 
-      {playing && <Player m={playing} startAt={resume[playing.id] ?? 0} onPlace={(t) => keepPlace(playing.id, t)} onClose={() => setPlaying(null)} />}
+      {playing && <Player key={playing.id} m={playing} startAt={resume[playing.id] ?? 0} onPlace={(t) => keepPlace(playing.id, t)} onClose={() => setPlaying(null)} />}
     </div>
   );
 }
@@ -308,7 +322,7 @@ function MovieCard({ m, at, onPlay }: { m: LibraryMovie; at?: number; onPlay: ()
 
 function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: number; onPlace: (t: number | null) => void; onClose: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const last = useRef(0);
   const src = `/api/movie-library/${m.id}/stream`;
   useEffect(() => {
@@ -331,8 +345,21 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
         </div>
         {failed || !playsHere(m) ? (
           <p className="settings-login__error">
-            This kind of video ({m.file.split('.').pop()?.toUpperCase()}{m.video_codec ? `, ${m.video_codec}` : ''}) doesn't play in this browser. Download it and open it in a video app (VLC
-            plays everything).
+            {failed ? (
+              <>
+                It didn't play: {failed} ({m.file.split('.').pop()?.toUpperCase()}
+                {m.video_codec ? `, ${m.video_codec}` : ''}).{' '}
+                <button type="button" className="secondary" onClick={() => setFailed(null)}>
+                  ↻ Try again
+                </button>
+              </>
+            ) : (
+              <>
+                This kind of video ({m.file.split('.').pop()?.toUpperCase()}
+                {m.video_codec ? `, ${m.video_codec}` : ''}) doesn't play in this browser.
+              </>
+            )}{' '}
+            Download it and open it in a video app (VLC plays everything).
           </p>
         ) : (
           <video
@@ -353,7 +380,7 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
             }}
             onPause={save}
             onEnded={() => onPlace(null)}
-            onError={() => setFailed(true)}
+            onError={(e) => setFailed(mediaProblem(e.currentTarget))}
           />
         )}
         <p className="hint">
