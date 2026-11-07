@@ -3049,6 +3049,24 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .modal-panel.movie-player { max-width: min(1100px, 100%); }
 .movie-player video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; margin: 10px 0; }
 .movie-player code { overflow-wrap: anywhere; }
+/* 🔄 A video shown turned (MovieLibraryPage Stage): the picture turns, the control bar stays upright. */
+.movie-player__actions { display: flex; gap: 6px; flex-shrink: 0; }
+.movie-player__turned { margin: 10px 0; }
+.movie-player__stage { position: relative; width: 100%; height: 70vh; background: #000; border-radius: 8px; overflow: hidden; cursor: pointer; }
+.movie-player__stage:fullscreen { height: 100%; border-radius: 0; }
+.movie-player__rot { position: absolute; top: 50%; left: 50%; }
+.movie-player__rot video { width: 100%; height: 100%; max-height: none; margin: 0; border-radius: 0; object-fit: contain; }
+.movie-player__bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.movie-player__bar input[type='range'] { flex: 1; min-width: 0; }
+.movie-player__bar button { min-height: 40px; padding: 4px 12px; }
+/* Poster of a turned video: the picture box is 16:9, so a quarter-turned picture swaps its sides. */
+.movie-card__poster img.movie-card__img--r180 { transform: rotate(180deg); }
+.movie-card__poster img.movie-card__img--r90,
+.movie-card__poster img.movie-card__img--r270 {
+  position: absolute; top: 50%; left: 50%; width: 56.25%; height: 177.78%;
+}
+.movie-card__poster img.movie-card__img--r90 { transform: translate(-50%, -50%) rotate(90deg); }
+.movie-card__poster img.movie-card__img--r270 { transform: translate(-50%, -50%) rotate(270deg); }
 
 /* 📅 Only taken between… (components/AddPhotos.tsx) */
 .add-photos__range { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 4px 0 12px; }

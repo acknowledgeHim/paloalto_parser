@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
@@ -25,6 +26,7 @@ interface LibraryMovie {
   video_codec: string | null;
   playable: boolean;
   original_rel: string | null;
+  rotation: number;
 }
 interface Library {
   dir: string;
@@ -297,7 +299,19 @@ export function MovieLibraryPage() {
         </>
       )}
 
-      {playing && <Player key={playing.id} m={playing} startAt={resume[playing.id] ?? 0} onPlace={(t) => keepPlace(playing.id, t)} onClose={() => setPlaying(null)} />}
+      {playing && (
+        <Player
+          key={playing.id}
+          m={playing}
+          startAt={resume[playing.id] ?? 0}
+          onPlace={(t) => keepPlace(playing.id, t)}
+          onClose={() => setPlaying(null)}
+          onRotated={(rotation) => {
+            setLib((l) => (l ? { ...l, movies: l.movies.map((x) => (x.id === playing.id ? { ...x, rotation } : x)) } : l));
+            setPlaying((p) => (p ? { ...p, rotation } : p));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -308,7 +322,17 @@ function MovieCard({ m, at, onPlay }: { m: LibraryMovie; at?: number; onPlay: ()
   return (
     <button type="button" className="movie-card" onClick={onPlay} title={m.rel_path}>
       <div className="movie-card__poster">
-        {poster ? <img src={`/api/movie-library/${m.id}/poster`} alt="" loading="lazy" onError={() => setPoster(false)} /> : <span>🎬</span>}
+        {poster ? (
+          <img
+            src={`/api/movie-library/${m.id}/poster`}
+            alt=""
+            loading="lazy"
+            className={m.rotation ? `movie-card__img--r${m.rotation}` : undefined}
+            onError={() => setPoster(false)}
+          />
+        ) : (
+          <span>🎬</span>
+        )}
         {m.duration != null && <span className="movie-card__len">{fmtLength(m.duration)}</span>}
         {at && m.duration ? <span className="movie-card__progress" style={{ width: `${Math.min(100, (at / m.duration) * 100)}%` }} /> : null}
       </div>
@@ -320,8 +344,27 @@ function MovieCard({ m, at, onPlay }: { m: LibraryMovie; at?: number; onPlay: ()
   );
 }
 
-function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: number; onPlace: (t: number | null) => void; onClose: () => void }) {
+function Player({
+  m,
+  startAt,
+  onPlace,
+  onClose,
+  onRotated,
+}: {
+  m: LibraryMovie;
+  startAt: number;
+  onPlace: (t: number | null) => void;
+  onClose: () => void;
+  onRotated: (degrees: number) => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [rotErr, setRotErr] = useState<string | null>(null);
+  const rotate = (by: number) => {
+    const degrees = (((m.rotation + by) % 360) + 360) % 360;
+    onRotated(degrees);
+    setRotErr(null);
+    api.put(`/movie-library/${m.id}/rotation`, { degrees }).catch((e) => setRotErr((e as Error).message));
+  };
   const [failed, setFailed] = useState<string | null>(null);
   const last = useRef(0);
   const src = `/api/movie-library/${m.id}/stream`;
@@ -341,8 +384,13 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
       <div className="modal-panel panel movie-player" onClick={(e) => e.stopPropagation()}>
         <div className="movie-library__head">
           <h2>{m.title}{m.year ? ` (${m.year})` : ''}</h2>
-          <button type="button" className="secondary" onClick={() => { save(); onClose(); }} aria-label="Close">✕</button>
+          <div className="movie-player__actions">
+            <button type="button" className="secondary" onClick={() => rotate(-90)} title="Turn left (for a video recorded sideways)" aria-label="Turn left">↺</button>
+            <button type="button" className="secondary" onClick={() => rotate(90)} title="Turn right (for a video recorded sideways)" aria-label="Turn right">↻</button>
+            <button type="button" className="secondary" onClick={() => { save(); onClose(); }} aria-label="Close">✕</button>
+          </div>
         </div>
+        {rotErr && <p className="settings-login__error">Couldn't save the turn: {rotErr}</p>}
         {failed || !playsHere(m) ? (
           <p className="settings-login__error">
             {failed ? (
@@ -362,10 +410,11 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
             Download it and open it in a video app (VLC plays everything).
           </p>
         ) : (
+          <Stage rotation={m.rotation} video={ref}>
           <video
             ref={ref}
             src={src}
-            controls
+            controls={!m.rotation}
             autoPlay
             playsInline
             preload="metadata"
@@ -382,10 +431,12 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
             onEnded={() => onPlace(null)}
             onError={(e) => setFailed(mediaProblem(e.currentTarget))}
           />
+          </Stage>
         )}
         <p className="hint">
           {[fmtLength(m.duration), quality(m), fmtSize(m.size), m.recorded_at ? `recorded ${new Date(m.recorded_at).toLocaleDateString()}` : null].filter(Boolean).join(' · ')}
           <br />
+          {m.rotation ? <>🔄 Shown turned {m.rotation === 180 ? 'upside down' : m.rotation === 90 ? 'right' : 'left'} — the file itself isn't changed.<br /></> : null}
           <code>{m.rel_path}</code> · <a href={`${src}?download=1`}>⬇ Download</a>
           {/\.(mov|qt)$/i.test(m.file) && <> · <a href={`/api/movie-library/${m.id}/mp4`}>⬇ Download as .mp4</a></>}
           {m.original_rel && <> · <a href={`${src}?original=1&download=1`}>⬇ Original ({m.original_rel.split('.').pop()?.toUpperCase()})</a></>}
@@ -395,3 +446,89 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
   );
 }
 
+
+const clock = (t: number) => {
+  if (!Number.isFinite(t)) return '0:00';
+  const h = Math.floor(t / 3600);
+  const mm = Math.floor((t % 3600) / 60);
+  const ss = String(Math.floor(t % 60)).padStart(2, '0');
+  return h ? `${h}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+};
+
+/**
+ * 🔄 A video shown turned (for one recorded sideways). The browser's own controls would turn with
+ * the picture, so a turned video gets a simple control bar of its own that stays upright, and
+ * full screen shows the whole (turned) stage. Not turned → the video as it is, with its own controls.
+ */
+function Stage({ rotation, video, children }: { rotation: number; video: React.RefObject<HTMLVideoElement>; children: React.ReactNode }) {
+  const stage = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const el = stage.current;
+    if (!el || !rotation) return;
+    const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rotation]);
+  useEffect(() => {
+    const v = video.current;
+    if (!v || !rotation) return;
+    const up = () => tick((n) => n + 1);
+    const evs = ['timeupdate', 'play', 'pause', 'volumechange', 'durationchange', 'loadedmetadata'];
+    evs.forEach((e) => v.addEventListener(e, up));
+    return () => evs.forEach((e) => v.removeEventListener(e, up));
+  }, [rotation, video]);
+  const side = rotation === 90 || rotation === 270;
+  const v = video.current;
+  // Always the same elements (only their look changes), so turning doesn't restart the video.
+  const style: React.CSSProperties | undefined = !rotation
+    ? undefined
+    : side
+      ? { width: box.h, height: box.w, transform: `translate(-50%, -50%) rotate(${rotation}deg)` }
+      : { width: box.w, height: box.h, transform: `translate(-50%, -50%) rotate(${rotation}deg)` };
+  const full = () => {
+    const el = stage.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else el.requestFullscreen?.().catch(() => {});
+  };
+  return (
+    <div className={rotation ? 'movie-player__turned' : undefined}>
+      <div
+        ref={stage}
+        className={rotation ? 'movie-player__stage' : undefined}
+        onClick={rotation ? () => (v?.paused ? void v.play() : v?.pause()) : undefined}
+        onDoubleClick={rotation ? full : undefined}
+      >
+        <div className={rotation ? 'movie-player__rot' : undefined} style={style}>
+          {children}
+        </div>
+      </div>
+      {!!rotation && <div className="movie-player__bar">
+        <button type="button" className="secondary" onClick={() => (v?.paused ? void v.play() : v?.pause())} aria-label={v?.paused ? 'Play' : 'Pause'}>
+          {v?.paused ?? true ? '▶' : '⏸'}
+        </button>
+        <span className="hint">{clock(v?.currentTime ?? 0)}</span>
+        <input
+          type="range"
+          min={0}
+          max={v?.duration || 0}
+          step={1}
+          value={v?.currentTime ?? 0}
+          onChange={(e) => v && (v.currentTime = Number(e.target.value))}
+          aria-label="Position"
+        />
+        <span className="hint">{clock(v?.duration ?? 0)}</span>
+        <button type="button" className="secondary" onClick={() => v && (v.muted = !v.muted)} aria-label={v?.muted ? 'Sound on' : 'Sound off'}>
+          {v?.muted ? '🔇' : '🔊'}
+        </button>
+        {document.fullscreenEnabled && (
+          <button type="button" className="secondary" onClick={full} aria-label="Full screen">
+            ⛶
+          </button>
+        )}
+      </div>}
+    </div>
+  );
+}

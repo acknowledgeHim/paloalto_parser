@@ -6,7 +6,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { folderProblem, resolveShare } from '../services/sharePaths.js';
 import { haveFfmpeg, MOV_EXTS, mp4Stream, videosLocation } from '../services/videoFiling.js';
-import { copyStatus, findMovie, libraryDir, libraryLocation, listLibrary, mp4CopiesOn, posterFor } from '../services/movieLibrary.js';
+import { copyStatus, findMovie, setRotation, libraryDir, libraryLocation, listLibrary, mp4CopiesOn, posterFor } from '../services/movieLibrary.js';
 
 // 🎬 Movies section — every video on the movies share, to search, sort and watch
 // (services/movieLibrary.ts). Read-only: nothing on the share is ever changed or removed.
@@ -65,6 +65,20 @@ movieLibraryRouter.patch('/settings', requireAdmin, (req, res) => {
   }
   res.json({ dir: libraryDir(), location: libraryLocation(), video_dir: videosLocation() });
 });
+
+/** PUT /:id/rotation { degrees } — show a sideways video the right way up (anyone; only how it's shown, the file isn't changed). */
+movieLibraryRouter.put(
+  '/:id/rotation',
+  asyncHandler(async (req, res) => {
+    const d = Number(req.body?.degrees);
+    if (![0, 90, 180, 270].includes(d)) return res.status(400).json({ error: 'degrees: 0, 90, 180 or 270' });
+    await listLibrary();
+    const by = typeof req.body?.acting_member_id === 'string' ? req.body.acting_member_id : null;
+    const m = setRotation(req.params.id, d, by);
+    if (!m) return res.status(404).json({ error: 'No such movie' });
+    res.json({ rotation: m.rotation });
+  })
+);
 
 movieLibraryRouter.get(
   '/:id/poster',

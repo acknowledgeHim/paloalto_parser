@@ -46,6 +46,8 @@ export interface LibraryMovie {
   playable: boolean;
   /** An .mp4 copy made from an .mpg: the original file next to it (kept as it was, downloadable). */
   original_rel: string | null;
+  /** Turned this much (0 / 90 / 180 / 270, clockwise) when shown — for videos recorded sideways. */
+  rotation: number;
 }
 
 interface Info {
@@ -137,6 +139,7 @@ async function scan(): Promise<void> {
       // .mkv/.avi etc. don't play in a browser; ✓ for the usual phone/web formats (HEVC only on Apple).
       playable: PLAYABLE_EXTS.has(ext),
       original_rel: null,
+      rotation: 0,
     };
   });
   // The same video in several formats in one folder ("Holiday.mpg" + its "Holiday.mp4" copy,
@@ -159,6 +162,7 @@ async function scan(): Promise<void> {
     best.original_rel = others.find((o) => !o.playable)?.rel_path ?? others[0]?.rel_path ?? null;
     shown.push(best);
   }
+  applyRotations(shown);
   cache = { at: Date.now(), dir, movies: shown, error: null };
   void probeMissing(dir, files);
   void makeMp4Copies(dir, files);
@@ -248,6 +252,23 @@ async function probeMissing(dir: string, files: Array<{ rel: string; size: numbe
   } finally {
     probing = false;
   }
+}
+
+function applyRotations(movies: LibraryMovie[]) {
+  const rot = new Map((db.prepare('SELECT rel_path, degrees FROM movie_rotation').all() as Array<{ rel_path: string; degrees: number }>).map((r) => [r.rel_path, r.degrees]));
+  for (const m of movies) m.rotation = rot.get(m.rel_path) ?? 0;
+}
+
+/** 🔄 Show a movie turned (0 / 90 / 180 / 270 clockwise). Only remembered here — the file isn't touched. */
+export function setRotation(id: string, degrees: number, by: string | null): LibraryMovie | null {
+  const m = cache?.movies.find((x) => x.id === id);
+  if (!m) return null;
+  db.prepare(
+    `INSERT INTO movie_rotation (rel_path, degrees, set_at, by_member) VALUES (?, ?, ?, ?)
+     ON CONFLICT(rel_path) DO UPDATE SET degrees = excluded.degrees, set_at = excluded.set_at, by_member = excluded.by_member`
+  ).run(m.rel_path, degrees, new Date().toISOString(), by);
+  m.rotation = degrees;
+  return m;
 }
 
 /** Put newly read lengths into the cached list without walking the share again. */

@@ -1336,6 +1336,17 @@ db.exec(`
   );
 `);
 
+// 🔄 Movies turned the right way up (routes/movieLibrary.ts): only how the browser shows them —
+// the video files on the share are never changed. New table; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS movie_rotation (
+    rel_path TEXT PRIMARY KEY,
+    degrees INTEGER NOT NULL,
+    set_at TEXT NOT NULL,
+    by_member TEXT
+  );
+`);
+
 // 🔒 Knowledge base articles only parents can see (routes/knowledgeBase.ts). Existing articles stay
 // visible to everyone (0).
 try {

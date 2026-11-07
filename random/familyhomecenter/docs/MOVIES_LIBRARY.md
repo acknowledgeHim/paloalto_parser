@@ -123,3 +123,15 @@ python3 scripts/dvd_to_mp4.py /media/pi/MY_DVD --all --name "Wedding 2003" -o /m
 - Write it into the movies folder and it shows up in 🎬 Movies.
 - `--crf` (quality, default 20) and `--preset` (speed, default veryfast). On a Pi it takes roughly
   as long as the video. It's quicker on a PC (the script runs anywhere ffmpeg does).
+
+## 🔄 Sideways videos
+
+In the player, **↺ / ↻** turns a video recorded sideways (or upside down) the right way up. It's
+saved for everyone, and the poster in the list turns too.
+
+- **The file isn't changed.** Only how 🎬 Movies shows it is remembered, in the new
+  `movie_rotation` table (no existing data changes). Downloads are the file as it is.
+- A turned video gets its own control bar (▶/⏸, position, sound, ⛶ full screen), because the
+  browser's own controls would turn sideways with the picture. Tap the picture to pause; double-tap
+  for full screen.
+- Turn it back to upright (↺/↻ round to 0°) for the browser's own controls again.
