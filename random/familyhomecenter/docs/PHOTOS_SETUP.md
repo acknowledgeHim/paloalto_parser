@@ -389,6 +389,10 @@ On an iPhone, the browser usually turns HEIC photos into JPG as it sends them. A
 arrives as HEIC is filed, but the Pi can't show HEIC in Photos. Setting the iPhone to
 **Settings → Camera → Formats → Most Compatible** avoids that.
 
+**📅 Only some dates?** In 📤 Add photos, tick *Only add ones taken between…*, pick the days,
+then pick a big batch: only those taken on those days are sent. For an iPhone Shortcut that sends a
+date range without picking, see docs/IPHONE_UPLOAD.md.
+
 ### 📥 The Inbox (automatic, with a sync app on the phone)
 
 The Inbox is `<PHOTOS_DIR>/Inbox`. You can change it in **Settings → 📁 Photo library → 📥 Inbox**.

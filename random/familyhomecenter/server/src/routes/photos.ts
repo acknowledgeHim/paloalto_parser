@@ -9,10 +9,11 @@ import { getPhotoQuality } from '../services/photoAnalysis.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import fsSync from 'node:fs';
 import { gzipSync } from 'node:zlib';
-import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { autoSortOn, canWrite, fileOne, fileVideoAndRecord, inboxDir, PICTURE_EXTS, registerInbox, sortInbox } from '../services/photoFiling.js';
-import { haveFfmpeg, VIDEO_EXTS, videosDir, videosFolderReady, videosLocation } from '../services/videoFiling.js';
+import { autoSortOn, canWrite, fileOne, fileVideoAndRecord, inboxDir, PICTURE_EXTS, registerInbox, sortInbox, takenDate } from '../services/photoFiling.js';
+import { fixName, sniffExt } from '../services/fileSniff.js';
+import { pipeline } from 'node:stream/promises';
+import { haveFfmpeg, VIDEO_EXTS, videoRecordedDate, videosDir, videosFolderReady, videosLocation } from '../services/videoFiling.js';
 import { photosChanged } from '../services/photos.js';
 import { getSetting, setSetting } from '../db.js';
 import { isParentRequest } from '../services/rewards.js';
@@ -371,30 +372,72 @@ async function freeInboxName(dir: string, name: string): Promise<string> {
   }
 }
 
+/** "2025-08-14" → that day's start (or end) on the Pi's clock; anything else → null. */
+function dayEdge(v: unknown, end: boolean): Date | null {
+  const m = String(v ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return end ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999) : new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
 /**
- * POST /upload (the picture as the body; headers x-filename, x-last-modified, x-acting-member) —
- * one photo from 📤 Add photos. Saved into the Inbox first, then filed straight away.
+ * POST /upload — one photo or video from 📤 Add photos or an iPhone Shortcut (docs/IPHONE_UPLOAD.md).
+ * Body: the file itself. Headers: x-filename (the extension is fixed from the file's first bytes if
+ * missing or wrong), x-last-modified (ms) or x-taken (any date, e.g. ISO 8601) as a fallback date,
+ * x-acting-member, and optionally x-only-from / x-only-to (YYYY-MM-DD): a file taken outside those
+ * days is not added (result "skipped" — the uploaded copy is thrown away; nothing in the library or
+ * on the phone is touched). Written straight to the Inbox as a hidden file, then filed.
  */
 photosRouter.post(
   '/upload',
-  express.raw({ type: () => true, limit: '300mb' }),
   asyncHandler(async (req, res) => {
-    const name = path.basename(decodeURIComponent(String(req.get('x-filename') ?? ''))).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 200) || 'photo.jpg';
-    const video = VIDEO_EXTS.has(path.extname(name).toLowerCase());
-    if (!PICTURE_EXTS.has(path.extname(name).toLowerCase()) && !video)
-      return res.status(400).json({ error: `${name}: only pictures (JPG, PNG, HEIC, WebP, GIF) and videos (MOV, MP4)` });
-    const body = req.body as Buffer;
-    if (!Buffer.isBuffer(body) || body.length < 100) return res.status(400).json({ error: `${name}: empty file` });
+    let name = path.basename(decodeURIComponent(String(req.get('x-filename') ?? ''))).replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 200) || 'photo';
+    // A form or JSON body was already read by the app's body parsers — the file must be the body itself.
+    if ((req as { _body?: boolean })._body) return res.status(400).json({ error: 'Send the file itself as the body (in a Shortcut: Request Body → File)' });
+    if (Number(req.get('content-length')) > 20 * 1024 ** 3) return res.status(413).json({ error: `${name}: over 20 GB` });
     if (!(await canWrite())) return res.status(503).json({ error: "The Family Home Center can't write to the photos folder (check the share allows writing)" });
     const inbox = inboxDir();
     await fsSync.promises.mkdir(inbox, { recursive: true });
     registerInbox();
-    // A dot name while it's written, so the Inbox sorter leaves it alone.
-    const tmp = path.join(inbox, `.upload-${uuidv4()}${path.extname(name).toLowerCase()}`);
-    await fsSync.promises.writeFile(tmp, body);
-    const hint = Number(req.get('x-last-modified')) || null;
+    // A dot name while it's written, so the Inbox sorter leaves it alone. Streamed, not held in
+    // memory, so a long 4K video doesn't fill up the Pi.
+    const tmp = path.join(inbox, `.upload-${uuidv4()}`);
+    try {
+      await pipeline(req, fsSync.createWriteStream(tmp, { flags: 'wx' }));
+    } catch (err) {
+      await fsSync.promises.unlink(tmp).catch(() => {});
+      return res.status(400).json({ error: `${name}: the upload didn't finish (${(err as Error).message})` });
+    }
+    const drop = () => fsSync.promises.unlink(tmp).catch(() => {}); // only ever our own upload copy
+    if ((await fsSync.promises.stat(tmp)).size < 100) {
+      await drop();
+      return res.status(400).json({ error: `${name}: empty file` });
+    }
+    name = fixName(name, await sniffExt(tmp).catch(() => null));
+    const ext = path.extname(name).toLowerCase();
+    const video = VIDEO_EXTS.has(ext);
+    if (!PICTURE_EXTS.has(ext) && !video) {
+      await drop();
+      return res.status(400).json({ error: `${name}: only pictures (JPG, PNG, HEIC, WebP, GIF) and videos (MOV, MP4)` });
+    }
+    const hint = Number(req.get('x-last-modified')) || Date.parse(String(req.get('x-taken') ?? '')) || null;
     const by = String(req.get('x-acting-member') ?? '') || null;
-    // 🎬 A video: .mov → .mp4 into <VIDEOS_DIR>/<YYYY>. Without ffmpeg it waits in the Inbox for it.
+
+    // 📅 Only between these days? Checked with the same date the file would be filed by.
+    const from = dayEdge(req.get('x-only-from'), false);
+    const to = dayEdge(req.get('x-only-to'), true);
+    if (from || to) {
+      try {
+        const when = video ? (await haveFfmpeg() ? await videoRecordedDate(tmp, hint) : null) : (await takenDate(tmp, hint)).date;
+        if (when && ((from && when < from) || (to && when > to))) {
+          await drop();
+          return res.json({ name, result: 'skipped', dest: null, taken_at: when.toISOString(), date_from: null, note: 'Taken outside the dates picked' });
+        }
+      } catch {
+        /* can't tell — file it */
+      }
+    }
+
+    // 🎬 A video: .mov → .mp4 into <VIDEOS_DIR>/<YYYY>. Without ffmpeg (or the share) it waits in the Inbox.
     if (video && (!(await haveFfmpeg()) || !videosFolderReady())) {
       await fsSync.promises.rename(tmp, path.join(inbox, await freeInboxName(inbox, name))).catch(() => {});
       return res.status(503).json({

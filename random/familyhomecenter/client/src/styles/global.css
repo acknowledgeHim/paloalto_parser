@@ -3050,3 +3050,13 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .movie-player video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; margin: 10px 0; }
 .movie-player code { overflow-wrap: anywhere; }
 .movie-library__setting { margin-top: 24px; }
+
+/* 📅 Only taken between… (components/AddPhotos.tsx) */
+.add-photos__range { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 4px 0 12px; }
+.add-photos__range label { display: flex; gap: 6px; align-items: center; }
+.add-photos__presets { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.add-photos__presets button { min-height: 40px; padding: 4px 12px; }
+.add-photos__shortcut { margin-top: 12px; }
+.add-photos__shortcut ol { padding-left: 1.3em; }
+.add-photos__shortcut li { margin: 6px 0; }
+.add-photos__shortcut code { overflow-wrap: anywhere; }

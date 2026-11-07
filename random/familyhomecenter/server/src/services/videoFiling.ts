@@ -165,6 +165,11 @@ async function convert(from: string, part: string, p: Probe): Promise<'copied' |
   throw last ?? new Error('ffmpeg could not convert it');
 }
 
+/** When a video was recorded (for 📤 Add photos' "only between these dates"). */
+export async function videoRecordedDate(file: string, hint?: number | null): Promise<Date> {
+  return (await recordedDate(file, await probe(file), hint)).date;
+}
+
 export interface VideoFiling {
   name: string;
   result: 'filed' | 'duplicate' | 'error';

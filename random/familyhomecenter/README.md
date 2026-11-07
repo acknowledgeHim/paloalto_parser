@@ -170,6 +170,7 @@ Optional integrations, each with its own guide:
 - [docs/MUSIC_SETUP.md](docs/MUSIC_SETUP.md) (HiFiBerry DAC8x, ALSA zone mapping, MPD + librespot)
 - [docs/LETSENCRYPT_SETUP.md](docs/LETSENCRYPT_SETUP.md) (free trusted HTTPS that renews itself — no certificate warnings)
 - [docs/PASSWORDS_SETUP.md](docs/PASSWORDS_SETUP.md) (🔑 a private password manager for each person — Vaultwarden on the Pi)
+- [docs/IPHONE_UPLOAD.md](docs/IPHONE_UPLOAD.md) (📲 iPhone: upload photos/videos by date — 📤 Add photos' date filter, or a Shortcut)
 - [docs/MOVIES_LIBRARY.md](docs/MOVIES_LIBRARY.md) (🎬 Movies — search, sort and watch everything on the movies share; mounting it)
 - [docs/PHONE_APPS.md](docs/PHONE_APPS.md) (📲 install the family's own phone apps — 📱 SMB Sync — from the Pi)
 - [docs/TYPING.md](docs/TYPING.md) (⌨️ typing lessons and games with stars — plus free desktop typing apps for the Pi)
