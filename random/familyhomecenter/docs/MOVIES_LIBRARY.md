@@ -66,15 +66,31 @@ as that user: `sudo -u pi ls /mnt/movies`. If that fails, the cifs mount needs
 `uid=pi,gid=pi` (or `dir_mode=0755,file_mode=0644`) in its `/etc/fstab` options, then
 `sudo umount /mnt/movies && sudo mount -a`.
 
-## .mov → .mp4 keeps the metadata
+## Which videos play in the browser
 
-The conversion copies every file-level tag (recorded date, GPS location, camera make/model/software,
-the `com.apple.quicktime.*` keys), per-stream tags, chapters, rotation, and all video and sound
-tracks. It also keeps the iPhone's data tracks (timed location, Live Photo link) when the `.mp4` can
-hold them. Afterwards the `.mp4`'s tags are compared with the `.mov`'s, and anything that didn't
-make it is named in the filing log. The original `.mov` is always kept in `Inbox/Converted`.
+- **.mp4 / .mov with H.264 video** play everywhere.
+- **.mp4 / .mov with HEVC video** (iPhones by default) play in Safari, and in Chrome / Edge on Mac
+  and Windows when the computer's hardware can decode HEVC. They usually **don't** play in
+  Chromium on the Pi or in Firefox on Linux. Download them and use VLC, or set the iPhones to
+  **Settings → Camera → Formats → Most Compatible** (H.264).
+- A `.mov` is sent to the browser as `video/mp4`, so Firefox and Chrome try it too.
+- **⬇ Download as .mp4** (for a `.mov`): made while it downloads. The picture and sound are copied
+  (only sound an `.mp4` can't hold is redone as AAC), with all the metadata: recorded date,
+  location, camera, `com.apple.quicktime.*` tags, chapters and rotation. Nothing is saved on the
+  Pi or the share.
 
-## 3. ffmpeg
+## 🎞️ .mp4 copies of .mpg
 
-Posters, lengths and the `.mov` → `.mp4` conversion need ffmpeg: `sudo apt install -y ffmpeg`
-(docs/MOVIES_SETUP.md). Without it the list still works, just without posters and lengths.
+`.mpg` / `.mpeg` (MPEG-2, from old camcorders and DVDs) doesn't play in browsers. So the Family Home
+Center makes an `.mp4` copy next to each one: `Holiday 2004.mpg` → `Holiday 2004.mp4`.
+
+- **Additive only.** The `.mpg` is never changed, moved or deleted, and a file that's already
+  called `Name.mp4` is never replaced. The copy is written as a hidden `.part` file and renamed
+  only when it's complete.
+- It's re-encoded to H.264 + AAC, interlaced video is smoothed, and tags and chapters are carried
+  over. The new file gets the original's file date, so "Recently added" doesn't change.
+- 🎬 Movies lists it once: the `.mp4` plays, and **⬇ Original (MPG)** downloads the `.mpg`.
+- One at a time, in the background, at low priority. On a Pi it takes about as long as the video.
+  Progress, and anything that couldn't be copied, is shown in **Settings → 🎬 Movies**. You can
+  switch it off there.
+- The share has to be writable for the server's user. If it's read-only, Settings says so.

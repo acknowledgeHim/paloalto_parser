@@ -8,7 +8,16 @@ interface Folder {
   via: string | null;
   problem: string | null;
 }
+interface Copies {
+  on: boolean;
+  running: string | null;
+  percent: number | null;
+  waiting: number;
+  made: number;
+  failed: Array<{ file: string; error: string }>;
+}
 interface Info {
+  mp4_copies: Copies;
   library: Folder;
   videos: Folder;
   ffmpeg: boolean;
@@ -41,7 +50,7 @@ export function MovieSettings() {
     void load();
   }, []);
 
-  const save = async (body: Record<string, string>) => {
+  const save = async (body: Record<string, string | boolean>) => {
     setBusy(true);
     setError(null);
     setMsg(null);
@@ -94,11 +103,51 @@ export function MovieSettings() {
           </label>
           {status(info.library)}
 
+          <h3>🎞️ .mp4 copies of .mpg videos</h3>
+          <label className="privacy-toggle">
+            <input type="checkbox" checked={info.mp4_copies.on} disabled={busy} onChange={(e) => void save({ mp4_copies: e.target.checked })} />
+            <span>
+              <strong>Make an .mp4 copy of each .mpg</strong>
+              <span className="hint">
+                {' '}
+                — so old camcorder / DVD videos play in the browser. The copy goes next to the original (<code>Name.mpg</code> → <code>Name.mp4</code>), which
+                is kept exactly as it is and can still be downloaded. A file that's already called <code>Name.mp4</code> is never replaced. One at a time, in
+                the background (slow on a Pi — about as long as the video).
+              </span>
+            </span>
+          </label>
+          {info.mp4_copies.on && (
+            <p className="hint">
+              {info.mp4_copies.running ? (
+                <>
+                  ⏳ Copying <code>{info.mp4_copies.running}</code>
+                  {info.mp4_copies.percent != null ? ` — ${info.mp4_copies.percent}%` : ''}
+                  {info.mp4_copies.waiting > 1 ? ` · ${info.mp4_copies.waiting - 1} more waiting` : ''}
+                </>
+              ) : (
+                'Nothing waiting to be copied.'
+              )}
+              {info.mp4_copies.made ? ` · ${info.mp4_copies.made} made since the server started` : ''}
+            </p>
+          )}
+          {info.mp4_copies.failed.length > 0 && (
+            <details>
+              <summary className="settings-login__error">⚠️ {info.mp4_copies.failed.length} couldn't be copied</summary>
+              <ul>
+                {info.mp4_copies.failed.map((f) => (
+                  <li key={f.file}>
+                    <code>{f.file}</code> — {f.error}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
           <h3>📥 Home videos from the Inbox</h3>
           <p className="hint">
-            Videos from the 📥 Inbox and 📤 Add photos go here, in a folder for the year they were recorded (<code>2025</code>). A <code>.mov</code> is turned
-            into an <code>.mp4</code> with all its metadata (date, location, camera) — the original is kept in <code>Inbox/Converted</code>; an{' '}
-            <code>.mp4</code> is moved as it is. Put it inside the movies folder above so they show up in 🎬 Movies too.
+            Videos from the 📥 Inbox and 📤 Add photos go here, in a folder for the year they were recorded (<code>2025</code>). Every video is moved as it is
+            (the same file, so date, location and camera details all stay). A <code>.mov</code> plays in the browser as it is, and 🎬 Movies can also
+            download it as an <code>.mp4</code>. Put it inside the movies folder above so they show up in 🎬 Movies too.
           </p>
           <label className="camera-storage__inline">
             Home videos folder

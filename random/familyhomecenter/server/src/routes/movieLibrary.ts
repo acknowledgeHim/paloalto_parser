@@ -5,8 +5,8 @@ import { setSetting } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { folderProblem, resolveShare } from '../services/sharePaths.js';
-import { haveFfmpeg, videosLocation } from '../services/videoFiling.js';
-import { findMovie, libraryDir, libraryLocation, listLibrary, posterFor } from '../services/movieLibrary.js';
+import { haveFfmpeg, MOV_EXTS, mp4Stream, videosLocation } from '../services/videoFiling.js';
+import { copyStatus, findMovie, libraryDir, libraryLocation, listLibrary, mp4CopiesOn, posterFor } from '../services/movieLibrary.js';
 
 // 🎬 Movies section — every video on the movies share, to search, sort and watch
 // (services/movieLibrary.ts). Read-only: nothing on the share is ever changed or removed.
@@ -42,6 +42,7 @@ movieLibraryRouter.get(
       videos: { location: videosLocation(), local: vids.local, via: vids.via, problem: vidProblem },
       ffmpeg,
       server_user: user,
+      mp4_copies: { on: mp4CopiesOn(), ...copyStatus },
     });
   })
 );
@@ -58,6 +59,10 @@ movieLibraryRouter.patch('/settings', requireAdmin, (req, res) => {
     if (d && !shareLoc(d)) return res.status(400).json({ error: 'Use the share location, e.g. /share/media/movies/takk' });
     setSetting('video_dest_dir', d);
   }
+  if (typeof req.body?.mp4_copies === 'boolean') {
+    setSetting('movie_mp4_copies', req.body.mp4_copies ? '' : 'off');
+    if (req.body.mp4_copies) void listLibrary(true).catch(() => {}); // start on what's there now
+  }
   res.json({ dir: libraryDir(), location: libraryLocation(), video_dir: videosLocation() });
 });
 
@@ -71,15 +76,48 @@ movieLibraryRouter.get(
   })
 );
 
-/** The video itself, with Range support so it can be skipped through (sendFile handles Range). */
+/**
+ * The video itself, with Range support so it can be skipped through (sendFile handles Range).
+ * ?original=1 — the .mpg an .mp4 copy was made from. ?download=1 — as a download.
+ */
 movieLibraryRouter.get(
   '/:id/stream',
   asyncHandler(async (req, res) => {
     const found = await findMovie(req.params.id);
     if (!found) return res.status(404).end();
-    const type = TYPES[path.extname(found.abs).toLowerCase()];
+    let abs = found.abs;
+    let file = found.movie.file;
+    if (req.query.original === '1') {
+      if (!found.movie.original_rel) return res.status(404).end();
+      abs = path.resolve(libraryDir(), found.movie.original_rel);
+      if (!abs.startsWith(path.resolve(libraryDir()) + path.sep)) return res.status(404).end();
+      file = path.basename(abs);
+    }
+    const ext = path.extname(abs).toLowerCase();
+    const download = req.query.download === '1';
+    // A .mov is an MP4-style file: saying so lets Firefox / Chrome try it (they refuse video/quicktime).
+    const type = !download && MOV_EXTS.has(ext) ? 'video/mp4' : TYPES[ext];
     if (type) res.type(type);
-    if (req.query.download === '1') res.attachment(found.movie.file);
-    res.sendFile(found.abs, { dotfiles: 'allow', acceptRanges: true });
+    if (download) res.attachment(file);
+    res.sendFile(abs, { dotfiles: 'allow', acceptRanges: true });
+  })
+);
+
+/** A .mov downloaded as an .mp4 — made while it downloads, same picture and sound, all the metadata (services/videoFiling.ts). */
+movieLibraryRouter.get(
+  '/:id/mp4',
+  asyncHandler(async (req, res) => {
+    const found = await findMovie(req.params.id);
+    if (!found) return res.status(404).end();
+    if (!MOV_EXTS.has(path.extname(found.abs).toLowerCase())) return res.redirect(`/api/movie-library/${req.params.id}/stream?download=1`);
+    if (!(await haveFfmpeg())) return res.status(503).json({ error: 'ffmpeg is needed to make an .mp4 — sudo apt install -y ffmpeg' });
+    res.type('video/mp4');
+    res.attachment(`${path.basename(found.movie.file, path.extname(found.movie.file))}.mp4`);
+    const stop = await mp4Stream(found.abs, res, (e) => {
+      console.warn('[movies] .mp4 download failed:', e.message);
+      if (!res.headersSent) res.status(500).json({ error: e.message });
+      else res.destroy();
+    });
+    res.on('close', stop); // the download was stopped (or finished)
   })
 );

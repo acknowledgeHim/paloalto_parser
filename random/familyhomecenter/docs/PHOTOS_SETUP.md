@@ -420,24 +420,24 @@ uploads the camera roll to the **Inbox** folder on the share over SMB:
   3. Set it to send JPG (or turn on its HEIC → JPG conversion).
 - Several phones can all upload into the same Inbox. Name clashes and duplicates are handled.
 
-### 🎬 Videos in the Inbox (.mov → .mp4)
+### 🎬 Videos in the Inbox
 
-Videos dropped into the Inbox (or picked in 📤 Add photos) go to the **movies folder**,
+Videos dropped into the Inbox (or picked in 📤 Add photos) go to the **home videos folder**,
 `/share/media/movies/takk/<YYYY>/` by default, in a folder for the year they were recorded.
 It's written as the location on the SMB share. The Pi finds it through the mounted share (see
 docs/MOVIES_LIBRARY.md). You can change it with `VIDEOS_DIR=` in `.env` or in
 **Settings → 🎬 Movies → Home videos folder**. If that share isn't mounted, videos wait in the Inbox.
 
-- A `.mov` is turned into an `.mp4`. Usually ffmpeg just copies the video and sound into the new
-  file, so it's quick and loses nothing. If they don't fit in an `.mp4`, the sound (or both) is
-  re-encoded. HEVC iPhone video is tagged so Apple devices and TVs play it.
-- The original `.mov` is **kept**: it's moved to `Inbox/Converted/`. Nothing is deleted.
-- An `.mp4` / `.m4v` is moved as it is.
+- Every video (`.mov`, `.mp4`, `.m4v`) is moved **as it is**. It's the same file, so all its
+  metadata stays. A `.mov` plays in the browser as it is. 🎬 Movies can also download it as an
+  `.mp4`, made while it downloads.
+- (Before this change, a `.mov` was converted, and its original kept in `Inbox/Converted/`. Those
+  stay where they are.)
 - The date comes from the video itself (an iPhone's recorded date, in its own time zone), then a
   YEAR folder it came in, then the phone's date, then the file's date.
-- The same video already in that year folder (same name and length) goes to `Inbox/Duplicates/`.
-- The `.mp4` is written as a hidden `.part` file and renamed only once it's complete.
-- Needs ffmpeg (`sudo apt install -y ffmpeg`). Without it, videos wait in the Inbox.
+- The same video already in that year folder (the same file, or an `.mp4` made from it earlier with
+  the same name and length) goes to `Inbox/Duplicates/`.
+- Needs ffmpeg (`sudo apt install -y ffmpeg`) to read the recorded date. Without it, videos wait in the Inbox.
 - The movies folder must be writable by the Family Home Center (same `uid=`/`gid=` mount options).
 
 ## 📅 Which date a photo gets

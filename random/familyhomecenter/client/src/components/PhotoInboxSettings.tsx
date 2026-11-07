@@ -81,8 +81,7 @@ export function PhotoInboxSettings() {
       </p>
       <p className="hint">
         🎬 Videos go to the home videos folder (<code>{inbox.video_dir}</code> — set under 🎬 Movies below), in a folder for the year they were recorded
-        (<code>2025</code>). A <code>.mov</code> is turned into an <code>.mp4</code> with all its metadata (the original is kept in{' '}
-        <code>Inbox/Converted</code>); an <code>.mp4</code> is moved as it is.
+        (<code>2025</code>), as they are — the same file, with all its metadata.
       </p>
       {!inbox.writable && (
         <div className="settings-login__error">

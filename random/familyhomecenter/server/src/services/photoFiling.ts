@@ -162,7 +162,7 @@ export async function fileOne(file: string, source: 'inbox' | 'upload', by: stri
   return r;
 }
 
-/** 🎬 A video: .mov → .mp4, into <VIDEOS_DIR>/<YYYY> (services/videoFiling.ts), written to photo_filings too. */
+/** 🎬 A video, as it is, into <VIDEOS_DIR>/<YYYY> (services/videoFiling.ts), written to photo_filings too. */
 export async function fileVideoAndRecord(file: string, source: 'inbox' | 'upload', by: string | null = null, dateHint?: number | null, name = path.basename(file)): Promise<FilingResult> {
   const r = await fileVideo(file, inboxDir(), dateHint, name);
   record(r, source, by);

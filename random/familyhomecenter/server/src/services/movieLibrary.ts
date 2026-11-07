@@ -9,8 +9,8 @@ import { db, getSetting } from '../db.js';
 /**
  * 🎬 The Movies section: every video on the movies share (<MOVIE_LIBRARY_DIR>, by default
  * /share/media/movies — so takk/2025/… from the 📥 Inbox shows up too), to search, sort and watch.
- *  - Read-only: files are only ever read (listed, probed, streamed). Nothing on the share is
- *    renamed, changed or deleted.
+ *  - Nothing on the share is ever renamed, changed or deleted. The only thing ever written there
+ *    is a new .mp4 copy next to an .mpg (makeMp4Copies, below — never over an existing file).
  *  - The list is re-read every 10 minutes (and on 🔄). Length / size of picture come from ffprobe
  *    once per file and are kept in movie_library_info (keyed by path + size + date, so a replaced
  *    file is read again). Poster frames are made on demand into server/data/movie-posters.
@@ -44,6 +44,8 @@ export interface LibraryMovie {
   height: number | null;
   video_codec: string | null;
   playable: boolean;
+  /** An .mp4 copy made from an .mpg: the original file next to it (kept as it was, downloadable). */
+  original_rel: string | null;
 }
 
 interface Info {
@@ -134,10 +136,21 @@ async function scan(): Promise<void> {
       video_codec: fresh?.video_codec ?? null,
       // .mkv/.avi etc. don't play in a browser; ✓ for the usual phone/web formats (HEVC only on Apple).
       playable: PLAYABLE_EXTS.has(ext),
+      original_rel: null,
     };
   });
-  cache = { at: Date.now(), dir, movies, error: null };
+  // An .mpg with its .mp4 copy next to it is listed once: the .mp4 (plays in the browser), with the original to download.
+  const byRel = new Map(movies.map((m) => [m.rel_path.toLowerCase(), m]));
+  const shown = movies.filter((m) => {
+    if (!COPY_EXTS.has(path.extname(m.rel_path).toLowerCase())) return true;
+    const copy = byRel.get(mp4Of(m.rel_path).toLowerCase());
+    if (!copy) return true;
+    copy.original_rel = m.rel_path;
+    return false;
+  });
+  cache = { at: Date.now(), dir, movies: shown, error: null };
   void probeMissing(dir, files);
+  void makeMp4Copies(dir, files);
 }
 
 /** The library (re-read when older than 10 minutes, or the folder changed). */
@@ -284,6 +297,93 @@ export async function posterFor(id: string): Promise<string | null> {
     );
   }
   return posterJobs.get(id)!;
+}
+
+/**
+ * 🎞️ .mpg → .mp4 copies, so old camcorder / DVD videos play in the browser. Additive only: the
+ * .mpg is never changed, moved or deleted; the copy goes next to it as "<name>.mp4" — only if no
+ * file of that name is there (never overwritten). Written as a hidden .part file and renamed when
+ * ffmpeg is done, so a half-made copy never shows. One at a time, at low priority, in the
+ * background. MPEG-2 has to be re-encoded (H.264 + AAC), interlaced pictures are made smooth, and
+ * the metadata (tags, chapters) is carried over. Off with Settings → 🎬 Movies.
+ */
+export const COPY_EXTS = new Set(['.mpg', '.mpeg']);
+const mp4Of = (rel: string) => rel.slice(0, rel.length - path.extname(rel).length) + '.mp4';
+export const mp4CopiesOn = () => getSetting('movie_mp4_copies') !== 'off';
+
+export const copyStatus: { running: string | null; percent: number | null; waiting: number; made: number; failed: Array<{ file: string; error: string }> } = {
+  running: null,
+  percent: null,
+  waiting: 0,
+  made: 0,
+  failed: [],
+};
+const copyFailed = new Map<string, string>(); // rel → why (tried again after a restart)
+let copying = false;
+
+async function makeMp4Copies(dir: string, files: Array<{ rel: string; size: number; mtimeMs: number }>) {
+  if (copying || !mp4CopiesOn()) return;
+  copying = true;
+  try {
+    const have = new Set(files.map((f) => f.rel.toLowerCase()));
+    const todo = files.filter((f) => COPY_EXTS.has(path.extname(f.rel).toLowerCase()) && !have.has(mp4Of(f.rel).toLowerCase()) && !copyFailed.has(f.rel));
+    copyStatus.waiting = todo.length;
+    for (const f of todo) {
+      if (!mp4CopiesOn()) break;
+      const src = path.join(dir, f.rel);
+      const target = path.join(dir, mp4Of(f.rel));
+      const part = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.part`);
+      copyStatus.running = f.rel;
+      copyStatus.percent = null;
+      try {
+        if (fsSync.existsSync(target)) continue; // something by that name is already there — leave it be
+        await fs.access(path.dirname(target), fsSync.constants.W_OK).catch(() => {
+          throw new Error("the folder can't be written to by the Family Home Center (read-only share?)");
+        });
+        const dur = (db.prepare('SELECT duration FROM movie_library_info WHERE rel_path = ?').get(f.rel) as { duration: number | null } | undefined)?.duration ?? null;
+        const args = [
+          '-nostdin', '-y', '-v', 'error', '-progress', 'pipe:1', '-i', src,
+          '-map', '0:v:0', '-map', '0:a?',
+          '-vf', 'yadif=deint=interlaced',
+          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+          '-c:a', 'aac', '-b:a', '192k',
+          '-map_metadata', '0', '-map_chapters', '0',
+          '-movflags', '+faststart+use_metadata_tags',
+          '-f', 'mp4', part,
+        ];
+        const nice = process.platform === 'linux' && fsSync.existsSync('/usr/bin/nice');
+        await new Promise<void>((resolve, reject) => {
+          const proc = nice ? spawn('/usr/bin/nice', ['-n', '19', config.movies.ffmpegPath, ...args]) : spawn(config.movies.ffmpegPath, args);
+          let err = '';
+          proc.stdout.on('data', (c) => {
+            const m = [...c.toString().matchAll(/out_time_us=(\d+)/g)].pop();
+            if (m && dur) copyStatus.percent = Math.min(99, Math.round(Number(m[1]) / 1e6 / dur * 100));
+          });
+          proc.stderr.on('data', (c) => (err = (err + c.toString()).slice(-4000)));
+          proc.on('error', reject);
+          proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err.trim().split('\n').slice(-3).join(' ') || `ffmpeg exited with code ${code}`))));
+        });
+        if (fsSync.existsSync(target)) throw new Error(`a ${path.basename(target)} appeared while copying — that one was kept as it is`);
+        await fs.rename(part, target);
+        await fs.utimes(target, new Date(f.mtimeMs), new Date(f.mtimeMs)).catch(() => {}); // sorts by "added" like the original
+        copyStatus.made++;
+        if (cache) cache.at = 0; // show it on the next look
+      } catch (err) {
+        const e = err as NodeJS.ErrnoException;
+        if (e.code === 'ENOENT' && !fsSync.existsSync(src)) continue;
+        if (e.code !== 'EEXIST') await fs.unlink(part).catch(() => {}); // only ever our own half-made .part
+        if (e.code === 'ENOENT') break; // no ffmpeg — try again next round
+        copyFailed.set(f.rel, e.message.slice(0, 300));
+        copyStatus.failed = [...copyFailed].map(([file, error]) => ({ file, error })).slice(-20);
+      } finally {
+        copyStatus.waiting = Math.max(0, copyStatus.waiting - 1);
+      }
+    }
+  } finally {
+    copyStatus.running = null;
+    copyStatus.percent = null;
+    copying = false;
+  }
 }
 
 /** Look at the share every 10 minutes so new movies (and their lengths) are ready before anyone opens the page. */

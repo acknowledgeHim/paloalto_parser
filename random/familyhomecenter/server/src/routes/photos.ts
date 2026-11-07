@@ -441,7 +441,7 @@ photosRouter.post(
       }
     }
 
-    // 🎬 A video: .mov → .mp4 into <VIDEOS_DIR>/<YYYY>. Without ffmpeg (or the share) it waits in the Inbox.
+    // 🎬 A video: moved as it is into <VIDEOS_DIR>/<YYYY>. Without ffmpeg (or the share) it waits in the Inbox.
     if (video && (!(await haveFfmpeg()) || !videosFolderReady())) {
       await fsSync.promises.rename(tmp, path.join(inbox, await freeInboxName(inbox, name))).catch(() => {});
       return res.status(503).json({

@@ -24,6 +24,7 @@ interface LibraryMovie {
   height: number | null;
   video_codec: string | null;
   playable: boolean;
+  original_rel: string | null;
 }
 interface Library {
   dir: string;
@@ -263,7 +264,7 @@ function MovieCard({ m, at, onPlay }: { m: LibraryMovie; at?: number; onPlay: ()
       </div>
       <div className="movie-card__title">{m.title}</div>
       <div className="hint">
-        {[m.year, q, m.folder, !m.playable ? '⬇ download to watch' : null].filter(Boolean).join(' · ')}
+        {[m.year, q, m.folder, !m.playable ? (/\.(mpg|mpeg)$/i.test(m.file) ? '.mp4 copy being made' : '⬇ download to watch') : null].filter(Boolean).join(' · ')}
       </div>
     </button>
   );
@@ -323,6 +324,8 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
           {[fmtLength(m.duration), quality(m), fmtSize(m.size), m.recorded_at ? `recorded ${new Date(m.recorded_at).toLocaleDateString()}` : null].filter(Boolean).join(' · ')}
           <br />
           <code>{m.rel_path}</code> · <a href={`${src}?download=1`}>⬇ Download</a>
+          {/\.(mov|qt)$/i.test(m.file) && <> · <a href={`/api/movie-library/${m.id}/mp4`}>⬇ Download as .mp4</a></>}
+          {m.original_rel && <> · <a href={`${src}?original=1&download=1`}>⬇ Original ({m.original_rel.split('.').pop()?.toUpperCase()})</a></>}
         </p>
       </div>
     </div>
