@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import { db, getSetting } from '../db.js';
 import { photosChanged, skipFolderInLibrary } from './photos.js';
 import { folderDate } from './photoDates.js';
+import { fileVideo, haveFfmpeg, VIDEO_EXTS } from './videoFiling.js';
 
 /**
  * 📥 Filing new photos into the library as <YEAR>/<Month>/ — from the 📥 Inbox folder on the share
@@ -158,10 +159,17 @@ export async function fileOne(file: string, source: 'inbox' | 'upload', by: stri
   return r;
 }
 
+/** 🎬 A video: .mov → .mp4, into <VIDEOS_DIR>/<YYYY> (services/videoFiling.ts), written to photo_filings too. */
+export async function fileVideoAndRecord(file: string, source: 'inbox' | 'upload', by: string | null = null, dateHint?: number | null, name = path.basename(file)): Promise<FilingResult> {
+  const r = await fileVideo(file, inboxDir(), dateHint, name);
+  record(r, source, by);
+  return r;
+}
+
 let sorting = false;
 /** File everything waiting in the Inbox (not its Duplicates/Filed folders). */
-export async function sortInbox(by: string | null = null): Promise<{ filed: number; duplicates: number; errors: number; left: number }> {
-  const out = { filed: 0, duplicates: 0, errors: 0, left: 0 };
+export async function sortInbox(by: string | null = null): Promise<{ filed: number; duplicates: number; errors: number; left: number; videos: number }> {
+  const out = { filed: 0, duplicates: 0, errors: 0, left: 0, videos: 0 };
   if (sorting) return out;
   sorting = true;
   try {
@@ -174,16 +182,26 @@ export async function sortInbox(by: string | null = null): Promise<{ filed: numb
       for (const it of items) {
         const p = path.join(d, it.name);
         if (it.isDirectory()) {
-          if (d === dir && (it.name === 'Duplicates' || it.name === 'Filed')) continue;
+          if (d === dir && (it.name === 'Duplicates' || it.name === 'Filed' || it.name === 'Converted')) continue;
           files.push(...(await walk(p)));
         } else if (!it.name.startsWith('.')) files.push(p);
       }
       return files;
     };
+    let ffmpeg: boolean | null = null;
     for (const f of await walk(dir)) {
-      if (!PICTURE_EXTS.has(path.extname(f).toLowerCase())) {
+      const ext = path.extname(f).toLowerCase();
+      const video = VIDEO_EXTS.has(ext);
+      if (!PICTURE_EXTS.has(ext) && !video) {
         out.left++;
         continue;
+      }
+      if (video) {
+        ffmpeg ??= await haveFfmpeg();
+        if (!ffmpeg) {
+          out.left++;
+          continue;
+        }
       }
       // Still being copied in by the phone? Leave it for the next round.
       const st = await fs.stat(f).catch(() => null);
@@ -191,13 +209,16 @@ export async function sortInbox(by: string | null = null): Promise<{ filed: numb
         if (st && Date.now() - st.mtimeMs < 60_000) out.left++;
         continue;
       }
-      const r = await fileOne(f, 'inbox', by);
-      if (r.result === 'filed') out.filed++;
+      const r = video ? await fileVideoAndRecord(f, 'inbox', by) : await fileOne(f, 'inbox', by);
+      if (r.result === 'filed' && video) out.videos++;
+      else if (r.result === 'filed') out.filed++;
       else if (r.result === 'duplicate') out.duplicates++;
       else out.errors++;
     }
     if (out.filed) photosChanged();
-    if (out.filed || out.duplicates || out.errors) console.log(`[photos] 📥 Inbox: ${out.filed} filed, ${out.duplicates} duplicate(s), ${out.errors} problem(s).`);
+    if (ffmpeg === false) console.warn('[photos] 📥 Inbox: videos are waiting but ffmpeg/ffprobe isn\'t installed (sudo apt install -y ffmpeg).');
+    if (out.filed || out.videos || out.duplicates || out.errors)
+      console.log(`[photos] 📥 Inbox: ${out.filed} photo(s) and ${out.videos} video(s) filed, ${out.duplicates} duplicate(s), ${out.errors} problem(s).`);
   } finally {
     sorting = false;
   }

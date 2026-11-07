@@ -36,6 +36,9 @@ export const config = {
   },
 
   photosDir: process.env.PHOTOS_DIR ?? path.join(__dirname, '..', '..', 'sample-photos'),
+  // 🎬 Videos from the 📥 Inbox are filed into <VIDEOS_DIR>/<YYYY>/ (.mov turned into .mp4) —
+  // services/videoFiling.ts. Can be changed in Settings → 📁 Photo library → 📥 Inbox.
+  videosDir: process.env.VIDEOS_DIR ?? '/share/media/movies/takk',
 
   music: {
     libraryDir: process.env.MUSIC_LIBRARY_DIR ?? path.join(__dirname, '..', '..', 'sample-music'),

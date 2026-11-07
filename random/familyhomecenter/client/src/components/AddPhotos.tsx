@@ -54,7 +54,7 @@ export function AddPhotos({ onClose, onAdded }: { onClose: () => void; onAdded: 
     if (added) onAdded();
   };
 
-  const folder = (dest?: string | null) => (dest ? dest.split('/').slice(0, -1).join(' / ') : '');
+  const folder = (dest?: string | null) => (dest ? dest.split('/').filter(Boolean).slice(0, -1).join(' / ') : '');
   const done = rows.filter((r) => r.state === 'filed').length;
   const dup = rows.filter((r) => r.state === 'duplicate').length;
   const bad = rows.filter((r) => r.state === 'error').length;
@@ -63,11 +63,11 @@ export function AddPhotos({ onClose, onAdded }: { onClose: () => void; onAdded: 
     <div className="modal-overlay" onClick={() => !busy && onClose()}>
       <div className="modal-panel panel add-photos" onClick={(e) => e.stopPropagation()}>
         <h2>📤 Add photos</h2>
-        <p className="hint">Pick pictures from this device. Each goes into the photo library under the year and month it was taken (e.g. 2025 / August).</p>
+        <p className="hint">Pick pictures and videos from this device. Each picture goes into the photo library under the year and month it was taken (e.g. 2025 / August); videos go to the movies folder by year (a .mov becomes an .mp4).</p>
         <input
           ref={input}
           type="file"
-          accept="image/*,.heic,.heif"
+          accept="image/*,video/*,.heic,.heif,.mov,.mp4"
           multiple
           hidden
           onChange={(e) => {
@@ -77,7 +77,7 @@ export function AddPhotos({ onClose, onAdded }: { onClose: () => void; onAdded: 
           }}
         />
         <button type="button" onClick={() => input.current?.click()} disabled={busy}>
-          {rows.length ? '＋ Pick more' : '📷 Pick photos'}
+          {rows.length ? '＋ Pick more' : '📷 Pick photos & videos'}
         </button>
         {rows.length > 0 && (
           <>

@@ -11,7 +11,8 @@ import fsSync from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { autoSortOn, canWrite, fileOne, inboxDir, PICTURE_EXTS, registerInbox, sortInbox } from '../services/photoFiling.js';
+import { autoSortOn, canWrite, fileOne, fileVideoAndRecord, inboxDir, PICTURE_EXTS, registerInbox, sortInbox } from '../services/photoFiling.js';
+import { haveFfmpeg, VIDEO_EXTS, videosDir } from '../services/videoFiling.js';
 import { photosChanged } from '../services/photos.js';
 import { getSetting, setSetting } from '../db.js';
 import { isParentRequest } from '../services/rewards.js';
@@ -369,7 +370,9 @@ photosRouter.post(
   express.raw({ type: () => true, limit: '300mb' }),
   asyncHandler(async (req, res) => {
     const name = path.basename(decodeURIComponent(String(req.get('x-filename') ?? ''))).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 200) || 'photo.jpg';
-    if (!PICTURE_EXTS.has(path.extname(name).toLowerCase())) return res.status(400).json({ error: `${name}: only pictures (JPG, PNG, HEIC, WebP, GIF)` });
+    const video = VIDEO_EXTS.has(path.extname(name).toLowerCase());
+    if (!PICTURE_EXTS.has(path.extname(name).toLowerCase()) && !video)
+      return res.status(400).json({ error: `${name}: only pictures (JPG, PNG, HEIC, WebP, GIF) and videos (MOV, MP4)` });
     const body = req.body as Buffer;
     if (!Buffer.isBuffer(body) || body.length < 100) return res.status(400).json({ error: `${name}: empty file` });
     if (!(await canWrite())) return res.status(503).json({ error: "The Family Home Center can't write to the photos folder (check the share allows writing)" });
@@ -381,7 +384,12 @@ photosRouter.post(
     await fsSync.promises.writeFile(tmp, body);
     const hint = Number(req.get('x-last-modified')) || null;
     const by = String(req.get('x-acting-member') ?? '') || null;
-    const r = await fileOne(tmp, 'upload', by, hint, name);
+    // 🎬 A video: .mov → .mp4 into <VIDEOS_DIR>/<YYYY>. Without ffmpeg it waits in the Inbox for it.
+    if (video && !(await haveFfmpeg())) {
+      await fsSync.promises.rename(tmp, path.join(inbox, name)).catch(() => {});
+      return res.status(503).json({ error: `${name}: saved in the Inbox — videos are filed once ffmpeg is installed on the Family Home Center` });
+    }
+    const r = video ? await fileVideoAndRecord(tmp, 'upload', by, hint, name) : await fileOne(tmp, 'upload', by, hint, name);
     if (r.result === 'error') {
       // Leave it in the Inbox under its own name — the sorter tries again.
       await fsSync.promises.rename(tmp, path.join(inbox, name)).catch(() => {});
@@ -399,11 +407,13 @@ photosRouter.get(
     if (!isParentRequest(req, req.query.acting_member_id)) return res.status(403).json({ error: 'For parents only' });
     const dir = inboxDir();
     let waiting = 0;
+    let videos = 0;
     let other = 0;
     try {
       for (const it of await fsSync.promises.readdir(dir, { withFileTypes: true })) {
         if (!it.isFile() || it.name.startsWith('.')) continue;
         if (PICTURE_EXTS.has(path.extname(it.name).toLowerCase())) waiting++;
+        else if (VIDEO_EXTS.has(path.extname(it.name).toLowerCase())) videos++;
         else other++;
       }
     } catch {
@@ -415,14 +425,17 @@ photosRouter.get(
       auto: autoSortOn(),
       writable: await canWrite(),
       waiting,
+      videos,
       other,
+      video_dir: videosDir(),
+      ffmpeg: await haveFfmpeg(),
       recent: db.prepare('SELECT * FROM photo_filings ORDER BY at DESC LIMIT 30').all(),
       totals: db.prepare("SELECT result, COUNT(*) AS n FROM photo_filings GROUP BY result").all(),
     });
   })
 );
 
-/** PATCH /inbox { auto, inbox_dir } (parents). */
+/** PATCH /inbox { auto, inbox_dir, video_dir } (parents). */
 photosRouter.patch('/inbox', (req, res) => {
   if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'For parents only' });
   if (req.body?.auto !== undefined) setSetting('photo_inbox_auto', req.body.auto ? '' : 'off');
@@ -431,6 +444,11 @@ photosRouter.patch('/inbox', (req, res) => {
     if (d && !path.isAbsolute(d)) return res.status(400).json({ error: 'Use a full path, e.g. /mnt/family-photos/Inbox' });
     setSetting('photo_inbox_dir', d);
     registerInbox();
+  }
+  if (typeof req.body?.video_dir === 'string') {
+    const d = req.body.video_dir.trim();
+    if (d && !path.isAbsolute(d)) return res.status(400).json({ error: 'Use a full path, e.g. /share/media/movies/takk' });
+    setSetting('video_dest_dir', d);
   }
   res.json({ ok: true });
 });

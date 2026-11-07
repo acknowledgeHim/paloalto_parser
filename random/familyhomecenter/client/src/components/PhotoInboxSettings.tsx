@@ -9,7 +9,7 @@ interface Filing {
   original_name: string;
   dest_path: string | null;
   taken_at: string | null;
-  date_from: 'photo' | 'phone' | 'file' | null;
+  date_from: 'photo' | 'video' | 'folder' | 'phone' | 'file' | null;
   result: 'filed' | 'duplicate' | 'error';
   note: string | null;
 }
@@ -19,12 +19,15 @@ interface Inbox {
   auto: boolean;
   writable: boolean;
   waiting: number;
+  videos: number;
   other: number;
+  video_dir: string;
+  ffmpeg: boolean;
   recent: Filing[];
   totals: Array<{ result: string; n: number }>;
 }
 
-const FROM: Record<string, string> = { photo: 'date from the photo', phone: 'date from the phone', file: 'file date (the photo had none)' };
+const FROM: Record<string, string> = { photo: 'date from the photo', video: 'date from the video', folder: 'date from its folder', phone: 'date from the phone', file: 'file date (the photo had none)' };
 
 /**
  * Settings → 📁 Photo library → 📥 Inbox: a folder on the share where a phone's sync app drops new
@@ -34,6 +37,7 @@ export function PhotoInboxSettings() {
   const acting = useActing();
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [dir, setDir] = useState('');
+  const [vdir, setVdir] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,6 +47,7 @@ export function PhotoInboxSettings() {
       .then((i) => {
         setInbox(i);
         setDir(i.inbox_dir);
+        setVdir(i.video_dir);
       })
       .catch((e) => setError(e.message));
   useEffect(() => {
@@ -76,6 +81,10 @@ export function PhotoInboxSettings() {
         name (“August”). A photo that's already there goes to <code>Inbox/Duplicates</code>. Nothing is ever deleted. 📤 Add photos on the Photos page files
         the same way.
       </p>
+      <p className="hint">
+        🎬 Videos go to the movies folder below, in a folder for the year they were recorded (<code>2025</code>). A <code>.mov</code> is turned into an{' '}
+        <code>.mp4</code> first (the original is kept in <code>Inbox/Converted</code>); an <code>.mp4</code> is moved as it is.
+      </p>
       {!inbox.writable && (
         <div className="settings-login__error">
           The Family Home Center can't write to the photos folder. Check the share account can write, and that the mount isn't read-only (see the commands
@@ -91,9 +100,24 @@ export function PhotoInboxSettings() {
           </button>
         )}
       </label>
+      <label className="camera-storage__inline">
+        Movies folder
+        <input value={vdir} onChange={(e) => setVdir(e.target.value)} style={{ flex: 1, minWidth: '16em' }} aria-label="Movies folder" />
+        {vdir !== inbox.video_dir && (
+          <button type="button" className="secondary" disabled={busy} onClick={() => run(async () => void (await api.patch('/photos/inbox', body({ video_dir: vdir }))))}>
+            Save
+          </button>
+        )}
+      </label>
+      {!inbox.ffmpeg && (
+        <div className="settings-login__error">
+          Videos wait in the Inbox until ffmpeg is installed on the Family Home Center: <code>sudo apt install -y ffmpeg</code>
+        </div>
+      )}
       <p className="hint">
         {inbox.exists ? `${inbox.waiting} photo${inbox.waiting === 1 ? '' : 's'} waiting` : 'The Inbox folder will be made the first time you sort'}
-        {inbox.other ? ` · ${inbox.other} other file${inbox.other === 1 ? '' : 's'} (videos etc.) left as they are` : ''} · so far {total('filed')} filed,{' '}
+        {inbox.videos ? ` · ${inbox.videos} video${inbox.videos === 1 ? '' : 's'} waiting` : ''}
+        {inbox.other ? ` · ${inbox.other} other file${inbox.other === 1 ? '' : 's'} left as they are` : ''} · so far {total('filed')} filed,{' '}
         {total('duplicate')} duplicates{total('error') ? `, ${total('error')} problems` : ''}
       </p>
       <label className="privacy-toggle">
@@ -110,8 +134,8 @@ export function PhotoInboxSettings() {
           disabled={busy || !inbox.writable}
           onClick={() =>
             run(async () => {
-              const r = await api.post<{ filed: number; duplicates: number; errors: number; left: number }>('/photos/inbox/sort-now', body({}));
-              return `${r.filed} filed · ${r.duplicates} duplicate${r.duplicates === 1 ? '' : 's'}${r.errors ? ` · ${r.errors} problems` : ''}${r.left ? ` · ${r.left} left (still copying, or not a photo)` : ''}`;
+              const r = await api.post<{ filed: number; videos: number; duplicates: number; errors: number; left: number }>('/photos/inbox/sort-now', body({}));
+              return `${r.filed} filed${r.videos ? ` · ${r.videos} video${r.videos === 1 ? '' : 's'}` : ''} · ${r.duplicates} duplicate${r.duplicates === 1 ? '' : 's'}${r.errors ? ` · ${r.errors} problems` : ''}${r.left ? ` · ${r.left} left (still copying, or not a photo/video)` : ''}`;
             })
           }
         >
