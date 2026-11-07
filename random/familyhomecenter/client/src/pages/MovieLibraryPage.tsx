@@ -78,18 +78,43 @@ const quality = (m: LibraryMovie) => {
 };
 const plain = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+/**
+ * Will this browser play it? The file type has to be one browsers open, and the picture inside
+ * has to be one this browser decodes — HEVC (iPhone video) only plays in Safari and on computers
+ * with hardware for it, never on the Pi's Chromium. Not read yet (no codec) → assume it plays.
+ */
+const CODEC_TYPES: Record<string, string> = {
+  h264: 'video/mp4; codecs="avc1.640028"',
+  hevc: 'video/mp4; codecs="hvc1.1.6.L120.90"',
+  vp9: 'video/webm; codecs="vp9"',
+  vp8: 'video/webm; codecs="vp8"',
+  av1: 'video/mp4; codecs="av01.0.08M.08"',
+  mpeg4: 'video/mp4; codecs="mp4v.20.8"',
+};
+let probeEl: HTMLVideoElement | null = null;
+function playsHere(m: LibraryMovie): boolean {
+  if (!m.playable) return false;
+  if (!m.video_codec) return true;
+  const type = CODEC_TYPES[m.video_codec];
+  if (!type) return false;
+  probeEl ??= document.createElement('video');
+  return probeEl.canPlayType(type) !== '';
+}
+
 export function MovieLibraryPage() {
   const { members, activeProfile } = useFamilyMembers();
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   const [lib, setLib] = useState<Library | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const saved = readJson(PREFS, { sort: 'added' as SortKey, desc: true, folder: '', year: '' });
+  const saved = readJson(PREFS, { sort: 'added' as SortKey, desc: true, folder: '', year: '', all: false });
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>(saved.sort);
   const [desc, setDesc] = useState<boolean>(saved.desc);
   const [folder, setFolder] = useState<string>(saved.folder);
   const [year, setYear] = useState<string>(saved.year);
+  // Only what plays in this browser, unless asked for the rest (they can only be downloaded).
+  const [showAll, setShowAll] = useState<boolean>(!!saved.all);
   const [shown, setShown] = useState(PAGE);
   const [playing, setPlaying] = useState<LibraryMovie | null>(null);
   const [resume, setResume] = useState<Record<string, number>>(() => readJson(RESUME, {}));
@@ -111,19 +136,21 @@ export function MovieLibraryPage() {
     const t = setInterval(() => void load(), 60_000);
     return () => clearInterval(t);
   }, []);
-  useEffect(() => writeJson(PREFS, { sort, desc, folder, year }), [sort, desc, folder, year]);
-  useEffect(() => setShown(PAGE), [query, sort, desc, folder, year]);
+  useEffect(() => writeJson(PREFS, { sort, desc, folder, year, all: showAll }), [sort, desc, folder, year, showAll]);
+  useEffect(() => setShown(PAGE), [query, sort, desc, folder, year, showAll]);
+  const movies = useMemo(() => (lib?.movies ?? []).filter((m) => showAll || playsHere(m)), [lib, showAll]);
+  const hidden = (lib?.movies.length ?? 0) - (showAll ? (lib?.movies ?? []).filter(playsHere).length : movies.length);
 
   const folders = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const m of lib?.movies ?? []) counts.set(m.folder, (counts.get(m.folder) ?? 0) + 1);
+    for (const m of movies) counts.set(m.folder, (counts.get(m.folder) ?? 0) + 1);
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [lib]);
-  const years = useMemo(() => [...new Set((lib?.movies ?? []).map((m) => m.year).filter((y): y is number => y != null))].sort((a, b) => b - a), [lib]);
+  }, [movies]);
+  const years = useMemo(() => [...new Set(movies.map((m) => m.year).filter((y): y is number => y != null))].sort((a, b) => b - a), [movies]);
 
   const list = useMemo(() => {
     const words = plain(query).split(/\s+/).filter(Boolean);
-    const out = (lib?.movies ?? []).filter((m) => {
+    const out = movies.filter((m) => {
       if (folder !== '' && m.folder !== folder) return false;
       if (year && String(m.year ?? '') !== year) return false;
       if (!words.length) return true;
@@ -153,7 +180,7 @@ export function MovieLibraryPage() {
       return (desc ? -c : c) || plain(a.title).localeCompare(plain(b.title));
     });
     return out;
-  }, [lib, query, sort, desc, folder, year]);
+  }, [movies, query, sort, desc, folder, year]);
 
   const keepPlace = (id: string, t: number | null) =>
     setResume((r) => {
@@ -163,7 +190,7 @@ export function MovieLibraryPage() {
       writeJson(RESUME, next);
       return next;
     });
-  const continuing = (lib?.movies ?? []).filter((m) => resume[m.id] > 0);
+  const continuing = movies.filter((m) => resume[m.id] > 0);
 
   return (
     <div className="movie-library">
@@ -185,7 +212,7 @@ export function MovieLibraryPage() {
       {lib && (
         <>
           <div className="movie-library__tools">
-            <input type="search" placeholder={`🔎 Search ${lib.movies.length} movies…`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search movies" />
+            <input type="search" placeholder={`🔎 Search ${movies.length} movies…`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search movies" />
             <select value={sort} onChange={(e) => {
               const s = SORTS.find((x) => x.key === e.target.value)!;
               setSort(s.key);
@@ -228,8 +255,17 @@ export function MovieLibraryPage() {
           )}
 
           <p className="hint">
-            {list.length === lib.movies.length ? `${list.length} movies` : `${list.length} of ${lib.movies.length} movies`} · from <code>{lib.location}</code>
+            {list.length === movies.length ? `${list.length} movies` : `${list.length} of ${movies.length} movies`} · from <code>{lib.location}</code>
           </p>
+          {hidden > 0 && (
+            <label className="privacy-toggle">
+              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+              <span>
+                <strong>Also show {hidden} that don't play in this browser</strong>
+                <span className="hint"> — they can be downloaded and watched in a video app (VLC){showAll ? '' : '. .mpg videos show up once their .mp4 copy is made.'}</span>
+              </span>
+            </label>
+          )}
           {lib.movies.length === 0 && !lib.error && <p className="empty-state">No videos in that folder yet.</p>}
           <div className="movie-library__grid">
             {list.slice(0, shown).map((m) => <MovieCard key={m.id} m={m} at={resume[m.id]} onPlay={() => setPlaying(m)} />)}
@@ -264,7 +300,7 @@ function MovieCard({ m, at, onPlay }: { m: LibraryMovie; at?: number; onPlay: ()
       </div>
       <div className="movie-card__title">{m.title}</div>
       <div className="hint">
-        {[m.year, q, m.folder, !m.playable ? (/\.(mpg|mpeg)$/i.test(m.file) ? '.mp4 copy being made' : '⬇ download to watch') : null].filter(Boolean).join(' · ')}
+        {[m.year, q, m.folder, !playsHere(m) ? (/\.(mpg|mpeg)$/i.test(m.file) && !m.original_rel ? '.mp4 copy being made' : '⬇ download to watch') : null].filter(Boolean).join(' · ')}
       </div>
     </button>
   );
@@ -293,7 +329,7 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
           <h2>{m.title}{m.year ? ` (${m.year})` : ''}</h2>
           <button type="button" className="secondary" onClick={() => { save(); onClose(); }} aria-label="Close">✕</button>
         </div>
-        {failed || !m.playable ? (
+        {failed || !playsHere(m) ? (
           <p className="settings-login__error">
             This kind of video ({m.file.split('.').pop()?.toUpperCase()}{m.video_codec ? `, ${m.video_codec}` : ''}) doesn't play in this browser. Download it and open it in a video app (VLC
             plays everything).

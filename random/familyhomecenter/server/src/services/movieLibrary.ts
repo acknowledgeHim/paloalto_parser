@@ -139,15 +139,26 @@ async function scan(): Promise<void> {
       original_rel: null,
     };
   });
-  // An .mpg with its .mp4 copy next to it is listed once: the .mp4 (plays in the browser), with the original to download.
-  const byRel = new Map(movies.map((m) => [m.rel_path.toLowerCase(), m]));
-  const shown = movies.filter((m) => {
-    if (!COPY_EXTS.has(path.extname(m.rel_path).toLowerCase())) return true;
-    const copy = byRel.get(mp4Of(m.rel_path).toLowerCase());
-    if (!copy) return true;
-    copy.original_rel = m.rel_path;
-    return false;
-  });
+  // The same video in several formats in one folder ("Holiday.mpg" + its "Holiday.mp4" copy,
+  // "Clip.mov" + "Clip.mp4") is listed once: the version a browser plays best, with the other
+  // one to download as the original.
+  const rank = (m: LibraryMovie) => {
+    const e = path.extname(m.rel_path).toLowerCase();
+    const extRank = ({ '.mp4': 0, '.m4v': 1, '.webm': 2, '.mov': 3 } as Record<string, number>)[e] ?? 4;
+    return (m.playable ? 0 : 10) + (m.video_codec === 'h264' ? 0 : 5) + extRank;
+  };
+  const groups = new Map<string, LibraryMovie[]>();
+  for (const m of movies) {
+    const key = m.rel_path.slice(0, m.rel_path.length - path.extname(m.rel_path).length).toLowerCase();
+    groups.set(key, [...(groups.get(key) ?? []), m]);
+  }
+  const shown: LibraryMovie[] = [];
+  for (const g of groups.values()) {
+    g.sort((a, b) => rank(a) - rank(b));
+    const [best, ...others] = g;
+    best.original_rel = others.find((o) => !o.playable)?.rel_path ?? others[0]?.rel_path ?? null;
+    shown.push(best);
+  }
   cache = { at: Date.now(), dir, movies: shown, error: null };
   void probeMissing(dir, files);
   void makeMp4Copies(dir, files);

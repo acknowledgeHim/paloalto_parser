@@ -68,6 +68,14 @@ as that user: `sudo -u pi ls /mnt/movies`. If that fails, the cifs mount needs
 
 ## Which videos play in the browser
 
+🎬 Movies **only lists what plays in the browser you're using**. Each browser checks the file type
+and the video inside it, so an HEVC iPhone video shows in Safari but not in Chromium on the Pi.
+The rest are behind **Also show N that don't play in this browser**, which you tick to download
+them. The same video in several formats in one folder (`Holiday.mpg` + `Holiday.mp4`, `Clip.mov` +
+`Clip.mp4`) is listed once, as the version that plays best (H.264 `.mp4` first), with
+**⬇ Original** for the other one.
+
+
 - **.mp4 / .mov with H.264 video** play everywhere.
 - **.mp4 / .mov with HEVC video** (iPhones by default) play in Safari, and in Chrome / Edge on Mac
   and Windows when the computer's hardware can decode HEVC. They usually **don't** play in
