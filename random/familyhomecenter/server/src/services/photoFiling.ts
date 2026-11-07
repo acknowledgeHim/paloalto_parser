@@ -110,6 +110,9 @@ async function moveSafely(from: string, to: string): Promise<void> {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
     await fs.copyFile(from, to, fsSync.constants.COPYFILE_EXCL);
+    // A copy gets today's file date — give it the original's back (the bytes, and so all EXIF / GPS / HEIC data, are already identical).
+    const st = await fs.stat(from).catch(() => null);
+    if (st) await fs.utimes(to, st.atime, st.mtime).catch(() => {});
     const keep = path.join(inboxDir(), 'Filed');
     await fs.mkdir(keep, { recursive: true });
     await fs.rename(from, path.join(keep, await freeName(keep, path.basename(from))));

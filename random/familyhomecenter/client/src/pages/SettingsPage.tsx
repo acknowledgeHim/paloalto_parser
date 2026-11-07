@@ -2,6 +2,7 @@ import { HomeScreenSettings } from '../components/HomeScreenSettings.js';
 import { WeeklyReportSettings } from '../components/WeeklyReportSettings.js';
 import { CameraSettings } from '../components/CameraSettings.js';
 import { PhotoSourceSettings } from '../components/PhotoSourceSettings.js';
+import { MovieSettings } from '../components/MovieSettings.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { KidsAccessSettings } from '../components/KidsAccessSettings.js';
@@ -297,6 +298,8 @@ export function SettingsPage() {
       <DeviceCertificateSettings />
 
       <PhotoSourceSettings />
+
+      <MovieSettings />
 
       <section className="panel">
         <h2>Screensaver / slideshow</h2>

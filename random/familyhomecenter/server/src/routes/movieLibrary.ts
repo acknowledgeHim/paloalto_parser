@@ -1,8 +1,11 @@
+import os from 'node:os';
 import path from 'node:path';
 import { Router } from 'express';
 import { setSetting } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { folderProblem, resolveShare } from '../services/sharePaths.js';
+import { haveFfmpeg, videosLocation } from '../services/videoFiling.js';
 import { findMovie, libraryDir, libraryLocation, listLibrary, posterFor } from '../services/movieLibrary.js';
 
 // 🎬 Movies section — every video on the movies share, to search, sort and watch
@@ -21,12 +24,41 @@ movieLibraryRouter.get(
   })
 );
 
-/** PATCH /settings { dir } — which folder the Movies section shows (parents). */
+/** GET /settings — Settings → 🎬 Movies: both movies folders, where they are on the Pi, and whether they can be read. */
+movieLibraryRouter.get(
+  '/settings',
+  asyncHandler(async (_req, res) => {
+    const lib = resolveShare(libraryLocation());
+    const vids = resolveShare(videosLocation());
+    const [libProblem, vidProblem, ffmpeg] = await Promise.all([folderProblem(lib.local), folderProblem(vids.local), haveFfmpeg()]);
+    let user = '';
+    try {
+      user = os.userInfo().username;
+    } catch {
+      /* unknown */
+    }
+    res.json({
+      library: { location: libraryLocation(), local: lib.local, via: lib.via, problem: libProblem },
+      videos: { location: videosLocation(), local: vids.local, via: vids.via, problem: vidProblem },
+      ffmpeg,
+      server_user: user,
+    });
+  })
+);
+
+/** PATCH /settings { dir, video_dir } — the folder the Movies section shows, and where Inbox videos are filed (parents). */
 movieLibraryRouter.patch('/settings', requireAdmin, (req, res) => {
-  const d = typeof req.body?.dir === 'string' ? req.body.dir.trim() : '';
-  if (d && !shareLoc(d)) return res.status(400).json({ error: 'Use the share location, e.g. /share/media/movies or //nas/media/movies' });
-  setSetting('movie_library_dir', d);
-  res.json({ dir: libraryDir(), location: libraryLocation() });
+  if (typeof req.body?.dir === 'string') {
+    const d = req.body.dir.trim();
+    if (d && !shareLoc(d)) return res.status(400).json({ error: 'Use the share location, e.g. /share/media/movies or //nas/media/movies' });
+    setSetting('movie_library_dir', d);
+  }
+  if (typeof req.body?.video_dir === 'string') {
+    const d = req.body.video_dir.trim();
+    if (d && !shareLoc(d)) return res.status(400).json({ error: 'Use the share location, e.g. /share/media/movies/takk' });
+    setSetting('video_dest_dir', d);
+  }
+  res.json({ dir: libraryDir(), location: libraryLocation(), video_dir: videosLocation() });
 });
 
 movieLibraryRouter.get(

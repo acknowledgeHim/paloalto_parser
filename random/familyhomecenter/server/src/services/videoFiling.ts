@@ -10,7 +10,7 @@ import { folderDate } from './photoDates.js';
 /**
  * 🎬 Videos from the 📥 Inbox (and 📤 Add photos) go to <VIDEOS_DIR>/<YYYY>/ — by default
  * /share/media/movies/takk/2025/ — by the year they were recorded.
- *  - .mov is turned into .mp4 (a quick copy into the new container when the phone's video and sound
+ *  - .mov is turned into .mp4 with all its metadata (see convert()) (a quick copy into the new container when the phone's video and sound
  *    fit in an .mp4, which is the usual iPhone case; otherwise re-encoded to H.264 + AAC).
  *  - .mp4 / .m4v are moved as they are.
  *  - Nothing is deleted: the original .mov is moved to Inbox/Converted. An .mp4 is written as a
@@ -143,20 +143,51 @@ async function keepIn(inbox: string, folder: string, file: string, name: string)
   await fs.rename(file, path.join(dir, await freeName(dir, name))); // same disk as the Inbox: a rename
 }
 
-/** .mov → .mp4. Tries a straight copy into .mp4 first; then keeps the picture and redoes the sound; then redoes both. */
-async function convert(from: string, part: string, p: Probe): Promise<'copied' | 'audio' | 'encoded'> {
-  const common = ['-nostdin', '-y', '-v', 'error', '-i', from, '-map', '0:v:0', '-map', '0:a?', '-map_metadata', '0', '-movflags', '+faststart+use_metadata_tags'];
+/** The video's tags (file-level and per-stream), to check none went missing in the .mp4. */
+async function tagsOf(file: string): Promise<Map<string, string>> {
+  const json = JSON.parse(await run(ffprobePath(), ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], 60_000));
+  const out = new Map<string, string>();
+  for (const [k, v] of Object.entries((json.format?.tags ?? {}) as Record<string, string>)) out.set(k.toLowerCase(), String(v));
+  for (const st of (json.streams ?? []) as Array<{ codec_type?: string; tags?: Record<string, string> }>) {
+    if (st.codec_type !== 'video' && st.codec_type !== 'audio') continue;
+    for (const [k, v] of Object.entries(st.tags ?? {})) {
+      // Container bookkeeping that is rewritten by design, not metadata of the recording.
+      if (/^(handler_name|vendor_id|encoder|major_brand|minor_version|compatible_brands|language)$/i.test(k)) continue;
+      out.set(`${st.codec_type}:${k.toLowerCase()}`, String(v));
+    }
+  }
+  return out;
+}
+
+/**
+ * .mov → .mp4, keeping all the metadata: every file-level tag (recorded date, location, camera
+ * make / model / software, the com.apple.quicktime.* keys) via -map_metadata 0 + use_metadata_tags,
+ * per-stream tags, chapters, rotation, every video and sound track — and, when the .mp4 can carry
+ * them, the iPhone's extra data tracks (timed location, Live Photo link). Tries a straight copy
+ * first; then keeps the picture and redoes the sound; then redoes both. Afterwards the .mp4's tags
+ * are compared with the .mov's; anything missing is named in the note (the .mov is kept anyway).
+ */
+async function convert(from: string, part: string, p: Probe): Promise<{ how: 'copied' | 'audio' | 'encoded'; lost: string[]; dataDropped: boolean }> {
+  const meta = ['-map_metadata', '0', '-map_metadata:s:v', '0:s:v', '-map_metadata:s:a', '0:s:a', '-map_chapters', '0', '-movflags', '+faststart+use_metadata_tags'];
   const tag = p.videoCodec === 'hevc' ? ['-tag:v', 'hvc1'] : []; // so iPhones / Macs / TVs play HEVC in .mp4
-  const tries: Array<[string[], 'copied' | 'audio' | 'encoded']> = [
-    [['-c', 'copy', ...tag], 'copied'],
-    [['-c:v', 'copy', ...tag, '-c:a', 'aac', '-b:a', '192k'], 'audio'],
-    [['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k'], 'encoded'],
+  const allTracks = ['-map', '0:v', '-map', '0:a?'];
+  const withData = [...allTracks, '-map', '0:d?', '-copy_unknown', '-c:d', 'copy'];
+  const tries: Array<[string[], 'copied' | 'audio' | 'encoded', boolean]> = [
+    [[...withData, '-c:v', 'copy', '-c:a', 'copy', ...tag], 'copied', false],
+    [[...allTracks, '-c', 'copy', ...tag], 'copied', true],
+    [[...withData, '-c:v', 'copy', ...tag, '-c:a', 'aac', '-b:a', '192k'], 'audio', false],
+    [[...allTracks, '-c:v', 'copy', ...tag, '-c:a', 'aac', '-b:a', '192k'], 'audio', true],
+    // Re-encoding: just the main picture (ffmpeg turns it upright, so the rotation flag isn't needed).
+    [['-map', '0:v:0', '-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k'], 'encoded', true],
   ];
   let last: Error | null = null;
-  for (const [args, how] of tries) {
+  for (const [args, how, noData] of tries) {
     try {
-      await run(config.movies.ffmpegPath, [...common, ...args, '-f', 'mp4', part], 6 * 3600_000);
-      return how;
+      await run(config.movies.ffmpegPath, ['-nostdin', '-y', '-v', 'error', '-i', from, ...args, ...meta, '-f', 'mp4', part], 6 * 3600_000);
+      const [before, after] = await Promise.all([tagsOf(from).catch(() => new Map<string, string>()), tagsOf(part).catch(() => new Map<string, string>())]);
+      const lost = [...before.keys()].filter((k) => !after.has(k) && !(how === 'encoded' && /^video:(rotate|timecode)$/.test(k)));
+      const hadData = noData && (await run(ffprobePath(), ['-v', 'error', '-select_streams', 'd', '-show_entries', 'stream=index', '-of', 'csv=p=0', from], 60_000).catch(() => '')).trim() !== '';
+      return { how, lost, dataDropped: hadData };
     } catch (err) {
       last = err as Error;
       await fs.unlink(part).catch(() => {}); // only ever our own half-written .part
@@ -202,16 +233,18 @@ export async function fileVideo(file: string, inbox: string, dateHint?: number |
     let note: string | null = null;
     if (converting) {
       const part = path.join(dir, `.${path.basename(target)}.${process.pid}.part`);
-      const how = await convert(file, part, p);
+      const { how, lost, dataDropped } = await convert(file, part, p);
       await fs.rename(part, target);
       await keepIn(inbox, 'Converted', file, name);
-      note = `${ext} → .mp4${how === 'copied' ? '' : how === 'audio' ? ' (sound re-encoded)' : ' (re-encoded)'} · original kept in Inbox/Converted`;
+      const kept = lost.length ? ` · ⚠️ not carried over: ${lost.slice(0, 6).join(', ')}${lost.length > 6 ? ` +${lost.length - 6}` : ''}` : ' · all metadata kept';
+      const data = dataDropped ? ' · iPhone data track (e.g. Live Photo link) only in the original' : '';
+      note = `${ext} → .mp4${how === 'copied' ? '' : how === 'audio' ? ' (sound re-encoded)' : ' (re-encoded)'}${kept}${data} · original kept in Inbox/Converted`;
     } else {
       try {
         await fs.rename(file, target);
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
-        await fs.copyFile(file, target, fsSync.constants.COPYFILE_EXCL);
+        await fs.copyFile(file, target, fsSync.constants.COPYFILE_EXCL); // same bytes, so all its metadata
         await keepIn(inbox, 'Filed', file, name);
       }
     }

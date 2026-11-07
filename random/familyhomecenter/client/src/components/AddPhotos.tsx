@@ -152,6 +152,11 @@ export function AddPhotos({ onClose, onAdded }: { onClose: () => void; onAdded: 
         <button type="button" onClick={() => input.current?.click()} disabled={busy}>
           {rows.length ? '＋ Pick more' : '📷 Pick photos & videos'}
         </button>
+        <p className="hint">
+          Files are saved exactly as sent — date, location, camera and all other details stay in them. On an iPhone, the photo picker can change a file
+          before it's sent: tap <strong>Options</strong> at the top of the picker and keep <strong>Location</strong> on (and pick <strong>Current</strong>{' '}
+          format if it's offered, so HEIC photos and videos aren't converted or shrunk). The Shortcut below always sends the originals.
+        </p>
         {rangeText && <p className="hint">Only adding ones taken {from && to ? 'on ' : ''}{rangeText}.</p>}
         {rows.length > 0 && (
           <>

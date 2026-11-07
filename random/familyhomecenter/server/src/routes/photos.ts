@@ -420,6 +420,10 @@ photosRouter.post(
       return res.status(400).json({ error: `${name}: only pictures (JPG, PNG, HEIC, WebP, GIF) and videos (MOV, MP4)` });
     }
     const hint = Number(req.get('x-last-modified')) || Date.parse(String(req.get('x-taken') ?? '')) || null;
+    // The file is saved byte for byte (all EXIF / GPS / HEIC / video metadata kept); give it the
+    // phone's own file date too, instead of the time it was uploaded.
+    const fileDate = Number(req.get('x-last-modified'));
+    if (fileDate > 0) await fsSync.promises.utimes(tmp, new Date(fileDate), new Date(fileDate)).catch(() => {});
     const by = String(req.get('x-acting-member') ?? '') || null;
 
     // 📅 Only between these days? Checked with the same date the file would be filed by.

@@ -47,13 +47,32 @@ share is mounted on the Pi:
 
 A folder that already exists on the Pi is used as it is.
 
-- **Movies section:** `MOVIE_LIBRARY_DIR=` in `.env`, or **🎬 Movies → 📁 Movies folder**
-  (parents).
-- **Where the Inbox puts videos:** `VIDEOS_DIR=` (default `/share/media/movies/takk`), or
-  **Settings → 📁 Photo library → 📥 Inbox → Movies folder**.
+Both folders are set in **⚙️ Settings → 🎬 Movies** (parents), which also shows whether the
+Family Home Center can read each one, and why not if it can't:
 
-If the share isn't mounted, the Movies page says so. Videos then **wait in the Inbox**: nothing is
+- **Movies folder** — what the 🎬 Movies section lists. `MOVIE_LIBRARY_DIR=` in `.env` is the default.
+  A plain Pi folder like `/mnt/movies` works too.
+- **Home videos folder** — where the Inbox / 📤 Add photos files videos, by year. `VIDEOS_DIR=`
+  (default `/share/media/movies/takk`) is the default.
+
+If a folder can't be opened, the Movies page says why and checks again on every visit (and on 🔄),
+so it clears up as soon as the share is mounted. Videos then **wait in the Inbox**: nothing is
 written to the Pi's own disk by mistake.
+
+### "Can't open the movies folder" but `ls` works for me
+
+The server runs as its own user (`User=pi` in familyhomecenter.service), not as you or root. Test
+as that user: `sudo -u pi ls /mnt/movies`. If that fails, the cifs mount needs
+`uid=pi,gid=pi` (or `dir_mode=0755,file_mode=0644`) in its `/etc/fstab` options, then
+`sudo umount /mnt/movies && sudo mount -a`.
+
+## .mov → .mp4 keeps the metadata
+
+The conversion copies every file-level tag (recorded date, GPS location, camera make/model/software,
+the `com.apple.quicktime.*` keys), per-stream tags, chapters, rotation, and all video and sound
+tracks. It also keeps the iPhone's data tracks (timed location, Live Photo link) when the `.mp4` can
+hold them. Afterwards the `.mp4`'s tags are compared with the `.mov`'s, and anything that didn't
+make it is named in the filing log. The original `.mov` is always kept in `Inbox/Converted`.
 
 ## 3. ffmpeg
 

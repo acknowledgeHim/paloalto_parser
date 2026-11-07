@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
@@ -172,7 +173,12 @@ export function MovieLibraryPage() {
         </button>
       </div>
       {error && <div className="settings-login__error">{error}</div>}
-      {lib?.error && <div className="settings-login__error">{lib.error}</div>}
+      {lib?.error && (
+        <div className="settings-login__error">
+          {lib.error}
+          {isParent && <> — change the folder in <Link to="/settings">⚙️ Settings → 🎬 Movies</Link>.</>}
+        </div>
+      )}
       {!lib && !error && <p>Loading…</p>}
 
       {lib && (
@@ -232,7 +238,11 @@ export function MovieLibraryPage() {
               <button type="button" className="secondary" onClick={() => setShown(shown + PAGE)}>Show more ({list.length - shown} left)</button>
             </div>
           )}
-          {isParent && <FolderSetting location={lib.location} dir={lib.dir} onSaved={() => void load(true)} />}
+          {isParent && (
+            <p className="hint">
+              📁 Movies folder: <code>{lib.location}</code> — change it in <Link to="/settings">⚙️ Settings → 🎬 Movies</Link>.
+            </p>
+          )}
         </>
       )}
 
@@ -319,38 +329,3 @@ function Player({ m, startAt, onPlace, onClose }: { m: LibraryMovie; startAt: nu
   );
 }
 
-function FolderSetting({ location, dir, onSaved }: { location: string; dir: string; onSaved: () => void }) {
-  const [v, setV] = useState(location);
-  const [err, setErr] = useState<string | null>(null);
-  return (
-    <details className="movie-library__setting">
-      <summary>📁 Movies folder</summary>
-      <label className="camera-storage__inline">
-        Share location
-        <input value={v} onChange={(e) => setV(e.target.value)} style={{ flex: 1, minWidth: '16em' }} aria-label="Movies folder" />
-        {v !== location && (
-          <button
-            type="button"
-            className="secondary"
-            onClick={() =>
-              api
-                .patch('/movie-library/settings', { dir: v })
-                .then(() => {
-                  setErr(null);
-                  onSaved();
-                })
-                .catch((e) => setErr((e as Error).message))
-            }
-          >
-            Save
-          </button>
-        )}
-      </label>
-      <p className="hint">
-        The folder on the SMB share (e.g. <code>/share/media/movies</code>). The Pi reads it through the mounted share{dir !== location ? <> — here that's <code>{dir}</code></> : ''}. Every video in it and
-        its folders is listed; nothing in it is ever changed. See docs/MOVIES_LIBRARY.md.
-      </p>
-      {err && <div className="settings-login__error">{err}</div>}
-    </details>
-  );
-}

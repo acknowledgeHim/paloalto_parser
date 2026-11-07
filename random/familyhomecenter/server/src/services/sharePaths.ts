@@ -1,4 +1,6 @@
 import fsSync from 'node:fs';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 /**
@@ -64,4 +66,56 @@ export function resolveShare(loc: string): { local: string; via: string | null }
     }
   }
   return best ? { local: best.local, via: best.via } : { local: loc, via: null };
+}
+
+/** The mounted share (from /proc/mounts, any type) that `dir` is inside, if any. */
+export function mountFor(dir: string): { source: string; at: string; fstype: string; options: string } | null {
+  try {
+    const unesc = (s: string) => s.replace(/\\(\d{3})/g, (_, o) => String.fromCharCode(parseInt(o, 8)));
+    const all = fsSync
+      .readFileSync('/proc/mounts', 'utf8')
+      .split('\n')
+      .map((l) => l.split(' '))
+      .filter((f) => f.length > 3)
+      .map((f) => ({ source: unesc(f[0]), at: unesc(f[1]), fstype: f[2], options: f[3] }))
+      .filter((m) => m.at !== '/' && (dir === m.at || dir.startsWith(m.at.endsWith('/') ? m.at : `${m.at}/`)));
+    return all.sort((a, b) => b.at.length - a.at.length)[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why the server can't read `dir` (null when it can) — in words a parent can act on. The server
+ * runs as its own user (usually pi), so a folder that `ls` shows for root or another user can
+ * still be closed to it.
+ */
+export async function folderProblem(dir: string): Promise<string | null> {
+  const user = (() => {
+    try {
+      return os.userInfo().username;
+    } catch {
+      return `uid ${process.getuid?.() ?? '?'}`;
+    }
+  })();
+  try {
+    await fsp.readdir(dir);
+    return null;
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    const m = mountFor(dir);
+    const how = m ? ` (${m.source} is mounted on ${m.at}, ${m.fstype})` : '';
+    if (code === 'ENOENT') {
+      return `${dir} doesn't exist for the Family Home Center${how}. Check the spelling (it's case-sensitive), and that it's a folder on the Pi itself — not a path on the NAS or another computer.`;
+    }
+    if (code === 'EACCES' || code === 'EPERM') {
+      const uidOpt = m && /(^|,)uid=/.test(m.options) ? '' : ` Add uid=${user},gid=${user} to the mount's options in /etc/fstab, then remount.`;
+      return `The Family Home Center runs as "${user}" and isn't allowed to read ${dir}${how}.${uidOpt} Test it with: sudo -u ${user} ls ${dir}`;
+    }
+    if (code === 'ENOTDIR') return `${dir} is a file, not a folder.`;
+    if (code === 'EHOSTDOWN' || code === 'EHOSTUNREACH' || code === 'ETIMEDOUT' || code === 'EIO' || code === 'ESTALE' || code === 'ENODEV') {
+      return `The share at ${dir} isn't answering (${code})${how} — is the NAS on? Try: sudo umount -l ${m?.at ?? dir} && sudo mount -a`;
+    }
+    return `Can't read ${dir}: ${(e as Error).message}${how}`;
+  }
 }

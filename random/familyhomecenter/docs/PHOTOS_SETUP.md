@@ -426,7 +426,7 @@ Videos dropped into the Inbox (or picked in 📤 Add photos) go to the **movies 
 `/share/media/movies/takk/<YYYY>/` by default, in a folder for the year they were recorded.
 It's written as the location on the SMB share. The Pi finds it through the mounted share (see
 docs/MOVIES_LIBRARY.md). You can change it with `VIDEOS_DIR=` in `.env` or in
-**Settings → 📁 Photo library → 📥 Inbox**. If that share isn't mounted, videos wait in the Inbox.
+**Settings → 🎬 Movies → Home videos folder**. If that share isn't mounted, videos wait in the Inbox.
 
 - A `.mov` is turned into an `.mp4`. Usually ffmpeg just copies the video and sound into the new
   file, so it's quick and loses nothing. If they don't fit in an `.mp4`, the sound (or both) is

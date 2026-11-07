@@ -20,7 +20,7 @@ export const LIBRARY_EXTS = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.avi', '.w
 /** What a browser can usually play straight from the file (Safari also plays HEVC .mp4/.mov). */
 const PLAYABLE_EXTS = new Set(['.mp4', '.m4v', '.mov', '.webm']);
 
-import { resolveShare } from './sharePaths.js';
+import { folderProblem, resolveShare } from './sharePaths.js';
 
 /** The movies folder as written (a share location like /share/media/movies, or a Pi folder)… */
 export const libraryLocation = () => getSetting('movie_library_dir') || config.movieLibraryDir;
@@ -104,10 +104,10 @@ async function walk(root: string): Promise<Array<{ rel: string; size: number; mt
 
 async function scan(): Promise<void> {
   const dir = libraryDir();
-  try {
-    await fs.access(dir);
-  } catch {
-    cache = { at: Date.now(), dir, movies: [], error: `Can't open ${libraryLocation()}${dir !== libraryLocation() ? ` (${dir} on the Pi)` : ''} — mount that share on the Pi (docs/MOVIES_LIBRARY.md)` };
+  const problem = await folderProblem(dir);
+  if (problem) {
+    const where = dir !== libraryLocation() ? ` (${libraryLocation()} → ${dir} on the Pi)` : '';
+    cache = { at: Date.now(), dir, movies: [], error: `Can't open the movies folder${where}: ${problem} See docs/MOVIES_LIBRARY.md.` };
     return;
   }
   const files = await walk(dir);
@@ -142,11 +142,12 @@ async function scan(): Promise<void> {
 
 /** The library (re-read when older than 10 minutes, or the folder changed). */
 export async function listLibrary(force = false): Promise<{ dir: string; location: string; movies: LibraryMovie[]; error: string | null; scanned_at: string | null }> {
-  const stale = !cache || cache.dir !== libraryDir() || Date.now() - cache.at > 10 * 60_000;
+  // A folder that couldn't be opened is tried again on every look (it may have just been mounted).
+  const stale = !cache || !!cache.error || cache.dir !== libraryDir() || Date.now() - cache.at > 10 * 60_000;
   if (force || stale) {
     scanning ??= scan().finally(() => (scanning = null));
     // A first look waits for the list; later ones get the old list while it refreshes.
-    if (!cache || force || cache.dir !== libraryDir()) await scanning;
+    if (!cache || force || cache.error || cache.dir !== libraryDir()) await scanning;
   }
   return { dir: cache!.dir, location: libraryLocation(), movies: cache!.movies, error: cache!.error, scanned_at: cache ? new Date(cache.at).toISOString() : null };
 }

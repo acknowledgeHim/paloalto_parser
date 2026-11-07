@@ -37,7 +37,6 @@ export function PhotoInboxSettings() {
   const acting = useActing();
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [dir, setDir] = useState('');
-  const [vdir, setVdir] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,7 +46,6 @@ export function PhotoInboxSettings() {
       .then((i) => {
         setInbox(i);
         setDir(i.inbox_dir);
-        setVdir(i.video_dir);
       })
       .catch((e) => setError(e.message));
   useEffect(() => {
@@ -82,8 +80,9 @@ export function PhotoInboxSettings() {
         the same way.
       </p>
       <p className="hint">
-        🎬 Videos go to the movies folder below, in a folder for the year they were recorded (<code>2025</code>). A <code>.mov</code> is turned into an{' '}
-        <code>.mp4</code> first (the original is kept in <code>Inbox/Converted</code>); an <code>.mp4</code> is moved as it is.
+        🎬 Videos go to the home videos folder (<code>{inbox.video_dir}</code> — set under 🎬 Movies below), in a folder for the year they were recorded
+        (<code>2025</code>). A <code>.mov</code> is turned into an <code>.mp4</code> with all its metadata (the original is kept in{' '}
+        <code>Inbox/Converted</code>); an <code>.mp4</code> is moved as it is.
       </p>
       {!inbox.writable && (
         <div className="settings-login__error">
@@ -96,15 +95,6 @@ export function PhotoInboxSettings() {
         <input value={dir} onChange={(e) => setDir(e.target.value)} style={{ flex: 1, minWidth: '16em' }} aria-label="Inbox folder" />
         {dir !== inbox.inbox_dir && (
           <button type="button" className="secondary" disabled={busy} onClick={() => run(async () => void (await api.patch('/photos/inbox', body({ inbox_dir: dir }))))}>
-            Save
-          </button>
-        )}
-      </label>
-      <label className="camera-storage__inline">
-        Movies folder
-        <input value={vdir} onChange={(e) => setVdir(e.target.value)} style={{ flex: 1, minWidth: '16em' }} aria-label="Movies folder" />
-        {vdir !== inbox.video_dir && (
-          <button type="button" className="secondary" disabled={busy} onClick={() => run(async () => void (await api.patch('/photos/inbox', body({ video_dir: vdir }))))}>
             Save
           </button>
         )}

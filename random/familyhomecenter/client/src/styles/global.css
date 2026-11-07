@@ -3049,7 +3049,6 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .modal-panel.movie-player { max-width: min(1100px, 100%); }
 .movie-player video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; margin: 10px 0; }
 .movie-player code { overflow-wrap: anywhere; }
-.movie-library__setting { margin-top: 24px; }
 
 /* 📅 Only taken between… (components/AddPhotos.tsx) */
 .add-photos__range { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 4px 0 12px; }
