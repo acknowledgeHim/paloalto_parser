@@ -102,3 +102,24 @@ Center makes an `.mp4` copy next to each one: `Holiday 2004.mpg` → `Holiday 20
   Progress, and anything that couldn't be copied, is shown in **Settings → 🎬 Movies**. You can
   switch it off there.
 - The share has to be writable for the server's user. If it's read-only, Settings says so.
+
+## 📀 DVDs → .mp4 (scripts/dvd_to_mp4.py)
+
+For **unprotected** DVDs: home camcorder discs, DVDs you burned yourself, or a copied `VIDEO_TS`
+folder. Store-bought movie DVDs are copy-protected (CSS). The script doesn't get around that: it
+says so and stops.
+
+```bash
+python3 scripts/dvd_to_mp4.py /media/pi/MY_DVD --list                         # the titles on it
+python3 scripts/dvd_to_mp4.py /media/pi/MY_DVD -o /mnt/media/movies/DVDs      # the main (longest) title
+python3 scripts/dvd_to_mp4.py /media/pi/MY_DVD --all --name "Wedding 2003" -o /mnt/media/movies/DVDs
+# an .iso: sudo mount -o loop,ro disc.iso /mnt/iso — then point at /mnt/iso
+```
+
+- It only reads the disc. It never overwrites: if the name is taken, it writes `Name (2).mp4`.
+  It writes to a hidden `.part` file and renames it when done.
+- Output is H.264 + AAC with every sound track. Interlaced video is smoothed and 16:9 stays 16:9.
+  DVD subtitles are pictures, which an `.mp4` can't hold, so they're left out.
+- Write it into the movies folder and it shows up in 🎬 Movies.
+- `--crf` (quality, default 20) and `--preset` (speed, default veryfast). On a Pi it takes roughly
+  as long as the video. It's quicker on a PC (the script runs anywhere ffmpeg does).
