@@ -109,6 +109,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { section: 'knowledge-base', label: '📚 Knowledge Base', path: '/knowledge-base' },
         { section: 'internet', label: '🌐 Internet', path: '/internet', badge: pendingRequests },
         { label: '🔑 Passwords', path: '/passwords' },
+        { label: '📲 Phone apps', path: '/apps' },
         { label: '📹 Cameras', path: '/cameras', parent: true },
         { label: '⚙️ Settings', path: '/settings' },
       ],

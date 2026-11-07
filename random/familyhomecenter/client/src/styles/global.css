@@ -2774,6 +2774,19 @@ body.photo-map-full-open { overflow: hidden; }
 .passwords-page__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
 .passwords-page__steps code { overflow-wrap: anywhere; }
 
+/* 📲 Phone apps (pages/PhoneAppsPage.tsx) */
+.phone-apps-page { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+.phone-apps-page code { overflow-wrap: anywhere; }
+.phone-apps-page__app { display: flex; flex-direction: column; gap: 12px; }
+.phone-apps-page__app h2, .phone-apps-page__app h3 { margin: 0; }
+.phone-apps-page__platforms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.phone-apps-page__platform { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+.phone-apps-page__platform.is-this-phone { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.phone-apps-page__get { display: inline-block; padding: 14px 22px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; font-size: 1.1em; text-decoration: none; }
+.phone-apps-page__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.phone-apps-page__admin { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+.phone-apps-page__buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* ⌨️ Typing (pages/TypingPage.tsx) */
 .typing-page { display: flex; flex-direction: column; gap: 14px; }
 .typing-page__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
