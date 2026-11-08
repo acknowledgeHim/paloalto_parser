@@ -2214,6 +2214,12 @@ body.fp-full-open { overflow: hidden; }
 .dressed__hand { right: 0; bottom: 0; transform: translate(62%, 10%) rotate(10deg); }
 .dressed__pet { left: 0; bottom: 0; transform: translate(-78%, 18%); animation: dressed-pet 1.6s ease-in-out infinite; }
 @keyframes dressed-pet { 0%, 100% { transform: translate(-78%, 18%); } 50% { transform: translate(-78%, 4%); } }
+/* 🚗 A vehicle they ride: in front of the bottom of the avatar, so they sit in / on it. */
+.dressed__vehicle { left: 50%; bottom: 0; transform: translate(-50%, 48%); z-index: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)); }
+/* Small avatars (in lists, next to names): the side pieces tuck in closer so they don't cover the text. */
+.dressed--small .dressed__hand { transform: translate(40%, 10%) rotate(10deg); }
+.dressed--small .dressed__pet { transform: translate(-45%, 18%); }
+.dressed--small .dressed__vehicle { transform: translate(-50%, 38%); }
 .dressed__magic { inset: 0; }
 .dressed__spark { position: absolute; opacity: 0; animation: dressed-spark 2.4s ease-out infinite; }
 .dressed__spark--0 { left: -10%; top: 30%; }

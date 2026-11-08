@@ -5,9 +5,16 @@
 **Chores ▾ → 👕 Dress up**, or the 👕 link in a kid's Prize Bank column. Kids spend their Prize
 Bank ⭐ stars on pieces for their avatar.
 
-- **Pieces:** a hat, glasses, something in their hand, a pet and a bit of magic (sparkles, hearts, flames…), one of each at a time.
+- **Pieces:** a hat, glasses, something in their hand, a pet, a vehicle and a bit of magic (sparkles, hearts, flames…), one of each at a time.
+- **🚗 Vehicles** are the big things to save up for: 36 of them, and the fancier the ride, the more stars it costs:
+  - **20 ⭐:** roller skates, a skateboard, a scooter or a sled.
+  - **25–45 ⭐:** bikes, a canoe, a moped, a tractor, cars, a pickup, a sailboat, a camper van, a school bus.
+  - **50–60 ⭐:** an ambulance, a police car, a fire truck, a speedboat, a race car, a big rig, a yacht.
+  - **70–100 ⭐:** trains, a cable car, a parachute, a helicopter, planes, a cruise ship.
+  - **The top:** a 🚀 rocket (150 ⭐) and a 🛸 flying saucer (200 ⭐).
+  The vehicle sits across the bottom of the avatar, so it looks like they are riding it.
 - **Trying and buying:** tap a piece to try it on, then **Buy it** to spend the stars. Tap a piece you own to wear it or take it off.
-- **Where it shows:** the floor plan, the Prize Bank and the replay.
+- **Where it shows:** everywhere their avatar shows up: the floor plan, the Prize Bank, Who's home, the name switcher, chores, lists, the replay and so on. Small avatars next to names keep their pieces tucked in close.
 - **Who can change it:** a kid can only spend their own stars. A parent can do it for anyone, and can **↶ refund** a piece, which gives the stars back.
 
 ## 🌗 Day and night on the floor plan

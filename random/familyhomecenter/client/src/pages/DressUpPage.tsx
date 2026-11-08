@@ -7,8 +7,8 @@ import { DressedAvatar } from '../components/DressedAvatar.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 
 /**
- * 👕 Dress up: spend Prize Bank stars on hats, glasses, pets and magic for your avatar — it wears
- * them on the floor plan and the Prize Bank. Tap a piece to try it on; buy it to keep it.
+ * 👕 Dress up: spend Prize Bank stars on hats, glasses, pets, vehicles and magic for your avatar — it wears
+ * them everywhere their avatar shows up. Tap a piece to try it on; buy it to keep it.
  */
 export function DressUpPage() {
   const { id } = useParams<{ id: string }>();

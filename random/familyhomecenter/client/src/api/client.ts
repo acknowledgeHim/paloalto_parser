@@ -353,7 +353,7 @@ export interface WeatherData {
 
 // ---- 👕 Dress up ----
 
-export type OutfitSlot = 'hat' | 'eyes' | 'hand' | 'pet' | 'magic';
+export type OutfitSlot = 'hat' | 'eyes' | 'hand' | 'pet' | 'vehicle' | 'magic';
 export interface OutfitItem {
   id: string;
   slot: OutfitSlot;

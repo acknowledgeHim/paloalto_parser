@@ -64,3 +64,8 @@ export function useFamilyMembers(): FamilyMemberContextValue {
   if (!ctx) throw new Error('useFamilyMembers must be used within FamilyMemberProvider');
   return ctx;
 }
+
+/** The family list when there is one (avatars can show up outside the provider, e.g. a login screen). */
+export function useOptionalFamilyMembers(): FamilyMemberContextValue | null {
+  return useContext(Ctx);
+}
