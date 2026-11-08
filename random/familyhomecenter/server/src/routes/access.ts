@@ -23,6 +23,7 @@ export const SECTION_KEYS = [
   'photos',
   'movies',
   'movie-library',
+  'games',
   'documents',
   'intercom',
   'internet',

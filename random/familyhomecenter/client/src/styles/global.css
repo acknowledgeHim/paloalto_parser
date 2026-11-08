@@ -3083,3 +3083,45 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .add-photos__shortcut ol { padding-left: 1.3em; }
 .add-photos__shortcut li { margin: 6px 0; }
 .add-photos__shortcut code { overflow-wrap: anywhere; }
+
+/* 🎮 Games (pages/GamesPage.tsx) */
+.games-page__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; margin: 12px 0; }
+.games-card { display: flex; flex-direction: column; gap: 8px; }
+.games-card h2 { margin: 0; }
+.games-card__emoji { font-size: 3em; line-height: 1; }
+.games-card--locked .games-card__emoji { filter: grayscale(0.4); }
+.games-card a.button {
+  display: inline-flex; align-items: center; justify-content: center; align-self: flex-start;
+  min-height: var(--tap-min); padding: 0 20px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; text-decoration: none;
+}
+.games-page__kid { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border, rgba(0,0,0,0.1)); }
+.games-page__kid-name { display: inline-flex; align-items: center; gap: 8px; min-width: 12em; }
+
+/* ⛰️ Hill Hopper (games/) — the garage and the run */
+.hill-garage__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hill-garage__driver { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.hill-garage__name { font-size: 1.3em; font-weight: 700; }
+.hill-garage__go { margin-left: auto; font-size: 1.3em; min-height: 56px; padding: 0 28px; }
+.hill-garage__rides { display: flex; flex-wrap: wrap; gap: 8px; }
+.hill-garage__ride { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 84px; padding: 8px; font-size: 0.85em; }
+.hill-garage__ride span { font-size: 2em; line-height: 1.1; }
+.hill-garage__ride.is-on { outline: 3px solid var(--accent); }
+.hill-garage__upgrade { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.hill-garage__pips { display: flex; gap: 4px; margin-top: 4px; }
+.hill-garage__pips span { width: 22px; height: 8px; border-radius: 4px; background: rgba(127,127,127,0.3); }
+.hill-garage__pips span.is-on { background: var(--accent); }
+.hill-garage__top { margin: 0; padding-left: 1.4em; }
+.hill-garage__top li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.hill-garage__top li strong { margin-left: auto; }
+.hill-garage__result h2 { margin-top: 0; }
+.hill-run { position: relative; width: 100%; height: min(78vh, 760px); min-height: 320px; border-radius: 12px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.hill-run__canvas { display: block; width: 100%; height: 100%; }
+.hill-run__quit { position: absolute; top: 76px; left: 12px; min-height: 36px; padding: 0 12px; }
+.hill-run__pedal {
+  position: absolute; bottom: 16px; width: clamp(96px, 18vw, 150px); height: clamp(96px, 22vh, 150px);
+  border-radius: 20px; font-weight: 800; font-size: 1.1em; color: #fff; opacity: 0.85; touch-action: none;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+}
+.hill-run__pedal.is-down { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.3); opacity: 1; }
+.hill-run__pedal--brake { left: 16px; background: #e53935; }
+.hill-run__pedal--gas { right: 16px; background: #43a047; }

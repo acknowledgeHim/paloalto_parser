@@ -184,3 +184,32 @@ Only new things were added:
 - **Weather:** now also asks for sunrise and sunset.
 
 No existing data changes.
+
+## 🎮 Games
+
+**🎵 Fun → 🎮 Games** (`/#/games`). Each game is **unlocked once with Prize Bank ⭐ stars**, then
+played as much as you like.
+
+- **Parents play free.** In **Kids' games** a parent can unlock a game for a kid (it uses the kid's
+  stars) or **↶ refund** it (stars back, game locked again; scores and progress are kept).
+- Kids' access has a **Games** switch (Settings → Kids' access). A kid whose sections were already
+  picked by hand needs it ticked.
+- Kept per person, in new tables (`game_unlocks`, `game_scores`, `game_saves`; no existing data
+  changes): unlocks, every run's score, and in-game progress.
+- Adding a game: an entry in `server/src/services/games.ts` and a page in `client/src/games/`.
+
+### ⛰️ Hill Hopper (25 ⭐)
+
+A side-scrolling hill driver. You drive your 👕 Dress up ride (or a buggy in your colour), with your
+own avatar at the wheel wearing your hat.
+
+- **GAS** (right pedal, → / D) and **BRAKE** (left pedal, ← / A; it reverses once stopped). The
+  big pedals are made for the touch screen.
+- **Balance:** too much gas on a hill tips you over backwards. If your head touches the ground,
+  the run's over. In the air, gas tips you back and brake tips you forward.
+- **⛽ Fuel** runs down while you drive. Grab cans, which get further apart the further you go.
+- **🪙 Coins** come from the road (5, then 10 after 600 m, then 25 after 1500 m), plus flips (+25)
+  and big jumps (+10). They buy **upgrades**: engine, tires, springs and fuel tank, 5 levels each
+  (100 → 2000 coins). Coins stay in the game; they're not Prize Bank stars.
+- It's the same course every run, so the **Best** flag means something. **🏆 Family best**
+  shows everyone's longest run.

@@ -1336,6 +1336,34 @@ db.exec(`
   );
 `);
 
+// 🎮 Games (routes/games.ts): games a kid unlocked with stars, every run's score, and each
+// person's progress in a game (coins, upgrades). New tables; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_unlocks (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    stars INTEGER NOT NULL DEFAULT 0,
+    unlocked_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id)
+  );
+  CREATE TABLE IF NOT EXISTS game_scores (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    detail TEXT,
+    played_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_game_scores_game ON game_scores (game_id, score);
+  CREATE TABLE IF NOT EXISTS game_saves (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id)
+  );
+`);
+
 // 🔄 Movies turned the right way up (routes/movieLibrary.ts): only how the browser shows them —
 // the video files on the share are never changed. New table; no existing data changes.
 db.exec(`
