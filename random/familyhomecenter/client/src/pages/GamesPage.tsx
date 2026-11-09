@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { TokenWallet } from '../components/TokenWallet.js';
+import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 interface ShelfGame {
@@ -49,6 +50,9 @@ export function GamesPage() {
   const [givePlays, setGivePlays] = useState<Record<string, string>>({}); // "kid|game" → how many to give
   const [rules, setRules] = useState<Record<string, GameRule> | null>(null);
   const [rulesNote, setRulesNote] = useState<string | null>(null);
+  // The sections under the games fold down to their heading (open ones remembered).
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+  useCollapsibleSections(pageEl, 'familyhomecenter.games.open');
   useEffect(() => {
     if (isParent) api.get<Record<string, GameRule>>('/games/settings').then(setRules).catch(() => {});
   }, [isParent]);
@@ -91,7 +95,7 @@ export function GamesPage() {
   const mine = activeProfile ? shelves[activeProfile.id] : undefined;
 
   return (
-    <div className="games-page">
+    <div className="games-page" ref={setPageEl}>
       <h1>🎮 Games</h1>
       {!activeProfile && <p className="hint">Pick who's playing (your name, up top) to play.</p>}
 
