@@ -25,9 +25,19 @@ const LOCKED_GAMES: Mode[] = ['tower', 'story', 'daily'];
 const DAILY_ACCURACY = 80;
 const SETTING_KEY = 'typing_rewards';
 
+export interface SpeedStar {
+  wpm: number;
+  stars: number;
+}
+
 export interface TypingRewards {
   /** Stars for passing lesson n the first time: levels[n - 1]. */
   levels: number[];
+  /**
+   * ⚡ Stars for passing a lesson at a speed: e.g. 10 wpm = 1 ⭐, 20 wpm = 3 ⭐. A lesson is worth the
+   * highest one reached (once per lesson); a faster pass later pays the difference.
+   */
+  speed_stars: SpeedStar[];
   balloon_best: number;
   race_best: number;
   whack_best: number;
@@ -43,6 +53,23 @@ export interface TypingRewards {
   games_per_day: number;
 }
 
+/** Sorted by speed, one per speed, sensible numbers; anything else falls back. */
+function cleanSpeedStars(v: unknown, fallback: SpeedStar[]): SpeedStar[] {
+  if (!Array.isArray(v)) return fallback;
+  const byWpm = new Map<number, number>();
+  for (const t of v.slice(0, 20)) {
+    const wpm = Math.round(Number((t as SpeedStar)?.wpm));
+    const stars = Math.round(Number((t as SpeedStar)?.stars));
+    if (wpm >= 1 && wpm <= 250 && stars >= 0 && stars <= 1000) byWpm.set(wpm, stars);
+  }
+  return [...byWpm].map(([wpm, stars]) => ({ wpm, stars })).sort((a, b) => a.wpm - b.wpm);
+}
+
+/** What a lesson passed at this speed is worth (the highest speed reached). */
+export function speedWorth(tiers: SpeedStar[], wpm: number): number {
+  return tiers.filter((t) => wpm >= t.wpm).reduce((m, t) => Math.max(m, t.stars), 0);
+}
+
 function readRewards(): TypingRewards {
   let saved: Partial<TypingRewards> = {};
   try {
@@ -53,6 +80,7 @@ function readRewards(): TypingRewards {
   const n = (v: unknown, d: number) => (Number.isFinite(Number(v)) && v !== null && v !== undefined ? Math.max(0, Math.min(1000, Math.round(Number(v)))) : d);
   return {
     levels: Array.from({ length: LEVEL_COUNT }, (_, i) => n(saved.levels?.[i], 1)),
+    speed_stars: cleanSpeedStars(saved.speed_stars, [{ wpm: 10, stars: 1 }]),
     balloon_best: n(saved.balloon_best, 1),
     race_best: n(saved.race_best, 1),
     whack_best: n(saved.whack_best, 1),
@@ -78,6 +106,7 @@ typingRouter.put('/settings/rewards', requireAdmin, (req, res) => {
   const merged: TypingRewards = { ...cur };
   for (const k of Object.keys(cur) as Array<keyof TypingRewards>) {
     if (k === 'levels') merged.levels = Array.isArray(b.levels) ? cur.levels.map((v, i) => b.levels![i] ?? v) : cur.levels;
+    else if (k === 'speed_stars') merged.speed_stars = b.speed_stars !== undefined ? cleanSpeedStars(b.speed_stars, cur.speed_stars) : cur.speed_stars;
     else if (k === 'daily_enabled') merged.daily_enabled = typeof b.daily_enabled === 'boolean' ? b.daily_enabled : cur.daily_enabled;
     else if (b[k] !== undefined) (merged[k] as number) = Number(b[k]);
   }
@@ -180,10 +209,11 @@ typingRouter.get('/:memberId', (req, res) => {
   if (!db.prepare('SELECT 1 FROM family_members WHERE id = ?').get(id)) return res.status(404).json({ error: 'No such person' });
   const levels = db
     .prepare(
-      `SELECT level, MAX(wpm) AS best_wpm, MAX(accuracy) AS best_accuracy, MAX(passed) AS passed, COUNT(*) AS tries
+      `SELECT level, MAX(wpm) AS best_wpm, MAX(accuracy) AS best_accuracy, MAX(passed) AS passed, COUNT(*) AS tries,
+              SUM(speed_stars) AS speed_paid
        FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' GROUP BY level`
     )
-    .all(id) as Array<{ level: number; best_wpm: number; best_accuracy: number; passed: number; tries: number }>;
+    .all(id) as Array<{ level: number; best_wpm: number; best_accuracy: number; passed: number; tries: number; speed_paid: number }>;
   const best = (mode: string, col: 'score' | 'wpm') =>
     (db.prepare(`SELECT MAX(${col}) AS v FROM typing_results WHERE family_member_id = ? AND mode = ?`).get(id, mode) as { v: number | null }).v ?? 0;
   res.json({
@@ -257,6 +287,21 @@ typingRouter.post('/:memberId/results', (req, res) => {
   let stars = 0;
   let capped = false;
   if (earned && mode === 'lesson') stars = rewards.levels[row.level - 1] ?? 0;
+  // ⚡ Speed stars: passing a lesson at the parent's speeds. Worth the highest speed reached, less
+  // what that lesson's speed already paid.
+  let speedStars = 0;
+  if (mode === 'lesson' && row.passed) {
+    const paid = (
+      db.prepare("SELECT COALESCE(SUM(speed_stars), 0) AS n FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' AND level = ?").get(id, row.level) as {
+        n: number;
+      }
+    ).n;
+    speedStars = Math.max(0, speedWorth(rewards.speed_stars, row.wpm) - paid);
+    if (speedStars) {
+      why = earned && stars ? `${why} at ${Math.floor(row.wpm)} wpm` : `Lesson ${row.level} at ${Math.floor(row.wpm)} wpm`;
+      stars += speedStars;
+    }
+  }
   if (earned && mode === 'daily') stars = rewards.daily;
   if (earned && mode !== 'lesson' && mode !== 'daily') {
     const worth = rewards[`${mode}_best` as 'balloon_best'];
@@ -267,13 +312,14 @@ typingRouter.post('/:memberId/results', (req, res) => {
   const now = new Date();
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO typing_results (id, family_member_id, at, day, mode, level, wpm, accuracy, chars, seconds, score, passed, stars)
-       VALUES (@id, @m, @at, @day, @mode, @level, @wpm, @accuracy, @chars, @seconds, @score, @passed, @stars)`
-    ).run({ id: uuidv4(), m: id, at: now.toISOString(), day: localDay(now), mode, ...row, stars });
+      `INSERT INTO typing_results (id, family_member_id, at, day, mode, level, wpm, accuracy, chars, seconds, score, passed, stars, speed_stars)
+       VALUES (@id, @m, @at, @day, @mode, @level, @wpm, @accuracy, @chars, @seconds, @score, @passed, @stars, @speedStars)`
+    ).run({ id: uuidv4(), m: id, at: now.toISOString(), day: localDay(now), mode, ...row, stars, speedStars });
     if (stars) db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(stars, id);
   })();
   res.json({
     stars,
+    speed_stars: speedStars,
     reason: stars ? why : capped ? `${why} — games have paid their stars for today` : earned ? why : null,
     stars_today: starsToday(id),
   });

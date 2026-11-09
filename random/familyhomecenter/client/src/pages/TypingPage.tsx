@@ -43,7 +43,7 @@ import {
  */
 
 interface Progress {
-  levels: Array<{ level: number; best_wpm: number; best_accuracy: number; passed: number; tries: number }>;
+  levels: Array<{ level: number; best_wpm: number; best_accuracy: number; passed: number; tries: number; speed_paid?: number }>;
   best_wpm: number;
   /** Best passing speed on the last lesson passed — "where they're at". */
   level_speed: { level: number; best_wpm: number } | null;
@@ -59,8 +59,14 @@ interface Progress {
   recent: Array<{ at: string; mode: string; level: number; wpm: number; accuracy: number; score: number; passed: number; stars: number }>;
 }
 
+interface SpeedStar {
+  wpm: number;
+  stars: number;
+}
 interface Rewards {
   levels: number[];
+  /** ⚡ passing a lesson at these speeds: worth the highest one reached (once per lesson) */
+  speed_stars: SpeedStar[];
   balloon_best: number;
   race_best: number;
   whack_best: number;
@@ -174,6 +180,7 @@ export function TypingPage() {
         <LessonRound
           level={playing}
           stars={rewards?.levels[playing.n - 1] ?? 0}
+          speed={rewards ? { tiers: rewards.speed_stars, paid: progress?.levels.find((l) => l.level === playing.n)?.speed_paid ?? 0 } : undefined}
           alreadyPassed={passed.has(playing.n)}
           onSave={save}
           onExit={() => setPlaying(null)}
@@ -253,6 +260,11 @@ export function TypingPage() {
 
 // ---- 📘 Lessons ----
 
+/** What a lesson passed at this speed is worth in ⚡ speed stars (the highest speed reached). */
+const speedWorth = (tiers: SpeedStar[] | undefined, wpm: number) => (tiers ?? []).filter((t) => wpm >= t.wpm).reduce((m, t) => Math.max(m, t.stars), 0);
+/** The next speed that would pay more for this lesson, if any. */
+const nextSpeed = (tiers: SpeedStar[] | undefined, paid: number) => (tiers ?? []).find((t) => t.stars > paid);
+
 function LessonList({
   progress,
   rewards,
@@ -270,7 +282,15 @@ function LessonList({
   return (
     <div className="typing-lessons">
       <p className="hint">
-        Pass a lesson with {PASS_ACCURACY}% right and its speed goal to open the next. Fingers rest on the home row:
+        Pass a lesson with {PASS_ACCURACY}% right and its speed goal to open the next.
+        {rewards?.speed_stars.length ? (
+          <>
+            {' '}
+            ⚡ Speed stars for passing a lesson fast: {rewards.speed_stars.map((t) => `${t.wpm} wpm = ${t.stars} ⭐`).join(' · ')} (each lesson pays up to its
+            fastest; go faster later for the rest).
+          </>
+        ) : null}{' '}
+        Fingers rest on the home row:
         left on <kbd>A S D F</kbd>, right on <kbd>J K L ;</kbd> — feel the bumps on F and J.
       </p>
       <div className="typing-lessons__grid">
@@ -279,6 +299,7 @@ function LessonList({
           const done = passed.has(l.n);
           const locked = l.n > nextOpen;
           const stars = rewards?.levels[l.n - 1] ?? 0;
+          const more = nextSpeed(rewards?.speed_stars, p?.speed_paid ?? 0);
           return (
             <button
               key={l.n}
@@ -293,6 +314,7 @@ function LessonList({
               <span className="hint">
                 {p ? `best ${Math.round(p.best_wpm)} wpm · ${Math.round(p.best_accuracy)}%` : `goal ${l.goalWpm} wpm`}
                 {!done && stars > 0 ? ` · +${stars} ⭐` : ''}
+                {!locked && more ? ` · ⚡ ${more.wpm} wpm: +${more.stars - (p?.speed_paid ?? 0)} ⭐` : ''}
               </span>
             </button>
           );
@@ -305,6 +327,7 @@ function LessonList({
 function LessonRound({
   level,
   stars,
+  speed,
   alreadyPassed,
   onSave,
   onExit,
@@ -312,6 +335,8 @@ function LessonRound({
 }: {
   level: Level;
   stars: number;
+  /** ⚡ the parent's speed stars, and how many this lesson's speed has paid already */
+  speed?: { tiers: SpeedStar[]; paid: number };
   alreadyPassed: boolean;
   onSave: (r: RoundResult) => Promise<{ stars: number; reason: string | null } | null>;
   onExit: () => void;
@@ -402,6 +427,10 @@ function LessonRound({
         </strong>
         <span className="hint">
           {Math.round(liveWpm)} wpm · {liveAcc}% · goal {level.goalWpm} wpm, {PASS_ACCURACY}%
+          {(() => {
+            const n = speed && nextSpeed(speed.tiers, speed.paid);
+            return n ? ` · ⚡ ${n.wpm} wpm = +${n.stars - speed!.paid} ⭐` : '';
+          })()}
         </span>
       </div>
 
@@ -438,6 +467,13 @@ function LessonRound({
             </p>
           )}
           {result.earned && result.earned.stars > 0 && <p className="typing-result__stars">+{result.earned.stars} ⭐ {result.earned.reason}</p>}
+          {result.passed &&
+            speed &&
+            (() => {
+              const got = Math.max(speed.paid, speedWorth(speed.tiers, result.wpm));
+              const n = nextSpeed(speed.tiers, got);
+              return n ? <p className="hint">⚡ Type it at {n.wpm} wpm for {n.stars - got} more ⭐.</p> : null;
+            })()}
           {result.passed && !passedBefore.current && stars === 0 && <p className="hint">Next lesson unlocked!</p>}
           <div className="typing-result__actions">
             <button type="button" onClick={restart}>
@@ -1000,6 +1036,51 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
           </label>
         ))}
       </div>
+      <h3>⚡ Speed stars for lessons</h3>
+      <p className="hint">
+        Stars for passing a lesson ({PASS_ACCURACY}% right) at a speed. A lesson is worth the highest speed reached, paid once per lesson: e.g. 10 wpm = 1 ⭐
+        and 20 wpm = 3 ⭐ means passing at 12 wpm pays 1, and later passing at 21 wpm pays 2 more (3 in all). This is on top of the stars for passing each lesson above.
+      </p>
+      <div className="typing-speed-stars">
+        {draft.speed_stars.map((t, i) => (
+          <div key={i} className="typing-speed-stars__row">
+            <input
+              type="number"
+              min={1}
+              max={250}
+              inputMode="numeric"
+              aria-label="Words a minute"
+              value={t.wpm}
+              onChange={(e) => setDraft({ ...draft, speed_stars: draft.speed_stars.map((x, j) => (j === i ? { ...x, wpm: Math.max(1, Math.min(250, num(e.target.value))) } : x)) })}
+            />
+            <span>wpm =</span>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              inputMode="numeric"
+              aria-label="Stars"
+              value={t.stars}
+              onChange={(e) => setDraft({ ...draft, speed_stars: draft.speed_stars.map((x, j) => (j === i ? { ...x, stars: num(e.target.value) } : x)) })}
+            />
+            <span>⭐</span>
+            <button type="button" className="link-button" onClick={() => setDraft({ ...draft, speed_stars: draft.speed_stars.filter((_, j) => j !== i) })}>
+              ✕ remove
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => {
+            const last = draft.speed_stars[draft.speed_stars.length - 1];
+            setDraft({ ...draft, speed_stars: [...draft.speed_stars, last ? { wpm: last.wpm + 10, stars: last.stars + 2 } : { wpm: 10, stars: 1 }] });
+          }}
+        >
+          + Add a speed
+        </button>
+        {!draft.speed_stars.length && <p className="hint">No speed stars — lessons pay only the stars above.</p>}
+      </div>
       <h3>Games</h3>
       <div className="typing-stars__grid">
         <label>
@@ -1043,6 +1124,7 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
             setDraft({
               ...draft,
               levels: draft.levels.map(() => 0),
+              speed_stars: draft.speed_stars.map((t) => ({ ...t, stars: 0 })),
               balloon_best: 0,
               race_best: 0,
               whack_best: 0,

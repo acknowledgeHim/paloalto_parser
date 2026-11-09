@@ -1415,6 +1415,13 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_typing_results_member ON typing_results (family_member_id, at);
 `);
+// ⌨️ Of a lesson's stars, how many were for its speed (the parent's "10 wpm = 1 ⭐, 20 wpm = 3 ⭐"),
+// so a faster pass later pays just the difference.
+try {
+  db.exec('ALTER TABLE typing_results ADD COLUMN speed_stars INTEGER NOT NULL DEFAULT 0');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
 
 export function getSetting(key: string, fallback = ''): string {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
