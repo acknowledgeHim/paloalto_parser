@@ -3229,3 +3229,12 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .tap-results { padding-left: 1.4em; display: flex; flex-direction: column; gap: 10px; }
 .spelling-round__verdict { font-size: 1.4em; font-weight: 800; }
 .spelling-round__word { font-size: 2.2em; font-weight: 800; letter-spacing: 0.06em; }
+
+/* ⌨️ typing: 💎 per level played */
+.typing-level-tokens { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.typing-level-tokens__row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 4.2em); gap: 6px; align-items: center; }
+.typing-level-tokens__row input { width: 100%; }
+.typing-level-tokens__head span { font-size: 0.85em; font-weight: 700; text-align: center; }
+.typing-race-tokens { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px 12px; margin-bottom: 8px; }
+.typing-race-tokens label { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.typing-race-tokens input { width: 4.2em; }

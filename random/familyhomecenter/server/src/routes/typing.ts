@@ -52,7 +52,22 @@ export interface TypingRewards {
   daily_enabled: boolean;
   /** How many game rounds a day can pay out (0 = games pay nothing). */
   games_per_day: number;
+  /**
+   * 💎 for a new best, by the level it was played at: Normal / Double ×2 / Triple ×3. Until a parent
+   * sets these, each level pays that game's *_best amount (as before).
+   */
+  game_levels: Record<TieredGame, number[]>;
+  /** 🏁 Race: 💎 for winning at a new best speed, by the rival's level 1–10 on the Easy → Hard scale. */
+  race_levels: number[];
 }
+
+/** Games played at Normal / Double ×2 / Triple ×3 (sent as their level). */
+const TIERED_GAMES = ['balloon', 'meteor', 'snake', 'tower'] as const;
+type TieredGame = (typeof TIERED_GAMES)[number];
+/** The Race's Easy → Hard scale (words a minute for levels 1–10) — the same as the page's. */
+const RACE_SPEEDS = [5, 8, 11, 15, 19, 23, 28, 34, 41, 50];
+/** Which level 1–10 a rival speed is (a "your own best" rival counts as the level at or below it). */
+export const raceLevel = (wpm: number) => Math.max(1, RACE_SPEEDS.filter((w) => w <= wpm).length);
 
 /** Sorted by speed, one per speed, sensible numbers; anything else falls back. */
 function cleanSpeedStars(v: unknown, fallback: SpeedStar[]): SpeedStar[] {
@@ -92,6 +107,13 @@ function readRewards(): TypingRewards {
     daily: n(saved.daily, 1),
     daily_enabled: saved.daily_enabled !== false,
     games_per_day: n(saved.games_per_day, 3),
+    game_levels: Object.fromEntries(
+      TIERED_GAMES.map((g) => {
+        const base = n(saved[`${g}_best` as 'balloon_best'], 1);
+        return [g, [0, 1, 2].map((i) => n(saved.game_levels?.[g]?.[i], base))];
+      })
+    ) as Record<TieredGame, number[]>,
+    race_levels: RACE_SPEEDS.map((_, i) => n(saved.race_levels?.[i], n(saved.race_best, 1))),
   };
 }
 
@@ -99,6 +121,8 @@ function readRewards(): TypingRewards {
 typingRouter.get('/settings/rewards', (_req, res) => {
   res.json(readRewards());
 });
+
+const clampTokens = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1000, Math.round(Number(v)))) : d);
 
 /** PUT /settings/rewards — parent only. */
 typingRouter.put('/settings/rewards', requireAdmin, (req, res) => {
@@ -108,6 +132,12 @@ typingRouter.put('/settings/rewards', requireAdmin, (req, res) => {
   for (const k of Object.keys(cur) as Array<keyof TypingRewards>) {
     if (k === 'levels') merged.levels = Array.isArray(b.levels) ? cur.levels.map((v, i) => b.levels![i] ?? v) : cur.levels;
     else if (k === 'speed_stars') merged.speed_stars = b.speed_stars !== undefined ? cleanSpeedStars(b.speed_stars, cur.speed_stars) : cur.speed_stars;
+    else if (k === 'game_levels') {
+      const g = (b.game_levels ?? {}) as Partial<Record<TieredGame, unknown[]>>;
+      merged.game_levels = Object.fromEntries(
+        TIERED_GAMES.map((x) => [x, cur.game_levels[x].map((v, i) => (Array.isArray(g[x]) && g[x]![i] !== undefined ? clampTokens(g[x]![i], v) : v))])
+      ) as Record<TieredGame, number[]>;
+    } else if (k === 'race_levels') merged.race_levels = cur.race_levels.map((v, i) => (Array.isArray(b.race_levels) && b.race_levels[i] !== undefined ? clampTokens(b.race_levels[i], v) : v));
     else if (k === 'daily_enabled') merged.daily_enabled = typeof b.daily_enabled === 'boolean' ? b.daily_enabled : cur.daily_enabled;
     else if (b[k] !== undefined) (merged[k] as number) = Number(b[k]);
   }
@@ -305,7 +335,12 @@ typingRouter.post('/:memberId/results', (req, res) => {
   }
   if (earned && mode === 'daily') stars = rewards.daily;
   if (earned && mode !== 'lesson' && mode !== 'daily') {
-    const worth = rewards[`${mode}_best` as 'balloon_best'];
+    // By the level it was played at: Normal / ×2 / ×3 for most games, the rival's level for the Race.
+    const worth = (TIERED_GAMES as readonly string[]).includes(mode)
+      ? (rewards.game_levels[mode as TieredGame][Math.min(3, Math.max(1, row.level)) - 1] ?? 0)
+      : mode === 'race'
+        ? (rewards.race_levels[raceLevel(row.level) - 1] ?? 0)
+        : rewards[`${mode}_best` as 'balloon_best'];
     if (worth > 0 && paidGamesToday(id) >= rewards.games_per_day) capped = true;
     else stars = worth;
   }

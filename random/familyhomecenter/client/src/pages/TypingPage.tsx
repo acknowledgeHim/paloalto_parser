@@ -15,6 +15,7 @@ import {
   WhackAKey,
   WordSnake,
   useTier,
+  starsAt,
 } from '../components/TypingGames.js';
 import {
   FINGER_COLORS,
@@ -77,6 +78,10 @@ interface Rewards {
   daily: number;
   daily_enabled: boolean;
   games_per_day: number;
+  /** 💎 for a new best by level played: Normal / ×2 / ×3 */
+  game_levels: Record<'balloon' | 'meteor' | 'snake' | 'tower', number[]>;
+  /** 🏁 Race: 💎 by the rival's level 1–10 */
+  race_levels: number[];
 }
 
 /** Name of each kind of round, for the tabs and the "Lately" list. */
@@ -199,15 +204,15 @@ export function TypingPage() {
           useWords={highestPassed >= 8}
           player={activeProfile}
           best={bestOf('meteor')}
-          stars={rewards?.meteor_best ?? 0}
+          stars={rewards?.game_levels?.meteor ?? rewards?.meteor_best ?? 0}
           onSave={save}
         />
       ) : tab === 'snake' ? (
-        <WordSnake words={pool} best={bestOf('snake')} stars={rewards?.snake_best ?? 0} onSave={save} />
+        <WordSnake words={pool} best={bestOf('snake')} stars={rewards?.game_levels?.snake ?? rewards?.snake_best ?? 0} onSave={save} />
       ) : tab === 'shop' ? (
         <ShoppingSpree words={pool} player={activeProfile} best={bestOf('shop')} onSave={save} />
       ) : tab === 'tower' ? (
-        <TowerBuilder words={pool} player={activeProfile} best={bestOf('tower')} stars={rewards?.tower_best ?? 0} onSave={save} />
+        <TowerBuilder words={pool} player={activeProfile} best={bestOf('tower')} stars={rewards?.game_levels?.tower ?? rewards?.tower_best ?? 0} onSave={save} />
       ) : tab === 'story' && activeProfile ? (
         <SillyStory player={activeProfile} family={others} best={bestOf('story')} stars={rewards?.story_best ?? 0} onSave={save} />
       ) : tab === 'daily' && activeProfile ? (
@@ -219,12 +224,12 @@ export function TypingPage() {
           onSave={save}
         />
       ) : tab === 'balloon' ? (
-        <BalloonPop words={pool} best={progress?.balloon_best ?? 0} stars={rewards?.balloon_best ?? 0} onSave={save} />
+        <BalloonPop words={pool} best={progress?.balloon_best ?? 0} stars={rewards?.game_levels?.balloon ?? rewards?.balloon_best ?? 0} onSave={save} />
       ) : tab === 'race' ? (
         <Race
           highestPassed={highestPassed}
           best={progress?.race_best_wpm ?? 0}
-          stars={rewards?.race_best ?? 0}
+          stars={rewards?.race_levels ?? rewards?.race_best ?? 0}
           player={activeProfile}
           family={others}
           onSave={save}
@@ -548,7 +553,7 @@ function BalloonPop({
 }: {
   words: string[];
   best: number;
-  stars: number;
+  stars: number | number[];
   onSave: (r: RoundResult) => Promise<{ stars: number; reason: string | null } | null>;
 }) {
   const [state, setState] = useState<'ready' | 'playing' | 'over'>('ready');
@@ -683,7 +688,7 @@ function BalloonPop({
         <span>{'❤️'.repeat(Math.max(0, lives))}</span>
         <span className="hint">
           Best {best}
-          {stars > 0 ? ` · beat it for +${stars} 💎` : ''}
+          {starsAt(stars, tier) > 0 ? ` · beat it for +${starsAt(stars, tier)} 💎` : ''}
         </span>
       </div>
       <div className={`balloon__sky ${miss ? 'balloon__sky--miss' : ''}`}>
@@ -762,6 +767,7 @@ function Racer({ rival, size }: { rival: Rival; size: number }) {
 
 /** The Easy → Hard scale: words a minute for levels 1–10. */
 const SPEED_LEVELS = [5, 8, 11, 15, 19, 23, 28, 34, 41, 50];
+const RACE_SPEEDS = SPEED_LEVELS;
 
 function raceText(highestPassed: number): string {
   if (highestPassed >= LEVELS.length - 1) return SENTENCES[Math.floor(Math.random() * SENTENCES.length)];
@@ -774,14 +780,14 @@ function raceText(highestPassed: number): string {
 function Race({
   highestPassed,
   best,
-  stars,
+  stars: starsByLevel,
   player,
   family,
   onSave,
 }: {
   highestPassed: number;
   best: number;
-  stars: number;
+  stars: number | number[];
   player: FamilyMember | null;
   /** Everyone else — raced at their own best speed once they've typed here. */
   family: FamilyMember[];
@@ -810,6 +816,8 @@ function Race({
   const memberBest = rival.member ? bests[rival.member.id] : undefined;
   const useBest = speed === 'best' && Boolean(memberBest);
   const rivalWpm = useBest ? Math.max(3, Math.round(memberBest!)) : SPEED_LEVELS[(typeof speed === 'number' ? speed : 2) - 1];
+  // 💎 for a win at a new best speed, by the rival's level (a "their best" rival: the level at or below it).
+  const stars = Array.isArray(starsByLevel) ? (starsByLevel[Math.max(1, SPEED_LEVELS.filter((w) => w <= rivalWpm).length) - 1] ?? 0) : starsByLevel;
   const pickRival = (r: Rival) => {
     setRival(r);
     if (!r.member) setSpeed(SPEED_LEVELS.findIndex((w) => w >= r.wpm) + 1 || SPEED_LEVELS.length);
@@ -1081,16 +1089,59 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
         </button>
         {!draft.speed_stars.length && <p className="hint">No speed tokens — lessons pay only the tokens above.</p>}
       </div>
-      <h3>Games</h3>
+      <h3>Games — 💎 for a new best, by the level played</h3>
+      <p className="hint">Pick how much a new best pays at each level the game was played at (Normal, Double ×2, Triple ×3).</p>
+      <div className="typing-level-tokens">
+        <div className="typing-level-tokens__row typing-level-tokens__head">
+          <span />
+          <span>Normal</span>
+          <span>×2</span>
+          <span>×3</span>
+        </div>
+        {(
+          [
+            ['balloon', '🎈 Balloon Pop'],
+            ['meteor', '☄️ Meteor Defense'],
+            ['snake', '🐍 Word Snake'],
+            ['tower', '🧱 Tower Builder'],
+          ] as const
+        ).map(([g, label]) => (
+          <div key={g} className="typing-level-tokens__row">
+            <span>{label}</span>
+            {[0, 1, 2].map((i) => (
+              <input
+                key={i}
+                type="number"
+                min={0}
+                inputMode="numeric"
+                aria-label={`${label} level ${i + 1}`}
+                value={draft.game_levels[g][i] ?? 0}
+                onChange={(e) => setDraft({ ...draft, game_levels: { ...draft.game_levels, [g]: draft.game_levels[g].map((v, j) => (j === i ? num(e.target.value) : v)) } })}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <h3>🏁 Race — 💎 for winning at a new best speed, by the rival’s level</h3>
+      <p className="hint">Racing someone at “their speed” counts as the level at or below that speed.</p>
+      <div className="typing-race-tokens">
+        {RACE_SPEEDS.map((w, i) => (
+          <label key={i}>
+            <span>
+              Level {i + 1} <span className="hint">({w} wpm)</span>
+            </span>
+            <input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={draft.race_levels[i] ?? 0}
+              onChange={(e) => setDraft({ ...draft, race_levels: draft.race_levels.map((v, j) => (j === i ? num(e.target.value) : v)) })}
+            />
+          </label>
+        ))}
+      </div>
+      <h3>Other games</h3>
       <div className="typing-stars__grid">
-        <label>
-          <span>🎈 Balloon Pop — new best score</span>
-          <input type="number" min={0} inputMode="numeric" value={draft.balloon_best} onChange={(e) => setDraft({ ...draft, balloon_best: num(e.target.value) })} />
-        </label>
-        <label>
-          <span>🏁 Race — win at a new best speed</span>
-          <input type="number" min={0} inputMode="numeric" value={draft.race_best} onChange={(e) => setDraft({ ...draft, race_best: num(e.target.value) })} />
-        </label>
         {(
           [
             ['whack_best', '🔨 Whack-a-Key — new best'],
@@ -1127,6 +1178,8 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
               speed_stars: draft.speed_stars.map((t) => ({ ...t, stars: 0 })),
               balloon_best: 0,
               race_best: 0,
+              game_levels: { balloon: [0, 0, 0], meteor: [0, 0, 0], snake: [0, 0, 0], tower: [0, 0, 0] },
+              race_levels: draft.race_levels.map(() => 0),
               whack_best: 0,
               meteor_best: 0,
               tower_best: 0,

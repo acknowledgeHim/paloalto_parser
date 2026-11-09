@@ -20,6 +20,9 @@ function EarnedLine({ earned }: { earned: Earned | null }) {
   return earned.reason ? <p className="hint">{earned.reason}</p> : null;
 }
 
+/** 💎 for a new best at this level (Normal / ×2 / ×3), from one amount or one per level. */
+export const starsAt = (stars: number | number[], tier: number) => (Array.isArray(stars) ? (stars[Math.min(3, Math.max(1, tier)) - 1] ?? 0) : stars);
+
 function BestLine({ best, stars, unit = '' }: { best: number; stars: number; unit?: string }) {
   return (
     <span className="hint">
@@ -300,7 +303,7 @@ export function MeteorDefense({
   useWords: boolean;
   player: FamilyMember | null;
   best: number;
-  stars: number;
+  stars: number | number[];
   onSave: SaveRound;
 }) {
   const [state, setState] = useState<'ready' | 'playing' | 'over'>('ready');
@@ -443,7 +446,7 @@ export function MeteorDefense({
           Score <strong>{score}</strong> <TierBadge tier={tier} />
         </span>
         <span>{'🛡️'.repeat(Math.max(0, lives))}</span>
-        <BestLine best={best} stars={stars} />
+        <BestLine best={best} stars={starsAt(stars, tier)} />
       </div>
       <div className={`meteor__space ${miss ? 'balloon__sky--miss' : ''}`}>
         {meteors.map((m) => {
@@ -514,7 +517,7 @@ export function TowerBuilder({
   words: string[];
   player: FamilyMember | null;
   best: number;
-  stars: number;
+  stars: number | number[];
   onSave: SaveRound;
 }) {
   const [state, setState] = useState<'ready' | 'playing' | 'over'>('ready');
@@ -639,7 +642,7 @@ export function TowerBuilder({
           )}
         </span>
         <span title="Wobbles">{'🟨'.repeat(Math.max(0, MAX_WOBBLE - wobble))}{'⬛'.repeat(Math.min(MAX_WOBBLE, wobble))}</span>
-        <BestLine best={best} stars={stars} unit={best === 1 ? ' point' : ' points'} />
+        <BestLine best={best} stars={starsAt(stars, tier)} unit={best === 1 ? ' point' : ' points'} />
       </div>
       <div className="tower">
         {state === 'playing' && (
@@ -702,7 +705,7 @@ const FOOD_ICONS = ['🍎', '🍌', '🍓', '🍇', '🍪', '🧀', '🥕', '�
 const FIELD_W = 160;
 const FIELD_H = 100;
 
-export function WordSnake({ words: pool, best, stars, onSave }: { words: string[]; best: number; stars: number; onSave: SaveRound }) {
+export function WordSnake({ words: pool, best, stars, onSave }: { words: string[]; best: number; stars: number | number[]; onSave: SaveRound }) {
   const { tier, setTier, words, pickByKey } = useTier(pool);
   const [state, setState] = useState<'ready' | 'playing' | 'over'>('ready');
   const [, setFrame] = useState(0);
@@ -872,7 +875,7 @@ export function WordSnake({ words: pool, best, stars, onSave }: { words: string[
         <span className="snake__hunger" title="Tummy">
           🍽️ <span><span style={{ width: `${L.hunger}%`, background: L.hunger < 25 ? '#d64545' : undefined }} /></span>
         </span>
-        <BestLine best={best} stars={stars} />
+        <BestLine best={best} stars={starsAt(stars, tier)} />
       </div>
       <div className={`snake ${miss ? 'balloon__sky--miss' : ''}`}>
         {L.foods.map((f) => {

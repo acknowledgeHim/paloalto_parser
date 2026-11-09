@@ -63,6 +63,10 @@ how many lessons are left (the server refuses saving them too):
   - A lesson pays once, the first time it's passed.
   - The games pay when someone beats their own best (top score; for Race and Silly Story, a faster
     winning speed). Shopping Spree never pays.
+  - **By the level played:** Balloon Pop, Meteor Defense, Word Snake and Tower Builder each have three
+    amounts for a new best, one each for Normal, Double ×2 and Triple ×3. The 🏁 Race has one amount per
+    rival level 1–10. Racing someone at "their speed" counts as the level at or below that speed. Until
+    a parent changes them, every level pays what that game paid before.
   - The Daily Challenge pays once a day for finishing it at 80% right.
   - "Game rounds that can pay each day" caps how many game rounds (not the Daily Challenge) can earn
     tokens per day (default 3).
