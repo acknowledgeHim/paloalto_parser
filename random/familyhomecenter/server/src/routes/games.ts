@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { countTime, limitHit } from '../services/dailyLimits.js';
 import { v4 as uuidv4 } from 'uuid';
 import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
@@ -169,11 +170,18 @@ gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
   const g = gameOf(gameId);
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
-  if (free(m) || unlockedFor(m).has(g.id)) return res.json({ ok: true, plays_left: null });
+  // ⏰ a parent's daily limit for this game (checked first, so a play isn't used up for nothing)
+  const over = limitHit(m.id, `game:${g.id}`);
+  if (over) return res.status(429).json({ error: over, limit: true });
+  if (free(m) || unlockedFor(m).has(g.id)) {
+    countTime(m.id, `game:${g.id}`);
+    return res.json({ ok: true, plays_left: null });
+  }
   const r = db
     .prepare('UPDATE game_passes SET plays_left = plays_left - 1, updated_at = ? WHERE family_member_id = ? AND game_id = ? AND plays_left > 0')
     .run(new Date().toISOString(), m.id, g.id);
   if (r.changes === 0) return res.status(403).json({ error: `No plays left — unlock ${g.name} again (${ruleOf(g.id).cost} 💎), or ask a parent for more plays` });
+  countTime(m.id, `game:${g.id}`);
   res.json({ ok: true, plays_left: passesFor(m.id).get(g.id) ?? 0 });
 });
 

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useDraft } from '../utils/autosave.js';
+import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
@@ -161,6 +162,23 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
   const [error, setError] = useState<string | null>(null);
   const isParent = activeProfile?.is_parent === 1;
   const saved = useDraft<LessonDraft>(activeProfile?.id, `lesson-${config.subject}`);
+  // ⏰ a parent's daily limit on lessons: one that's open is always finished
+  const activity = `lessons-${config.subject}`;
+  const limit = useLimit(activeProfile?.id, activity);
+  useActivityClock(activeProfile?.id, activity, open !== null, limit.setStatus);
+  const openLesson = async (id: string) => {
+    setError(null);
+    if (activeProfile && !isParent) {
+      try {
+        limit.setStatus(await api.post(`/limits/${activeProfile.id}/start`, { activity, acting_member_id: activeProfile.id }));
+      } catch (e) {
+        setError((e as Error).message);
+        void limit.reload();
+        return;
+      }
+    }
+    setOpen(id);
+  };
   // 💾 Left in the middle of a lesson (closed, or tapped away)? Open it again, once.
   const reopened = useRef<string | undefined>(undefined);
   useEffect(() => {
@@ -211,6 +229,7 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
           saved.save(null);
           setOpen(null);
           load();
+          void limit.reload();
         }}
       />
     );
@@ -228,6 +247,7 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
         </p>
       )}
       {error && <div className="settings-login__error">{error}</div>}
+      {!error && <LimitNote status={limit.status} />}
       {list && (
         <section className="panel">
           <div className="learning-grades" role="radiogroup" aria-label="Grade">
@@ -273,7 +293,7 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
             {shown
               .filter((l) => l.topic === t)
               .map((l) => (
-                <button key={l.id} type="button" className={`lesson-card${l.hidden ? ' is-hidden' : ''}${l.done?.passed ? ' is-done' : ''}`} onClick={() => setOpen(l.id)}>
+                <button key={l.id} type="button" className={`lesson-card${l.hidden ? ' is-hidden' : ''}${l.done?.passed ? ' is-done' : ''}`} onClick={() => void openLesson(l.id)}>
                   <span className="lesson-card__grade">{list?.grades[l.grade]}</span>
                   <strong>{l.title}</strong>
                   <span className="lesson-card__meta">

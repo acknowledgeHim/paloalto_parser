@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { startPlay } from './plays.js';
+import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 import { BrickTumbleRun, SKINS, skinOf, type BrickResult } from './BrickTumbleRun.js';
 
 interface Save {
@@ -27,6 +28,9 @@ export function BrickTumblePage() {
   const [save, setSave] = useState<Save>({ skin: 'bright', startLevel: 1 });
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null); // the game's seed while playing
+  // ⏰ a parent's daily limit: a run going is always finished; the next one can't start
+  const limit = useLimit(me?.id, 'game:brick-tumble');
+  useActivityClock(me?.id, 'game:brick-tumble', playing !== null, limit.setStatus);
   const [last, setLast] = useState<{ r: BrickResult; newBest: boolean; newLooks: string[] } | null>(null);
 
   useEffect(() => {
@@ -88,6 +92,7 @@ export function BrickTumblePage() {
         seed={playing}
         onEnd={(r) => {
           setPlaying(null);
+          void limit.reload();
           const newBest = r.score > best;
           setLast({ r, newBest, newLooks: SKINS.filter((s) => s.needs > best && s.needs <= r.score).map((s) => `${s.emoji} ${s.name}`) });
           void store(save, r);
@@ -129,7 +134,7 @@ export function BrickTumblePage() {
           <button
             type="button"
             className="hill-garage__go"
-            disabled={!info.owned && !info.plays_left}
+            disabled={(!info.owned && !info.plays_left) || !!limit.status?.over}
             onClick={async () => {
               setError(null);
               try {
@@ -144,6 +149,7 @@ export function BrickTumblePage() {
           >
             ▶ Play!
           </button>
+          <LimitNote status={limit.status} />
           {!info.owned && (
             <div className="hint">
               {info.plays_left ? `🎟️ ${info.plays_left} play${info.plays_left === 1 ? '' : 's'} left` : '🎟️ No plays left — unlock it in 🎮 Games, or ask a parent for more'}

@@ -209,6 +209,9 @@ number of plays.
   gives that many 🎟️ plays; each go uses one, and when they're used up the kid earns tokens and
   unlocks it again (buying again while some are left adds more). Games already unlocked for good
   stay theirs — ↶ refund takes one back. Saved in the `game_rules` setting; no data changes.
+- **⏰ Daily limits** per kid and per game — games a day and/or minutes a day — are set with the
+  learning ones (📚 Learning → ⚙️ Grades & tokens). A run that's going always finishes; see
+  [LEARNING.md](LEARNING.md#-daily-limits-parents--learning--️-grades--tokens--️-daily-limits).
 
 - **Parents play free.** In **Kids' games** a parent can unlock a game for a kid (it uses the kid's
   tokens) or **↶ refund** it (tokens back, game locked again; scores and progress are kept).

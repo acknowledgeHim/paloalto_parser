@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
 import { useDraft } from '../utils/autosave.js';
+import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 
 /** 💾 a round in progress: the round, and the answers checked so far */
 interface MathDraft {
@@ -53,6 +54,9 @@ export function MathPage() {
   const [topics, setTopics] = useState<{ course: string[]; topics: string[][] } | null>(null);
   const saved = useDraft<MathDraft>(activeProfile?.id, 'math');
   const [startAnswers, setStartAnswers] = useState<string[]>([]);
+  // ⏰ a parent's daily limit: a round already going is always finished
+  const limit = useLimit(activeProfile?.id, 'math');
+  useActivityClock(activeProfile?.id, 'math', round !== null, limit.setStatus);
 
   useEffect(() => {
     if (person && grade === null) setGrade(person.grade ?? 0);
@@ -74,6 +78,7 @@ export function MathPage() {
       saved.save({ round: r, answers: [] });
       setStartAnswers([]);
       setRound(r);
+      void limit.reload();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -82,6 +87,7 @@ export function MathPage() {
     try {
       setResult(await api.post<Finish>(`/learning/round/${r.round_id}/finish`, { answers, acting_member_id: activeProfile?.id }));
       reload();
+      void limit.reload();
       saved.save(null);
     } catch (e) {
       setError((e as Error).message);
@@ -180,7 +186,8 @@ export function MathPage() {
               </button>
             </div>
           )}
-          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} onClick={() => void start()}>
+          <LimitNote status={limit.status} />
+          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} disabled={!!limit.status?.over} onClick={() => void start()}>
             {saved.draft ? '↻ Start 10 new problems' : '▶ Start 10 problems'}
           </button>
           {error && <div className="settings-login__error">{error}</div>}

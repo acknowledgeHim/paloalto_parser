@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { DailyLimitSettings } from '../components/DailyLimitSettings.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
@@ -157,6 +158,8 @@ export function LearningSettingsPage() {
       </div>
 
       <LessonTokenSettings />
+
+      <DailyLimitSettings />
 
       <section className="panel">
         <h2>🗣️ Speaking the words</h2>

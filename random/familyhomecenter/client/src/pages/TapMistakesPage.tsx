@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
 import { useDraft } from '../utils/autosave.js';
+import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 
 interface Start {
   round_id: string;
@@ -66,6 +67,9 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
   /** 💾 a round in progress: the round, every item's taps, and how many are checked */
   const saved = useDraft<{ round: Start; taps: number[][]; done: number }>(activeProfile?.id, `tap-${game.subject}`);
   const [startAt, setStartAt] = useState<{ taps: number[][]; done: number } | null>(null);
+  // ⏰ a parent's daily limit: a round already going is always finished
+  const limit = useLimit(activeProfile?.id, game.subject);
+  useActivityClock(activeProfile?.id, game.subject, round !== null, limit.setStatus);
 
   useEffect(() => {
     if (person && grade === null) setGrade(person.grade ?? 0);
@@ -84,6 +88,7 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
       saved.save({ round: r, taps: r.items.map(() => []), done: 0 });
       setStartAt(null);
       setRound(r);
+      void limit.reload();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -92,6 +97,7 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
     try {
       setResult(await api.post<Finish>(`/learning/round/${r.round_id}/finish`, { answers, acting_member_id: activeProfile?.id }));
       reload();
+      void limit.reload();
       saved.save(null);
     } catch (e) {
       setError((e as Error).message);
@@ -187,7 +193,8 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
               </button>
             </div>
           )}
-          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} onClick={() => void start()}>
+          <LimitNote status={limit.status} />
+          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} disabled={!!limit.status?.over} onClick={() => void start()}>
             {saved.draft ? '↻ Start a new' : '▶ Start'} 10
           </button>
           {error && <div className="settings-login__error">{error}</div>}

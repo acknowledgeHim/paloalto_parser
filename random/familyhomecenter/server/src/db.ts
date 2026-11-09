@@ -1598,6 +1598,16 @@ db.exec(`
     data TEXT NOT NULL,
     finished_at TEXT
   );
+  -- ⏰ Daily limits: how many times and how long each person used each activity, per day.
+  CREATE TABLE IF NOT EXISTS activity_usage (
+    family_member_id TEXT NOT NULL,
+    activity TEXT NOT NULL,
+    day TEXT NOT NULL,
+    times INTEGER NOT NULL DEFAULT 0,
+    seconds INTEGER NOT NULL DEFAULT 0,
+    last_beat_at TEXT,
+    PRIMARY KEY (family_member_id, activity, day)
+  );
   CREATE TABLE IF NOT EXISTS learning_drafts (
     family_member_id TEXT NOT NULL,
     key TEXT NOT NULL,

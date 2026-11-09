@@ -5,6 +5,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
 import { say, stopSpeaking } from '../utils/speech.js';
 import { useDraft } from '../utils/autosave.js';
+import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 
 interface Word {
   word: string;
@@ -50,6 +51,9 @@ export function SpellingPage() {
   const [error, setError] = useState<string | null>(null);
   const saved = useDraft<SpellDraft>(activeProfile?.id, 'spelling');
   const [startAnswers, setStartAnswers] = useState<string[]>([]);
+  // ⏰ a parent's daily limit: a round already going is always finished
+  const limit = useLimit(activeProfile?.id, 'spelling');
+  useActivityClock(activeProfile?.id, 'spelling', round !== null, limit.setStatus);
 
   useEffect(() => {
     if (person && grade === null) setGrade(person.grade ?? 0);
@@ -68,6 +72,7 @@ export function SpellingPage() {
       saved.save({ round: r, answers: [] });
       setStartAnswers([]);
       setRound(r);
+      void limit.reload();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -77,6 +82,7 @@ export function SpellingPage() {
       const res = await api.post<Finish>(`/learning/round/${r.round_id}/finish`, { answers, acting_member_id: activeProfile?.id });
       setResult(res);
       reload();
+      void limit.reload();
       saved.save(null);
     } catch (e) {
       setError((e as Error).message);
@@ -173,7 +179,8 @@ export function SpellingPage() {
               </button>
             </div>
           )}
-          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} onClick={() => void start()}>
+          <LimitNote status={limit.status} />
+          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} disabled={!!limit.status?.over} onClick={() => void start()}>
             {saved.draft ? '↻ Start a new 10 words' : '▶ Start 10 words'}
           </button>
           {error && <div className="settings-login__error">{error}</div>}

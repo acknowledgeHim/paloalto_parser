@@ -4,6 +4,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useTypeCatcher, type RoundResult } from '../components/typingInput.js';
 import { useDraft } from '../utils/autosave.js';
+import { LimitNote, useActivityClock, useLimit, type LimitStatus } from '../utils/limits.js';
 import {
   DailyChallenge,
   MeteorDefense,
@@ -120,6 +121,24 @@ export function TypingPage() {
   const [rewards, setRewards] = useState<Rewards | null>(null);
   const [playing, setPlaying] = useState<Level | null>(null);
   const saved = useDraft<TypingDraft>(activeProfile?.id, 'typing-lesson');
+  // ⏰ a parent's daily limit. Checked when the page opens, on a new tab and after each finished
+  // round — never in the middle of one, so whatever's going is always finished.
+  const limit = useLimit(activeProfile?.id, 'typing');
+  const [locked, setLocked] = useState<string | null>(null);
+  const checkLimit = useCallback(async () => {
+    if (!activeProfile) return setLocked(null);
+    try {
+      const s = await api.get<LimitStatus>(`/limits/${activeProfile.id}?activity=typing`);
+      limit.setStatus(s);
+      setLocked(s.over);
+    } catch {
+      setLocked(null);
+    }
+  }, [activeProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void checkLimit();
+  }, [checkLimit, tab]);
+  useActivityClock(activeProfile?.id, 'typing', playing !== null || (tab !== 'lessons' && tab !== 'stars'), limit.setStatus);
 
   const loadProgress = useCallback(() => {
     if (!activeProfile) return setProgress(null);
@@ -151,6 +170,7 @@ export function TypingPage() {
         acting_member_id: activeProfile.id,
       });
       loadProgress();
+      void checkLimit();
       return res;
     } catch {
       return null;
@@ -202,11 +222,19 @@ export function TypingPage() {
           resume={saved.draft?.level === playing.n ? saved.draft : null}
           onSpot={(d, now) => (now ? saved.save : saved.saveSoon)(d)}
           onSave={save}
+          locked={locked}
           onExit={() => setPlaying(null)}
-          onNext={() => setPlaying(LEVELS[playing.n] ?? null)}
+          onNext={() => setPlaying(locked ? null : (LEVELS[playing.n] ?? null))}
         />
+      ) : locked && tab !== 'stars' ? (
+        <section className="panel">
+          <h2>⏰ That's all the typing for today</h2>
+          <LimitNote status={limit.status} />
+          <p className="hint">Your last round is saved{progress?.recent[0] ? ` (${Math.round(progress.recent[0].wpm)} wpm, ${Math.round(progress.recent[0].accuracy)}%)` : ''}.</p>
+        </section>
       ) : tab === 'lessons' ? (
         <>
+          <LimitNote status={limit.status} />
           {saved.draft && LEVELS[saved.draft.level - 1] && (
             <div className="panel learning-resume">
               <span>
@@ -361,11 +389,14 @@ function LessonRound({
   speed,
   alreadyPassed,
   resume,
+  locked,
   onSpot,
   onSave,
   onExit,
   onNext,
 }: {
+  /** ⏰ today's limit is reached (after this one): why */
+  locked?: string | null;
   /** 💾 carrying on part-way through this lesson */
   resume?: TypingDraft | null;
   /** 💾 their spot changed (null = finished or started over; now = save straight away) */
@@ -535,11 +566,14 @@ function LessonRound({
               return n ? <p className="hint">⚡ Type it at {n.wpm} wpm for {n.stars - got} more 💎.</p> : null;
             })()}
           {result.passed && !passedBefore.current && stars === 0 && <p className="hint">Next lesson unlocked!</p>}
+          {locked && <p className="limit-note is-over">{locked}</p>}
           <div className="typing-result__actions">
-            <button type="button" onClick={again}>
-              ↻ Again
-            </button>
-            {result.passed && LEVELS[level.n] && (
+            {!locked && (
+              <button type="button" onClick={again}>
+                ↻ Again
+              </button>
+            )}
+            {!locked && result.passed && LEVELS[level.n] && (
               <button type="button" onClick={onNext}>
                 Next lesson ›
               </button>

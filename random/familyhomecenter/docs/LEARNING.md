@@ -122,6 +122,23 @@ history 2 💎), the pass mark, and optionally an amount for a single lesson.
 Lesson text markup: `## ` heading, `- ` bullet, `1. ` step, `**bold**`, ✅ / ❌ example lines, and a
 blank line between paragraphs.
 
+## ⏰ Daily limits (parents: 📚 Learning → ⚙️ Grades & tokens → ⏰ Daily limits)
+
+For each kid, and for each of 🔤 Spelling, 🔍 Spot the misspellings, 📝 Grammar, ➗ Math, the three 📖
+lesson sets, ⌨️ Typing and each 🎮 game: **times a day** (rounds, lessons, games) and/or **minutes a
+day**. Blank = no limit; 0 = off for the day. Parents have no limits.
+
+- **Whatever's started gets finished.** A round, lesson, typing round or game run that's going when
+  the limit is reached carries on to the end, results and 💎 included. Only the *next* one is stopped,
+  with "⏰ That's 3 rounds of ➗ Math today — come back tomorrow!" Picking a 💾 saved round back up
+  is allowed too, because it was already started.
+- **Times** count when something starts: a round, opening a lesson, or a game run. Typing counts
+  each finished round.
+- **Minutes** count only while the screen is showing it *and* someone has touched it in the last 2
+  minutes, so a tab left open doesn't use them up.
+- Each page shows what's left today ("⏰ 2 of 3 rounds left today · 12 of 30 minutes left"). The
+  settings show what each kid has used today.
+
 ## 💾 Auto-save
 
 Nothing is lost if a kid closes the tab, taps something else, or the screen restarts. Their spot is
@@ -142,4 +159,5 @@ New tables only: `learning_grades` (each kid's grade), `learning_results` (every
 right out of 10, tokens, the words missed), `learning_lessons` (the lessons, built-in and parents'), and
 `learning_lessons_done` (every quiz taken), `learning_open_rounds` (practice rounds, kept so they
 survive a restart; marked finished, never removed) and `learning_drafts` (💾 each person's saved
-spot). Settings in `settings.learning_rewards`.
+spot), and `activity_usage` (⏰ times and seconds per person, activity and day; limits in the
+`daily_limits` setting). Settings in `settings.learning_rewards`.

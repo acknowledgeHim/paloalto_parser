@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { countTime } from '../services/dailyLimits.js';
 import { v4 as uuidv4 } from 'uuid';
 import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
@@ -277,6 +278,7 @@ typingRouter.post('/:memberId/results', (req, res) => {
   if (!MODES.includes(mode)) return res.status(400).json({ error: `mode must be one of ${MODES.join(', ')}` });
   if (LOCKED_GAMES.includes(mode) && !sentencesOpen(id)) return res.status(403).json({ error: 'Pass all the lessons first' });
   if (mode === 'daily' && !readRewards().daily_enabled) return res.status(403).json({ error: 'The Daily Challenge is turned off' });
+  countTime(id, 'typing'); // ⏰ each finished round counts toward a daily limit (finishing is never stopped)
   const num = (v: unknown, max: number) => Math.max(0, Math.min(max, Number(v) || 0));
   const row = {
     level: Math.round(num(b.level, 100)),

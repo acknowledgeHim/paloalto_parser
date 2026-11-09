@@ -191,6 +191,9 @@ export function GamesPage() {
             uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs (use ↶ refund
             above to take one back).
           </p>
+          <p className="hint">
+            ⏰ How many games — or minutes — a day for each kid: <Link to="/learning/settings">📚 Learning → ⚙️ Grades & tokens → Daily limits</Link>.
+          </p>
           {mine.games.map((g) => {
             const r = rules[g.id];
             if (!r) return null;

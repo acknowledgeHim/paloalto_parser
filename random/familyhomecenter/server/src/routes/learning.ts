@@ -11,6 +11,7 @@ import { checkMath, MATH_COURSE, MATH_GRADE_TOPICS, mathRound, type MathProblem 
 import { makeSpellcheckItem } from '../services/spellcheckGen.js';
 import { GRADE_NAMES, WORDS } from '../services/spellingWords.js';
 import { addTokens } from '../services/tokens.js';
+import { tryStart } from '../services/dailyLimits.js';
 import type { FamilyMember } from '../types.js';
 
 /**
@@ -199,6 +200,8 @@ learningRouter.post('/spelling/start', (req, res) => {
   if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
   const g = Math.round(Number(grade));
   if (!(g >= 0 && g < WORDS.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  const over = tryStart(m.id, 'spelling');
+  if (over) return res.status(429).json({ error: over, limit: true });
   // No word twice in a round (a few lists repeat a word on purpose across grades, not within one).
   const seen = new Set<string>();
   const words = pick(WORDS[g], WORDS[g].length).filter((w) => !seen.has(w.word.toLowerCase()) && seen.add(w.word.toLowerCase())).slice(0, ROUND_SIZE);
@@ -222,6 +225,8 @@ function startTap(req: import('express').Request, res: import('express').Respons
   if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
   const g = Math.round(Number(grade));
   if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  const over = tryStart(m.id, subject);
+  if (over) return res.status(429).json({ error: over, limit: true });
   const items = make(g);
   const r: Round = { id: uuidv4(), member: m.id, subject, grade: g, started: Date.now(), answers: [], tap: items };
   rounds.set(r.id, r);
@@ -274,6 +279,8 @@ learningRouter.post('/math/start', (req, res) => {
   if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
   const g = Math.round(Number(grade));
   if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  const over = tryStart(m.id, 'math');
+  if (over) return res.status(429).json({ error: over, limit: true });
   const math = mathRound(g, ROUND_SIZE);
   const r: Round = { id: uuidv4(), member: m.id, subject: 'math', grade: g, started: Date.now(), answers: [], math };
   rounds.set(r.id, r);

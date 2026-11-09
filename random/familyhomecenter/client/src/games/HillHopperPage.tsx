@@ -6,6 +6,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
+import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 import { HAZARD_COINS, HAZARD_WORLDS } from './hillHazards.js';
 import { DEFAULT_CONTROLS, HillHopperRun, JUMP_TAP_LABEL, jumpKeysOf, jumpTapOf, keyName, type Controls, type JumpTap, type RunResult } from './HillHopperRun.js';
 
@@ -68,6 +69,9 @@ export function HillHopperPage() {
   const [worn, setWorn] = useState<Partial<Record<string, string>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  // ⏰ a parent's daily limit: a run going is always finished; the next one can't start
+  const limit = useLimit(me?.id, 'game:hill-hopper');
+  useActivityClock(me?.id, 'game:hill-hopper', playing, limit.setStatus);
   const [last, setLast] = useState<{ r: RunResult; newBest: boolean } | null>(null);
 
   const load = () => {
@@ -178,6 +182,7 @@ export function HillHopperPage() {
         controls={save.controls}
         onEnd={(r) => {
           setPlaying(false);
+          void limit.reload();
           const prevBest = save.bests[world.id] ?? 0;
           setLast({ r, newBest: r.distance > prevBest });
           void store({ ...save, coins: save.coins + r.coins, bests: { ...save.bests, [world.id]: Math.max(prevBest, r.distance) } }, { ...r, world: world.id } as RunResult);
@@ -230,7 +235,7 @@ export function HillHopperPage() {
           <button
             type="button"
             className="hill-garage__go"
-            disabled={!info.owned && !info.plays_left}
+            disabled={(!info.owned && !info.plays_left) || !!limit.status?.over}
             onClick={async () => {
               setError(null);
               try {
@@ -245,6 +250,7 @@ export function HillHopperPage() {
           >
             ▶ Drive!
           </button>
+          <LimitNote status={limit.status} />
           {!info.owned && (
             <div className="hint">
               {info.plays_left ? `🎟️ ${info.plays_left} play${info.plays_left === 1 ? '' : 's'} left` : '🎟️ No plays left — unlock it in 🎮 Games, or ask a parent for more'}
