@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
 import { say, stopSpeaking } from '../utils/speech.js';
+import { useDraft } from '../utils/autosave.js';
 
 interface Word {
   word: string;
@@ -29,6 +30,12 @@ interface Finish {
 
 const SECONDS = 90;
 
+/** 💾 a round in progress: the round, and the words answered so far */
+interface SpellDraft {
+  round: Start;
+  answers: string[];
+}
+
 /**
  * 🔤 Spelling (📚 Learning): 10 random words at a grade. Each is said, used in a sentence, and said
  * again; type it within 90 seconds. 🔊 / 🗣️ / 📖 say the word, the sentence or the meaning again.
@@ -41,6 +48,8 @@ export function SpellingPage() {
   const [round, setRound] = useState<Start | null>(null);
   const [result, setResult] = useState<Finish | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const saved = useDraft<SpellDraft>(activeProfile?.id, 'spelling');
+  const [startAnswers, setStartAnswers] = useState<string[]>([]);
 
   useEffect(() => {
     if (person && grade === null) setGrade(person.grade ?? 0);
@@ -55,10 +64,35 @@ export function SpellingPage() {
     setError(null);
     setResult(null);
     try {
-      setRound(await api.post<Start>('/learning/spelling/start', { member_id: activeProfile.id, grade: g, acting_member_id: activeProfile.id }));
+      const r = await api.post<Start>('/learning/spelling/start', { member_id: activeProfile.id, grade: g, acting_member_id: activeProfile.id });
+      saved.save({ round: r, answers: [] });
+      setStartAnswers([]);
+      setRound(r);
     } catch (e) {
       setError((e as Error).message);
     }
+  };
+  const finish = async (r: Start, answers: string[]) => {
+    try {
+      const res = await api.post<Finish>(`/learning/round/${r.round_id}/finish`, { answers, acting_member_id: activeProfile?.id });
+      setResult(res);
+      reload();
+      saved.save(null);
+    } catch (e) {
+      setError((e as Error).message);
+      if (/expired|already finished/.test((e as Error).message)) saved.save(null);
+    }
+    setRound(null);
+  };
+  /** 💾 carry on with the saved round, at the first word not answered yet */
+  const resume = () => {
+    const d = saved.draft;
+    if (!d) return;
+    setError(null);
+    setResult(null);
+    if (d.answers.length >= d.round.words.length) return void finish(d.round, d.answers);
+    setStartAnswers(d.answers);
+    setRound(d.round);
   };
 
   if (round) {
@@ -66,16 +100,9 @@ export function SpellingPage() {
       <SpellingRound
         round={round}
         gradeName={settings?.grades[round.grade] ?? ''}
-        onDone={async (answers) => {
-          try {
-            const r = await api.post<Finish>(`/learning/round/${round.round_id}/finish`, { answers, acting_member_id: activeProfile?.id });
-            setResult(r);
-            reload();
-          } catch (e) {
-            setError((e as Error).message);
-          }
-          setRound(null);
-        }}
+        startAnswers={startAnswers}
+        onProgress={(answers) => saved.save({ round, answers })}
+        onDone={(answers) => void finish(round, answers)}
         onQuit={() => setRound(null)}
       />
     );
@@ -136,8 +163,18 @@ export function SpellingPage() {
               </>
             )}
           </p>
-          <button type="button" className="learning-go" onClick={() => void start()}>
-            ▶ Start 10 words
+          {saved.draft && (
+            <div className="learning-resume">
+              <span>
+                💾 You have a round going: {settings.grades[saved.draft.round.grade]}, {saved.draft.answers.length} of {saved.draft.round.words.length} words done
+              </span>
+              <button type="button" className="learning-go" onClick={resume}>
+                ▶ Keep going
+              </button>
+            </div>
+          )}
+          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} onClick={() => void start()}>
+            {saved.draft ? '↻ Start a new 10 words' : '▶ Start 10 words'}
           </button>
           {error && <div className="settings-login__error">{error}</div>}
         </section>
@@ -173,14 +210,29 @@ export function SpellingPage() {
   );
 }
 
-export function SpellingRound({ round, gradeName, onDone, onQuit }: { round: Start; gradeName: string; onDone: (answers: string[]) => void; onQuit: () => void }) {
-  const [i, setI] = useState(0);
+export function SpellingRound({
+  round,
+  gradeName,
+  startAnswers = [],
+  onProgress,
+  onDone,
+  onQuit,
+}: {
+  round: Start;
+  gradeName: string;
+  /** 💾 carrying on: the words already answered (it starts at the next one) */
+  startAnswers?: string[];
+  onProgress?: (answers: string[]) => void;
+  onDone: (answers: string[]) => void;
+  onQuit: () => void;
+}) {
+  const [i, setI] = useState(() => Math.min(startAnswers.length, round.words.length - 1));
   const [typed, setTyped] = useState('');
   const [left, setLeft] = useState(SECONDS);
   const [shown, setShown] = useState<{ ok: boolean; right: string; given: string } | null>(null);
   const [meaning, setMeaning] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const answers = useRef<string[]>([]);
+  const answers = useRef<string[]>([...startAnswers]);
   const input = useRef<HTMLInputElement>(null);
   const w = round.words[i];
 
@@ -223,6 +275,7 @@ export function SpellingRound({ round, gradeName, onDone, onQuit }: { round: Sta
     stopSpeaking();
     const given = typed.trim();
     answers.current[i] = given;
+    onProgress?.(round.words.slice(0, i + 1).map((_, k) => answers.current[k] ?? ''));
     setShown({ ok: given.toLowerCase() === w.word.toLowerCase(), right: w.word, given });
   };
   const next = () => {

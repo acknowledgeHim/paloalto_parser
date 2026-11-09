@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
+import { useDraft } from '../utils/autosave.js';
+
+/** 💾 a round in progress: the round, and the answers checked so far */
+interface MathDraft {
+  round: Start;
+  answers: string[];
+}
 
 interface Problem {
   q: string;
@@ -44,6 +51,8 @@ export function MathPage() {
   const [result, setResult] = useState<Finish | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [topics, setTopics] = useState<{ course: string[]; topics: string[][] } | null>(null);
+  const saved = useDraft<MathDraft>(activeProfile?.id, 'math');
+  const [startAnswers, setStartAnswers] = useState<string[]>([]);
 
   useEffect(() => {
     if (person && grade === null) setGrade(person.grade ?? 0);
@@ -61,10 +70,34 @@ export function MathPage() {
     setError(null);
     setResult(null);
     try {
-      setRound(await api.post<Start>('/learning/math/start', { member_id: activeProfile.id, grade: g, acting_member_id: activeProfile.id }));
+      const r = await api.post<Start>('/learning/math/start', { member_id: activeProfile.id, grade: g, acting_member_id: activeProfile.id });
+      saved.save({ round: r, answers: [] });
+      setStartAnswers([]);
+      setRound(r);
     } catch (e) {
       setError((e as Error).message);
     }
+  };
+  const finish = async (r: Start, answers: string[]) => {
+    try {
+      setResult(await api.post<Finish>(`/learning/round/${r.round_id}/finish`, { answers, acting_member_id: activeProfile?.id }));
+      reload();
+      saved.save(null);
+    } catch (e) {
+      setError((e as Error).message);
+      if (/expired|already finished/.test((e as Error).message)) saved.save(null);
+    }
+    setRound(null);
+  };
+  /** 💾 carry on with the saved round, at the first problem not checked yet */
+  const resume = () => {
+    const d = saved.draft;
+    if (!d) return;
+    setError(null);
+    setResult(null);
+    if (d.answers.length >= d.round.problems.length) return void finish(d.round, d.answers);
+    setStartAnswers(d.answers);
+    setRound(d.round);
   };
 
   if (round) {
@@ -73,15 +106,9 @@ export function MathPage() {
         round={round}
         gradeName={settings?.grades[round.grade] ?? ''}
         actingId={activeProfile?.id}
-        onDone={async (answers) => {
-          try {
-            setResult(await api.post<Finish>(`/learning/round/${round.round_id}/finish`, { answers, acting_member_id: activeProfile?.id }));
-            reload();
-          } catch (e) {
-            setError((e as Error).message);
-          }
-          setRound(null);
-        }}
+        startAnswers={startAnswers}
+        onProgress={(answers) => saved.save({ round, answers })}
+        onDone={(answers) => void finish(round, answers)}
         onQuit={() => setRound(null)}
       />
     );
@@ -143,8 +170,18 @@ export function MathPage() {
               </>
             )}
           </p>
-          <button type="button" className="learning-go" onClick={() => void start()}>
-            ▶ Start 10 problems
+          {saved.draft && (
+            <div className="learning-resume">
+              <span>
+                💾 You have a round going: {settings.grades[saved.draft.round.grade]}, {saved.draft.answers.length} of {saved.draft.round.problems.length} problems done
+              </span>
+              <button type="button" className="learning-go" onClick={resume}>
+                ▶ Keep going
+              </button>
+            </div>
+          )}
+          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} onClick={() => void start()}>
+            {saved.draft ? '↻ Start 10 new problems' : '▶ Start 10 problems'}
           </button>
           {error && <div className="settings-login__error">{error}</div>}
         </section>
@@ -181,12 +218,29 @@ export function MathPage() {
   );
 }
 
-function MathRound({ round, gradeName, actingId, onDone, onQuit }: { round: Start; gradeName: string; actingId?: string; onDone: (answers: string[]) => void; onQuit: () => void }) {
-  const [i, setI] = useState(0);
+function MathRound({
+  round,
+  gradeName,
+  actingId,
+  startAnswers = [],
+  onProgress,
+  onDone,
+  onQuit,
+}: {
+  round: Start;
+  gradeName: string;
+  actingId?: string;
+  /** 💾 carrying on: the answers already checked (it starts at the next problem) */
+  startAnswers?: string[];
+  onProgress?: (answers: string[]) => void;
+  onDone: (answers: string[]) => void;
+  onQuit: () => void;
+}) {
+  const [i, setI] = useState(() => Math.min(startAnswers.length, round.problems.length - 1));
   const [typed, setTyped] = useState('');
   const [checked, setChecked] = useState<Checked | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const answers = useRef<string[]>([]);
+  const answers = useRef<string[]>([...startAnswers]);
   const input = useRef<HTMLInputElement>(null);
   const p = round.problems[i];
 
@@ -202,6 +256,7 @@ function MathRound({ round, gradeName, actingId, onDone, onQuit }: { round: Star
     answers.current[i] = answer;
     try {
       setChecked(await api.post<Checked>(`/learning/round/${round.round_id}/check`, { index: i, answer, acting_member_id: actingId }));
+      onProgress?.(round.problems.slice(0, i + 1).map((_, k) => answers.current[k] ?? ''));
     } catch (e) {
       setError((e as Error).message);
     }

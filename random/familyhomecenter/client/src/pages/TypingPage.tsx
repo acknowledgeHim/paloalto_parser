@@ -3,6 +3,7 @@ import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useTypeCatcher, type RoundResult } from '../components/typingInput.js';
+import { useDraft } from '../utils/autosave.js';
 import {
   DailyChallenge,
   MeteorDefense,
@@ -101,6 +102,16 @@ const LOCKED_TABS = ['tower', 'story', 'daily'];
 
 type Tab = 'lessons' | 'whack' | 'meteor' | 'balloon' | 'snake' | 'race' | 'shop' | 'tower' | 'story' | 'daily' | 'stars';
 
+/** 💾 a typing lesson part-way through: the text, how far, the keys right/wrong, and time typing */
+interface TypingDraft {
+  level: number;
+  text: string;
+  pos: number;
+  right: number;
+  wrong: number;
+  ms: number;
+}
+
 export function TypingPage() {
   const { members, activeProfile } = useFamilyMembers();
   const canManage = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
@@ -108,6 +119,7 @@ export function TypingPage() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [rewards, setRewards] = useState<Rewards | null>(null);
   const [playing, setPlaying] = useState<Level | null>(null);
+  const saved = useDraft<TypingDraft>(activeProfile?.id, 'typing-lesson');
 
   const loadProgress = useCallback(() => {
     if (!activeProfile) return setProgress(null);
@@ -187,12 +199,26 @@ export function TypingPage() {
           stars={rewards?.levels[playing.n - 1] ?? 0}
           speed={rewards ? { tiers: rewards.speed_stars, paid: progress?.levels.find((l) => l.level === playing.n)?.speed_paid ?? 0 } : undefined}
           alreadyPassed={passed.has(playing.n)}
+          resume={saved.draft?.level === playing.n ? saved.draft : null}
+          onSpot={(d, now) => (now ? saved.save : saved.saveSoon)(d)}
           onSave={save}
           onExit={() => setPlaying(null)}
           onNext={() => setPlaying(LEVELS[playing.n] ?? null)}
         />
       ) : tab === 'lessons' ? (
-        <LessonList progress={progress} rewards={rewards} passed={passed} onPlay={setPlaying} />
+        <>
+          {saved.draft && LEVELS[saved.draft.level - 1] && (
+            <div className="panel learning-resume">
+              <span>
+                💾 Lesson {saved.draft.level} ({LEVELS[saved.draft.level - 1].name}) is {Math.round((saved.draft.pos / Math.max(1, saved.draft.text.length)) * 100)}% typed
+              </span>
+              <button type="button" className="learning-go" onClick={() => setPlaying(LEVELS[saved.draft!.level - 1])}>
+                ▶ Keep going
+              </button>
+            </div>
+          )}
+          <LessonList progress={progress} rewards={rewards} passed={passed} onPlay={setPlaying} />
+        </>
       ) : lockedOut(tab) ? (
         <SentenceLock title={MODE_LABELS[tab]} passed={passed.size} total={LEVELS.length} nobody={!activeProfile} />
       ) : tab === 'whack' ? (
@@ -334,10 +360,16 @@ function LessonRound({
   stars,
   speed,
   alreadyPassed,
+  resume,
+  onSpot,
   onSave,
   onExit,
   onNext,
 }: {
+  /** 💾 carrying on part-way through this lesson */
+  resume?: TypingDraft | null;
+  /** 💾 their spot changed (null = finished or started over; now = save straight away) */
+  onSpot?: (d: TypingDraft | null, now: boolean) => void;
   level: Level;
   stars: number;
   /** ⚡ the parent's speed stars, and how many this lesson's speed has paid already */
@@ -369,8 +401,28 @@ function LessonRound({
     setStartedAt(null);
     setResult(null);
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(restart, [level]);
+  const again = () => {
+    onSpot?.(null, true);
+    restart();
+  };
+  // A new lesson — or 💾 back where they were in it (the clock carries on from the time already typed).
+  const resumeAt = useRef(resume);
+  useEffect(() => {
+    const r = resumeAt.current;
+    resumeAt.current = null;
+    if (r && r.level === level.n && r.pos > 0 && r.pos < r.text.length) {
+      const startedAt = Date.now() - r.ms;
+      live.current = { pos: r.pos, right: r.right, wrong: r.wrong, startedAt, done: false };
+      passedBefore.current = alreadyPassed;
+      setText(r.text);
+      setPos(r.pos);
+      setWrongAt(null);
+      setKeystrokes({ right: r.right, wrong: r.wrong });
+      setStartedAt(startedAt);
+      setResult(null);
+    } else restart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
   useEffect(() => {
     if (!startedAt || result) return;
     const t = setInterval(() => setNow(Date.now()), 500);
@@ -390,8 +442,10 @@ function LessonRound({
       setKeystrokes({ right: L.right, wrong: L.wrong });
       setWrongAt(null);
       setPos(L.pos);
+      if (L.pos < text.length) onSpot?.({ level: level.n, text, pos: L.pos, right: L.right, wrong: L.wrong, ms: Date.now() - L.startedAt }, false);
       if (L.pos >= text.length) {
         L.done = true;
+        onSpot?.(null, true);
         const ms = Date.now() - L.startedAt;
         const accuracy = Math.round((L.right / Math.max(1, L.right + L.wrong)) * 1000) / 10;
         const wpm = wpmOf(text.length, ms);
@@ -412,6 +466,7 @@ function LessonRound({
       L.wrong++;
       setKeystrokes({ right: L.right, wrong: L.wrong });
       setWrongAt(L.pos);
+      if (L.pos > 0) onSpot?.({ level: level.n, text, pos: L.pos, right: L.right, wrong: L.wrong, ms: Date.now() - L.startedAt }, false);
     }
   };
   const { input, focus } = useTypeCatcher(onChar, undefined, !result);
@@ -481,7 +536,7 @@ function LessonRound({
             })()}
           {result.passed && !passedBefore.current && stars === 0 && <p className="hint">Next lesson unlocked!</p>}
           <div className="typing-result__actions">
-            <button type="button" onClick={restart}>
+            <button type="button" onClick={again}>
               ↻ Again
             </button>
             {result.passed && LEVELS[level.n] && (

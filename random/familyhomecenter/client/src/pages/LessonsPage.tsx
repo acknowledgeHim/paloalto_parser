@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useDraft } from '../utils/autosave.js';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
@@ -142,6 +143,14 @@ export function LessonBody({ text }: { text: string }) {
 }
 
 /** 📖 Lessons for a subject: pick one, read it, take the quiz. Parents can edit, add and hide lessons. */
+/** 💾 the lesson someone has open: how far down they'd read, and their quiz answers so far */
+interface LessonDraft {
+  id: string;
+  quiz: boolean;
+  picked: Array<number | null>;
+  scroll: number;
+}
+
 export function LessonsPage({ config }: { config: LessonsConfig }) {
   const { activeProfile } = useFamilyMembers();
   const [list, setList] = useState<List | null>(null);
@@ -151,6 +160,14 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isParent = activeProfile?.is_parent === 1;
+  const saved = useDraft<LessonDraft>(activeProfile?.id, `lesson-${config.subject}`);
+  // 💾 Left in the middle of a lesson (closed, or tapped away)? Open it again, once.
+  const reopened = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (saved.draft === undefined || reopened.current === activeProfile?.id) return;
+    reopened.current = activeProfile?.id;
+    if (saved.draft && !open) setOpen(saved.draft.id);
+  }, [saved.draft, activeProfile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = () => {
     const q = new URLSearchParams({ subject: config.subject });
@@ -188,7 +205,10 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
         grades={list?.grades ?? []}
         isParent={isParent}
         onEdit={() => setEditing(open)}
+        saved={saved.draft?.id === open ? saved.draft : null}
+        onSave={(d, now) => (now ? saved.save : saved.saveSoon)(d)}
         onBack={() => {
+          saved.save(null);
           setOpen(null);
           load();
         }}
@@ -278,11 +298,34 @@ function nearestGrade(list: List, g: number): number | 'all' {
   return have.find((x) => x >= g) ?? have[have.length - 1] ?? 'all';
 }
 
-function LessonView({ id, config, grades, isParent, onEdit, onBack }: { id: string; config: LessonsConfig; grades: string[]; isParent: boolean; onEdit: () => void; onBack: () => void }) {
+function LessonView({
+  id,
+  config,
+  grades,
+  isParent,
+  saved,
+  onSave,
+  onEdit,
+  onBack,
+}: {
+  id: string;
+  config: LessonsConfig;
+  grades: string[];
+  isParent: boolean;
+  /** 💾 where they were in this lesson last time */
+  saved: LessonDraft | null;
+  onSave: (d: LessonDraft | null, now: boolean) => void;
+  onEdit: () => void;
+  onBack: () => void;
+}) {
   const { activeProfile } = useFamilyMembers();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [quizOpen, setQuizOpen] = useState(false);
   const [picked, setPicked] = useState<Array<number | null>>([]);
+  const start = useRef(saved);
+  const spot = useRef({ quiz: false, picked: [] as Array<number | null> });
+  spot.current = { quiz: quizOpen, picked };
+  const lastScroll = useRef(0);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -291,17 +334,45 @@ function LessonView({ id, config, grades, isParent, onEdit, onBack }: { id: stri
       .get<Lesson>(`/learning/lessons/${id}${activeProfile ? `?member_id=${activeProfile.id}` : ''}`)
       .then((l) => {
         setLesson(l);
-        setPicked(l.quiz.map(() => null));
+        const s = start.current;
+        start.current = null;
+        if (s && s.id === id && s.picked.length === l.quiz.length) {
+          // 💾 back where they were: the quiz answers picked, and how far down they'd read
+          setPicked(s.picked);
+          setQuizOpen(s.quiz);
+          lastScroll.current = s.scroll;
+          setTimeout(() => window.scrollTo(0, s.scroll), 60);
+        } else {
+          setPicked(l.quiz.map(() => null));
+          onSave({ id, quiz: false, picked: l.quiz.map(() => null), scroll: 0 }, true);
+        }
       })
       .catch((e) => setError((e as Error).message));
     window.scrollTo(0, 0);
   }, [id, activeProfile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 💾 keep their spot: quiz answers straight away, scrolling now and then
+  const loaded = lesson !== null;
+  useEffect(() => {
+    if (!loaded) return;
+    onSave({ id, quiz: quizOpen, picked, scroll: lastScroll.current }, true);
+  }, [quizOpen, picked]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!loaded) return;
+    const onScroll = () => {
+      lastScroll.current = window.scrollY;
+      onSave({ id, ...spot.current, scroll: window.scrollY }, false);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [loaded, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     if (!activeProfile) return setError('Pick who you are up top first');
     setError(null);
     try {
       setResult(await api.post<QuizResult>(`/learning/lessons/${id}/quiz`, { member_id: activeProfile.id, answers: picked, acting_member_id: activeProfile.id }));
+      onSave(null, true);
     } catch (e) {
       setError((e as Error).message);
     }

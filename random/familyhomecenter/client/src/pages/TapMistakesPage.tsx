@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
+import { useDraft } from '../utils/autosave.js';
 
 interface Start {
   round_id: string;
@@ -62,6 +63,9 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
   const [round, setRound] = useState<Start | null>(null);
   const [result, setResult] = useState<Finish | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** 💾 a round in progress: the round, every item's taps, and how many are checked */
+  const saved = useDraft<{ round: Start; taps: number[][]; done: number }>(activeProfile?.id, `tap-${game.subject}`);
+  const [startAt, setStartAt] = useState<{ taps: number[][]; done: number } | null>(null);
 
   useEffect(() => {
     if (person && grade === null) setGrade(person.grade ?? 0);
@@ -76,10 +80,34 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
     setError(null);
     setResult(null);
     try {
-      setRound(await api.post<Start>(`/learning/${game.subject}/start`, { member_id: activeProfile.id, grade: g, acting_member_id: activeProfile.id }));
+      const r = await api.post<Start>(`/learning/${game.subject}/start`, { member_id: activeProfile.id, grade: g, acting_member_id: activeProfile.id });
+      saved.save({ round: r, taps: r.items.map(() => []), done: 0 });
+      setStartAt(null);
+      setRound(r);
     } catch (e) {
       setError((e as Error).message);
     }
+  };
+  const finish = async (r: Start, answers: number[][]) => {
+    try {
+      setResult(await api.post<Finish>(`/learning/round/${r.round_id}/finish`, { answers, acting_member_id: activeProfile?.id }));
+      reload();
+      saved.save(null);
+    } catch (e) {
+      setError((e as Error).message);
+      if (/expired|already finished/.test((e as Error).message)) saved.save(null);
+    }
+    setRound(null);
+  };
+  /** 💾 carry on with the saved round, at the first item not checked yet */
+  const resume = () => {
+    const d = saved.draft;
+    if (!d) return;
+    setError(null);
+    setResult(null);
+    if (d.done >= d.round.items.length) return void finish(d.round, d.taps);
+    setStartAt({ taps: d.taps, done: d.done });
+    setRound(d.round);
   };
 
   if (round) {
@@ -89,15 +117,9 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
         round={round}
         gradeName={settings?.grades[round.grade] ?? ''}
         actingId={activeProfile?.id}
-        onDone={async (answers) => {
-          try {
-            setResult(await api.post<Finish>(`/learning/round/${round.round_id}/finish`, { answers, acting_member_id: activeProfile?.id }));
-            reload();
-          } catch (e) {
-            setError((e as Error).message);
-          }
-          setRound(null);
-        }}
+        startAt={startAt}
+        onProgress={(taps, done, now) => (now ? saved.save : saved.saveSoon)({ round, taps, done })}
+        onDone={(answers) => void finish(round, answers)}
         onQuit={() => setRound(null)}
       />
     );
@@ -155,8 +177,18 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
               </>
             )}
           </p>
-          <button type="button" className="learning-go" onClick={() => void start()}>
-            ▶ Start 10
+          {saved.draft && (
+            <div className="learning-resume">
+              <span>
+                💾 You have a round going: {settings.grades[saved.draft.round.grade]}, {saved.draft.done} of {saved.draft.round.items.length} done
+              </span>
+              <button type="button" className="learning-go" onClick={resume}>
+                ▶ Keep going
+              </button>
+            </div>
+          )}
+          <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} onClick={() => void start()}>
+            {saved.draft ? '↻ Start a new' : '▶ Start'} 10
           </button>
           {error && <div className="settings-login__error">{error}</div>}
         </section>
@@ -226,6 +258,8 @@ function TapRound({
   round,
   gradeName,
   actingId,
+  startAt,
+  onProgress,
   onDone,
   onQuit,
 }: {
@@ -233,11 +267,15 @@ function TapRound({
   round: Start;
   gradeName: string;
   actingId?: string;
+  /** 💾 carrying on: the taps so far and how many items are checked (it starts at the next one) */
+  startAt?: { taps: number[][]; done: number } | null;
+  /** 💾 taps changed (now = an item was just checked: save straight away) */
+  onProgress?: (taps: number[][], done: number, now: boolean) => void;
   onDone: (answers: number[][]) => void;
   onQuit: () => void;
 }) {
-  const [i, setI] = useState(0);
-  const [taps, setTaps] = useState<number[][]>(() => round.items.map(() => []));
+  const [i, setI] = useState(() => Math.min(startAt?.done ?? 0, round.items.length - 1));
+  const [taps, setTaps] = useState<number[][]>(() => round.items.map((_, k) => startAt?.taps[k] ?? []));
   const [checked, setChecked] = useState<Checked | null>(null);
   const [error, setError] = useState<string | null>(null);
   const item = round.items[i];
@@ -245,12 +283,15 @@ function TapRound({
 
   const toggle = (k: number) => {
     if (checked) return;
-    setTaps((t) => t.map((x, j) => (j !== i ? x : x.includes(k) ? x.filter((y) => y !== k) : [...x, k])));
+    const next = taps.map((x, j) => (j !== i ? x : x.includes(k) ? x.filter((y) => y !== k) : [...x, k]));
+    setTaps(next);
+    onProgress?.(next, i, false);
   };
   const check = async () => {
     setError(null);
     try {
       setChecked(await api.post<Checked>(`/learning/round/${round.round_id}/check`, { index: i, tapped: mine, acting_member_id: actingId }));
+      onProgress?.(taps, i + 1, true);
     } catch (e) {
       setError((e as Error).message);
     }

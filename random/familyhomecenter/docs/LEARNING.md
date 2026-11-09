@@ -122,8 +122,24 @@ history 2 💎), the pass mark, and optionally an amount for a single lesson.
 Lesson text markup: `## ` heading, `- ` bullet, `1. ` step, `**bold**`, ✅ / ❌ example lines, and a
 blank line between paragraphs.
 
+## 💾 Auto-save
+
+Nothing is lost if a kid closes the tab, taps something else, or the screen restarts. Their spot is
+kept on the server for 3 days, so it works on another screen too.
+
+- **🔤 Spelling, 🔍 Spot the misspellings, 📝 Grammar, ➗ Math:** the page shows **💾 You have a round
+  going … ▶ Keep going**, which carries on at the next word or problem. Answers already given stay as
+  they were. **↻ Start a new** one replaces it. ✕ Stop keeps it too, so a stray tap there isn't lost.
+- **📖 Lessons (grammar, math, history):** going back to the page opens the lesson they were on, at
+  the same spot, with their quiz answers ticked. **‹ Back** or finishing the quiz is done with it.
+- **⌨️ Typing lessons:** **💾 Lesson N is 40% typed — ▶ Keep going** (or opening that lesson) carries on
+  from the same letter with the same speed and accuracy so far. The clock doesn't count the time away.
+  The typing games are quick rounds and start fresh.
+
 ## Data
 
 New tables only: `learning_grades` (each kid's grade), `learning_results` (every round: grade,
 right out of 10, tokens, the words missed), `learning_lessons` (the lessons, built-in and parents'), and
-`learning_lessons_done` (every quiz taken). Settings in `settings.learning_rewards`.
+`learning_lessons_done` (every quiz taken), `learning_open_rounds` (practice rounds, kept so they
+survive a restart; marked finished, never removed) and `learning_drafts` (💾 each person's saved
+spot). Settings in `settings.learning_rewards`.

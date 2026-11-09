@@ -157,10 +157,29 @@ interface Round {
   math?: MathProblem[];
   lockedText?: string[];
 }
-const rounds = new Map<string, Round>();
-const sweep = () => {
-  const old = Date.now() - 2 * 3600_000;
-  for (const [k, r] of rounds) if (r.started < old) rounds.delete(k);
+/** How long a round started and left can be picked up again (💾 auto-save). */
+const KEEP_MS = 3 * 24 * 3600_000;
+/** Rounds live in the database, so a closed tab, another screen or a restart can carry on. */
+const rounds = {
+  get(id: string): Round | undefined {
+    const row = db.prepare('SELECT data FROM learning_open_rounds WHERE id = ? AND finished_at IS NULL').get(id) as { data: string } | undefined;
+    if (!row) return undefined;
+    const r = JSON.parse(row.data) as Round;
+    return r.started < Date.now() - KEEP_MS ? undefined : r;
+  },
+  set(id: string, r: Round) {
+    db.prepare('INSERT INTO learning_open_rounds (id, family_member_id, subject, started_at, data) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data').run(
+      id,
+      r.member,
+      r.subject,
+      new Date(r.started).toISOString(),
+      JSON.stringify(r)
+    );
+  },
+  /** Marks it finished; false when it already was (each round counts once). */
+  finish(id: string): boolean {
+    return db.prepare('UPDATE learning_open_rounds SET finished_at = ? WHERE id = ? AND finished_at IS NULL').run(new Date().toISOString(), id).changes === 1;
+  },
 };
 
 function pick<T>(list: T[], n: number): T[] {
@@ -180,7 +199,6 @@ learningRouter.post('/spelling/start', (req, res) => {
   if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
   const g = Math.round(Number(grade));
   if (!(g >= 0 && g < WORDS.length)) return res.status(400).json({ error: 'Grade: K–12' });
-  sweep();
   // No word twice in a round (a few lists repeat a word on purpose across grades, not within one).
   const seen = new Set<string>();
   const words = pick(WORDS[g], WORDS[g].length).filter((w) => !seen.has(w.word.toLowerCase()) && seen.add(w.word.toLowerCase())).slice(0, ROUND_SIZE);
@@ -204,7 +222,6 @@ function startTap(req: import('express').Request, res: import('express').Respons
   if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
   const g = Math.round(Number(grade));
   if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
-  sweep();
   const items = make(g);
   const r: Round = { id: uuidv4(), member: m.id, subject, grade: g, started: Date.now(), answers: [], tap: items };
   rounds.set(r.id, r);
@@ -257,7 +274,6 @@ learningRouter.post('/math/start', (req, res) => {
   if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
   const g = Math.round(Number(grade));
   if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
-  sweep();
   const math = mathRound(g, ROUND_SIZE);
   const r: Round = { id: uuidv4(), member: m.id, subject: 'math', grade: g, started: Date.now(), answers: [], math };
   rounds.set(r.id, r);
@@ -284,11 +300,13 @@ learningRouter.post('/round/:id/check', (req, res) => {
     if (!(i >= 0 && i < r.math.length)) return res.status(400).json({ error: 'No such problem' });
     r.lockedText ??= [];
     r.lockedText[i] ??= String(req.body?.answer ?? '').slice(0, 40);
+    rounds.set(r.id, r);
     return res.json(mathResult(r.math[i], r.lockedText[i]));
   }
   if (!r.tap || !(i >= 0 && i < r.tap.length)) return res.status(400).json({ error: 'No such item' });
   r.locked ??= [];
   r.locked[i] ??= tapResult(r.tap[i], cleanTaps(req.body?.tapped)).tapped;
+  rounds.set(r.id, r);
   res.json(tapResult(r.tap[i], r.locked[i]));
 });
 
@@ -302,7 +320,7 @@ learningRouter.post('/round/:id/finish', (req, res) => {
   if (!isSelfOrParent(req, r.member, acting_member_id)) return res.status(403).json({ error: "That's someone else's round" });
   const m = memberOf(r.member);
   if (!m) return res.status(404).json({ error: 'not found' });
-  rounds.delete(r.id); // each round counts once
+  if (!rounds.finish(r.id)) return res.status(404).json({ error: 'That round was already finished' }); // each round counts once
   let items: unknown[];
   let correct: number;
   if (r.math) {
@@ -336,6 +354,34 @@ learningRouter.post('/round/:id/finish', (req, res) => {
     if (tokens) addTokens(m.id, tokens, `${SUBJECT_NAMES[r.subject]}: ${correct}/${total} at ${GRADE_NAMES[r.grade]}`);
   })();
   res.json({ correct, total, pct, passed: pct >= passMark(rw.tiers), tokens, no_tokens_why: tokens ? null : why, items });
+});
+
+// ---- 💾 auto-save: where someone is in a round, a lesson or a typing lesson ----
+
+const DRAFT_KEY = /^[a-z0-9:_-]{1,80}$/i;
+
+/** GET /drafts/:memberId/:key → { data, updated_at } (data null when there's nothing saved). */
+learningRouter.get('/drafts/:memberId/:key', (req, res) => {
+  const { memberId, key } = req.params;
+  if (!DRAFT_KEY.test(key)) return res.status(400).json({ error: 'bad key' });
+  const row = db.prepare('SELECT data, updated_at FROM learning_drafts WHERE family_member_id = ? AND key = ?').get(memberId, key) as { data: string | null; updated_at: string } | undefined;
+  const fresh = row?.data && Date.parse(row.updated_at) > Date.now() - KEEP_MS;
+  res.json({ data: fresh ? JSON.parse(row!.data!) : null, updated_at: fresh ? row!.updated_at : null });
+});
+
+/** PUT /drafts/:memberId/:key { data, acting_member_id } — save their spot (data null = done with it). */
+learningRouter.put('/drafts/:memberId/:key', (req, res) => {
+  const { memberId, key } = req.params;
+  const { data, acting_member_id } = req.body ?? {};
+  if (!DRAFT_KEY.test(key)) return res.status(400).json({ error: 'bad key' });
+  if (!memberOf(memberId)) return res.status(404).json({ error: 'not found' });
+  if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: "That's someone else's" });
+  const json = data === null || data === undefined ? null : JSON.stringify(data);
+  if (json && json.length > 200_000) return res.status(413).json({ error: 'too big' });
+  db.prepare(
+    'INSERT INTO learning_drafts (family_member_id, key, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(family_member_id, key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
+  ).run(memberId, key, json, new Date().toISOString());
+  res.json({ ok: true });
 });
 
 // ---- 🗣️ speech, for browsers without voices ----

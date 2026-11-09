@@ -1588,4 +1588,21 @@ db.exec(`
     day TEXT NOT NULL,
     PRIMARY KEY (family_member_id, day)
   );
+  -- 💾 Learning auto-save: practice rounds kept here (not just in memory) so a closed tab or a
+  -- restart doesn't lose one, and each person's in-progress spot (round, lesson, quiz, typing).
+  CREATE TABLE IF NOT EXISTS learning_open_rounds (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    data TEXT NOT NULL,
+    finished_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS learning_drafts (
+    family_member_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    data TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, key)
+  );
 `);
