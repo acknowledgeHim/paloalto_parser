@@ -33,11 +33,24 @@ export interface Controls {
   brakeKeys: string[];
   /** 🦘 keys that jump (when Jump is on); old saves don't have it → Space */
   jumpKeys?: string[];
+  /** 🦘 how the mouse / a finger jumps: tap the middle of the game, an on-screen JUMP button, the
+   *  middle mouse button (wheel click), or keys only. Old saves don't have it → middle. */
+  jumpTap?: JumpTap;
   /** pedals: only the on-screen pedals · buttons: left button = gas, right = brake · sides: right half = gas, left half = brake */
   mouse: 'pedals' | 'buttons' | 'sides';
 }
 export const DEFAULT_CONTROLS: Controls = { gasKeys: ['arrowright', 'd'], brakeKeys: ['arrowleft', 'a'], jumpKeys: [' '], mouse: 'pedals' };
 export const jumpKeysOf = (c: Controls) => c.jumpKeys ?? [' '];
+export type JumpTap = 'middle' | 'button' | 'wheel' | 'none';
+export const jumpTapOf = (c: Controls): JumpTap => c.jumpTap ?? 'middle';
+export const JUMP_TAP_LABEL: Record<JumpTap, string> = {
+  middle: 'Tap / click the middle of the game',
+  button: 'An on-screen 🦘 JUMP button (between the pedals)',
+  wheel: 'The middle mouse button (click the scroll wheel)',
+  none: 'Keys only',
+};
+/** What the run's "how to jump" hint says for the mouse / touch part. */
+const jumpTapHint: Record<JumpTap, string> = { middle: 'tap the middle', button: 'tap JUMP', wheel: 'click the mouse wheel', none: '' };
 /** 🦘 how high a jump goes (m), whatever the gravity */
 const JUMP_HEIGHT = 1.7;
 
@@ -693,8 +706,10 @@ export function HillHopperRun({
       }
       if (!started) {
         ctx.textAlign = 'center';
+        const jk = jumpKeysOf(controls).map(keyName).join(' / ');
+        const jt = jumpTapHint[jumpTapOf(controls)];
         const hint = jump
-          ? `Hold GAS${controls.gasKeys.length ? ` (${controls.gasKeys.map(keyName).join(' / ')})` : ''} to go!  🦘 Jump: tap the middle${jumpKeysOf(controls).length ? ` or press ${jumpKeysOf(controls).map(keyName).join(' / ')}` : ''}`
+          ? `Hold GAS${controls.gasKeys.length ? ` (${controls.gasKeys.map(keyName).join(' / ')})` : ''} to go!  🦘 Jump: ${[jt, jk && `press ${jk}`].filter(Boolean).join(' or ') || 'no key set'}`
           : `Hold GAS${controls.gasKeys.length ? ` (${controls.gasKeys.map(keyName).join(' / ')})` : ''} to go!  Ease off on hills — brake if the nose comes up`;
         let size = Math.round(Math.min(26, W / 20));
         ctx.font = `bold ${size}px system-ui, sans-serif`;
@@ -754,9 +769,10 @@ export function HillHopperRun({
         ref={canvas}
         className="hill-run__canvas"
         onPointerDown={(e) => {
-          // 🦘 the middle third of the screen jumps (when Jump is on)
+          // 🦘 jumping with the mouse / a finger (when Jump is on): the middle third of the game, or the wheel button
           const rx = (e.clientX - e.currentTarget.getBoundingClientRect().left) / e.currentTarget.clientWidth;
-          if (jump && e.button === 0 && rx > 1 / 3 && rx < 2 / 3) {
+          const tap = jumpTapOf(controls);
+          if (jump && ((tap === 'middle' && e.button === 0 && rx > 1 / 3 && rx < 2 / 3) || (tap === 'wheel' && e.button === 1))) {
             e.preventDefault();
             jumpAsk.current = performance.now();
             return;
@@ -781,6 +797,8 @@ export function HillHopperRun({
         }}
         onPointerUp={(e) => letGo(e.pointerId)}
         onPointerCancel={(e) => letGo(e.pointerId)}
+        // no auto-scroll when the wheel button jumps
+        onMouseDown={(e) => e.button === 1 && e.preventDefault()}
         onContextMenu={(e) => e.preventDefault()}
       />
       <button type="button" className="hill-run__quit secondary" onClick={() => (quit.current = true)}>
@@ -798,6 +816,21 @@ export function HillHopperRun({
         BRAKE
         <small>{keysFor(controls.brakeKeys)}</small>
       </button>
+      {jump && jumpTapOf(controls) === 'button' && (
+        <button
+          type="button"
+          className="hill-run__pedal hill-run__pedal--jump"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            jumpAsk.current = performance.now();
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+          aria-label="Jump"
+        >
+          🦘 JUMP
+          <small>{keysFor(jumpKeysOf(controls))}</small>
+        </button>
+      )}
       <button
         type="button"
         className={`hill-run__pedal hill-run__pedal--gas${pedal.current.gas ? ' is-down' : ''}`}

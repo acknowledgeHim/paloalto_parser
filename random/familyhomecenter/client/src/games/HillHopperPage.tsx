@@ -7,7 +7,7 @@ import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
 import { HAZARD_COINS, HAZARD_WORLDS } from './hillHazards.js';
-import { DEFAULT_CONTROLS, HillHopperRun, jumpKeysOf, keyName, type Controls, type RunResult } from './HillHopperRun.js';
+import { DEFAULT_CONTROLS, HillHopperRun, JUMP_TAP_LABEL, jumpKeysOf, jumpTapOf, keyName, type Controls, type JumpTap, type RunResult } from './HillHopperRun.js';
 
 interface Save {
   coins: number;
@@ -325,7 +325,7 @@ export function HillHopperPage() {
         <label className="privacy-toggle">
           <input type="checkbox" checked={save.jump ?? false} onChange={(e) => void store({ ...save, jump: e.target.checked })} />
           <span>
-            🦘 Jump — tap the middle of the screen or press the jump key.{' '}
+            🦘 Jump — with the jump key, or the jump button you pick below.{' '}
             <span className="hint">
               In 🦖 Dino Land with obstacles there are 🥚 eggs too: hop over them. Squash 3 and the next dinosaur chases you for 10 seconds!
             </span>
@@ -344,6 +344,20 @@ export function HillHopperPage() {
             </div>
           );
         })}
+        {save.jump && (
+          <div className="hill-garage__mouse" role="radiogroup" aria-label="Jump button">
+            <strong>🦘 Jump button (mouse / touch)</strong>
+            {(Object.keys(JUMP_TAP_LABEL) as JumpTap[]).map((t) => (
+              <label key={t} className="privacy-toggle">
+                <input type="radio" name="hill-jump-tap" checked={jumpTapOf(save.controls) === t} onChange={() => void store({ ...save, controls: { ...save.controls, jumpTap: t } })} />
+                <span>{JUMP_TAP_LABEL[t]}</span>
+              </label>
+            ))}
+            {jumpTapOf(save.controls) === 'middle' && save.controls.mouse === 'buttons' && (
+              <p className="hint">With “left button = gas”, clicking the middle of the game jumps instead of gas — the JUMP button or the wheel click may suit you better.</p>
+            )}
+          </div>
+        )}
         <div className="hill-garage__mouse" role="radiogroup" aria-label="Mouse">
           {(Object.keys(MOUSE_LABEL) as Array<Controls['mouse']>).map((m) => (
             <label key={m} className="privacy-toggle">
@@ -419,7 +433,7 @@ export function HillHopperPage() {
           <li>The car is bouncy: gas lifts the nose, and too much on a hill flips you over backwards. Ease off, or tap the brake to bring the nose down. Landing on your head — or on your back — ends the run.</li>
           <li>In the air, gas tips you back and brake tips you forward: land on your wheels, or do a flip for coins.</li>
           <li>Grab ⛽ cans before the tank runs dry. They get further apart the further you go.</li>
-          <li>🦘 With Jump on (🎮 Controls): tap the middle of the screen or press Space to hop.</li>
+          <li>🦘 With Jump on (🎮 Controls): press the jump key (Space unless you changed it) or your jump button — the middle of the screen, an on-screen JUMP button or the mouse wheel click — to hop.</li>
         </ul>
       </section>
       {error && <div className="settings-login__error">{error}</div>}

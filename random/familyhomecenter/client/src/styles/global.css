@@ -3125,6 +3125,8 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .hill-run__pedal.is-down { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.3); opacity: 1; }
 .hill-run__pedal--brake { left: 16px; background: #e53935; }
 .hill-run__pedal--gas { right: 16px; background: #43a047; }
+.hill-run__pedal--jump { left: 50%; transform: translateX(-50%); background: #1e88e5; width: clamp(88px, 16vw, 140px); }
+.hill-run__pedal--jump:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.3); opacity: 1; }
 .hill-run__pedal small { display: block; font-size: 0.7em; font-weight: 600; opacity: 0.9; }
 .hill-garage__mouse { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 /* ✕ Remove from Keep watching (the movie stays) */

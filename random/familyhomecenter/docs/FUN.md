@@ -261,8 +261,10 @@ own avatar at the wheel wearing your hat.
   - 👽 **The Moon:** aliens in a flying saucer follow you. When it glows, a red target shows where
     the zapper will land: where you'd be if you kept going at the same speed. Speed up or slow down
     to dodge (+5 each miss). You have 🛡️🛡️🛡️ shields; the third zap ends the run.
-  **🦘 Jump** (garage → Controls, off unless you turn it on): tap the middle of the screen or press
-  the jump key (Space; change it there) to hop. With Jump on, 🦖 Dino Land also has 🥚 dino eggs on
+  **🦘 Jump** (garage → Controls, off unless you turn it on): press the jump key (Space;
+  change it there) or the jump button to hop. The jump button is picked there too: tap the middle of
+  the screen (the default), an on-screen 🦘 JUMP button between the pedals, the middle mouse button
+  (wheel click), or keys only. With Jump on, 🦖 Dino Land also has 🥚 dino eggs on
   the road: hop over one for +3. Squash 3 and the next dinosaur you get under turns round and
   chases you for 10 s, jumping at you — outrun it (or dodge its landings) and it gives up (+20).
   **−** next to an upgrade takes a level off and gives its coins back.
