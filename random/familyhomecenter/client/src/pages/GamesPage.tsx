@@ -33,7 +33,7 @@ interface GameRule {
   plays: number;
   features?: Record<string, number>;
 }
-const FEATURE_NAMES: Record<string, string> = { jump: '🦘 Jump', obstacles: '⚠️ Obstacles' };
+const FEATURE_NAMES: Record<string, string> = { jump: '🦘 Jump', obstacles: '⚠️ Obstacles', glide: '🪂 Glider' };
 
 /**
  * 🎮 Games: each game is unlocked with 💎 tokens — for good, or for a number of plays a parent sets per
@@ -197,7 +197,7 @@ export function GamesPage() {
           <p className="hint">
             For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
             uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs (use ↶ refund
-            above to take one back). 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
+            above to take one back). 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump, 🪂 Glider and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
             already had one switched on keeps it.
           </p>
           <p className="hint">

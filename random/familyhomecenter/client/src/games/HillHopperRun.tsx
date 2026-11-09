@@ -53,6 +53,12 @@ export const JUMP_TAP_LABEL: Record<JumpTap, string> = {
 const jumpTapHint: Record<JumpTap, string> = { middle: 'tap the middle', button: 'tap JUMP', wheel: 'click the mouse wheel', none: '' };
 /** 🦘 how high a jump goes (m), whatever the gravity */
 const JUMP_HEIGHT = 1.7;
+/** 🦘 each Jump upgrade level: this much higher (×) */
+const JUMP_PER_LEVEL = 0.25;
+/** 🪂 gliding: how fast it sinks (m/s), and seconds of glide with no upgrades / per level */
+const GLIDE_SINK = 1.4;
+const GLIDE_TIME = 1.6;
+const GLIDE_PER_LEVEL = 0.7;
 /** 🦈 how far back from where it leaps its fin circles (m) */
 const SHARK_FIN = 2.2;
 
@@ -104,6 +110,7 @@ export function HillHopperRun({
   world,
   obstacles = false,
   jump = false,
+  glide = false,
   best,
   controls,
   onEnd,
@@ -116,6 +123,8 @@ export function HillHopperRun({
   obstacles?: boolean;
   /** 🦘 jump: a key (Space) or tapping the middle of the screen */
   jump?: boolean;
+  /** 🪂 glider: hold the jump key / button in the air to glide (sky coins and cans come with it) */
+  glide?: boolean;
   best: number | null;
   controls: Controls;
   onEnd: (r: RunResult) => void;
@@ -124,14 +133,19 @@ export function HillHopperRun({
   const pedal = useRef({ gas: false, brake: false });
   /** 🦘 a jump asked for (when), used up by the next step on the ground */
   const jumpAsk = useRef(0);
+  /** 🪂 the jump key / button is being held (glides while in the air) */
+  const jumpHeld = useRef(false);
+  const jumpers = useRef(new Set<number>());
+  const usesJumpKey = jump || glide;
   const quit = useRef(false);
   const [, setPressed] = useState(0);
 
   useEffect(() => {
     const keys = (down: boolean) => (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (jump && jumpKeysOf(controls).includes(k)) {
+      if (usesJumpKey && jumpKeysOf(controls).includes(k)) {
         if (down && !e.repeat) jumpAsk.current = performance.now();
+        jumpHeld.current = down;
         e.preventDefault();
         return;
       }
@@ -149,6 +163,7 @@ export function HillHopperRun({
     const blur = () => {
       pedal.current.gas = false;
       pedal.current.brake = false;
+      jumpHeld.current = false;
     };
     window.addEventListener('blur', blur);
     return () => {
@@ -156,7 +171,7 @@ export function HillHopperRun({
       window.removeEventListener('keyup', ku);
       window.removeEventListener('blur', blur);
     };
-  }, [controls, jump]);
+  }, [controls, jump, glide]);
 
   useEffect(() => {
     const cv = canvas.current!;
@@ -168,7 +183,31 @@ export function HillHopperRun({
     const car: Car = newCar(terrain);
     const startX = car.x;
     const hz = obstacles && HAZARD_WORLDS[world.id] ? new Hazards(world, terrain, startX, jump && world.id === 'dino') : null;
-    const jumpG = Math.sqrt(2 * world.gravity * JUMP_HEIGHT);
+    const jumpG = Math.sqrt(2 * world.gravity * JUMP_HEIGHT * (1 + JUMP_PER_LEVEL * (upgrades.jump ?? 0)));
+    // 🪂 glide time per trip into the air
+    const glideMax = GLIDE_TIME + GLIDE_PER_LEVEL * (upgrades.glide ?? 0);
+    let glideLeft = glideMax;
+    let gliding = false;
+    // ☁️ with the glider: coins (worth double) and now and then a ⛽ can, up in the sky
+    const skyBits: Array<{ x: number; y: number; fuel: boolean; taken: boolean }> = [];
+    let skyTo = startX + 90;
+    let skySeed = world.seed * 7 + 3;
+    const skyRand = () => {
+      skySeed = (skySeed * 1103515245 + 12345) & 0x7fffffff;
+      return skySeed / 0x7fffffff;
+    };
+    const placeSky = (upTo: number) => {
+      while (glide && skyTo < upTo) {
+        const high = 4.5 + skyRand() * 3;
+        if (skyRand() < 0.25) skyBits.push({ x: skyTo, y: terrain.h(skyTo) + high, fuel: true, taken: false });
+        else
+          for (let k = 0; k < 6; k++) {
+            const cx = skyTo + k * 1.6;
+            skyBits.push({ x: cx, y: Math.max(terrain.h(cx), world.water ?? -Infinity) + high + Math.sin((k / 5) * Math.PI) * 1.2, fuel: false, taken: false });
+          }
+        skyTo += 110 + skyRand() * 110;
+      }
+    };
     let jumpReady = 0; // seconds until another jump is allowed
     let shake = 0;
     let zoom = 1;
@@ -214,7 +253,26 @@ export function HillHopperRun({
       if (started) fuel = Math.max(0, fuel - FUEL_PER_SEC * world.fuelBurn * DT);
       // 🦘 Jump: only from the ground (a press up to 0.2 s early still counts).
       jumpReady = Math.max(0, jumpReady - DT);
-      if (jump && jumpAsk.current && performance.now() - jumpAsk.current < 200 && jumpReady <= 0 && car.wheels.some((w) => w.ground)) {
+      const onGround = car.wheels.some((w) => w.ground);
+      // 🪂 gliding: hold jump while in the air — sinks slowly and stays level, until the glide runs out
+      gliding = glide && !onGround && jumpHeld.current && glideLeft > 0 && car.vy < 0.5 && performance.now() - jumpAsk.current > 120;
+      if (onGround) glideLeft = glideMax;
+      else if (gliding) {
+        glideLeft -= DT;
+        const sink = -GLIDE_SINK;
+        if (car.vy < sink) {
+          const dv = Math.min(sink - car.vy, 30 * DT);
+          car.vy += dv;
+          for (const w of car.wheels) w.vy += dv;
+        }
+        car.w *= 0.96;
+        car.a *= 0.995;
+        if (car.vx < 9) {
+          car.vx += 1.2 * DT;
+          for (const w of car.wheels) w.vx += 1.2 * DT;
+        }
+      }
+      if (jump && jumpAsk.current && performance.now() - jumpAsk.current < 200 && jumpReady <= 0 && onGround) {
         jumpAsk.current = 0;
         jumpReady = 0.4;
         started = true;
@@ -264,6 +322,18 @@ export function HillHopperRun({
           coins += c.value;
         }
       }
+      placeSky(car.x + 200);
+      for (const c of skyBits) {
+        if (c.taken || Math.abs(c.x - car.x) > 3) continue;
+        if (near(c.x, c.y, c.fuel ? 1.6 : 1.3)) {
+          c.taken = true;
+          if (c.fuel) {
+            fuel = stats.tank;
+            say('☁️⛽ Sky fuel — full tank!');
+          } else coins += Math.round((car.x > 1500 ? 25 : car.x > 600 ? 10 : 5) * world.coinMul * 2);
+        }
+      }
+      if (skyBits.length > 200) skyBits.splice(0, skyBits.findIndex((c) => c.x > car.x - 30));
       for (const f of fuelAt) {
         if (f.taken || Math.abs(f.x - car.x) > 3) continue;
         if (near(f.x, terrain.h(f.x) + 0.8, 1.6)) {
@@ -671,6 +741,37 @@ export function HillHopperRun({
         if (f.taken || f.x < x0 || f.x > x1) continue;
         ctx.fillText('⛽', sx(f.x), sy(terrain.h(f.x) + 0.8));
       }
+      // ☁️ sky coins and cans (with the glider)
+      for (const c of skyBits) {
+        if (c.taken || c.x < x0 || c.x > x1) continue;
+        if (c.fuel) {
+          ctx.font = `${Math.round(S * 1.6)}px system-ui, sans-serif`;
+          ctx.fillText('☁️', sx(c.x), sy(c.y - 0.5));
+          ctx.font = `${Math.round(S * 1.1)}px system-ui, sans-serif`;
+          ctx.fillText('⛽', sx(c.x), sy(c.y));
+          continue;
+        }
+        ctx.fillStyle = '#fff176';
+        ctx.strokeStyle = '#f57f17';
+        ctx.lineWidth = Math.max(2, S * 0.07);
+        ctx.beginPath();
+        ctx.arc(sx(c.x), sy(c.y), S * 0.36, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#f57f17';
+        ctx.font = `bold ${Math.round(S * 0.4)}px system-ui, sans-serif`;
+        ctx.fillText('×2', sx(c.x), sy(c.y));
+      }
+      ctx.font = `${Math.round(S * 1.1)}px system-ui, sans-serif`;
+
+      // 🪂 the glider, open above the car
+      if (gliding) {
+        ctx.font = `${Math.round(S * 2.4)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000';
+        ctx.fillText('🪂', sx(car.x), sy(car.y + 2.6));
+      }
 
       // The car: springs, wheels, body, driver.
       for (const w of car.wheels) {
@@ -813,6 +914,15 @@ export function HillHopperRun({
       ctx.fillRect(pad, pad + 32, 150, 26);
       ctx.fillStyle = '#fff';
       ctx.fillText(`🪙 ${coins}${hz ? ` ×${HAZARD_COINS}` : ''}`, pad + 8, pad + 35);
+      if (glide) {
+        // 🪂 glide left on this trip into the air
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(pad + 156, pad + 32, fw * 0.6 + 44, 26);
+        ctx.fillStyle = gliding ? '#81d4fa' : '#b3e5fc';
+        ctx.fillRect(pad + 156 + 38, pad + 37, (fw * 0.6 * Math.max(0, glideLeft)) / glideMax, 16);
+        ctx.fillStyle = '#fff';
+        ctx.fillText('🪂', pad + 164, pad + 35);
+      }
       const dist = Math.max(0, Math.floor(maxX - startX));
       ctx.textAlign = 'right';
       ctx.font = 'bold 22px system-ui, sans-serif';
@@ -897,9 +1007,12 @@ export function HillHopperRun({
           // 🦘 jumping with the mouse / a finger (when Jump is on): the middle third of the game, or the wheel button
           const rx = (e.clientX - e.currentTarget.getBoundingClientRect().left) / e.currentTarget.clientWidth;
           const tap = jumpTapOf(controls);
-          if (jump && ((tap === 'middle' && e.button === 0 && rx > 1 / 3 && rx < 2 / 3) || (tap === 'wheel' && e.button === 1))) {
+          if (usesJumpKey && ((tap === 'middle' && e.button === 0 && rx > 1 / 3 && rx < 2 / 3) || (tap === 'wheel' && e.button === 1))) {
             e.preventDefault();
             jumpAsk.current = performance.now();
+            jumpHeld.current = true;
+            jumpers.current.add(e.pointerId);
+            e.currentTarget.setPointerCapture?.(e.pointerId);
             return;
           }
           if (controls.mouse === 'pedals') return;
@@ -920,8 +1033,14 @@ export function HillHopperRun({
           e.currentTarget.setPointerCapture?.(e.pointerId);
           setPressed((n) => n + 1);
         }}
-        onPointerUp={(e) => letGo(e.pointerId)}
-        onPointerCancel={(e) => letGo(e.pointerId)}
+        onPointerUp={(e) => {
+          if (jumpers.current.delete(e.pointerId)) jumpHeld.current = jumpers.current.size > 0;
+          letGo(e.pointerId);
+        }}
+        onPointerCancel={(e) => {
+          if (jumpers.current.delete(e.pointerId)) jumpHeld.current = jumpers.current.size > 0;
+          letGo(e.pointerId);
+        }}
         // no auto-scroll when the wheel button jumps
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}
         onContextMenu={(e) => e.preventDefault()}
@@ -941,18 +1060,22 @@ export function HillHopperRun({
         BRAKE
         <small>{keysFor(controls.brakeKeys)}</small>
       </button>
-      {jump && jumpTapOf(controls) === 'button' && (
+      {usesJumpKey && jumpTapOf(controls) === 'button' && (
         <button
           type="button"
           className="hill-run__pedal hill-run__pedal--jump"
           onPointerDown={(e) => {
             e.preventDefault();
             jumpAsk.current = performance.now();
+            jumpHeld.current = true;
+            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
           }}
+          onPointerUp={() => (jumpHeld.current = false)}
+          onPointerCancel={() => (jumpHeld.current = false)}
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Jump"
         >
-          🦘 JUMP
+          {jump ? '🦘 JUMP' : '🪂 GLIDE'}
           <small>{keysFor(jumpKeysOf(controls))}</small>
         </button>
       )}

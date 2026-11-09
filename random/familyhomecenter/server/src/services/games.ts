@@ -24,6 +24,7 @@ export const GAMES: Game[] = [
     features: [
       { id: 'jump', name: '🦘 Jump', cost: 5 },
       { id: 'obstacles', name: '⚠️ Obstacles', cost: 5 },
+      { id: 'glide', name: '🪂 Glider', cost: 5 },
     ],
   },
   {

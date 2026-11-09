@@ -11,6 +11,10 @@ export interface Upgrades {
   tires: number;
   springs: number;
   tank: number;
+  /** 🦘 higher jumps (with Jump on) */
+  jump?: number;
+  /** 🪂 longer glides (with the Glider) */
+  glide?: number;
 }
 export const UPGRADE_KEYS: Array<keyof Upgrades> = ['engine', 'tires', 'springs', 'tank'];
 export const MAX_LEVEL = 5;

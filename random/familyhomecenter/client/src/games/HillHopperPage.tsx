@@ -16,6 +16,8 @@ interface Save {
   vehicle: string | null; // a Dress up vehicle id, or null for the buggy
   /** 🦘 Jump on (Space or tapping the middle of the screen; in Dino Land with obstacles, eggs too) */
   jump?: boolean;
+  /** 🪂 Glider on (hold jump in the air; sky coins and cans come with it) */
+  glide?: boolean;
   /** Picked in the garage here. Not picked: the game drives whatever vehicle the avatar has on in Dress up. */
   vehicle_picked?: boolean;
   controls: Controls;
@@ -37,12 +39,14 @@ interface PlayInfo {
 }
 
 const GAME = 'hill-hopper';
-const NO_UPGRADES: Upgrades = { engine: 0, tires: 0, springs: 0, tank: 0 };
+const NO_UPGRADES: Upgrades = { engine: 0, tires: 0, springs: 0, tank: 0, jump: 0, glide: 0 };
 const UPGRADE_LABEL: Record<keyof Upgrades, string> = {
   engine: '🔧 Engine — faster, more pull up hills',
   tires: '🛞 Tires — more grip, less spinning',
   springs: '🪀 Springs — smoother over bumps',
   tank: '⛽ Fuel tank — drive longer between cans',
+  jump: '🦘 Jump — hop higher',
+  glide: '🪂 Glider — glide farther',
 };
 const WHY: Record<RunResult['why'], string> = {
   crash: '💥 Bonk! Your head hit the ground.',
@@ -89,6 +93,7 @@ export function HillHopperPage() {
           vehicle: i.save?.vehicle ?? null,
           vehicle_picked: i.save?.vehicle_picked ?? false,
           jump: i.save?.jump ?? false,
+          glide: i.save?.glide ?? false,
           controls: { ...DEFAULT_CONTROLS, ...(i.save?.controls ?? {}) },
           worlds: [...new Set(['hills', ...(i.save?.worlds ?? [])])],
           world: i.save?.world ?? 'hills',
@@ -206,6 +211,7 @@ export function HillHopperPage() {
         world={world}
         obstacles={has('obstacles') && save.obstacles.includes(world.id)}
         jump={has('jump') && (save.jump ?? false)}
+        glide={has('glide') && (save.glide ?? false)}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -220,14 +226,14 @@ export function HillHopperPage() {
   }
 
   const buy = (k: keyof Upgrades) => {
-    const lvl = save.upgrades[k];
+    const lvl = save.upgrades[k] ?? 0;
     const cost = UPGRADE_COST[lvl];
     if (lvl >= MAX_LEVEL || save.coins < cost) return;
     void store({ ...save, coins: save.coins - cost, upgrades: { ...save.upgrades, [k]: lvl + 1 } });
   };
   /** Take a level off (the coins it cost come back), e.g. if the car's too fast or bouncy. */
   const remove = (k: keyof Upgrades) => {
-    const lvl = save.upgrades[k];
+    const lvl = save.upgrades[k] ?? 0;
     if (lvl <= 0) return;
     void store({ ...save, coins: save.coins + UPGRADE_COST[lvl - 1], upgrades: { ...save.upgrades, [k]: lvl - 1 } });
   };
@@ -375,7 +381,15 @@ export function HillHopperPage() {
             </span>
           </span>
         </label>
-        {(['gas', 'brake', 'jump'] as const).filter((p) => p !== 'jump' || (save.jump && has('jump'))).map((p) => {
+        {!has('glide') && unlockButton('glide')}
+        <label className={`privacy-toggle${has('glide') ? '' : ' is-locked'}`}>
+          <input type="checkbox" checked={has('glide') && (save.glide ?? false)} disabled={!has('glide')} onChange={(e) => void store({ ...save, glide: e.target.checked })} />
+          <span>
+            🪂 Glider — hold the jump key (or jump button) while you’re in the air to glide.{' '}
+            <span className="hint">With it on, there are ☁️ coins worth double and the odd ⛽ can up in the sky. Upgrade it to glide farther.</span>
+          </span>
+        </label>
+        {(['gas', 'brake', 'jump'] as const).filter((p) => p !== 'jump' || (save.jump && has('jump')) || (save.glide && has('glide'))).map((p) => {
           const keys = p === 'gas' ? save.controls.gasKeys : p === 'brake' ? save.controls.brakeKeys : jumpKeysOf(save.controls);
           return (
             <div key={p} className="hill-garage__upgrade">
@@ -388,7 +402,7 @@ export function HillHopperPage() {
             </div>
           );
         })}
-        {save.jump && has('jump') && (
+        {((save.jump && has('jump')) || (save.glide && has('glide'))) && (
           <div className="hill-garage__mouse" role="radiogroup" aria-label="Jump button">
             <strong>🦘 Jump button (mouse / touch)</strong>
             {(Object.keys(JUMP_TAP_LABEL) as JumpTap[]).map((t) => (
@@ -420,8 +434,8 @@ export function HillHopperPage() {
 
       <section className="panel">
         <h2>🔧 Upgrades</h2>
-        {UPGRADE_KEYS.map((k) => {
-          const lvl = save.upgrades[k];
+        {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : [])].map((k) => {
+          const lvl = save.upgrades[k] ?? 0;
           const cost = UPGRADE_COST[lvl];
           return (
             <div key={k} className="hill-garage__upgrade">
