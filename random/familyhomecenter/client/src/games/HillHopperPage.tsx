@@ -23,7 +23,7 @@ interface Save {
   worlds: string[];
   world: string;
   bests: Record<string, number>;
-  /** ⚠️ worlds with obstacles turned on (🦖 dino, 👽 moon) */
+  /** ⚠️ worlds with obstacles turned on (every world has its own — hillHazards.ts) */
   obstacles: string[];
 }
 interface PlayInfo {
@@ -51,6 +51,7 @@ const WHY: Record<RunResult['why'], string> = {
   quit: '✕ Stopped.',
   squashed: '🦖 Squashed by a dinosaur! Wait for it to jump, then zoom underneath.',
   zapped: '👽 Zapped by the aliens! When the saucer glows, speed up or slow down.',
+  bumped: '🛡️ Out of shields! Watch for the warning — then wait, or zoom past.',
 };
 const MOUSE_LABEL: Record<Controls['mouse'], string> = {
   pedals: 'Click / tap the on-screen pedals',

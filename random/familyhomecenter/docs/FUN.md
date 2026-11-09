@@ -258,6 +258,20 @@ own avatar at the wheel wearing your hat.
   | ☀️ The Sun | 3500 | heavy gravity; the heat burns fuel fast | ×2.5 |
 
   **⚠️ Add obstacles** (a switch on the world's card, once it's unlocked; ×1.5 coins while on):
+  - **Every world has its own.** A warning always comes first. Bumping one costs a 🛡️ shield, and
+    the run ends when all 3 are gone.
+    - 🌄 **Green Hills: 🐹 gophers.** They pop out of holes; the dirt puffs 💨 first. Go past while
+      they're down (+5).
+    - 🏜️ **Desert: 🦂 scorpions** pop out of the sand (+5).
+    - 🧊 **Ice World: 🐧 penguins** pop out of ice holes; 🫧 bubbles come first (+5).
+    - ☀️ **The Sun: 🔥 flames** shoot up out of cracks that glow first (+6). They're too tall to
+      jump over.
+    - 🍭 **Candy Land: 🍬 giant gumdrops** bounce on the road. Zoom under while one's up high (+8).
+    - 🌊 **Water Planet: 🦈 sharks** leap out of the sea. Their fin circles and splashes 💦 just
+      before a leap, so wait, then go (+6).
+    - 🌴 **Jungle: a 🐒 monkey** in the treetops drops 🥥 coconuts on a red 🎯 target. Speed up or
+      slow down (+5 each miss).
+    - With 🦘 Jump, the small ones (gophers, scorpions, penguins) can be hopped over too.
   - 🦖 **Dino Land:** big dinosaurs stand on the road and jump. They crouch just before a jump.
     Drive underneath while one is in the air (+15 coins); if it lands on you, or you drive into it,
     you're squashed. A "🦖 40 m ▶" sign warns you one is coming, and the camera zooms out near one.

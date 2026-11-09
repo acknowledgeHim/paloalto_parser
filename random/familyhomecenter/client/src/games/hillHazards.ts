@@ -7,6 +7,10 @@
  *  - 🥚 With 🦘 Jump on too, Dino Land has dino eggs on the road: hop over them (+3). Squash
  *    EGG_LIMIT of them and the next dinosaur you get under turns round and chases you for CHASE_TIME
  *    seconds, jumping at you. Outrun it (or dodge its landings) and it gives up (+20).
+ *  - Every other world has its own critters (CRITTERS below), each with a warning first: they
+ *    pop up out of the ground (🐹 🦂 🐧 🔥 — go past while they're down), bounce (🍬 — go under while
+ *    it's up), leap out of the sea (🦈 — go past while it's under), or drop from the trees (🐒 🥥 —
+ *    speed up or slow down when you see the 🎯). Bumping one costs a 🛡️ shield (3 a run).
  * No drawing here (HillHopperRun draws them), so the driver test can use it too.
  */
 import { HEAD, type Car, type Terrain, type World } from './hillPhysics.js';
@@ -15,7 +19,67 @@ import { HEAD, type Car, type Terrain, type World } from './hillPhysics.js';
 export const HAZARD_WORLDS: Record<string, { emoji: string; text: string }> = {
   dino: { emoji: '🦖', text: 'Jumping dinosaurs — drive under them while they’re in the air, don’t get squashed!' },
   moon: { emoji: '👽', text: 'Aliens in a flying saucer shoot zappers — when it glows, speed up or slow down!' },
+  hills: { emoji: '🐹', text: 'Gophers pop out of their holes — drive past while they’re down (the dirt shakes first)!' },
+  desert: { emoji: '🦂', text: 'Scorpions pop up out of the sand — go past while they’re hiding!' },
+  jungle: { emoji: '🐒', text: 'Monkeys drop coconuts from the trees — when you see the 🎯, speed up or slow down!' },
+  ice: { emoji: '🐧', text: 'Penguins pop out of ice holes — go past while they’re underwater (bubbles come first)!' },
+  water: { emoji: '🦈', text: 'Sharks leap out of the sea — when the fin splashes, wait, then go!' },
+  candy: { emoji: '🍬', text: 'Giant gumdrops bounce on the road — zoom under while they’re up high!' },
+  sun: { emoji: '🔥', text: 'Flames shoot up out of glowing cracks — go past while they’re out!' },
 };
+
+/** A world's critters: how they move, how big, how often (seconds), and how far apart (m). */
+export interface CritterKind {
+  move: 'pop' | 'bounce' | 'leap';
+  emoji: string;
+  /** how tall (m) when up, and half as wide */
+  h: number;
+  halfW: number;
+  down: [number, number];
+  warn: number;
+  up: number;
+  gap: [number, number];
+  /** 🪙 for getting past one */
+  coins: number;
+}
+export const CRITTERS: Record<string, CritterKind> = {
+  // down long enough to get going from a stop just short of it and clear it (~2.2 s with no upgrades)
+  hills: { move: 'pop', emoji: '🐹', h: 1.2, halfW: 0.6, down: [2.8, 3.8], warn: 0.8, up: 1.3, gap: [70, 120], coins: 5 },
+  desert: { move: 'pop', emoji: '🦂', h: 1.0, halfW: 0.7, down: [2.8, 3.8], warn: 0.8, up: 1.4, gap: [70, 120], coins: 5 },
+  ice: { move: 'pop', emoji: '🐧', h: 1.4, halfW: 0.6, down: [3.0, 4.0], warn: 0.9, up: 1.4, gap: [70, 120], coins: 5 },
+  sun: { move: 'pop', emoji: '🔥', h: 4.2, halfW: 0.8, down: [2.8, 3.6], warn: 0.9, up: 1.1, gap: [65, 110], coins: 6 },
+  candy: { move: 'bounce', emoji: '🍬', h: 1.3, halfW: 0.8, down: [0.5, 0.8], warn: 0, up: 0, gap: [70, 120], coins: 8 },
+  water: { move: 'leap', emoji: '🦈', h: 1.4, halfW: 1.0, down: [3.2, 4.2], warn: 0.7, up: 1.2, gap: [50, 90], coins: 6 },
+};
+const GUMDROP_UP = 10.5; // m/s off the ground: ~5.6 m high, ~2.1 s in the air (~1.7 s above the car)
+const SHARK_ARC = { half: 2.6, high: 2.8 };
+const NUT_HEIGHT = 7.5; // how high above the ground the monkey drops it from
+
+export interface Critter {
+  x: number;
+  phase: 'down' | 'warn' | 'up';
+  /** seconds left in this phase */
+  t: number;
+  /** bounce: height off the ground and speed */
+  y: number;
+  vy: number;
+  passed: boolean;
+}
+/** 🐒 the monkey up in the trees, and the coconuts it's dropped */
+export interface Dropper {
+  x: number;
+  y: number;
+  next: number;
+  charge: number;
+  aim: { x: number; y: number } | null;
+  nuts: Array<{ x: number; y: number; vy: number; done: boolean }>;
+}
+
+/** Where a 🦈 is (m, from its home spot and sea level) while it's leaping: p = 0…1 through the leap. */
+export function sharkAt(c: Critter, kind: CritterKind, sea: number) {
+  const p = c.phase === 'up' ? 1 - c.t / kind.up : 0;
+  return { x: c.x - SHARK_ARC.half + 2 * SHARK_ARC.half * p, y: sea + Math.sin(Math.PI * p) * SHARK_ARC.high - 0.4, p };
+}
 /** More coins for driving with obstacles on. */
 export const HAZARD_COINS = 1.5;
 
@@ -64,7 +128,7 @@ export interface Saucer {
   bolts: Bolt[];
 }
 
-export type HazardHit = 'squashed' | 'zapped' | null;
+export type HazardHit = 'squashed' | 'zapped' | 'bumped' | null;
 
 function rng(seed: number) {
   let s = seed >>> 0 || 1;
@@ -91,6 +155,10 @@ export class Hazards {
   eggsBroken = 0;
   angry = false;
   saucer: Saucer | null = null;
+  /** this world's critters (CRITTERS), if it has them */
+  readonly kind: CritterKind | null;
+  critters: Critter[] = [];
+  dropper: Dropper | null = null;
   /** 🛡️ zaps you can take on the Moon before it's over, and a moment of safety after each */
   shields = 3;
   private safeUntil = 0;
@@ -108,6 +176,145 @@ export class Hazards {
     this.rand = rng(world.seed * 31 + 5);
     this.placedTo = startX + 70;
     if (world.id === 'moon') this.saucer = { x: startX + 10, y: terrain.h(startX) + 9, t: 0, next: 4, charge: 0, aim: null, bolts: [] };
+    if (world.id === 'jungle') this.dropper = { x: startX + 12, y: terrain.h(startX) + NUT_HEIGHT, next: 5, charge: 0, aim: null, nuts: [] };
+    this.kind = CRITTERS[world.id] ?? null;
+  }
+
+  /** Lost a 🛡️ (or the last one). */
+  private bump(why: string): { over: boolean; say: string } | null {
+    if (this.time < this.safeUntil) return null;
+    this.shields--;
+    if (this.shields <= 0) return { over: true, say: why };
+    this.safeUntil = this.time + 1.5;
+    return { over: false, say: `${why} 🛡️ ${this.shields} left` };
+  }
+
+  private between(r: [number, number]) {
+    return r[0] + this.rand() * (r[1] - r[0]);
+  }
+
+  /** 🐹 🦂 🐧 🔥 🍬 🦈 */
+  private updateCritters(car: Car, dt: number, pts: Array<{ x: number; y: number }>): { hit: boolean; coins: number; say?: string } {
+    const k = this.kind!;
+    const sea = this.world.water ?? 0;
+    let coins = 0;
+    let say: string | undefined;
+    while (this.placedTo < car.x + 120) {
+      this.placedTo += this.between(k.gap);
+      if (k.move === 'leap') {
+        // 🦈 only out at sea: somewhere the water's deep enough on both sides of the leap
+        let tries = 0;
+        const deep = (x: number) => [-3, -1.5, 0, 1.5, 3].every((dx) => this.terrain.h(x + dx) < sea - 0.5);
+        while (tries++ < 120 && !deep(this.placedTo)) this.placedTo += 2;
+        if (!deep(this.placedTo)) continue;
+      } else {
+        for (let tries = 0; tries < 60 && !this.flat(this.placedTo); tries++) this.placedTo += 1.5;
+      }
+      this.critters.push({ x: this.placedTo, phase: 'down', t: this.between(k.down), y: 0, vy: 0, passed: false });
+    }
+    for (const c of this.critters) {
+      if (c.x < car.x - 40) continue;
+      if (k.move === 'bounce') {
+        if (c.y <= 0 && c.vy <= 0) {
+          c.t -= dt;
+          if (c.t <= 0) c.vy = GUMDROP_UP;
+        } else {
+          c.vy -= this.world.gravity * dt;
+          c.y += c.vy * dt;
+          if (c.y <= 0) {
+            c.y = 0;
+            c.vy = 0;
+            c.t = this.between(k.down);
+          }
+        }
+      } else if (c.x - car.x < 50) {
+        c.t -= dt;
+        if (c.t <= 0) {
+          if (c.phase === 'down') {
+            c.phase = 'warn';
+            c.t = k.warn;
+          } else if (c.phase === 'warn') {
+            c.phase = 'up';
+            c.t = k.up;
+          } else {
+            c.phase = 'down';
+            c.t = this.between(k.down);
+          }
+        }
+      }
+      // touching it?
+      let touching = false;
+      if (k.move === 'leap') {
+        if (c.phase === 'up') {
+          const at = sharkAt(c, k, sea);
+          touching = pts.some((p) => Math.hypot(p.x - at.x, p.y - at.y) < k.halfW);
+        }
+      } else {
+        const gy = this.terrain.h(c.x);
+        const base = gy + (k.move === 'bounce' ? c.y : 0);
+        const up = k.move === 'bounce' || c.phase === 'up';
+        touching = up && pts.some((p) => Math.abs(p.x - c.x) < k.halfW && p.y > base - 0.05 && p.y < base + k.h);
+      }
+      if (touching) {
+        const b = this.bump(`${k.emoji} Bumped!`);
+        if (b?.over) return { hit: true, coins };
+        if (b) say = b.say;
+      }
+      if (!c.passed && car.x > c.x + k.halfW + 1.6) {
+        c.passed = true;
+        coins += k.coins;
+        say ??= `${k.emoji} Got past! +${k.coins}`;
+      }
+    }
+    if (this.critters.length > 8) this.critters = this.critters.filter((c) => c.x > car.x - 40);
+    return { hit: false, coins, say };
+  }
+
+  /** 🐒 🥥 */
+  private updateDropper(car: Car, dt: number, pts: Array<{ x: number; y: number }>): { hit: boolean; coins: number; say?: string } {
+    const m = this.dropper!;
+    let coins = 0;
+    let say: string | undefined;
+    // It swings along the treetops a bit ahead of you — or to where it's aiming.
+    const tx = m.aim ? m.aim.x : car.x + 5 + 4 * Math.sin(this.time * 0.5);
+    const ty = this.terrain.h(tx) + NUT_HEIGHT;
+    const f = Math.min(1, dt * (m.aim ? 5 : 2));
+    m.x += (tx - m.x) * f;
+    m.y += (ty - m.y) * f;
+    if (m.charge > 0) {
+      m.charge -= dt;
+      if (m.charge <= 0 && m.aim) {
+        m.nuts.push({ x: m.aim.x, y: this.terrain.h(m.aim.x) + NUT_HEIGHT - 0.5, vy: 0, done: false });
+        m.aim = null;
+        m.next = 2.2 + this.rand() * 1.8;
+      }
+    } else if (car.x > 40) {
+      m.next -= dt;
+      if (m.next <= 0) {
+        // 🎯 where you'll be when it lands, if you keep going the same speed
+        m.charge = CHARGE;
+        const fall = Math.sqrt((2 * (NUT_HEIGHT - 0.5)) / this.world.gravity);
+        const ax = car.x + Math.max(0, car.vx) * (CHARGE + fall);
+        m.aim = { x: ax, y: this.terrain.h(ax) };
+      }
+    }
+    for (const n of m.nuts) {
+      if (n.done) continue;
+      n.vy -= this.world.gravity * dt;
+      n.y += n.vy * dt;
+      if (pts.some((p) => Math.hypot(p.x - n.x, p.y - n.y) < 0.55)) {
+        n.done = true;
+        const b = this.bump('🥥 Bonk!');
+        if (b?.over) return { hit: true, coins };
+        if (b) say = b.say;
+      } else if (n.y < this.terrain.h(n.x) + 0.2) {
+        n.done = true;
+        coins += 5;
+        say ??= '🐒 Missed you! +5';
+      }
+    }
+    m.nuts = m.nuts.filter((n) => !n.done);
+    return { hit: false, coins, say };
   }
 
   private flat(x: number) {
@@ -205,6 +412,19 @@ export class Hazards {
         }
       }
       if (this.dinos.length > 6) this.dinos = this.dinos.filter((d) => d.x > car.x - 40 || d.chase > 0);
+    }
+
+    if (this.kind) {
+      const r = this.updateCritters(car, dt, pts);
+      coins += r.coins;
+      say = r.say ?? say;
+      if (r.hit) return { hit: 'bumped', coins };
+    }
+    if (this.dropper) {
+      const r = this.updateDropper(car, dt, pts);
+      coins += r.coins;
+      say = r.say ?? say;
+      if (r.hit) return { hit: 'bumped', coins };
     }
 
     const u = this.saucer;

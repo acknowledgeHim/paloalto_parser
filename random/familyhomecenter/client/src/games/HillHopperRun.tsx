@@ -15,7 +15,7 @@ import {
   type Upgrades,
   type World,
 } from './hillPhysics.js';
-import { CROUCH, DINO, EGG_LIMIT, HAZARD_COINS, HAZARD_WORLDS, Hazards } from './hillHazards.js';
+import { CROUCH, DINO, EGG_LIMIT, HAZARD_COINS, HAZARD_WORLDS, Hazards, sharkAt } from './hillHazards.js';
 
 export interface Driver {
   id: string;
@@ -53,6 +53,8 @@ export const JUMP_TAP_LABEL: Record<JumpTap, string> = {
 const jumpTapHint: Record<JumpTap, string> = { middle: 'tap the middle', button: 'tap JUMP', wheel: 'click the mouse wheel', none: '' };
 /** 🦘 how high a jump goes (m), whatever the gravity */
 const JUMP_HEIGHT = 1.7;
+/** 🦈 how far back from where it leaps its fin circles (m) */
+const SHARK_FIN = 2.2;
 
 const KEY_NAMES: Record<string, string> = { arrowright: '→', arrowleft: '←', arrowup: '↑', arrowdown: '↓', ' ': 'Space', shift: 'Shift', control: 'Ctrl', enter: 'Enter' };
 export const keyName = (k: string) => KEY_NAMES[k] ?? (k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
@@ -61,7 +63,7 @@ export interface RunResult {
   distance: number;
   coins: number;
   flips: number;
-  why: 'crash' | 'tipped' | 'fuel' | 'quit' | 'squashed' | 'zapped';
+  why: 'crash' | 'tipped' | 'fuel' | 'quit' | 'squashed' | 'zapped' | 'bumped';
 }
 
 /** Vehicle pictures that already face right (most vehicle emoji face left, so they're mirrored). */
@@ -171,7 +173,7 @@ export function HillHopperRun({
     let shake = 0;
     let zoom = 1;
     // With obstacles on, no little 🦖 in the scenery (it'd look like a real one).
-    const decor = hz ? look.decor.filter((d) => d !== '🦖') : look.decor;
+    const decor = hz ? look.decor.filter((d) => d !== '🦖' && d !== HAZARD_WORLDS[world.id]?.emoji) : look.decor;
     const pickups: Pickup[] = [];
     let placedTo = placePickups(terrain, 400, pickups, 40);
     const fuelAt = fuelSpots(20000).map((x) => ({ x, taken: false }));
@@ -325,6 +327,129 @@ export function HillHopperRun({
           ctx.fillStyle = '#000';
           ctx.fillText('💢', sx(d.x), sy(gy + d.y + DINO.h + 0.6));
         }
+      }
+      // 🐹 🦂 🐧 🔥 🍬 🦈 — this world's critters
+      const k = hz.kind;
+      if (k) {
+        const sea = world.water ?? 0;
+        for (const c of hz.critters) {
+          const gy = terrain.h(c.x);
+          if (c.x + 4 < x0) continue;
+          if (c.x - 4 > x1) {
+            const ahead = c.x - car.x;
+            if (ahead < 60) {
+              ctx.font = 'bold 16px system-ui, sans-serif';
+              ctx.fillStyle = 'rgba(0,0,0,0.45)';
+              ctx.fillRect(W - 112, H * 0.42 - 18, 104, 36);
+              ctx.fillStyle = '#fff';
+              ctx.fillText(`${k.emoji} ${Math.round(ahead)} m ▶`, W - 60, H * 0.42);
+            }
+            continue;
+          }
+          ctx.fillStyle = '#000';
+          if (k.move === 'bounce') {
+            const kk = Math.max(0, 1 - c.y / 5);
+            ctx.fillStyle = `rgba(0,0,0,${0.12 + 0.25 * kk})`;
+            ctx.beginPath();
+            ctx.ellipse(sx(c.x), sy(gy) + 2, k.halfW * S * (0.6 + 0.4 * kk), S * 0.22, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.save();
+            ctx.translate(sx(c.x), sy(gy + c.y));
+            ctx.scale(1, c.y <= 0 ? 0.8 : 1); // squished on landing
+            ctx.font = emojiFont(k.h * S * 1.25);
+            ctx.fillStyle = '#000';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(k.emoji, 0, S * 0.2);
+            ctx.restore();
+            continue;
+          }
+          if (k.move === 'leap') {
+            const at = sharkAt(c, k, sea);
+            if (c.phase === 'up') {
+              ctx.save();
+              ctx.translate(sx(at.x), sy(at.y));
+              // nose up going out, nose down coming back in (the emoji faces left: flip it)
+              ctx.scale(-1, 1);
+              ctx.rotate((at.p - 0.5) * 1.6);
+              ctx.font = emojiFont(S * 2.2);
+              ctx.fillStyle = '#000';
+              ctx.fillText('🦈', 0, 0);
+              ctx.restore();
+            } else {
+              // its fin, circling — splashing when it's about to leap
+              const fx = c.x - SHARK_FIN + Math.sin(performance.now() / 400 + c.x) * 1.2;
+              const fy = sy(sea);
+              ctx.fillStyle = '#455a64';
+              ctx.beginPath();
+              ctx.moveTo(sx(fx) - S * 0.35, fy);
+              ctx.lineTo(sx(fx) + S * 0.1, fy - S * 0.7);
+              ctx.lineTo(sx(fx) + S * 0.35, fy);
+              ctx.closePath();
+              ctx.fill();
+              if (c.phase === 'warn') {
+                ctx.font = emojiFont(S * 1.0);
+                ctx.fillStyle = '#000';
+                ctx.fillText('💦', sx(c.x - SHARK_FIN), fy - S * 0.9);
+              }
+            }
+            continue;
+          }
+          // pop: a hole, the warning, then it's up
+          const hx = sx(c.x);
+          const hy = sy(gy);
+          ctx.fillStyle = world.id === 'sun' ? (c.phase === 'warn' ? `rgba(255,${120 + 80 * Math.sin(performance.now() / 60)},0,0.95)` : 'rgba(120,20,0,0.85)') : world.id === 'ice' ? 'rgba(30,80,140,0.85)' : 'rgba(40,25,10,0.8)';
+          ctx.beginPath();
+          ctx.ellipse(hx, hy + 2, k.halfW * S * 1.1, S * 0.22, 0, 0, Math.PI * 2);
+          ctx.fill();
+          if (c.phase === 'warn') {
+            const wob = Math.sin(performance.now() / 45) * S * 0.08;
+            ctx.font = emojiFont(S * 0.8);
+            ctx.fillStyle = '#000';
+            ctx.fillText(world.id === 'ice' ? '🫧' : world.id === 'sun' ? '♨️' : '💨', hx + wob, hy - S * 0.5);
+          } else if (c.phase === 'up') {
+            ctx.font = emojiFont(S * Math.min(k.h, 1.6) * 1.15);
+            ctx.fillStyle = '#000';
+            ctx.textBaseline = 'bottom';
+            // 🔥 a tall column of flames; the others pop up out of the hole
+            const n = world.id === 'sun' ? Math.round(k.h / 1.3) : 1;
+            const rise = Math.min(1, (k.up - c.t) / 0.15);
+            for (let i = 0; i < n; i++) ctx.fillText(k.emoji, hx + (i % 2 ? S * 0.15 : -S * 0.1), hy + S * 0.25 - i * S * 1.3 + (1 - rise) * S);
+            ctx.textBaseline = 'middle';
+          }
+        }
+      }
+      const m = hz.dropper;
+      if (m) {
+        if (m.aim && m.aim.x > x0 && m.aim.x < x1) {
+          const ax = sx(m.aim.x);
+          const ay = sy(m.aim.y);
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
+          ctx.strokeStyle = `rgba(255,23,68,${0.5 + 0.5 * pulse})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.ellipse(ax, ay, S * 0.9, S * 0.3, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#000';
+        for (const n of m.nuts) {
+          ctx.font = emojiFont(S * 0.9);
+          ctx.fillText('🥥', sx(n.x), sy(n.y));
+        }
+        ctx.font = emojiFont(S * 1.8);
+        ctx.fillText('🌿', sx(m.x), sy(m.y + 0.9));
+        ctx.font = emojiFont(S * 1.5);
+        ctx.fillText('🐒', sx(m.x), sy(m.y));
+      }
+      if (k || m) {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(12, 76 + 44, 110, 26);
+        ctx.fillStyle = '#fff';
+        ctx.fillText('🛡️'.repeat(Math.max(0, hz.shields)), 20, 76 + 47);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
       }
       const u = hz.saucer;
       if (u) {
