@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { db } from '../db.js';
+import { db, getSetting, setSetting } from '../db.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 import { GAMES, gameOf } from '../services/games.js';
 import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
 import type { FamilyMember } from '../types.js';
@@ -20,6 +21,45 @@ const best = (memberId: string, gameId: string) =>
 const passesFor = (memberId: string) =>
   new Map((db.prepare('SELECT game_id, plays_left FROM game_passes WHERE family_member_id = ?').all(memberId) as Array<{ game_id: string; plays_left: number }>).map((r) => [r.game_id, r.plays_left]));
 
+// ---- ⚙️ per game (parents): what unlocking costs, and how many plays it's good for ----
+/** plays: 0 = an unlock is for good; N = unlocking gives N plays, then they unlock it again. cost: 💎 (default: the game's price). */
+interface GameRule {
+  cost: number;
+  plays: number;
+}
+const RULES_KEY = 'game_rules';
+function rules(): Record<string, GameRule> {
+  let saved: Record<string, Partial<GameRule>> = {};
+  try {
+    saved = JSON.parse(getSetting(RULES_KEY, '{}'));
+  } catch {
+    /* defaults */
+  }
+  const n = (v: unknown, d: number) => (v !== undefined && v !== null && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 10000 ? Math.round(Number(v)) : d);
+  return Object.fromEntries(GAMES.map((g) => [g.id, { cost: n(saved[g.id]?.cost, g.stars), plays: n(saved[g.id]?.plays, 0) }]));
+}
+const ruleOf = (gameId: string) => rules()[gameId] ?? { cost: 0, plays: 0 };
+
+/** GET /settings — each game's cost and plays per unlock. */
+gamesRouter.get('/settings', (_req, res) => res.json(rules()));
+/** PUT /settings { [gameId]: { cost, plays } } (parents). Unlocks already bought for good stay theirs (a parent can refund them). */
+gamesRouter.put('/settings', requireAdmin, (req, res) => {
+  const cur = rules();
+  const b = (req.body ?? {}) as Record<string, Partial<GameRule>>;
+  for (const g of GAMES) {
+    const x = b[g.id];
+    if (!x) continue;
+    for (const k of ['cost', 'plays'] as const) {
+      if (x[k] === undefined) continue;
+      const v = Math.round(Number(x[k]));
+      if (!(v >= 0 && v <= 10000)) return res.status(400).json({ error: `${g.name}: ${k === 'cost' ? 'cost' : 'plays'} must be 0–10000` });
+      cur[g.id][k] = v;
+    }
+  }
+  setSetting(RULES_KEY, JSON.stringify(cur));
+  res.json(cur);
+});
+
 function shelf(m: FamilyMember) {
   const mine = unlockedFor(m);
   const passes = passesFor(m.id);
@@ -29,7 +69,8 @@ function shelf(m: FamilyMember) {
     games: GAMES.map((g) => {
       const owned = free(m) || mine.has(g.id);
       const plays = passes.get(g.id) ?? null;
-      return { ...g, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id) };
+      const r = ruleOf(g.id);
+      return { ...g, stars: r.cost, plays_per_unlock: r.plays, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id) };
     }),
   };
 }
@@ -41,7 +82,10 @@ gamesRouter.get('/', (req, res) => {
   res.json(shelf(m));
 });
 
-/** POST /:memberId/unlock { game_id, acting_member_id } — spend their 💎 tokens on a game (once). */
+/**
+ * POST /:memberId/unlock { game_id, acting_member_id } — spend their 💎 tokens on a game: for good, or (if a
+ * parent set plays per unlock) for that many 🎟️ plays — when they're used up, they unlock it again.
+ */
 gamesRouter.post('/:memberId/unlock', (req, res) => {
   const { memberId } = req.params;
   const { game_id, acting_member_id } = req.body ?? {};
@@ -50,10 +94,21 @@ gamesRouter.post('/:memberId/unlock', (req, res) => {
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (free(m) || unlockedFor(m).has(g.id)) return res.json(shelf(m));
-  if (m.token_balance < g.stars) return res.status(400).json({ error: `Needs ${g.stars} 💎 — ${g.stars - m.token_balance} more to go` });
+  const r = ruleOf(g.id);
+  if (m.token_balance < r.cost) return res.status(400).json({ error: `Needs ${r.cost} 💎 — ${r.cost - m.token_balance} more to go` });
+  const by = typeof acting_member_id === 'string' ? acting_member_id : null;
+  const now = new Date().toISOString();
   db.transaction(() => {
-    addTokens(m.id, -g.stars, `🎮 Unlocked: ${g.emoji} ${g.name}`, typeof acting_member_id === 'string' ? acting_member_id : null);
-    db.prepare("INSERT INTO game_unlocks (family_member_id, game_id, stars, unlocked_at, currency) VALUES (?, ?, ?, ?, 'tokens')").run(m.id, g.id, g.stars, new Date().toISOString());
+    if (r.plays > 0) {
+      addTokens(m.id, -r.cost, `🎮 ${r.plays} play${r.plays === 1 ? '' : 's'}: ${g.emoji} ${g.name}`, by);
+      db.prepare(
+        `INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = plays_left + excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`
+      ).run(m.id, g.id, r.plays, by, now);
+    } else {
+      addTokens(m.id, -r.cost, `🎮 Unlocked: ${g.emoji} ${g.name}`, by);
+      db.prepare("INSERT INTO game_unlocks (family_member_id, game_id, stars, unlocked_at, currency) VALUES (?, ?, ?, ?, 'tokens')").run(m.id, g.id, r.cost, now);
+    }
   })();
   res.json(shelf(memberOf(m.id)!));
 });
@@ -118,7 +173,7 @@ gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
   const r = db
     .prepare('UPDATE game_passes SET plays_left = plays_left - 1, updated_at = ? WHERE family_member_id = ? AND game_id = ? AND plays_left > 0')
     .run(new Date().toISOString(), m.id, g.id);
-  if (r.changes === 0) return res.status(403).json({ error: `No plays left — unlock ${g.name} for ${g.stars} ⭐, or ask a parent for more plays` });
+  if (r.changes === 0) return res.status(403).json({ error: `No plays left — unlock ${g.name} again (${ruleOf(g.id).cost} 💎), or ask a parent for more plays` });
   res.json({ ok: true, plays_left: passesFor(m.id).get(g.id) ?? 0 });
 });
 
@@ -127,7 +182,7 @@ gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
   const g = gameOf(req.params.gameId);
   const m = memberOf(req.params.memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
-  if (!mayPlay(m, g.id)) return res.status(403).json({ error: `Unlock ${g.name} first (${g.stars} ⭐), or ask a parent for some plays` });
+  if (!mayPlay(m, g.id)) return res.status(403).json({ error: `Unlock ${g.name} first (${ruleOf(g.id).cost} 💎), or ask a parent for some plays` });
   const save = db.prepare('SELECT data FROM game_saves WHERE family_member_id = ? AND game_id = ?').get(m.id, g.id) as { data: string } | undefined;
   const top = db
     .prepare(

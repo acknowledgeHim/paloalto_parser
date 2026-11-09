@@ -3275,3 +3275,16 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .lesson-settings__list { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; margin-top: 6px; }
 .lesson-settings__row { display: grid; grid-template-columns: minmax(0, 1fr) 7.5em; gap: 8px; align-items: center; }
 .hill-garage__upgrade-btns { display: flex; gap: 6px; align-items: center; }
+
+/* 🎮 Games → ⚙️ What each game costs */
+.games-page__rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border, #ddd);
+}
+.games-page__rule input {
+  width: 5rem;
+}

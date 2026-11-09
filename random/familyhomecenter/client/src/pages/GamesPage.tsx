@@ -13,8 +13,10 @@ interface ShelfGame {
   blurb: string;
   unlocked: boolean;
   owned: boolean;
-  /** 🎟️ plays a parent gave (null = none given, or the game is theirs) */
+  /** 🎟️ plays left — given by a parent or bought (null = none, or the game is theirs) */
   plays_left: number | null;
+  /** 0 = unlocking is for good; N = unlocking buys N plays (a parent sets it per game) */
+  plays_per_unlock: number;
   best: number | null;
 }
 interface Shelf {
@@ -23,9 +25,11 @@ interface Shelf {
   games: ShelfGame[];
 }
 
+const playsText = (n: number) => `${n} play${n === 1 ? '' : 's'}`;
+
 /**
- * 🎮 Games: each game is unlocked once with 💎 tokens, then played as much as you like.
- * Parents play free, and can unlock (or refund) a game for a kid.
+ * 🎮 Games: each game is unlocked with 💎 tokens — for good, or for a number of plays a parent sets per
+ * game (then unlocked again). Parents play free, and can unlock (or refund) a game for a kid.
  */
 export function GamesPage() {
   const { members, activeProfile, refresh } = useFamilyMembers();
@@ -35,6 +39,22 @@ export function GamesPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [givePlays, setGivePlays] = useState<Record<string, string>>({}); // "kid|game" → how many to give
+  const [rules, setRules] = useState<Record<string, { cost: number; plays: number }> | null>(null);
+  const [rulesNote, setRulesNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (isParent) api.get<Record<string, { cost: number; plays: number }>>('/games/settings').then(setRules).catch(() => {});
+  }, [isParent]);
+  const saveRules = async () => {
+    if (!rules) return;
+    setRulesNote(null);
+    try {
+      setRules(await api.put<Record<string, { cost: number; plays: number }>>('/games/settings', rules));
+      setRulesNote('Saved ✓');
+      void load();
+    } catch (e) {
+      setRulesNote((e as Error).message);
+    }
+  };
 
   const people = activeProfile ? [activeProfile, ...(isParent ? kids.filter((k) => k.id !== activeProfile.id) : [])] : isParent ? kids : [];
   const load = () =>
@@ -71,7 +91,7 @@ export function GamesPage() {
         <>
           {!mine.plays_free && <TokenWallet member={activeProfile} onChange={() => void load()} />}
           <p className="hint">
-            {mine.plays_free ? 'Parents play free.' : <>💎 {mine.token_balance} tokens to spend · unlock a game once, then play it as much as you like. Earn tokens in ⌨️ Typing.</>}
+            {mine.plays_free ? 'Parents play free.' : <>💎 {mine.token_balance} tokens to spend on games. Earn tokens in ⌨️ Typing and 📚 Learning.</>}
           </p>
           <div className="games-page__grid">
             {mine.games.map((g) => (
@@ -81,7 +101,7 @@ export function GamesPage() {
                 <p className="hint">{g.blurb}</p>
                 {g.best ? <p>🏆 Your best: <strong>{g.best}</strong></p> : null}
                 {!g.owned && g.plays_left != null && (
-                  <p>🎟️ {g.plays_left ? `${g.plays_left} play${g.plays_left === 1 ? '' : 's'} left (from a parent)` : 'No plays left'}</p>
+                  <p>🎟️ {g.plays_left ? `${g.plays_left} play${g.plays_left === 1 ? '' : 's'} left` : 'No plays left'}</p>
                 )}
                 {g.unlocked && (
                   <Link className="button" to={`/games/${g.id}`}>
@@ -90,7 +110,11 @@ export function GamesPage() {
                 )}
                 {!g.owned && (
                   <button type="button" className={g.unlocked ? 'secondary' : undefined} disabled={busy || mine.token_balance < g.stars} onClick={() => void act('unlock', activeProfile.id, g.id)}>
-                    {mine.token_balance < g.stars ? `${g.stars} 💎 to keep it — ${g.stars - mine.token_balance} more to go` : `🔓 Unlock for good: ${g.stars} 💎`}
+                    {mine.token_balance < g.stars
+                      ? `${g.stars} 💎 to ${g.plays_per_unlock ? `get ${playsText(g.plays_per_unlock)}` : 'keep it'} — ${g.stars - mine.token_balance} more to go`
+                      : g.plays_per_unlock
+                        ? `🔓 ${g.unlocked ? 'More' : 'Unlock'}: ${playsText(g.plays_per_unlock)} for ${g.stars} 💎`
+                        : `🔓 Unlock for good: ${g.stars} 💎`}
                   </button>
                 )}
               </div>
@@ -103,8 +127,8 @@ export function GamesPage() {
         <section className="panel">
           <h2>Kids' games</h2>
           <p className="hint">
-            Unlock a game for good for a kid (it uses their 💎 tokens) or give them back — or 🎟️ give them a number of plays (each go uses one; when they run
-            out it locks again). Their scores and progress are kept either way.
+            Unlock a game for a kid (it uses their 💎 tokens) or give one bought for good back — or 🎟️ give them a number of plays free (each go uses
+            one; when they run out it locks again). Their scores and progress are kept either way.
           </p>
           {kids.map((k) => {
             const s = shelves[k.id];
@@ -128,7 +152,7 @@ export function GamesPage() {
                       ) : (
                         <>
                           <button type="button" className="secondary" disabled={busy || s.token_balance < g.stars} onClick={() => void act('unlock', k.id, g.id)}>
-                            🔓 For good ({g.stars} 💎)
+                            🔓 {g.plays_per_unlock ? playsText(g.plays_per_unlock) : 'For good'} ({g.stars} 💎)
                           </button>
                           <span className="games-page__plays">
                             🎟️ {g.plays_left ?? 0} left · give
@@ -157,6 +181,41 @@ export function GamesPage() {
               </div>
             );
           })}
+        </section>
+      )}
+      {isParent && rules && mine && (
+        <section className="panel">
+          <h2>⚙️ What each game costs</h2>
+          <p className="hint">
+            For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
+            uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs (use ↶ refund
+            above to take one back).
+          </p>
+          {mine.games.map((g) => {
+            const r = rules[g.id];
+            if (!r) return null;
+            const set = (k: 'cost' | 'plays', v: string) => setRules({ ...rules, [g.id]: { ...r, [k]: Math.max(0, Math.round(Number(v) || 0)) } });
+            return (
+              <div key={g.id} className="games-page__rule">
+                <strong>
+                  {g.emoji} {g.name}
+                </strong>
+                <label>
+                  💎 <input type="number" min={0} max={10000} value={r.cost} onChange={(e) => set('cost', e.target.value)} aria-label={`${g.name} cost in tokens`} />
+                </label>
+                <label>
+                  for <input type="number" min={0} max={10000} value={r.plays} onChange={(e) => set('plays', e.target.value)} aria-label={`${g.name} plays per unlock`} /> plays
+                </label>
+                <span className="hint">{r.plays ? `= ${playsText(r.plays)} for ${r.cost} 💎` : `= for good, ${r.cost} 💎`}</span>
+              </div>
+            );
+          })}
+          <div className="typing-stars__actions">
+            <button type="button" onClick={() => void saveRules()}>
+              Save
+            </button>
+            {rulesNote && <span className="hint">{rulesNote}</span>}
+          </div>
         </section>
       )}
       {error && <div className="settings-login__error">{error}</div>}

@@ -201,8 +201,14 @@ No existing data changes.
 
 ## 🎮 Games
 
-**🎵 Fun → 🎮 Games** (`/#/games`). Each game is **unlocked once with 💎 tokens**, then
-played as much as you like.
+**🎵 Fun → 🎮 Games** (`/#/games`). Each game is **unlocked with 💎 tokens** — for good, or for a
+number of plays.
+
+- **⚙️ What each game costs** (parents, bottom of the Games page): per game, the 💎 cost and how
+  many plays an unlock is good for. **0 plays = for good** (the default). With a number, unlocking
+  gives that many 🎟️ plays; each go uses one, and when they're used up the kid earns tokens and
+  unlocks it again (buying again while some are left adds more). Games already unlocked for good
+  stay theirs — ↶ refund takes one back. Saved in the `game_rules` setting; no data changes.
 
 - **Parents play free.** In **Kids' games** a parent can unlock a game for a kid (it uses the kid's
   tokens) or **↶ refund** it (tokens back, game locked again; scores and progress are kept).
