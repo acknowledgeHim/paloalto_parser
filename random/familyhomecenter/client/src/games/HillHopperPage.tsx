@@ -4,7 +4,7 @@ import { api, type Closet } from '../api/client.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
-import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, type Upgrades } from './hillPhysics.js';
+import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
 import { DEFAULT_CONTROLS, HillHopperRun, keyName, type Controls, type RunResult } from './HillHopperRun.js';
 
@@ -13,6 +13,10 @@ interface Save {
   upgrades: Upgrades;
   vehicle: string | null; // a Dress up vehicle id, or null for the buggy
   controls: Controls;
+  /** 🌍 worlds bought (Green Hills is always there), the one picked, and the best distance in each */
+  worlds: string[];
+  world: string;
+  bests: Record<string, number>;
 }
 interface PlayInfo {
   owned: boolean;
@@ -48,7 +52,7 @@ export function HillHopperPage() {
   const me = activeProfile;
   const catalog = useOutfitCatalog();
   const [info, setInfo] = useState<PlayInfo | null>(null);
-  const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS });
+  const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS, worlds: ['hills'], world: 'hills', bests: {} });
   const [listening, setListening] = useState<'gas' | 'brake' | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +71,10 @@ export function HillHopperPage() {
           upgrades: { ...NO_UPGRADES, ...(i.save?.upgrades ?? {}) },
           vehicle: i.save?.vehicle !== undefined ? i.save.vehicle : worn,
           controls: { ...DEFAULT_CONTROLS, ...(i.save?.controls ?? {}) },
+          worlds: [...new Set(['hills', ...(i.save?.worlds ?? [])])],
+          world: i.save?.world ?? 'hills',
+          // Runs from before worlds existed were all on Green Hills.
+          bests: { hills: i.best ?? 0, ...(i.save?.bests ?? {}) },
         });
       })
       .catch((e) => setError((e as Error).message));
@@ -79,6 +87,7 @@ export function HillHopperPage() {
     const id = me ? outfitOf(me).hat : undefined;
     return catalog?.items.find((i) => i.id === id)?.emoji ?? null;
   }, [catalog, me]);
+  const world = worldOf(save.worlds.includes(save.world) ? save.world : 'hills');
   const vehicleEmoji = catalog?.items.find((i) => i.id === save.vehicle && owned.includes(i.id))?.emoji ?? null;
 
   const store = async (next: Save, result?: RunResult) => {
@@ -87,7 +96,7 @@ export function HillHopperPage() {
     try {
       const r = await api.post<{ best: number | null }>(`/games/${GAME}/play/${me.id}/result`, {
         score: result?.distance ?? 0,
-        detail: result ? { coins: result.coins, flips: result.flips, why: result.why } : undefined,
+        detail: result ? { coins: result.coins, flips: result.flips, why: result.why, world: (result as RunResult & { world?: string }).world } : undefined,
         save: next,
         acting_member_id: me.id,
       });
@@ -140,12 +149,14 @@ export function HillHopperPage() {
         driver={{ id: me.id, name: me.name, color: me.color, avatar: me.avatar ?? null, hat }}
         vehicle={vehicleEmoji}
         upgrades={save.upgrades}
-        best={info.best}
+        world={world}
+        best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
           setPlaying(false);
-          setLast({ r, newBest: r.distance > (info.best ?? 0) });
-          void store({ ...save, coins: save.coins + r.coins }, r);
+          const prevBest = save.bests[world.id] ?? 0;
+          setLast({ r, newBest: r.distance > prevBest });
+          void store({ ...save, coins: save.coins + r.coins, bests: { ...save.bests, [world.id]: Math.max(prevBest, r.distance) } }, { ...r, world: world.id } as RunResult);
         }}
       />
     );
@@ -181,7 +192,7 @@ export function HillHopperPage() {
         <div>
           <div className="hill-garage__name">{me.name}</div>
           <div className="hint">
-            🪙 {save.coins} coins · Best {info.best ?? 0} m
+            🪙 {save.coins} coins · {world.emoji} {world.name} · Best {save.bests[world.id] ?? 0} m
           </div>
         </div>
         <div className="hill-garage__go-wrap">
@@ -209,6 +220,41 @@ export function HillHopperPage() {
             </div>
           )}
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>🌍 Worlds</h2>
+        <div className="hill-garage__worlds">
+          {WORLDS.map((w) => {
+            const have = save.worlds.includes(w.id);
+            const on = world.id === w.id;
+            return (
+              <div key={w.id} className={`hill-garage__world${on ? ' is-on' : ''}${have ? '' : ' is-locked'}`}>
+                <div className="hill-garage__world-emoji">{w.emoji}</div>
+                <strong>{w.name}</strong>
+                <span className="hint">{w.blurb}</span>
+                {have && save.bests[w.id] ? <span className="hint">🏁 Best {save.bests[w.id]} m</span> : null}
+                {w.coinMul > 1 && <span className="hint">🪙 ×{w.coinMul} coins</span>}
+                {on ? (
+                  <span className="hill-garage__world-on">✓ Driving here</span>
+                ) : have ? (
+                  <button type="button" className="secondary" onClick={() => void store({ ...save, world: w.id })}>
+                    Drive here
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={save.coins < w.coins}
+                    onClick={() => void store({ ...save, coins: save.coins - w.coins, worlds: [...save.worlds, w.id], world: w.id })}
+                  >
+                    {save.coins < w.coins ? `🔒 🪙 ${w.coins}` : `🔓 Unlock · 🪙 ${w.coins}`}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p className="hint">Unlock worlds with coins from the game. Each one drives differently — and pays more coins the harder it is.</p>
       </section>
 
       <section className="panel">
@@ -290,7 +336,7 @@ export function HillHopperPage() {
 
       {info.top.length > 0 && (
         <section className="panel">
-          <h2>🏆 Family best</h2>
+          <h2>🏆 Family best (any world)</h2>
           <ol className="hill-garage__top">
             {info.top.map((t) => {
               const m = byId.get(t.member_id);

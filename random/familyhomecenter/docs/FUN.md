@@ -220,5 +220,20 @@ own avatar at the wheel wearing your hat.
 - **🪙 Coins** come from the road (5, then 10 after 600 m, then 25 after 1500 m), plus flips (+25)
   and big jumps (+10). They buy **upgrades**: engine, tires, springs and fuel tank, 5 levels each
   (100 → 2000 coins). Coins stay in the game; they're not Prize Bank stars.
+- **🌍 Worlds**, unlocked with game coins in the garage (once bought, pick any of them to drive in):
+
+  | World | 🪙 | How it drives | Coins |
+  |---|---|---|---|
+  | 🌄 Green Hills | free | where it starts | ×1 |
+  | 🏜️ Desert Dunes | 300 | long dunes, loose sand (less grip) | ×1.2 |
+  | 🌴 Jungle | 600 | short choppy bumps, slippery mud | ×1.3 |
+  | 🧊 Ice World | 900 | gentle hills, very slippery | ×1.4 |
+  | 🦖 Dino Land | 1200 | big hills, volcano sky | ×1.5 |
+  | 🌊 Water Planet | 1600 | islands and sea; you float, slow down and paddle | ×1.6 |
+  | 🍭 Candy Land | 2000 | everything super bouncy | ×1.6 |
+  | 🌕 The Moon | 2600 | low gravity, giant floaty jumps | ×2 |
+  | ☀️ The Sun | 3500 | heavy gravity; the heat burns fuel fast | ×2.5 |
+
+  Each world has its own course and its own **Best** (your Green Hills best from before carries over).
 - It's the same course every run, so the **Best** flag means something. **🏆 Family best**
   shows everyone's longest run.

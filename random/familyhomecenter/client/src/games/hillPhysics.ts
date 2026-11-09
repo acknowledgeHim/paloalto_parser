@@ -19,6 +19,41 @@ export const UPGRADE_COST = [100, 250, 500, 1000, 2000];
 
 // ---------- the hills ----------
 
+/**
+ * 🌍 Worlds to drive in. Green Hills is free; the rest are bought with coins from the game. Each one
+ * drives differently (gravity, grip, bounce, hill shape, water) — the look is in HillHopperRun.
+ */
+export interface World {
+  id: string;
+  emoji: string;
+  name: string;
+  blurb: string;
+  coins: number; // price
+  gravity: number;
+  grip: number; // × the tires' grip
+  bounce: number; // × how bouncy the ground is
+  bumps: number; // × bump size
+  hillLen: number; // × distance between hill points (longer = smoother, rolling)
+  trend: number; // × how much it climbs
+  water: number | null; // sea level (m) — below it the car floats and slows
+  fuelBurn: number; // × fuel use
+  coinMul: number; // × coin values
+  seed: number;
+}
+
+export const WORLDS: World[] = [
+  { id: 'hills', emoji: '🌄', name: 'Green Hills', blurb: 'Where it all starts.', coins: 0, gravity: 9.8, grip: 1, bounce: 1, bumps: 1, hillLen: 1, trend: 1, water: null, fuelBurn: 1, coinMul: 1, seed: 7 },
+  { id: 'desert', emoji: '🏜️', name: 'Desert Dunes', blurb: 'Long rolling dunes of loose sand — less grip.', coins: 300, gravity: 9.8, grip: 0.85, bounce: 0.9, bumps: 1.35, hillLen: 1.7, trend: 0.8, water: null, fuelBurn: 1.1, coinMul: 1.2, seed: 21 },
+  { id: 'jungle', emoji: '🌴', name: 'Jungle', blurb: 'Short, choppy bumps and slippery mud.', coins: 600, gravity: 9.8, grip: 0.85, bounce: 1.1, bumps: 0.72, hillLen: 0.85, trend: 0.9, water: null, fuelBurn: 1, coinMul: 1.3, seed: 33 },
+  { id: 'ice', emoji: '🧊', name: 'Ice World', blurb: 'Gentle hills — but so slippery!', coins: 900, gravity: 9.8, grip: 0.42, bounce: 1, bumps: 0.65, hillLen: 1.2, trend: 0.55, water: null, fuelBurn: 1, coinMul: 1.4, seed: 47 },
+  { id: 'dino', emoji: '🦖', name: 'Dino Land', blurb: 'Big hills under a volcano sky.', coins: 1200, gravity: 9.8, grip: 1, bounce: 1.05, bumps: 1.2, hillLen: 1.1, trend: 1.0, water: null, fuelBurn: 1.1, coinMul: 1.5, seed: 65 },
+  { id: 'water', emoji: '🌊', name: 'Water Planet', blurb: 'Islands and sea — your ride floats, slows down and paddles through the water.', coins: 1600, gravity: 9.8, grip: 1, bounce: 1, bumps: 1.25, hillLen: 1.3, trend: 0, water: -0.6, fuelBurn: 1.1, coinMul: 1.6, seed: 82 },
+  { id: 'candy', emoji: '🍭', name: 'Candy Land', blurb: 'Everything is super bouncy.', coins: 2000, gravity: 9.8, grip: 1.05, bounce: 1.55, bumps: 1.1, hillLen: 0.9, trend: 0.8, water: null, fuelBurn: 1, coinMul: 1.6, seed: 97 },
+  { id: 'moon', emoji: '🌕', name: 'The Moon', blurb: 'Low gravity — giant, floaty jumps. Land on your wheels!', coins: 2600, gravity: 3.4, grip: 0.9, bounce: 1.1, bumps: 1.5, hillLen: 1.2, trend: 0.5, water: null, fuelBurn: 0.9, coinMul: 2, seed: 111 },
+  { id: 'sun', emoji: '☀️', name: 'The Sun', blurb: 'Heavy gravity, glowing ground, and the heat burns fuel fast.', coins: 3500, gravity: 14, grip: 1.15, bounce: 0.95, bumps: 1.0, hillLen: 1, trend: 0.75, water: null, fuelBurn: 1.45, coinMul: 2.5, seed: 131 },
+];
+export const worldOf = (id: string | null | undefined) => WORLDS.find((w) => w.id === id) ?? WORLDS[0];
+
 function mulberry32(seed: number) {
   return () => {
     seed |= 0;
@@ -54,28 +89,36 @@ export const TUNE = {
 export class Terrain {
   private pts: number[] = [];
   private rand: () => number;
-  constructor(seed = 7) {
-    this.rand = mulberry32(seed);
+  private step: number;
+  readonly world: World;
+  constructor(world: World = WORLDS[0]) {
+    this.world = world;
+    this.rand = mulberry32(world.seed);
+    this.step = STEP * world.hillLen;
   }
   private point(i: number): number {
     if (i < 0) return 0;
     while (this.pts.length <= i) {
       const k = this.pts.length;
-      const x = k * STEP;
+      const x = k * this.step;
       if (x < 30) {
         this.pts.push(0);
         continue;
       }
       const prev = this.pts[k - 1];
-      const size = Math.min(TUNE.bumpStart + x / TUNE.bumpGrow, TUNE.bumpMax); // how big the bumps get
-      const trend = Math.sin(x / 140) * 0.9 + 0.25; // long climbs and dips, mostly uphill
-      this.pts.push(prev + trend * size * 0.6 + (this.rand() * 2 - 1) * size);
+      const w = this.world;
+      const size = Math.min(TUNE.bumpStart + x / TUNE.bumpGrow, TUNE.bumpMax) * w.bumps * Math.sqrt(w.hillLen); // how big the bumps get
+      const trend = (Math.sin(x / 140) * 0.9 + 0.25) * w.trend; // long climbs and dips, mostly uphill
+      let next = prev + trend * size * 0.6 + (this.rand() * 2 - 1) * size;
+      // Water Planet: islands rising out of the sea, never too far above or below it.
+      if (w.water != null) next = Math.max(w.water - 2.2, Math.min(w.water + 4.5, next - (next - w.water - 1) * 0.35));
+      this.pts.push(next);
     }
     return this.pts[i];
   }
   /** Ground height at x (a smooth Catmull-Rom curve through the points). */
   h(x: number): number {
-    const f = x / STEP;
+    const f = x / this.step;
     const i = Math.floor(f);
     const t = f - i;
     const p0 = this.point(i - 1);
@@ -104,10 +147,11 @@ export function placePickups(t: Terrain, upTo: number, into: Pickup[], from: num
   let x = from;
   while (x < upTo) {
     // A row of coins every 35–60 m; more valuable the further you get.
-    const value = x > 1500 ? 25 : x > 600 ? 10 : 5;
+    const value = Math.round((x > 1500 ? 25 : x > 600 ? 10 : 5) * t.world.coinMul);
     for (let k = 0; k < 5; k++) {
       const cx = x + k * 1.4;
-      into.push({ kind: 'coin', x: cx, y: t.h(cx) + 1.1, value, taken: false });
+      const ground = t.h(cx);
+      into.push({ kind: 'coin', x: cx, y: Math.max(ground, t.world.water ?? -Infinity) + 1.1, value, taken: false });
     }
     x += 35 + rand() * 25;
   }
@@ -158,7 +202,6 @@ const M = 1.6; // body
 const I = 0.75;
 const MW = 0.3; // each wheel
 const IW = 0.5 * MW * WHEEL_R * WHEEL_R;
-const G = 9.8;
 /** The driver's head, in body coordinates, and its size. */
 export const HEAD = { x: -0.15, y: 0.95, r: 0.36 };
 /** Corners of the body that can scrape the ground. */
@@ -182,13 +225,19 @@ export interface Stats {
   k: number;
   c: number;
   tank: number;
+  g: number;
+  bounce: number;
+  water: number | null;
 }
 
-export function statsFor(u: Upgrades): Stats {
+export function statsFor(u: Upgrades, world: World = WORLDS[0]): Stats {
   return {
-    torque: 1.7 * (1 + 0.22 * u.engine),
+    torque: 1.7 * (1 + 0.22 * u.engine) * Math.max(1, world.gravity / 9.8), // enough pull for heavy gravity
     maxSpeed: 13 + 2.6 * u.engine,
-    grip: 0.95 + 0.14 * u.tires,
+    grip: (0.95 + 0.14 * u.tires) * world.grip,
+    g: world.gravity,
+    bounce: TUNE.bounce * world.bounce,
+    water: world.water,
     k: TUNE.springK + 25 * u.springs,
     c: TUNE.springC + 1.1 * u.springs, // better springs: less bouncy
     tank: 100 * (1 + 0.25 * u.tank),
@@ -221,8 +270,29 @@ export interface StepResult {
 export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolean, dt: number): StepResult {
   const drive = fuel ? pedal : 0;
   // Gravity.
+  const G = s.g;
   car.vy -= G * dt;
   for (const wh of car.wheels) wh.vy -= G * dt;
+
+  // 🌊 Water: below sea level things float up, slow down, and the engine paddles a little.
+  if (s.water != null) {
+    const sink = (y: number) => Math.min(Math.max(s.water! - y, 0), 1.2);
+    const d = sink(car.y);
+    if (d > 0) {
+      car.vy += d * 13 * dt;
+      car.vx *= Math.exp(-1.4 * d * dt);
+      car.vy *= Math.exp(-1.8 * d * dt);
+      car.w *= Math.exp(-2 * d * dt);
+      car.vx += drive * 2.2 * d * dt;
+    }
+    for (const wh of car.wheels) {
+      const dw = sink(wh.y);
+      if (dw > 0) {
+        wh.vy += dw * 10 * dt;
+        wh.vx *= Math.exp(-1.2 * dw * dt);
+      }
+    }
+  }
 
   // Springs between the body and each wheel.
   for (const wh of car.wheels) {
@@ -283,7 +353,7 @@ export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolea
     const vn = wh.vx * nx + wh.vy * ny;
     let jn = 0;
     if (vn < 0) {
-      jn = -vn * MW * TUNE.bounce;
+      jn = -vn * MW * s.bounce;
       wh.vx += (nx * jn) / MW;
       wh.vy += (ny * jn) / MW;
     }
