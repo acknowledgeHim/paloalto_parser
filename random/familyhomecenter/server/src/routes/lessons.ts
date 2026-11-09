@@ -4,6 +4,7 @@ import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { GRAMMAR_LESSONS, MATH_LESSONS, type LessonSeed, type QuizItem } from '../services/lessonContent.js';
 import { HISTORY_LESSONS } from '../services/historyContent.js';
+import { MORE_MATH_LESSONS } from '../services/mathLessonsMore.js';
 import { isSelfOrParent, sessionActor } from '../services/rewards.js';
 import { GRADE_NAMES } from '../services/spellingWords.js';
 import { addTokens } from '../services/tokens.js';
@@ -30,7 +31,8 @@ function seed(list: LessonSeed[]) {
   );
   db.transaction(() => list.forEach((l, i) => ins.run(l.id, l.subject, l.grade, l.topic, l.title, l.body, JSON.stringify(l.quiz), i, now, now)))();
 }
-seed([...GRAMMAR_LESSONS, ...MATH_LESSONS, ...HISTORY_LESSONS]);
+// (new lists go on the end, so the lessons already added keep their order)
+seed([...GRAMMAR_LESSONS, ...MATH_LESSONS, ...HISTORY_LESSONS, ...MORE_MATH_LESSONS]);
 
 // ---- ⚙️ settings: default tokens per lesson and the pass mark, per subject ----
 interface LessonSettings {
