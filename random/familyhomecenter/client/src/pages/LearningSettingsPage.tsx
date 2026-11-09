@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { type LearningSettings, type SubjectRewards } from '../utils/learning.js';
 import { say } from '../utils/speech.js';
@@ -26,6 +27,9 @@ export function LearningSettingsPage() {
   const [grades, setGrades] = useState<Record<string, number | null>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [engine, setEngine] = useState<string | null | undefined>(undefined);
+  // Every section folds down to its heading (tap to open); which are open is remembered.
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+  useCollapsibleSections(pageEl, 'familyhomecenter.learning-settings.open');
 
   useEffect(() => {
     api.get<LearningSettings>('/learning/settings').then((s) => {
@@ -68,7 +72,7 @@ export function LearningSettingsPage() {
   const upd = (subject: string, patch: Partial<SubjectRewards>) => setDraft({ ...draft, [subject]: { ...draft[subject], ...patch } });
 
   return (
-    <div className="learning-page">
+    <div className="learning-page" ref={setPageEl}>
       <h1>📚 Learning · ⚙️ Grades & tokens</h1>
 
       <section className="panel">

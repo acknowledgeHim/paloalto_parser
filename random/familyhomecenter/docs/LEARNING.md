@@ -5,6 +5,8 @@ A top-level menu: **⌨️ Typing** (see [TYPING.md](TYPING.md)), **🔤 Spellin
 
 ## 🎒 Grades and tokens (parents: 📚 Learning → ⚙️ Grades & tokens)
 
+Each section on this page folds down to its heading — tap it to open or close.
+
 - **Each kid's grade** (Kindergarten–12th). They can practise **any** grade, but only rounds at
   **their grade or higher** earn tokens. Until a parent sets a grade, nothing pays.
 - **Tokens per game:** "% right → 💎" levels for a round of 10 (e.g. 80% = 1 💎, 100% = 2 💎, the

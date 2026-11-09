@@ -75,7 +75,6 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
     {
       label: '🏡 Family',
       items: [
-        { section: 'board', label: '👥 Family Board', path: '/board' },
         { section: 'calendar', label: '📅 Calendar', path: '/calendar' },
         { section: 'board', label: '📝 Notes', path: '/notes' },
         { section: 'board', label: '📔 Journal & gratitude', path: '/journal' },
@@ -87,9 +86,9 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
     {
       label: '🧹 Chores',
       items: [
+        { section: 'board', label: '👥 Family Board', path: '/board' },
         { section: 'tasks', label: '🧹 Chores & Tasks', path: '/tasks' },
         { section: 'prizes', label: '🎁 Prize Bank', path: '/prizes' },
-        { section: 'prizes', label: '👕 Dress up', path: '/dress-up' },
         { label: '✅ To approve', path: '/approvals', badge: pendingApprovals, parent: true },
       ],
     },
@@ -100,6 +99,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { section: 'photos', label: '📷 Photos', path: '/photos' },
         { section: 'movie-library', label: '🎬 Movies', path: '/movies' },
         { section: 'games', label: '🎮 Games', path: '/games' },
+        { section: 'prizes', label: '👕 Dress up', path: '/dress-up' },
         { section: 'music', label: '🎵 Music', path: '/music' },
         { section: 'board', label: '🎞️ This week', path: '/recap' },
       ],
