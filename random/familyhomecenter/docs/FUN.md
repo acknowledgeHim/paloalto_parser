@@ -6,7 +6,7 @@ Tokens are the app's own currency, kept apart from the Prize Bank's ⭐ stars (s
 - **Earned:** ⌨️ Typing (lessons, speed and game bests; a parent sets how many), chores and to-dos a
   parent sets to pay **💎 Tokens**, swapping ⭐ stars for tokens, and a parent giving some.
 - **Spent:** 👕 Dress up and 🎮 Games.
-- **The 💎 wallet** (on the Games and Dress up pages): the balance, **⭐ → 💎 swap** (a parent sets the rate,
+- **The 💎 wallet** (on the Games and Dress up pages): the balance, **⭐ → 💎 swap** (parents only — a parent swaps a kid's stars; kids can't swap their own. A parent sets the rate,
   1 ⭐ = 1 💎 to start, 0 = off; stars can't be swapped back), **👑 Give / Take away** for parents, and
   a history of every change.
 - When tokens arrived, everyone started with as many tokens as typing had paid them in stars so far.

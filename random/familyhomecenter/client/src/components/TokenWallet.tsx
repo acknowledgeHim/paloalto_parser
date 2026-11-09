@@ -72,10 +72,13 @@ export function TokenWallet({ member, onChange, refreshKey }: { member: FamilyMe
       <p className="hint">Tokens are earned in ⌨️ Typing (and chores set to pay tokens) and spent in 👕 Dress up and 🎮 Games. Prize Bank ⭐ stars are separate.</p>
       {open && (
         <>
-          {mayUse && isKid && w.tokens_per_star > 0 && (
+          {!isParent && isKid && mayUse && w.tokens_per_star > 0 && (
+            <p className="hint">⭐ → 💎 A parent can swap your Prize Bank stars for tokens ({w.tokens_per_star} 💎 per ⭐ · you have {w.star_balance} ⭐) — ask one.</p>
+          )}
+          {isParent && isKid && w.tokens_per_star > 0 && (
             <div className="token-wallet__row">
               <span>
-                ⭐ → 💎 Swap stars for tokens ({w.tokens_per_star} 💎 per ⭐ · {w.star_balance} ⭐ to swap):
+                👑 ⭐ → 💎 Swap {member.name}’s stars for tokens ({w.tokens_per_star} 💎 per ⭐ · {w.star_balance} ⭐ to swap):
               </span>
               <input type="number" min={1} max={w.star_balance} value={swap} onChange={(e) => setSwap(e.target.value)} aria-label="Stars to swap" />
               <button

@@ -41,11 +41,12 @@ tokensRouter.get('/:memberId', (req, res) => {
   res.json(w);
 });
 
-/** POST /:memberId/swap { stars, acting_member_id } — trade ⭐ Prize Bank stars for 💎 tokens. */
+/** POST /:memberId/swap { stars, acting_member_id } — a parent trades a kid's ⭐ Prize Bank stars for 💎 tokens. */
 tokensRouter.post('/:memberId/swap', (req, res) => {
   const { memberId } = req.params;
   const { stars, acting_member_id } = req.body ?? {};
-  if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can swap their stars' });
+  // A parent does the swap for a kid — kids can't swap their own stars.
+  if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can swap stars for tokens — ask a parent' });
   const rate = tokensPerStar();
   if (!rate) return res.status(400).json({ error: 'Swapping stars for tokens is turned off' });
   const n = Math.round(Number(stars));
