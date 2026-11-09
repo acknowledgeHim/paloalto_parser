@@ -1598,6 +1598,15 @@ db.exec(`
     data TEXT NOT NULL,
     finished_at TEXT
   );
+  -- 🔓 Extras inside a game bought with 💎 (Hill Hopper's 🦘 Jump and ⚠️ Obstacles).
+  CREATE TABLE IF NOT EXISTS game_features (
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    feature TEXT NOT NULL,
+    cost INTEGER NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id, feature)
+  );
   -- ⏰ Daily limits: how many times and how long each person used each activity, per day.
   CREATE TABLE IF NOT EXISTS activity_usage (
     family_member_id TEXT NOT NULL,

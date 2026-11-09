@@ -3538,3 +3538,7 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
   gap: 0.75rem;
   margin-top: 0.5rem;
 }
+/* 🔓 Hill Hopper extras bought with 💎 */
+.hill-garage__unlock { margin: 4px 0; }
+.privacy-toggle.is-locked { opacity: 0.6; }
+.games-page__extra { display: inline-flex; align-items: center; gap: 4px; }

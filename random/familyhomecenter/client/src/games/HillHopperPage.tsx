@@ -32,6 +32,8 @@ interface PlayInfo {
   save: Partial<Save> | null;
   best: number | null;
   top: Array<{ member_id: string; score: number }>;
+  /** 🔓 extras bought with 💎: 🦘 jump, ⚠️ obstacles (a parent sets the price; 0 = free) */
+  features?: Record<string, { name: string; cost: number; owned: boolean }>;
 }
 
 const GAME = 'hill-hopper';
@@ -58,7 +60,7 @@ const MOUSE_LABEL: Record<Controls['mouse'], string> = {
 
 /** ⛰️ Hill Hopper: the garage (upgrades, which ride to drive, best runs), then the run itself. */
 export function HillHopperPage() {
-  const { members, activeProfile } = useFamilyMembers();
+  const { members, activeProfile, refresh: refreshMembers } = useFamilyMembers();
   const me = activeProfile;
   const catalog = useOutfitCatalog();
   const [info, setInfo] = useState<PlayInfo | null>(null);
@@ -169,6 +171,31 @@ export function HillHopperPage() {
   }
   if (!info) return <p>Loading…</p>;
 
+  /** 🔓 has this extra (old saves without prices: yes) */
+  const has = (f: string) => info?.features?.[f]?.owned ?? true;
+  const buyFeature = async (f: string) => {
+    if (!me) return;
+    const x = info?.features?.[f];
+    if (x && !window.confirm(`Unlock ${x.name} for ${x.cost} 💎?`)) return;
+    setError(null);
+    try {
+      const r = await api.post<{ features: PlayInfo['features'] }>(`/games/${GAME}/play/${me.id}/feature`, { feature: f, acting_member_id: me.id });
+      setInfo((i) => (i ? { ...i, features: r.features } : i));
+      void refreshMembers();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const unlockButton = (f: string) => {
+    const x = info?.features?.[f];
+    if (!x) return null;
+    return (
+      <button type="button" className="secondary hill-garage__unlock" onClick={() => void buyFeature(f)}>
+        🔓 Unlock {x.name} — {x.cost} 💎
+      </button>
+    );
+  };
+
   if (playing) {
     return (
       <HillHopperRun
@@ -176,8 +203,8 @@ export function HillHopperPage() {
         vehicle={vehicleEmoji}
         upgrades={save.upgrades}
         world={world}
-        obstacles={save.obstacles.includes(world.id)}
-        jump={save.jump ?? false}
+        obstacles={has('obstacles') && save.obstacles.includes(world.id)}
+        jump={has('jump') && (save.jump ?? false)}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -272,7 +299,16 @@ export function HillHopperPage() {
                 <span className="hint">{w.blurb}</span>
                 {have && save.bests[w.id] ? <span className="hint">🏁 Best {save.bests[w.id]} m</span> : null}
                 {w.coinMul > 1 && <span className="hint">🪙 ×{w.coinMul} coins</span>}
-                {have && HAZARD_WORLDS[w.id] && (
+                {have && HAZARD_WORLDS[w.id] && !has('obstacles') && (
+                  <div className="hill-garage__obstacles">
+                    <span className="hint">
+                      {HAZARD_WORLDS[w.id].emoji} Obstacles — {HAZARD_WORLDS[w.id].text} 🪙 ×{HAZARD_COINS}
+                    </span>
+                    {unlockButton('obstacles')}
+                    <span className="hint">(once, for every world)</span>
+                  </div>
+                )}
+                {have && HAZARD_WORLDS[w.id] && has('obstacles') && (
                   <label className="privacy-toggle hill-garage__obstacles">
                     <input
                       type="checkbox"
@@ -328,8 +364,9 @@ export function HillHopperPage() {
 
       <section className="panel">
         <h2>🎮 Controls</h2>
-        <label className="privacy-toggle">
-          <input type="checkbox" checked={save.jump ?? false} onChange={(e) => void store({ ...save, jump: e.target.checked })} />
+        {!has('jump') && unlockButton('jump')}
+        <label className={`privacy-toggle${has('jump') ? '' : ' is-locked'}`}>
+          <input type="checkbox" checked={has('jump') && (save.jump ?? false)} disabled={!has('jump')} onChange={(e) => void store({ ...save, jump: e.target.checked })} />
           <span>
             🦘 Jump — with the jump key, or the jump button you pick below.{' '}
             <span className="hint">
@@ -337,7 +374,7 @@ export function HillHopperPage() {
             </span>
           </span>
         </label>
-        {(['gas', 'brake', 'jump'] as const).filter((p) => p !== 'jump' || save.jump).map((p) => {
+        {(['gas', 'brake', 'jump'] as const).filter((p) => p !== 'jump' || (save.jump && has('jump'))).map((p) => {
           const keys = p === 'gas' ? save.controls.gasKeys : p === 'brake' ? save.controls.brakeKeys : jumpKeysOf(save.controls);
           return (
             <div key={p} className="hill-garage__upgrade">
@@ -350,7 +387,7 @@ export function HillHopperPage() {
             </div>
           );
         })}
-        {save.jump && (
+        {save.jump && has('jump') && (
           <div className="hill-garage__mouse" role="radiogroup" aria-label="Jump button">
             <strong>🦘 Jump button (mouse / touch)</strong>
             {(Object.keys(JUMP_TAP_LABEL) as JumpTap[]).map((t) => (

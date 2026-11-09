@@ -27,6 +27,14 @@ interface Shelf {
 
 const playsText = (n: number) => `${n} play${n === 1 ? '' : 's'}`;
 
+/** ⚙️ a game's price, plays per unlock, and 🔓 its extras' prices (server: routes/games.ts) */
+interface GameRule {
+  cost: number;
+  plays: number;
+  features?: Record<string, number>;
+}
+const FEATURE_NAMES: Record<string, string> = { jump: '🦘 Jump', obstacles: '⚠️ Obstacles' };
+
 /**
  * 🎮 Games: each game is unlocked with 💎 tokens — for good, or for a number of plays a parent sets per
  * game (then unlocked again). Parents play free, and can unlock (or refund) a game for a kid.
@@ -39,16 +47,16 @@ export function GamesPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [givePlays, setGivePlays] = useState<Record<string, string>>({}); // "kid|game" → how many to give
-  const [rules, setRules] = useState<Record<string, { cost: number; plays: number }> | null>(null);
+  const [rules, setRules] = useState<Record<string, GameRule> | null>(null);
   const [rulesNote, setRulesNote] = useState<string | null>(null);
   useEffect(() => {
-    if (isParent) api.get<Record<string, { cost: number; plays: number }>>('/games/settings').then(setRules).catch(() => {});
+    if (isParent) api.get<Record<string, GameRule>>('/games/settings').then(setRules).catch(() => {});
   }, [isParent]);
   const saveRules = async () => {
     if (!rules) return;
     setRulesNote(null);
     try {
-      setRules(await api.put<Record<string, { cost: number; plays: number }>>('/games/settings', rules));
+      setRules(await api.put<Record<string, GameRule>>('/games/settings', rules));
       setRulesNote('Saved ✓');
       void load();
     } catch (e) {
@@ -189,7 +197,8 @@ export function GamesPage() {
           <p className="hint">
             For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
             uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs (use ↶ refund
-            above to take one back).
+            above to take one back). 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
+            already had one switched on keeps it.
           </p>
           <p className="hint">
             ⏰ How many games — or minutes — a day for each kid: <Link to="/learning/settings">📚 Learning → ⚙️ Grades & tokens → Daily limits</Link>.
@@ -210,6 +219,20 @@ export function GamesPage() {
                   for <input type="number" min={0} max={10000} value={r.plays} onChange={(e) => set('plays', e.target.value)} aria-label={`${g.name} plays per unlock`} /> plays
                 </label>
                 <span className="hint">{r.plays ? `= ${playsText(r.plays)} for ${r.cost} 💎` : `= for good, ${r.cost} 💎`}</span>
+                {Object.entries(r.features ?? {}).map(([f, cost]) => (
+                  <label key={f} className="games-page__extra">
+                    🔓 {FEATURE_NAMES[f] ?? f} extra: 💎{' '}
+                    <input
+                      type="number"
+                      min={0}
+                      max={10000}
+                      value={cost}
+                      onChange={(e) => setRules({ ...rules, [g.id]: { ...r, features: { ...r.features, [f]: Math.max(0, Math.round(Number(e.target.value) || 0)) } } })}
+                      aria-label={`${g.name} ${FEATURE_NAMES[f] ?? f} cost in tokens`}
+                    />{' '}
+                    <span className="hint">{cost ? '' : '(free)'}</span>
+                  </label>
+                ))}
               </div>
             );
           })}

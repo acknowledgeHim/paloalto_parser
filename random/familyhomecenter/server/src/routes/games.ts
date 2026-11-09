@@ -27,6 +27,8 @@ const passesFor = (memberId: string) =>
 interface GameRule {
   cost: number;
   plays: number;
+  /** 🔓 each extra's price in 💎 (0 = free for everyone) */
+  features: Record<string, number>;
 }
 const RULES_KEY = 'game_rules';
 function rules(): Record<string, GameRule> {
@@ -37,9 +39,18 @@ function rules(): Record<string, GameRule> {
     /* defaults */
   }
   const n = (v: unknown, d: number) => (v !== undefined && v !== null && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 10000 ? Math.round(Number(v)) : d);
-  return Object.fromEntries(GAMES.map((g) => [g.id, { cost: n(saved[g.id]?.cost, g.stars), plays: n(saved[g.id]?.plays, 0) }]));
+  return Object.fromEntries(
+    GAMES.map((g) => [
+      g.id,
+      {
+        cost: n(saved[g.id]?.cost, g.stars),
+        plays: n(saved[g.id]?.plays, 0),
+        features: Object.fromEntries((g.features ?? []).map((f) => [f.id, n(saved[g.id]?.features?.[f.id], f.cost)])),
+      },
+    ])
+  );
 }
-const ruleOf = (gameId: string) => rules()[gameId] ?? { cost: 0, plays: 0 };
+const ruleOf = (gameId: string): GameRule => rules()[gameId] ?? { cost: 0, plays: 0, features: {} };
 
 /** GET /settings — each game's cost and plays per unlock. */
 gamesRouter.get('/settings', (_req, res) => res.json(rules()));
@@ -55,6 +66,13 @@ gamesRouter.put('/settings', requireAdmin, (req, res) => {
       const v = Math.round(Number(x[k]));
       if (!(v >= 0 && v <= 10000)) return res.status(400).json({ error: `${g.name}: ${k === 'cost' ? 'cost' : 'plays'} must be 0–10000` });
       cur[g.id][k] = v;
+    }
+    for (const f of g.features ?? []) {
+      const v0 = x.features?.[f.id];
+      if (v0 === undefined) continue;
+      const v = Math.round(Number(v0));
+      if (!(v >= 0 && v <= 10000)) return res.status(400).json({ error: `${g.name} ${f.name}: 0–10000` });
+      cur[g.id].features[f.id] = v;
     }
   }
   setSetting(RULES_KEY, JSON.stringify(cur));
@@ -185,6 +203,63 @@ gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
   res.json({ ok: true, plays_left: passesFor(m.id).get(g.id) ?? 0 });
 });
 
+/**
+ * 🔓 Each extra: its price and whether they have it — bought, free (price 0 or a parent), or
+ * already switched on in their saved game from before extras had a price (that stays theirs).
+ */
+function featuresFor(m: FamilyMember, gameId: string, save: unknown) {
+  const g = gameOf(gameId);
+  const bought = new Set(
+    (db.prepare('SELECT feature FROM game_features WHERE family_member_id = ? AND game_id = ?').all(m.id, gameId) as Array<{ feature: string }>).map((x) => x.feature)
+  );
+  const sv = (save ?? {}) as { jump?: boolean; obstacles?: unknown[] };
+  const had = new Set<string>();
+  if (sv.jump) had.add('jump');
+  if (Array.isArray(sv.obstacles) && sv.obstacles.length) had.add('obstacles');
+  // Had it on before it had a price: theirs for good (kept, so turning it off doesn't lose it).
+  for (const f of had)
+    if (!bought.has(f) && g?.features?.some((x) => x.id === f)) {
+      db.prepare('INSERT OR IGNORE INTO game_features (family_member_id, game_id, feature, cost, unlocked_at) VALUES (?, ?, ?, 0, ?)').run(m.id, gameId, f, new Date().toISOString());
+      bought.add(f);
+    }
+  const prices = ruleOf(gameId).features;
+  return Object.fromEntries(
+    (g?.features ?? []).map((f) => {
+      const cost = prices[f.id] ?? f.cost;
+      return [f.id, { name: f.name, cost, owned: free(m) || cost === 0 || bought.has(f.id) }];
+    })
+  );
+}
+
+/** POST /:gameId/play/:memberId/feature { feature, acting_member_id } — 🔓 buy an extra with 💎. */
+gamesRouter.post('/:gameId/play/:memberId/feature', (req, res) => {
+  const { gameId, memberId } = req.params;
+  const { feature, acting_member_id } = req.body ?? {};
+  if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
+  const g = gameOf(gameId);
+  const m = memberOf(memberId);
+  if (!g || !m) return res.status(404).json({ error: 'not found' });
+  const f = g.features?.find((x) => x.id === feature);
+  if (!f) return res.status(404).json({ error: 'No such extra' });
+  const save = db.prepare('SELECT data FROM game_saves WHERE family_member_id = ? AND game_id = ?').get(m.id, g.id) as { data: string } | undefined;
+  let data: unknown = null;
+  try {
+    data = save ? JSON.parse(save.data) : null;
+  } catch {
+    data = null;
+  }
+  const now = featuresFor(m, g.id, data);
+  if (now[f.id]?.owned) return res.json({ features: now, token_balance: m.token_balance });
+  const cost = now[f.id].cost;
+  if (m.token_balance < cost) return res.status(400).json({ error: `Needs ${cost} 💎 — ${cost - m.token_balance} more to go` });
+  db.transaction(() => {
+    addTokens(m.id, -cost, `🔓 ${g.emoji} ${g.name}: ${f.name}`, typeof acting_member_id === 'string' ? acting_member_id : null);
+    db.prepare('INSERT OR IGNORE INTO game_features (family_member_id, game_id, feature, cost, unlocked_at) VALUES (?, ?, ?, ?, ?)').run(m.id, g.id, f.id, cost, new Date().toISOString());
+  })();
+  const after = memberOf(m.id)!;
+  res.json({ features: featuresFor(after, g.id, data), token_balance: after.token_balance });
+});
+
 /** GET /:gameId/play/:memberId — their saved progress, best score and the family's top runs. */
 gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
   const g = gameOf(req.params.gameId);
@@ -205,7 +280,7 @@ gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
     data = null;
   }
   const owned = free(m) || unlockedFor(m).has(g.id);
-  res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0 });
+  res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0, features: featuresFor(m, g.id, data) });
 });
 
 /** POST /:gameId/play/:memberId/result { score, detail, save, acting_member_id } — a finished run, and progress to keep. */

@@ -264,6 +264,9 @@ own avatar at the wheel wearing your hat.
   - 👽 **The Moon:** aliens in a flying saucer follow you. When it glows, a red target shows where
     the zapper will land: where you'd be if you kept going at the same speed. Speed up or slow down
     to dodge (+5 each miss). You have 🛡️🛡️🛡️ shields; the third zap ends the run.
+  **🔓 Extras for 💎:** 🦘 Jump and ⚠️ Obstacles are each unlocked once with tokens (5 💎 each to
+  start; a parent changes the price under Games → ⚙️ What each game costs, and 0 makes it free).
+  Parents have them free. Anyone who already had one switched on keeps it.
   **🦘 Jump** (garage → Controls, off unless you turn it on): press the jump key (Space;
   change it there) or the jump button to hop. The jump button is picked there too: tap the middle of
   the screen (the default), an on-screen 🦘 JUMP button between the pedals, the middle mouse button

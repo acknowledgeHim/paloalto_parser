@@ -9,6 +9,8 @@ export interface Game {
   name: string;
   stars: number;
   blurb: string;
+  /** 🔓 extras inside the game a kid unlocks with 💎 too (a parent sets the price; 0 = free) */
+  features?: Array<{ id: string; name: string; cost: number }>;
 }
 
 export const GAMES: Game[] = [
@@ -19,6 +21,10 @@ export const GAMES: Game[] = [
     stars: 25,
     blurb:
       'Drive your Dress up ride over bumpy hills — balance it so you don’t flip, grab fuel cans before you run dry, collect coins and spend them on a better engine, grippier tires and a bigger tank.',
+    features: [
+      { id: 'jump', name: '🦘 Jump', cost: 5 },
+      { id: 'obstacles', name: '⚠️ Obstacles', cost: 5 },
+    ],
   },
   {
     id: 'brick-tumble',
