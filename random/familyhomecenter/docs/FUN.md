@@ -237,3 +237,22 @@ own avatar at the wheel wearing your hat.
   Each world has its own course and its own **Best** (your Green Hills best from before carries over).
 - It's the same course every run, so the **Best** flag means something. **🏆 Family best**
   shows everyone's longest run.
+
+### 🧱 Brick Tumble (20 ⭐)
+
+A falling-bricks game, our own version (not a copy of any particular one). Bricks of four squares
+fall into a 10 × 20 well. Move and turn them, fill a row from side to side to clear it, and don't
+let the pile reach the top.
+
+- **Keys:** ← → / A D move · ↑ / W / X turn · Z / Q turn the other way · ↓ / S faster ·
+  Space drops it · C / Shift puts it on hold · P / Esc pauses. It pauses by itself if you switch away.
+- **Mouse or finger on the well:** tap to turn (the left edge turns the other way), drag sideways to
+  move, drag down to go faster, flick down to drop. Right-click = hold. There are also big buttons
+  under the game for touch screens.
+- **Points:** 100 / 300 / 500 / 800 for 1–4 rows at once, times the level. Clearing rows with brick
+  after brick adds a bonus, and dropping adds a little. It gets faster every 10 rows. You can start at
+  level 1, 3, 5, 7 or 10.
+- **🎨 Brick looks**, unlocked by your best score: Bright (free), 🍬 Candy 3,000, 🍓 Fruit 8,000,
+  🐾 Animals 15,000, 🌌 Space 30,000.
+- 🏆 Family best, 🎟️ parent-given plays and unlocking with stars all work like Hill Hopper.
+

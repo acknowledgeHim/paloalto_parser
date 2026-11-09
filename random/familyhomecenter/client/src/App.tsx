@@ -30,6 +30,7 @@ import { CameraAgent } from './components/CameraAgent.js';
 import { DressUpPage } from './pages/DressUpPage.js';
 import { GamesPage } from './pages/GamesPage.js';
 import { HillHopperPage } from './games/HillHopperPage.js';
+import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { HeightsPage } from './pages/HeightsPage.js';
 import { NotesPage } from './components/StickyNotes.js';
@@ -139,6 +140,7 @@ export function App() {
           <Route path="/movies" element={<SectionGate section="movie-library"><MovieLibraryPage /></SectionGate>} />
           <Route path="/games" element={<SectionGate section="games"><GamesPage /></SectionGate>} />
           <Route path="/games/hill-hopper" element={<SectionGate section="games"><HillHopperPage /></SectionGate>} />
+          <Route path="/games/brick-tumble" element={<SectionGate section="games"><BrickTumblePage /></SectionGate>} />
           <Route path="/photos" element={<SectionGate section="photos"><PhotosPage /></SectionGate>} />
           <Route path="/photos/people" element={<SectionGate section="photos"><PeoplePage /></SectionGate>} />
           <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />

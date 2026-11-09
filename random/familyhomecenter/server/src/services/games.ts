@@ -20,6 +20,14 @@ export const GAMES: Game[] = [
     blurb:
       'Drive your Dress up ride over bumpy hills — balance it so you don’t flip, grab fuel cans before you run dry, collect coins and spend them on a better engine, grippier tires and a bigger tank.',
   },
+  {
+    id: 'brick-tumble',
+    emoji: '🧱',
+    name: 'Brick Tumble',
+    stars: 20,
+    blurb:
+      'Falling bricks: move and turn them as they drop, fill a row from side to side to clear it, and don’t let the pile reach the top. It speeds up as you go — big scores unlock new brick looks.',
+  },
 ];
 
 export const gameOf = (id: string) => GAMES.find((g) => g.id === id);
