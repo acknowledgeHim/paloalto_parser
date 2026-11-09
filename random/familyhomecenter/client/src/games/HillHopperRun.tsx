@@ -63,7 +63,7 @@ const LOOKS: Record<string, Look> = {
   desert: { sky: ['#ffb74d', '#fff3e0'], far: ['#f0c27b', '#e6a957'], ground: ['#e9c27a', '#c8954a'], edge: '#f6d796', orb: { color: 'rgba(255, 250, 220, 0.95)', glow: true }, decor: ['🌵', '🌵', '🐪', '🦂', '🏜️'] },
   jungle: { sky: ['#4db6ac', '#c8f7e6'], far: ['#2e7d32', '#1b5e20'], ground: ['#5d4037', '#3e2723'], edge: '#2e7d32', orb: { color: 'rgba(255, 255, 200, 0.7)' }, decor: ['🌴', '🌿', '🦜', '🐒', '🌺', '🐍'] },
   ice: { sky: ['#90caf9', '#f1f8ff'], far: ['#e3f2fd', '#bbdefb'], ground: ['#cfe8ff', '#90b8de'], edge: '#ffffff', orb: { color: 'rgba(255, 255, 255, 0.9)' }, decor: ['⛄', '🐧', '🌨️', '🏔️', '🦭'] },
-  dino: { sky: ['#bf360c', '#ffcc80'], far: ['#6d4c41', '#4e342e'], ground: ['#8d6e63', '#4e342e'], edge: '#7cb342', orb: { emoji: '🌋' }, decor: ['🦕', '🌿', '🥚', '🌴'] },
+  dino: { sky: ['#bf360c', '#ffcc80'], far: ['#6d4c41', '#4e342e'], ground: ['#8d6e63', '#4e342e'], edge: '#7cb342', orb: { emoji: '🌋' }, decor: ['🦕', '🦖', '🌿', '🥚', '🌴'] },
   water: { sky: ['#29b6f6', '#e1f5fe'], far: ['#4fc3f7', '#0288d1'], ground: ['#f4d58d', '#c9a45c'], edge: '#ffe082', orb: { color: 'rgba(255, 245, 157, 0.95)' }, decor: ['🌴', '🐚', '🦀', '⛱️', '🐢'] },
   candy: { sky: ['#f8bbd0', '#fff0f6'], far: ['#ce93d8', '#f48fb1'], ground: ['#f06292', '#ad1457'], edge: '#fff59d', orb: { emoji: '🍬' }, decor: ['🍭', '🍬', '🧁', '🍩', '🍦'] },
   moon: { sky: ['#000010', '#1a1a2e'], far: ['#3a3a4a', '#2a2a36'], ground: ['#b0b0b0', '#6e6e6e'], edge: '#d6d6d6', orb: { emoji: '🌍' }, stars: true, decor: ['🚩', '🛰️', '👨‍🚀', '🪨'] },
@@ -138,6 +138,8 @@ export function HillHopperRun({
     const hz = obstacles && HAZARD_WORLDS[world.id] ? new Hazards(world, terrain, startX) : null;
     let shake = 0;
     let zoom = 1;
+    // With obstacles on, no little 🦖 in the scenery (it'd look like a real one).
+    const decor = hz ? look.decor.filter((d) => d !== '🦖') : look.decor;
     const pickups: Pickup[] = [];
     let placedTo = placePickups(terrain, 400, pickups, 40);
     const fuelAt = fuelSpots(20000).map((x) => ({ x, taken: false }));
@@ -424,7 +426,7 @@ export function HillHopperRun({
         const dx = i * 17 + hsh * 8;
         const gy = terrain.h(dx);
         if (world.water != null && gy < world.water + 0.3) continue; // nothing growing in the sea
-        ctx.fillText(look.decor[Math.floor(hsh * 997) % look.decor.length], sx(dx), sy(gy) + S * 0.15);
+        ctx.fillText(decor[Math.floor(hsh * 997) % decor.length], sx(dx), sy(gy) + S * 0.15);
       }
       ctx.textBaseline = 'alphabetic';
 
