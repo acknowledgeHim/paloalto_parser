@@ -163,6 +163,9 @@ export function SpellingPage() {
           <li>Each word is said, used in a sentence, then said again. Type it and press Enter — you have {SECONDS} seconds.</li>
           <li>🔊 says the word again, 🗣️ the sentence, 📖 what it means.</li>
           <li>Try any grade. Tokens come from your own grade or higher (a parent sets your grade).</li>
+          <li>
+            Also try <Link to="/spelling/spot">🔍 Spot the misspellings</Link>: tap the words spelled wrong in a paragraph.
+          </li>
         </ul>
         {person?.is_parent && <Link to="/learning/settings">⚙️ Grades & tokens</Link>}
       </section>

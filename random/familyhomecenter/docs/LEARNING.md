@@ -43,6 +43,37 @@ then restart the Family Home Center. ⚙️ Grades & tokens shows whether it's i
 `server/src/services/spellingWords.ts`: one line per word, `word|a sentence using it|what it means`,
 under its grade.
 
+## 🔍 Spot the misspellings
+
+A short paragraph made from the grade's spelling sentences, with some of that grade's words spelled
+wrong in a believable way: a dropped or doubled letter, ie/ei, a wrong vowel, "f" for "ph" and so on.
+Tap every misspelled word, then **Check**. It shows the right spellings, and that answer is then final.
+Kindergarten–1st: 2 sentences, 1 to find. Higher grades: up to 5 sentences and 4 to find. A misspelling is
+never a real word: it's checked against the spelling lists and, on computers that have one, the dictionary.
+
+## 📝 Grammar
+
+Read a sentence or paragraph and tap every word that's wrong:
+- a wrong form ("goed")
+- a mix-up ("their" / "there")
+- a missing capital
+- a word that shouldn't be there ("more taller")
+
+It says how many to find. **Check** shows the fixes and a tip. An item is right only when you tap exactly
+the mistakes. K–4 get one sentence with one mistake. 5–6 get two sentences with one mistake. 7–8 get three
+with two. 9–12 get three or four with two or three.
+
+There are **400 items per grade**. A few are hand-written (`server/src/services/grammarContent.ts`). The rest
+come from sentence patterns filled in from word lists (`server/src/services/grammarGen.ts`). Each pattern
+covers a range of grades:
+- capitals, plurals, a/an, is/are: K–3
+- past tenses, there/their, its/it's, good/well, could have, I/me: 1–7
+- fewer, affect/effect, lie/lay, who/whom, "neither … nor", "along with": 5–12
+- confusable words like imminent/eminent and criterion/criteria: 9–12
+
+To add a pattern, write a sentence with the mistake as `{wrong|right}` (`{word|}` means the word shouldn't
+be there), then `||` and a tip. Write it so every other word in it is correct.
+
 ## Data
 
 New tables only: `learning_grades` (each kid's grade) and `learning_results` (every round: grade,

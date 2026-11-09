@@ -8,6 +8,8 @@ import { say } from '../utils/speech.js';
 /** Names for each subject's settings. Subjects without an entry show by their id. */
 export const SUBJECT_LABELS: Record<string, string> = {
   spelling: '🔤 Spelling',
+  spellcheck: '🔍 Spot the misspellings',
+  grammar: '📝 Grammar',
 };
 
 /**

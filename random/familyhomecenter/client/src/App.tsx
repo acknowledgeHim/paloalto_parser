@@ -33,6 +33,7 @@ import { HillHopperPage } from './games/HillHopperPage.js';
 import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { ResourceUsagePage } from './pages/ResourceUsagePage.js';
 import { SpellingPage } from './pages/SpellingPage.js';
+import { GRAMMAR_GAME, SPELLCHECK_GAME, TapMistakesPage } from './pages/TapMistakesPage.js';
 import { LearningSettingsPage } from './pages/LearningSettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { HeightsPage } from './pages/HeightsPage.js';
@@ -153,6 +154,8 @@ export function App() {
           <Route path="/apps" element={<PhoneAppsPage />} />
           <Route path="/typing" element={<TypingPage />} />
           <Route path="/spelling" element={<SpellingPage />} />
+          <Route path="/spelling/spot" element={<TapMistakesPage key="spellcheck" game={SPELLCHECK_GAME} />} />
+          <Route path="/grammar" element={<TapMistakesPage key="grammar" game={GRAMMAR_GAME} />} />
           <Route path="/learning/settings" element={<LearningSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/cameras" element={<CamerasPage />} />

@@ -5,19 +5,23 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { isParentRequest, isSelfOrParent, sessionActor } from '../services/rewards.js';
 import { speak, speechEngine } from '../services/speech.js';
+import type { GrammarItem } from '../services/grammarContent.js';
+import { GRAMMAR } from '../services/grammarGen.js';
+import { makeSpellcheckItem } from '../services/spellcheckGen.js';
 import { GRADE_NAMES, WORDS } from '../services/spellingWords.js';
 import { addTokens } from '../services/tokens.js';
 import type { FamilyMember } from '../types.js';
 
 /**
- * 📚 Learning: 🔤 Spelling (and more subjects to come). Each kid has a school grade a parent sets;
+ * 📚 Learning: 🔤 Spelling, 🔍 Spot the misspellings, 📝 Grammar (and more to come). Each kid has a school grade a parent sets;
  * they can practise any grade, but only rounds at their grade or higher earn 💎 tokens. A round is
  * 10 random items, checked here (not in the browser), and pays by the parent's "% right → tokens"
  * levels — the lowest level is the pass mark — up to so many paying rounds a day.
  */
 export const learningRouter = Router();
 
-export const SUBJECTS = ['spelling'] as const;
+export const SUBJECTS = ['spelling', 'spellcheck', 'grammar'] as const;
+const SUBJECT_NAMES: Record<Subject, string> = { spelling: '🔤 Spelling', spellcheck: '🔍 Spot the misspellings', grammar: '📝 Grammar' };
 export type Subject = (typeof SUBJECTS)[number];
 const ROUND_SIZE = 10;
 
@@ -144,6 +148,10 @@ interface Round {
   started: number;
   /** what's right for each item (spelling: the word) */
   answers: string[];
+  /** tap-the-mistakes games: each item's words, with the fix for each mistake */
+  tap?: GrammarItem[];
+  /** tap games: answers already checked one by one (they can't be changed after) */
+  locked?: number[][];
 }
 const rounds = new Map<string, Round>();
 const sweep = () => {
@@ -184,6 +192,69 @@ learningRouter.post('/spelling/start', (req, res) => {
   });
 });
 
+/** Start a tap-the-mistakes round (🔍 misspellings, 📝 grammar). */
+function startTap(req: import('express').Request, res: import('express').Response, subject: Subject, make: (g: number) => GrammarItem[]) {
+  const { member_id, grade, acting_member_id } = req.body ?? {};
+  const m = memberOf(String(member_id));
+  if (!m) return res.status(404).json({ error: 'not found' });
+  if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
+  const g = Math.round(Number(grade));
+  if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  sweep();
+  const items = make(g);
+  const r: Round = { id: uuidv4(), member: m.id, subject, grade: g, started: Date.now(), answers: [], tap: items };
+  rounds.set(r.id, r);
+  const why = noTokensWhy(m, subject, g);
+  res.json({
+    round_id: r.id,
+    grade: g,
+    // Only the words and how many to find — never which ones.
+    items: items.map((it) => ({ words: it.tokens.map((t) => t.shown), mistakes: it.tokens.filter((t) => t.right !== null).length })),
+    tokens: why ? null : readRewards()[subject].tiers,
+    no_tokens_why: why,
+  });
+}
+
+/** POST /grammar/start { member_id, grade } — 10 random sentences/paragraphs, each with mistakes. */
+learningRouter.post('/grammar/start', (req, res) => startTap(req, res, 'grammar', (g) => pick(GRAMMAR[g], ROUND_SIZE)));
+
+/** POST /spellcheck/start { member_id, grade } — 10 paragraphs with misspelled words to tap. */
+learningRouter.post('/spellcheck/start', (req, res) =>
+  startTap(req, res, 'spellcheck', (g) => {
+    const out: GrammarItem[] = [];
+    for (let k = 0; out.length < ROUND_SIZE && k < 100; k++) {
+      const it = makeSpellcheckItem(g);
+      if (it.tokens.some((t) => t.right !== null)) out.push(it);
+    }
+    return out;
+  })
+);
+
+function tapResult(it: GrammarItem, tapped: number[]) {
+  const want = it.tokens.flatMap((t, k) => (t.right !== null ? [k] : []));
+  const got = [...new Set(tapped)].filter((k) => Number.isInteger(k) && k >= 0 && k < it.tokens.length).sort((a, b) => a - b);
+  return {
+    words: it.tokens.map((t) => t.shown),
+    fixes: want.map((k) => ({ i: k, right: it.tokens[k].right as string })),
+    tapped: got,
+    ok: got.length === want.length && got.every((k, j) => k === want[j]),
+    tip: it.tip,
+  };
+}
+const cleanTaps = (a: unknown): number[] => (Array.isArray(a) ? a.map(Number).filter(Number.isInteger).slice(0, 200) : []);
+
+/** POST /round/:id/check { index, tapped: number[] } — tap games: check one item (it's then final). */
+learningRouter.post('/round/:id/check', (req, res) => {
+  const r = rounds.get(req.params.id);
+  if (!r?.tap) return res.status(404).json({ error: 'That round has expired — start a new one' });
+  if (!isSelfOrParent(req, r.member, req.body?.acting_member_id)) return res.status(403).json({ error: "That's someone else's round" });
+  const i = Math.round(Number(req.body?.index));
+  if (!(i >= 0 && i < r.tap.length)) return res.status(400).json({ error: 'No such item' });
+  r.locked ??= [];
+  r.locked[i] ??= tapResult(r.tap[i], cleanTaps(req.body?.tapped)).tapped;
+  res.json(tapResult(r.tap[i], r.locked[i]));
+});
+
 const same = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase();
 
 /** POST /round/:id/finish { answers: string[], acting_member_id } — checked here; pays tokens. */
@@ -195,10 +266,23 @@ learningRouter.post('/round/:id/finish', (req, res) => {
   const m = memberOf(r.member);
   if (!m) return res.status(404).json({ error: 'not found' });
   rounds.delete(r.id); // each round counts once
-  const given: string[] = Array.isArray(answers) ? answers.map((a) => String(a ?? '').slice(0, 60)) : [];
-  const items = r.answers.map((right, i) => ({ right, given: given[i] ?? '', ok: same(given[i] ?? '', right) }));
-  const correct = items.filter((x) => x.ok).length;
-  const pct = Math.round((correct / r.answers.length) * 100);
+  let items: unknown[];
+  let correct: number;
+  if (r.tap) {
+    // Each answer: the word numbers tapped (ones already checked stay as they were). Right =
+    // exactly the mistakes, no more, no less.
+    const taps: unknown[] = Array.isArray(answers) ? answers : [];
+    const tapItems = r.tap.map((it, i) => tapResult(it, r.locked?.[i] ?? cleanTaps(taps[i])));
+    items = tapItems;
+    correct = tapItems.filter((x) => x.ok).length;
+  } else {
+    const given: string[] = Array.isArray(answers) ? answers.map((a) => String(a ?? '').slice(0, 60)) : [];
+    const spellItems = r.answers.map((right, i) => ({ right, given: given[i] ?? '', ok: same(given[i] ?? '', right) }));
+    items = spellItems;
+    correct = spellItems.filter((x) => x.ok).length;
+  }
+  const total = r.tap ? r.tap.length : r.answers.length;
+  const pct = Math.round((correct / total) * 100);
   const rw = readRewards()[r.subject];
   const why = noTokensWhy(m, r.subject, r.grade);
   const tokens = why ? 0 : worth(rw.tiers, pct);
@@ -206,10 +290,10 @@ learningRouter.post('/round/:id/finish', (req, res) => {
   db.transaction(() => {
     db.prepare(
       'INSERT INTO learning_results (id, family_member_id, subject, grade, at, day, correct, total, tokens, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(uuidv4(), m.id, r.subject, r.grade, now.toISOString(), localDay(now), correct, r.answers.length, tokens, JSON.stringify(items.filter((x) => !x.ok)).slice(0, 4000));
-    if (tokens) addTokens(m.id, tokens, `🔤 Spelling: ${correct}/${r.answers.length} at ${GRADE_NAMES[r.grade]}`);
+    ).run(uuidv4(), m.id, r.subject, r.grade, now.toISOString(), localDay(now), correct, total, tokens, JSON.stringify(items.filter((x) => !(x as { ok: boolean }).ok)).slice(0, 4000));
+    if (tokens) addTokens(m.id, tokens, `${SUBJECT_NAMES[r.subject]}: ${correct}/${total} at ${GRADE_NAMES[r.grade]}`);
   })();
-  res.json({ correct, total: r.answers.length, pct, passed: pct >= passMark(rw.tiers), tokens, no_tokens_why: tokens ? null : why, items });
+  res.json({ correct, total, pct, passed: pct >= passMark(rw.tiers), tokens, no_tokens_why: tokens ? null : why, items });
 });
 
 // ---- 🗣️ speech, for browsers without voices ----

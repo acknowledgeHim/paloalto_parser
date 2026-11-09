@@ -3207,5 +3207,21 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .spelling-round__shown { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px; border-radius: 12px; }
 .spelling-round__shown.is-ok { background: rgba(67,160,71,0.15); }
 .spelling-round__shown.is-wrong { background: rgba(229,57,53,0.12); }
+.tap-round { display: flex; flex-direction: column; gap: 12px; }
+.tap-round__ask { margin: 0; font-size: 1.1em; }
+.tap-round__text { font-size: 1.35em; line-height: 2; margin: 0; }
+.tap-round__text .tap-word { font: inherit; background: none; border: 2px solid transparent; border-radius: 8px; padding: 0 4px; margin: 0 1px; color: inherit; cursor: pointer; min-height: 0; }
+.tap-round__text button.tap-word:hover { border-color: var(--border); }
+.tap-round__text .tap-word.is-tapped { background: #fff3c4; border-color: #f9a825; color: #222; }
+.tap-round__actions { display: flex; gap: 8px; }
+.tap-round__checked.is-ok .spelling-round__verdict { color: #2e7d32; }
+.tap-round__checked.is-wrong .spelling-round__verdict { color: #c62828; }
+.tap-fixed .tap-word { padding: 0 2px; border-radius: 6px; }
+.tap-fixed .tap-word.is-found { background: #c8e6c9; color: #1b5e20; font-weight: 700; }
+.tap-fixed .tap-word.is-missed { background: #ffe0b2; color: #8a4b00; font-weight: 700; }
+.tap-fixed .tap-word.is-falsetap { background: #ffcdd2; color: #8e0000; }
+.tap-fixed s { opacity: 0.7; font-weight: 400; }
+.tap-tip { display: block; font-size: 0.8em; margin-top: 4px; color: var(--muted, #666); line-height: 1.4; }
+.tap-results { padding-left: 1.4em; display: flex; flex-direction: column; gap: 10px; }
 .spelling-round__verdict { font-size: 1.4em; font-weight: 800; }
 .spelling-round__word { font-size: 2.2em; font-weight: 800; letter-spacing: 0.06em; }
