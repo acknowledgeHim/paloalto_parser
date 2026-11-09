@@ -18,8 +18,8 @@ Each section on this page folds down to its heading — tap it to open or close.
 
 ## 🔤 Spelling
 
-Pick a grade (your own is outlined) and press **▶ Start 10 words**. 30 words per grade, from
-"cat" and "jump" up to "sesquipedalian"; a round picks 10 at random.
+Pick a grade (your own is outlined) and press **▶ Start 10 words**. About 200 words per grade, from
+"cat" and "jump" up to "sesquipedalian"; a round picks 10 at random. Each word is used in only one grade, the lowest it fits (lists in `server/src/services/spellingWords.ts` and `spellingMore*.ts`).
 
 - Each word is **said, used in a sentence, then said again**. Type it and press Enter (or ✓ Check)
   within **90 seconds** — the bar runs down and turns red for the last 15. Time's up = whatever's

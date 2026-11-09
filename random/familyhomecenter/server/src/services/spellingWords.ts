@@ -3,8 +3,14 @@
  * means. Sentences and meanings avoid giving the spelling away beyond the word itself. Grade levels
  * follow common US school spelling lists (sight words and short vowels early on, then blends,
  * vowel teams, prefixes/suffixes, and finally the long academic words of high school).
- * To add words: add a line to that grade. A round picks 10 at random.
+ * To add words: add a line to that grade (here or in spellingMore*.ts — about 200 a grade). A round
+ * picks 10 at random.
  */
+import { MORE_1, MORE_2, MORE_K } from './spellingMoreK2.js';
+import { MORE_3, MORE_4, MORE_5 } from './spellingMore35.js';
+import { MORE_6, MORE_7, MORE_8 } from './spellingMore68.js';
+import { MORE_10, MORE_11, MORE_12, MORE_9 } from './spellingMore912.js';
+
 export interface SpellingWord {
   word: string;
   sentence: string;
@@ -419,14 +425,41 @@ vicissitude|They survived every vicissitude.|a change of fortune
 xenophobia|The speech warned against xenophobia.|fear or dislike of foreigners`,
 ];
 
-export const WORDS: SpellingWord[][] = RAW.map((block) =>
+const parse = (block: string): SpellingWord[] =>
   block
     .trim()
     .split('\n')
+    .filter((line) => line.trim())
     .map((line) => {
       const [word, sentence, meaning] = line.split('|').map((x) => x.trim());
       return { word, sentence, meaning };
-    })
+    });
+
+/**
+ * Is it usable? One word (letters only), its sentence uses that exact word (🔍 Spot the
+ * misspellings misspells it there), and the meaning doesn't give it away.
+ */
+export function wordProblem(w: SpellingWord): string | null {
+  if (!w.word || !w.sentence || !w.meaning) return 'missing a part';
+  if (!/^[A-Za-z]+$/.test(w.word)) return 'not a single word';
+  const tokens = w.sentence.split(/\s+/).map((t) => /^[^A-Za-z]*([A-Za-z']+)[^A-Za-z]*$/.exec(t)?.[1]?.toLowerCase());
+  if (!tokens.includes(w.word.toLowerCase())) return 'sentence does not use the word';
+  if (new RegExp(`\\b${w.word}\\b`, 'i').test(w.meaning)) return 'meaning gives the word away';
+  return null;
+}
+
+const MORE = [MORE_K, MORE_1, MORE_2, MORE_3, MORE_4, MORE_5, MORE_6, MORE_7, MORE_8, MORE_9, MORE_10, MORE_11, MORE_12];
+
+// Each grade: its words, then the extra lists (spellingMore*.ts). A word is used once — in the
+// lowest grade it's in — and lines that don't pass wordProblem() are left out.
+const seenWords = new Set<string>();
+export const WORDS: SpellingWord[][] = RAW.map((block, g) =>
+  [...parse(block), ...parse(MORE[g] ?? '')].filter((w) => {
+    const k = w.word?.toLowerCase();
+    if (!k || seenWords.has(k) || wordProblem(w)) return false;
+    seenWords.add(k);
+    return true;
+  })
 );
 
 export const GRADE_COUNT = WORDS.length; // 13: K–12
