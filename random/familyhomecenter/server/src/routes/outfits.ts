@@ -3,7 +3,7 @@ import { db } from '../db.js';
 import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
 import { OUTFIT_ITEMS, OUTFIT_SLOTS, outfitItem, parseOutfit } from '../services/outfits.js';
 import type { FamilyMember } from '../types.js';
-import { addTokens } from '../services/tokens.js';
+import { addTokens, parentsDressFree } from '../services/tokens.js';
 
 /** 👕 Dress up: the shop, and each person's bought pieces and what they have on. */
 export const outfitsRouter = Router();
@@ -18,8 +18,9 @@ function closet(memberId: string) {
   const owned = (db.prepare('SELECT item_id FROM outfit_items WHERE family_member_id = ?').all(memberId) as Array<{ item_id: string }>).map(
     (r) => r.item_id
   );
-  // 👑 Parents dress up free: every piece is theirs to wear (nothing is bought or stored for it).
-  const free = member.is_parent === 1;
+  // 👑 Parents dress up free (unless turned off in Settings → 💎 Tokens): every piece is theirs to
+  // wear (nothing is bought or stored for it). Turned off, they buy pieces like everyone else.
+  const free = member.is_parent === 1 && parentsDressFree();
   return { owned: free ? OUTFIT_ITEMS.map((i) => i.id) : owned, bought: owned, free, outfit: parseOutfit(member.avatar_outfit), token_balance: member.token_balance, star_balance: member.star_balance };
 }
 

@@ -24,6 +24,11 @@ export function tokenBalance(memberId: string): number {
 }
 
 /** How many tokens one ⭐ star swaps for (0 = swapping is off). */
+/** 👑 Parents wear any 👕 Dress up piece free (default on). A parent turns it off in Settings → 💎 Tokens. */
+export function parentsDressFree(): boolean {
+  return getSetting('parents_dress_free', '1') !== '0';
+}
+
 export function tokensPerStar(): number {
   const v = Number(getSetting('tokens_per_star', '1'));
   return Number.isFinite(v) && v >= 0 ? Math.min(100, Math.round(v)) : 1;

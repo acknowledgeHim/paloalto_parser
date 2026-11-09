@@ -14,6 +14,7 @@ import { ConfirmButton } from '../components/ConfirmButton.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { PrizeBankSettings } from '../components/PrizeBankSettings.js';
 import { DeviceCertificateSettings } from '../components/DeviceCertificateSettings.js';
+import { TokenSettings } from '../components/TokenSettings.js';
 import { TypingSettings } from '../components/TypingSettings.js';
 
 interface AuthStatus {
@@ -254,6 +255,8 @@ export function SettingsPage() {
       )}
 
       <PrizeBankSettings />
+
+      <TokenSettings />
 
       <PrivacySettings />
 

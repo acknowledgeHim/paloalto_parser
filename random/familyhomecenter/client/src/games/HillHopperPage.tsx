@@ -13,6 +13,8 @@ interface Save {
   coins: number;
   upgrades: Upgrades;
   vehicle: string | null; // a Dress up vehicle id, or null for the buggy
+  /** Picked in the garage here. Not picked: the game drives whatever vehicle the avatar has on in Dress up. */
+  vehicle_picked?: boolean;
   controls: Controls;
   /** 🌍 worlds bought (Green Hills is always there), the one picked, and the best distance in each */
   worlds: string[];
@@ -60,6 +62,8 @@ export function HillHopperPage() {
   const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS, worlds: ['hills'], world: 'hills', bests: {}, obstacles: [] });
   const [listening, setListening] = useState<'gas' | 'brake' | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
+  /** What the avatar has on in 👕 Dress up (fresh from the server, not the profile loaded earlier). */
+  const [worn, setWorn] = useState<Partial<Record<string, string>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [last, setLast] = useState<{ r: RunResult; newBest: boolean } | null>(null);
@@ -70,11 +74,11 @@ export function HillHopperPage() {
       .get<PlayInfo>(`/games/${GAME}/play/${me.id}`)
       .then((i) => {
         setInfo(i);
-        const worn = outfitOf(me).vehicle ?? null;
         setSave({
           coins: i.save?.coins ?? 0,
           upgrades: { ...NO_UPGRADES, ...(i.save?.upgrades ?? {}) },
-          vehicle: i.save?.vehicle !== undefined ? i.save.vehicle : worn,
+          vehicle: i.save?.vehicle ?? null,
+          vehicle_picked: i.save?.vehicle_picked ?? false,
           controls: { ...DEFAULT_CONTROLS, ...(i.save?.controls ?? {}) },
           worlds: [...new Set(['hills', ...(i.save?.worlds ?? [])])],
           world: i.save?.world ?? 'hills',
@@ -84,17 +88,25 @@ export function HillHopperPage() {
         });
       })
       .catch((e) => setError((e as Error).message));
-    api.get<Closet>(`/outfits/${me.id}`).then((c) => setOwned(c.owned)).catch(() => setOwned([]));
+    api
+      .get<Closet>(`/outfits/${me.id}`)
+      .then((c) => {
+        setOwned(c.owned);
+        setWorn(c.outfit ?? {});
+      })
+      .catch(() => setOwned([]));
   };
   useEffect(load, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const vehicles = useMemo(() => (catalog?.items ?? []).filter((i) => i.slot === 'vehicle' && owned.includes(i.id)), [catalog, owned]);
-  const hat = useMemo(() => {
-    const id = me ? outfitOf(me).hat : undefined;
-    return catalog?.items.find((i) => i.id === id)?.emoji ?? null;
-  }, [catalog, me]);
+  const wearing = worn ?? (me ? outfitOf(me) : {});
+  const emojiOf = (id: string | undefined) => (id ? (catalog?.items.find((i) => i.id === id)?.emoji ?? null) : null);
+  const hat = emojiOf(wearing.hat);
+  const hand = emojiOf(wearing.hand);
   const world = worldOf(save.worlds.includes(save.world) ? save.world : 'hills');
-  const vehicleEmoji = catalog?.items.find((i) => i.id === save.vehicle && owned.includes(i.id))?.emoji ?? null;
+  // The ride: the one picked in the garage, or else the vehicle the avatar wears in Dress up.
+  const rideId = save.vehicle_picked ? save.vehicle : (wearing.vehicle ?? null);
+  const vehicleEmoji = catalog?.items.find((i) => i.id === rideId && (owned.includes(i.id) || i.id === wearing.vehicle))?.emoji ?? null;
 
   const store = async (next: Save, result?: RunResult) => {
     setSave(next);
@@ -152,7 +164,7 @@ export function HillHopperPage() {
   if (playing) {
     return (
       <HillHopperRun
-        driver={{ id: me.id, name: me.name, color: me.color, avatar: me.avatar ?? null, hat }}
+        driver={{ id: me.id, name: me.name, color: me.color, avatar: me.avatar ?? null, hat, hand }}
         vehicle={vehicleEmoji}
         upgrades={save.upgrades}
         world={world}
@@ -282,18 +294,18 @@ export function HillHopperPage() {
       <section className="panel">
         <h2>🚗 Your ride</h2>
         <div className="hill-garage__rides">
-          <button type="button" className={`hill-garage__ride${!vehicleEmoji ? ' is-on' : ''}`} onClick={() => void store({ ...save, vehicle: null })}>
+          <button type="button" className={`hill-garage__ride${!vehicleEmoji ? ' is-on' : ''}`} onClick={() => void store({ ...save, vehicle: null, vehicle_picked: true })}>
             <span>🛞</span>Buggy
           </button>
           {vehicles.map((v) => (
-            <button key={v.id} type="button" className={`hill-garage__ride${save.vehicle === v.id ? ' is-on' : ''}`} onClick={() => void store({ ...save, vehicle: v.id })}>
+            <button key={v.id} type="button" className={`hill-garage__ride${vehicleEmoji && rideId === v.id ? ' is-on' : ''}`} onClick={() => void store({ ...save, vehicle: v.id, vehicle_picked: true })}>
               <span>{v.emoji}</span>
               {v.name}
             </button>
           ))}
         </div>
         <p className="hint">
-          Rides you've bought in <Link to="/dress-up">👕 Dress up → 🚗 Vehicles</Link> show up here. They all drive the same — upgrades are what make it faster.
+          Rides you've bought in <Link to="/dress-up">👕 Dress up → 🚗 Vehicles</Link> show up here. Until you pick one here, you drive the one your avatar has on. They all drive the same — upgrades are what make it faster.
         </p>
       </section>
 

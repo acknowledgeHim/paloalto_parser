@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { isParentRequest, isSelfOrParent, sessionActor } from '../services/rewards.js';
-import { addTokens, tokensPerStar } from '../services/tokens.js';
+import { addTokens, parentsDressFree, tokensPerStar } from '../services/tokens.js';
 
 /** 💎 Tokens: balances, history, swapping ⭐ for 💎, and parents giving / taking. */
 export const tokensRouter = Router();
@@ -20,14 +20,19 @@ function wallet(memberId: string) {
   };
 }
 
-tokensRouter.get('/settings', (_req, res) => res.json({ tokens_per_star: tokensPerStar() }));
+const tokenSettings = () => ({ tokens_per_star: tokensPerStar(), parents_dress_free: parentsDressFree() });
+tokensRouter.get('/settings', (_req, res) => res.json(tokenSettings()));
 
-/** PUT /settings { tokens_per_star } — parents. 0 turns swapping off. */
+/** PUT /settings { tokens_per_star?, parents_dress_free? } — parents. 0 tokens per star turns swapping off. */
 tokensRouter.put('/settings', requireAdmin, (req, res) => {
-  const v = Math.round(Number(req.body?.tokens_per_star));
-  if (!Number.isFinite(v) || v < 0 || v > 100) return res.status(400).json({ error: 'Tokens per star: 0–100' });
-  setSetting('tokens_per_star', String(v));
-  res.json({ tokens_per_star: tokensPerStar() });
+  const b = req.body ?? {};
+  if (b.tokens_per_star !== undefined) {
+    const v = Math.round(Number(b.tokens_per_star));
+    if (!Number.isFinite(v) || v < 0 || v > 100) return res.status(400).json({ error: 'Tokens per star: 0–100' });
+    setSetting('tokens_per_star', String(v));
+  }
+  if (typeof b.parents_dress_free === 'boolean') setSetting('parents_dress_free', b.parents_dress_free ? '1' : '0');
+  res.json(tokenSettings());
 });
 
 tokensRouter.get('/:memberId', (req, res) => {

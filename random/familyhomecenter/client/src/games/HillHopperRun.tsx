@@ -23,6 +23,8 @@ export interface Driver {
   color: string;
   avatar: string | null;
   hat: string | null;
+  /** 🎈 what they hold (Dress up → In their hand), drawn beside the head */
+  hand?: string | null;
 }
 
 /** How gas and brake are worked: keys (each a KeyboardEvent.key, lower case) and the mouse. */
@@ -573,6 +575,13 @@ export function HillHopperRun({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(driver.hat, hx, hy - hr * 1.05);
+      }
+      if (driver.hand) {
+        ctx.fillStyle = '#000'; // opaque, so the emoji isn't see-through
+        ctx.font = `${Math.round(hr * 1.7)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(driver.hand, hx + hr * 1.7, hy - hr * 0.1);
       }
       ctx.restore();
 
