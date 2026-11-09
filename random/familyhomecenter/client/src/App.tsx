@@ -32,6 +32,7 @@ import { GamesPage } from './pages/GamesPage.js';
 import { HillHopperPage } from './games/HillHopperPage.js';
 import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { ResourceUsagePage } from './pages/ResourceUsagePage.js';
+import { MathPage } from './pages/MathPage.js';
 import { SpellingPage } from './pages/SpellingPage.js';
 import { GRAMMAR_GAME, SPELLCHECK_GAME, TapMistakesPage } from './pages/TapMistakesPage.js';
 import { LearningSettingsPage } from './pages/LearningSettingsPage.js';
@@ -155,6 +156,7 @@ export function App() {
           <Route path="/typing" element={<TypingPage />} />
           <Route path="/spelling" element={<SpellingPage />} />
           <Route path="/spelling/spot" element={<TapMistakesPage key="spellcheck" game={SPELLCHECK_GAME} />} />
+          <Route path="/math" element={<MathPage />} />
           <Route path="/grammar" element={<TapMistakesPage key="grammar" game={GRAMMAR_GAME} />} />
           <Route path="/learning/settings" element={<LearningSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

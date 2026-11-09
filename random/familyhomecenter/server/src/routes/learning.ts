@@ -7,21 +7,22 @@ import { isParentRequest, isSelfOrParent, sessionActor } from '../services/rewar
 import { speak, speechEngine } from '../services/speech.js';
 import type { GrammarItem } from '../services/grammarContent.js';
 import { GRAMMAR } from '../services/grammarGen.js';
+import { checkMath, MATH_COURSE, MATH_GRADE_TOPICS, mathRound, type MathProblem } from '../services/mathGen.js';
 import { makeSpellcheckItem } from '../services/spellcheckGen.js';
 import { GRADE_NAMES, WORDS } from '../services/spellingWords.js';
 import { addTokens } from '../services/tokens.js';
 import type { FamilyMember } from '../types.js';
 
 /**
- * 📚 Learning: 🔤 Spelling, 🔍 Spot the misspellings, 📝 Grammar (and more to come). Each kid has a school grade a parent sets;
+ * 📚 Learning: 🔤 Spelling, 🔍 Spot the misspellings, 📝 Grammar, ➗ Math. Each kid has a school grade a parent sets;
  * they can practise any grade, but only rounds at their grade or higher earn 💎 tokens. A round is
  * 10 random items, checked here (not in the browser), and pays by the parent's "% right → tokens"
  * levels — the lowest level is the pass mark — up to so many paying rounds a day.
  */
 export const learningRouter = Router();
 
-export const SUBJECTS = ['spelling', 'spellcheck', 'grammar'] as const;
-const SUBJECT_NAMES: Record<Subject, string> = { spelling: '🔤 Spelling', spellcheck: '🔍 Spot the misspellings', grammar: '📝 Grammar' };
+export const SUBJECTS = ['spelling', 'spellcheck', 'grammar', 'math'] as const;
+const SUBJECT_NAMES: Record<Subject, string> = { spelling: '🔤 Spelling', spellcheck: '🔍 Spot the misspellings', grammar: '📝 Grammar', math: '➗ Math' };
 export type Subject = (typeof SUBJECTS)[number];
 const ROUND_SIZE = 10;
 
@@ -152,6 +153,9 @@ interface Round {
   tap?: GrammarItem[];
   /** tap games: answers already checked one by one (they can't be changed after) */
   locked?: number[][];
+  /** ➗ math: the problems, and answers already checked one by one */
+  math?: MathProblem[];
+  lockedText?: string[];
 }
 const rounds = new Map<string, Round>();
 const sweep = () => {
@@ -243,13 +247,46 @@ function tapResult(it: GrammarItem, tapped: number[]) {
 }
 const cleanTaps = (a: unknown): number[] => (Array.isArray(a) ? a.map(Number).filter(Number.isInteger).slice(0, 200) : []);
 
+const mathResult = (p: MathProblem, given: string) => ({ q: p.q, given, ok: checkMath(p, given), right: p.show, hint: p.hint, topic: p.topic });
+
+/** POST /math/start { member_id, grade } — 10 problems at that grade (made fresh, mixed topics). */
+learningRouter.post('/math/start', (req, res) => {
+  const { member_id, grade, acting_member_id } = req.body ?? {};
+  const m = memberOf(String(member_id));
+  if (!m) return res.status(404).json({ error: 'not found' });
+  if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
+  const g = Math.round(Number(grade));
+  if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  sweep();
+  const math = mathRound(g, ROUND_SIZE);
+  const r: Round = { id: uuidv4(), member: m.id, subject: 'math', grade: g, started: Date.now(), answers: [], math };
+  rounds.set(r.id, r);
+  const why = noTokensWhy(m, 'math', g);
+  res.json({
+    round_id: r.id,
+    grade: g,
+    problems: math.map((p) => ({ q: p.q, topic: p.topic, note: p.note ?? null, choices: p.choices ?? null })),
+    tokens: why ? null : readRewards().math.tiers,
+    no_tokens_why: why,
+  });
+});
+
+/** GET /math/topics — what each grade covers. */
+learningRouter.get('/math/topics', (_req, res) => res.json({ course: MATH_COURSE, topics: MATH_GRADE_TOPICS }));
+
 /** POST /round/:id/check { index, tapped: number[] } — tap games: check one item (it's then final). */
 learningRouter.post('/round/:id/check', (req, res) => {
   const r = rounds.get(req.params.id);
-  if (!r?.tap) return res.status(404).json({ error: 'That round has expired — start a new one' });
+  if (!r?.tap && !r?.math) return res.status(404).json({ error: 'That round has expired — start a new one' });
   if (!isSelfOrParent(req, r.member, req.body?.acting_member_id)) return res.status(403).json({ error: "That's someone else's round" });
   const i = Math.round(Number(req.body?.index));
-  if (!(i >= 0 && i < r.tap.length)) return res.status(400).json({ error: 'No such item' });
+  if (r.math) {
+    if (!(i >= 0 && i < r.math.length)) return res.status(400).json({ error: 'No such problem' });
+    r.lockedText ??= [];
+    r.lockedText[i] ??= String(req.body?.answer ?? '').slice(0, 40);
+    return res.json(mathResult(r.math[i], r.lockedText[i]));
+  }
+  if (!r.tap || !(i >= 0 && i < r.tap.length)) return res.status(400).json({ error: 'No such item' });
   r.locked ??= [];
   r.locked[i] ??= tapResult(r.tap[i], cleanTaps(req.body?.tapped)).tapped;
   res.json(tapResult(r.tap[i], r.locked[i]));
@@ -268,7 +305,12 @@ learningRouter.post('/round/:id/finish', (req, res) => {
   rounds.delete(r.id); // each round counts once
   let items: unknown[];
   let correct: number;
-  if (r.tap) {
+  if (r.math) {
+    const given: unknown[] = Array.isArray(answers) ? answers : [];
+    const mathItems = r.math.map((p, i) => mathResult(p, r.lockedText?.[i] ?? String(given[i] ?? '').slice(0, 40)));
+    items = mathItems;
+    correct = mathItems.filter((x) => x.ok).length;
+  } else if (r.tap) {
     // Each answer: the word numbers tapped (ones already checked stay as they were). Right =
     // exactly the mistakes, no more, no less.
     const taps: unknown[] = Array.isArray(answers) ? answers : [];
@@ -281,7 +323,7 @@ learningRouter.post('/round/:id/finish', (req, res) => {
     items = spellItems;
     correct = spellItems.filter((x) => x.ok).length;
   }
-  const total = r.tap ? r.tap.length : r.answers.length;
+  const total = r.math ? r.math.length : r.tap ? r.tap.length : r.answers.length;
   const pct = Math.round((correct / total) * 100);
   const rw = readRewards()[r.subject];
   const why = noTokensWhy(m, r.subject, r.grade);

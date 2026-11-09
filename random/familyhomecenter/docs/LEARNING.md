@@ -74,6 +74,25 @@ covers a range of grades:
 To add a pattern, write a sentence with the mistake as `{wrong|right}` (`{word|}` means the word shouldn't
 be there), then `||` and a tip. Write it so every other word in it is correct.
 
+## ➗ Math
+
+10 problems a round, made fresh each time from problem types with random numbers. Every grade has
+thousands of different problems (more than 10,000 each when sampled).
+- K–2: counting, adding/taking away, place value, money
+- 3–5: times tables, division, fractions, decimals, area/volume
+- 6: Pre-Algebra (integers, one-step equations, percents, ratios, GCF/LCM)
+- 7: Algebra (two-step equations, slope, inequalities, systems)
+- 8: Algebra II (quadratics, logs, exponent rules, i, composing functions)
+- 9: Geometry (angles, Pythagorean theorem, circles, polygons, volume)
+- 10: Trigonometry (special angles, radians, SOH-CAH-TOA, laws of sines/cosines)
+- 11: Pre-Calculus (sequences/series, interest, matrices, vectors, combinations)
+- 12: Calculus (derivatives, limits, integrals, tangent lines, chain/product rule)
+
+Type a number. Fractions (3/4), mixed numbers (1 1/2) and decimals all count if they're equal.
+Answers that need rounding say so. Some problems are tap-a-choice instead (like sin 30°). Check shows
+the right answer and a tip, and that answer is then final. Problem types live in
+`server/src/services/mathGen.ts`.
+
 ## Data
 
 New tables only: `learning_grades` (each kid's grade) and `learning_results` (every round: grade,

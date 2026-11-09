@@ -10,6 +10,7 @@ export const SUBJECT_LABELS: Record<string, string> = {
   spelling: '🔤 Spelling',
   spellcheck: '🔍 Spot the misspellings',
   grammar: '📝 Grammar',
+  math: '➗ Math',
 };
 
 /**

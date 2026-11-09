@@ -3207,6 +3207,10 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .spelling-round__shown { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px; border-radius: 12px; }
 .spelling-round__shown.is-ok { background: rgba(67,160,71,0.15); }
 .spelling-round__shown.is-wrong { background: rgba(229,57,53,0.12); }
+.math-q { font-size: 1.6em; font-weight: 700; white-space: pre-line; line-height: 1.4; word-break: break-word; }
+.math-q--small { font-size: 1em; font-weight: 600; }
+.math-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.math-choices button { font-size: 1.3em; min-width: 3.5em; }
 .tap-round { display: flex; flex-direction: column; gap: 12px; }
 .tap-round__ask { margin: 0; font-size: 1.1em; }
 .tap-round__text { font-size: 1.35em; line-height: 2; margin: 0; }

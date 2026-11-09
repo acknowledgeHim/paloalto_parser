@@ -111,6 +111,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { label: '🔤 Spelling', path: '/spelling' },
         { label: '🔍 Spot the misspellings', path: '/spelling/spot' },
         { label: '📝 Grammar', path: '/grammar' },
+        { label: '➗ Math', path: '/math' },
         { label: '⚙️ Grades & tokens', path: '/learning/settings', parent: true },
       ],
     },
