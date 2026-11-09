@@ -1364,6 +1364,19 @@ db.exec(`
   );
 `);
 
+// 🎟️ Games a parent gave a kid a number of plays of (routes/games.ts) — on top of unlocking with
+// stars. New table; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_passes (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    plays_left INTEGER NOT NULL DEFAULT 0,
+    given_by TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id)
+  );
+`);
+
 // 🔄 Movies turned the right way up (routes/movieLibrary.ts): only how the browser shows them —
 // the video files on the share are never changed. New table; no existing data changes.
 db.exec(`

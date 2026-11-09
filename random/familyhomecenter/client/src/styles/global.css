@@ -3135,3 +3135,9 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
   background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.9em; line-height: 1;
 }
 .movie-card__dismiss:hover { background: rgba(0, 0, 0, 0.85); }
+.games-page__kid { flex-direction: column; align-items: stretch; }
+.games-page__kid-game { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 36px; }
+.games-page__plays { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.games-page__plays input { width: 4.5em; }
+.hill-garage__go-wrap { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hill-garage__go-wrap .hill-garage__go { margin-left: 0; }

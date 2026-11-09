@@ -5,6 +5,7 @@ import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, type Upgrades } from './hillPhysics.js';
+import { startPlay } from './plays.js';
 import { DEFAULT_CONTROLS, HillHopperRun, keyName, type Controls, type RunResult } from './HillHopperRun.js';
 
 interface Save {
@@ -14,6 +15,8 @@ interface Save {
   controls: Controls;
 }
 interface PlayInfo {
+  owned: boolean;
+  plays_left: number | null;
   save: Partial<Save> | null;
   best: number | null;
   top: Array<{ member_id: string; score: number }>;
@@ -181,9 +184,31 @@ export function HillHopperPage() {
             🪙 {save.coins} coins · Best {info.best ?? 0} m
           </div>
         </div>
-        <button type="button" className="hill-garage__go" onClick={() => { setLast(null); setPlaying(true); }}>
-          ▶ Drive!
-        </button>
+        <div className="hill-garage__go-wrap">
+          <button
+            type="button"
+            className="hill-garage__go"
+            disabled={!info.owned && !info.plays_left}
+            onClick={async () => {
+              setError(null);
+              try {
+                const left = await startPlay(GAME, me.id); // 🎟️ uses a play, if it's plays a parent gave
+                setInfo((i) => (i ? { ...i, plays_left: left } : i));
+                setLast(null);
+                setPlaying(true);
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }}
+          >
+            ▶ Drive!
+          </button>
+          {!info.owned && (
+            <div className="hint">
+              {info.plays_left ? `🎟️ ${info.plays_left} play${info.plays_left === 1 ? '' : 's'} left` : '🎟️ No plays left — unlock it in 🎮 Games, or ask a parent for more'}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="panel">

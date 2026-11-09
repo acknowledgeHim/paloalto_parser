@@ -15,12 +15,21 @@ const free = (m: FamilyMember) => m.is_parent === 1;
 const best = (memberId: string, gameId: string) =>
   (db.prepare('SELECT MAX(score) AS s FROM game_scores WHERE family_member_id = ? AND game_id = ?').get(memberId, gameId) as { s: number | null }).s;
 
+/** 🎟️ Plays a parent gave them: game id → how many are left (a row with 0 = had some, all used). */
+const passesFor = (memberId: string) =>
+  new Map((db.prepare('SELECT game_id, plays_left FROM game_passes WHERE family_member_id = ?').all(memberId) as Array<{ game_id: string; plays_left: number }>).map((r) => [r.game_id, r.plays_left]));
+
 function shelf(m: FamilyMember) {
   const mine = unlockedFor(m);
+  const passes = passesFor(m.id);
   return {
     star_balance: m.star_balance,
     plays_free: free(m),
-    games: GAMES.map((g) => ({ ...g, unlocked: free(m) || mine.has(g.id), best: best(m.id, g.id) })),
+    games: GAMES.map((g) => {
+      const owned = free(m) || mine.has(g.id);
+      const plays = passes.get(g.id) ?? null;
+      return { ...g, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id) };
+    }),
   };
 }
 
@@ -62,16 +71,58 @@ gamesRouter.post('/:memberId/refund', (req, res) => {
   res.json(shelf(memberOf(memberId)!));
 });
 
+/** Can they open the game (garage, saving a run)? Bought, free, or ever given plays (even if used up — so a last run still saves). */
 function mayPlay(m: FamilyMember, gameId: string) {
-  return free(m) || unlockedFor(m).has(gameId);
+  return free(m) || unlockedFor(m).has(gameId) || passesFor(m.id).has(gameId);
 }
+
+/** POST /:memberId/passes { game_id, plays, mode: 'add' | 'set', acting_member_id } (parents) — 🎟️ give a kid a number of plays. */
+gamesRouter.post('/:memberId/passes', (req, res) => {
+  const { memberId } = req.params;
+  const { game_id, plays, mode, acting_member_id } = req.body ?? {};
+  if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
+  const g = gameOf(String(game_id));
+  const m = memberOf(memberId);
+  if (!g || !m) return res.status(404).json({ error: 'not found' });
+  const n = Math.round(Number(plays));
+  if (!Number.isFinite(n) || n < 0 || n > 1000) return res.status(400).json({ error: 'How many plays? (0–1000)' });
+  const now = new Date().toISOString();
+  const by = typeof acting_member_id === 'string' ? acting_member_id : null;
+  if (mode === 'set') {
+    db.prepare(
+      `INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`
+    ).run(m.id, g.id, n, by, now);
+  } else {
+    db.prepare(
+      `INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = plays_left + excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`
+    ).run(m.id, g.id, n, by, now);
+  }
+  res.json(shelf(m));
+});
+
+/** POST /:gameId/play/:memberId/start { acting_member_id } — a run is starting: uses up one 🎟️ play unless the game is theirs. */
+gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
+  const { gameId, memberId } = req.params;
+  if (!isSelfOrParent(req, memberId, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can play as them' });
+  const g = gameOf(gameId);
+  const m = memberOf(memberId);
+  if (!g || !m) return res.status(404).json({ error: 'not found' });
+  if (free(m) || unlockedFor(m).has(g.id)) return res.json({ ok: true, plays_left: null });
+  const r = db
+    .prepare('UPDATE game_passes SET plays_left = plays_left - 1, updated_at = ? WHERE family_member_id = ? AND game_id = ? AND plays_left > 0')
+    .run(new Date().toISOString(), m.id, g.id);
+  if (r.changes === 0) return res.status(403).json({ error: `No plays left — unlock ${g.name} for ${g.stars} ⭐, or ask a parent for more plays` });
+  res.json({ ok: true, plays_left: passesFor(m.id).get(g.id) ?? 0 });
+});
 
 /** GET /:gameId/play/:memberId — their saved progress, best score and the family's top runs. */
 gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
   const g = gameOf(req.params.gameId);
   const m = memberOf(req.params.memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
-  if (!mayPlay(m, g.id)) return res.status(403).json({ error: `Unlock ${g.name} first (${g.stars} ⭐)` });
+  if (!mayPlay(m, g.id)) return res.status(403).json({ error: `Unlock ${g.name} first (${g.stars} ⭐), or ask a parent for some plays` });
   const save = db.prepare('SELECT data FROM game_saves WHERE family_member_id = ? AND game_id = ?').get(m.id, g.id) as { data: string } | undefined;
   const top = db
     .prepare(
@@ -85,7 +136,8 @@ gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
   } catch {
     data = null;
   }
-  res.json({ game: g, save: data, best: best(m.id, g.id), top });
+  const owned = free(m) || unlockedFor(m).has(g.id);
+  res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0 });
 });
 
 /** POST /:gameId/play/:memberId/result { score, detail, save, acting_member_id } — a finished run, and progress to keep. */

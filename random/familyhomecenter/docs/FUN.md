@@ -192,6 +192,9 @@ played as much as you like.
 
 - **Parents play free.** In **Kids' games** a parent can unlock a game for a kid (it uses the kid's
   stars) or **↶ refund** it (stars back, game locked again; scores and progress are kept).
+- **🎟️ Plays:** a parent can give a kid a number of plays of a game instead (Kids' games → give N
+  plays). Each go uses one. When they run out, the game locks again, unless the kid unlocks it for
+  good with stars. Plays add up, and **take away** clears them. Kept in the new `game_passes` table.
 - Kids' access has a **Games** switch (Settings → Kids' access). A kid whose sections were already
   picked by hand needs it ticked.
 - Kept per person, in new tables (`game_unlocks`, `game_scores`, `game_saves`; no existing data
