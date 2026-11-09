@@ -1,3 +1,4 @@
+import './threadpool.js'; // first: more file-reading threads (see threadpool.ts)
 import http from 'node:http';
 import express from 'express';
 import cors from 'cors';

@@ -135,3 +135,33 @@ saved for everyone, and the poster in the list turns too.
   browser's own controls would turn sideways with the picture. Tap the picture to pause; double-tap
   for full screen.
 - Turn it back to upright (↺/↻ round to 0°) for the browser's own controls again.
+
+## 🐢 Slow or freezing while people watch
+
+- **More file-reading threads.** Node reads files on a small pool of helper threads (4 by default). A
+  movie streamed from the share keeps several of them waiting on the NAS, and two viewers could use
+  them all up. Then everything else that reads files (pages, thumbnails, photos) had to wait, which
+  looked like the Pi froze. It's now 32 (`UV_THREADPOOL_SIZE`, set in `server/src/threadpool.ts`
+  and in `scripts/familyhomecenter.service`).
+- **Bigger reads.** Movies are read 1 MB at a time (the share's own read size), not 64 KB.
+- **Background work steps aside while anyone's watching.** The .mpg → .mp4 copier pauses, and
+  reading lengths and making posters wait (posters go one at a time). "Watching" means a movie was
+  sent in the last 30 seconds.
+- **🩺 Pi health** (Settings → 🎬 Movies) shows who's watching, CPU load, temperature, memory, the
+  network (link speed, and what's going in and out now), and whether the Pi is slowing itself down
+  because it's too hot or short of power. It warns about the usual causes: a 100 Mbit or Wi-Fi link
+  (every movie crosses it twice, NAS → Pi → viewer), heat, or a weak power supply.
+
+## 📱 Plays on a computer, black on a phone
+
+Phones decode video in hardware, which handles less than a computer's browser. The sound may
+play over a black picture. In the player, **ℹ️ Video details** shows what's inside the file and
+flags what phones often can't play:
+
+- 10-bit or 4:2:2 picture
+- interlaced video
+- very high H.264 levels or bitrates
+- HEVC (and HEVC tagged `hev1`)
+- AC-3 / DTS sound
+
+If a phone plays a video with no picture, the player says so after a few seconds.

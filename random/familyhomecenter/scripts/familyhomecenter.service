@@ -11,6 +11,8 @@ EnvironmentFile=/home/pi/paloalto_parser/random/familyhomecenter/.env
 # Belt and braces: the app also sets this itself before loading the face recognition library —
 # keeps ONNX Runtime from trying to send Microsoft usage telemetry.
 Environment=ORT_DISABLE_TELEMETRY=1
+# More file-reading threads: movies streamed from the share can otherwise tie up all 4 and freeze the app.
+Environment=UV_THREADPOOL_SIZE=32
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5

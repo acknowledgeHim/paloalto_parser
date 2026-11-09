@@ -1,12 +1,16 @@
 import os from 'node:os';
 import path from 'node:path';
-import { Router } from 'express';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import { pipeline } from 'node:stream/promises';
+import { Router, type Request, type Response } from 'express';
 import { setSetting } from '../db.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { folderProblem, resolveShare } from '../services/sharePaths.js';
+import { piHealth } from '../services/piHealth.js';
 import { haveFfmpeg, MOV_EXTS, mp4Stream, videosLocation } from '../services/videoFiling.js';
-import { copyStatus, findMovie, setRotation, libraryDir, libraryLocation, listLibrary, mp4CopiesOn, posterFor } from '../services/movieLibrary.js';
+import { videoDetails, copyStatus, findMovie, setRotation, streamStarted, watchingNow, libraryDir, libraryLocation, listLibrary, mp4CopiesOn, posterFor } from '../services/movieLibrary.js';
 
 // 🎬 Movies section — every video on the movies share, to search, sort and watch
 // (services/movieLibrary.ts). Read-only: nothing on the share is ever changed or removed.
@@ -44,6 +48,14 @@ movieLibraryRouter.get(
       server_user: user,
       mp4_copies: { on: mp4CopiesOn(), ...copyStatus },
     });
+  })
+);
+
+/** GET /health — 🩺 how the Pi is doing, and who's watching (Settings → 🎬 Movies). */
+movieLibraryRouter.get(
+  '/health',
+  asyncHandler(async (_req, res) => {
+    res.json({ ...(await piHealth()), watching: watchingNow(), copy_paused: copyStatus.paused });
   })
 );
 
@@ -91,6 +103,49 @@ movieLibraryRouter.get(
 );
 
 /**
+ * Sends a video file with Range support (so it can be skipped through), reading 1 MB at a time —
+ * the share's own read size — instead of Express's 64 KB, so far fewer trips to the NAS.
+ */
+async function sendVideo(req: Request, res: Response, abs: string): Promise<void> {
+  const st = await fsp.stat(abs).catch(() => null);
+  if (!st?.isFile()) {
+    res.status(404).end();
+    return;
+  }
+  const size = st.size;
+  let start = 0;
+  let end = size - 1;
+  const range = req.headers.range;
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Last-Modified', st.mtime.toUTCString());
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    if (m && (m[1] || m[2])) {
+      if (m[1]) {
+        start = Number(m[1]);
+        end = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+      } else {
+        start = Math.max(0, size - Number(m[2])); // the last N bytes
+      }
+    }
+    if (!m || start > end || start >= size) {
+      res.status(416).setHeader('Content-Range', `bytes */${size}`).end();
+      return;
+    }
+    res.status(206).setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+  }
+  res.setHeader('Content-Length', end - start + 1);
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  const stream = fs.createReadStream(abs, { start, end, highWaterMark: 1024 * 1024 });
+  await pipeline(stream, res).catch(() => {
+    /* the viewer skipped ahead or closed it */
+  });
+}
+
+/**
  * The video itself, with Range support so it can be skipped through (sendFile handles Range).
  * ?original=1 — the .mpg an .mp4 copy was made from. ?download=1 — as a download.
  */
@@ -111,9 +166,23 @@ movieLibraryRouter.get(
     const download = req.query.download === '1';
     // A .mov is an MP4-style file: saying so lets Firefox / Chrome try it (they refuse video/quicktime).
     const type = !download && MOV_EXTS.has(ext) ? 'video/mp4' : TYPES[ext];
-    if (type) res.type(type);
+    res.type(type ?? ext); // by extension (video/mp4, video/webm…) when not set above
     if (download) res.attachment(file);
-    res.sendFile(abs, { dotfiles: 'allow', acceptRanges: true });
+    // Who's watching (so background work steps aside), and 1 MB reads — the share's own read size,
+    // so far fewer trips to the NAS than the default 64 KB.
+    const done = streamStarted(`${req.ip}|${found.movie.id}`, found.movie.title);
+    res.on('close', done);
+    await sendVideo(req, res, abs);
+  })
+);
+
+/** GET /:id/info — ℹ️ what's inside the video, and what phones may not play (the player's "Video details"). */
+movieLibraryRouter.get(
+  '/:id/info',
+  asyncHandler(async (req, res) => {
+    const found = await findMovie(req.params.id);
+    if (!found) return res.status(404).json({ error: 'not found' });
+    res.json(await videoDetails(found.abs).catch((e) => ({ summary: `Couldn't read it: ${(e as Error).message}`, phone_problems: [] })));
   })
 );
 

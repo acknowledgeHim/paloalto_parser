@@ -209,6 +209,39 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<string> {
   });
 }
 
+/**
+ * 🍿 Who's watching right now. A browser fetches a video in many short pieces, so "watching" means
+ * a piece was sent in the last 30 s (per person + movie). While anyone is, background work on the
+ * share (the .mpg → .mp4 copier, reading lengths, posters) steps aside so the movie and the rest of
+ * the app stay smooth.
+ */
+const viewers = new Map<string, { title: string; at: number; open: number }>();
+const WATCH_WINDOW = 30_000;
+export function streamStarted(who: string, title: string): () => void {
+  const v = viewers.get(who) ?? { title, at: 0, open: 0 };
+  v.title = title;
+  v.at = Date.now();
+  v.open++;
+  viewers.set(who, v);
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    v.open--;
+    v.at = Date.now();
+  };
+}
+export function watchingNow(): Array<{ title: string; open: number }> {
+  const now = Date.now();
+  for (const [k, v] of viewers) if (v.open <= 0 && now - v.at > WATCH_WINDOW) viewers.delete(k);
+  return [...viewers.values()].map((v) => ({ title: v.title, open: v.open }));
+}
+export const someoneWatching = () => watchingNow().length > 0;
+/** Wait until nobody's watching (checked every 5 s). */
+async function whenIdle(): Promise<void> {
+  while (someoneWatching()) await new Promise((r) => setTimeout(r, 5000));
+}
+
 let probing = false;
 /** Length / picture size for files not read yet — one at a time, in the background. */
 async function probeMissing(dir: string, files: Array<{ rel: string; size: number; mtimeMs: number }>) {
@@ -228,6 +261,7 @@ async function probeMissing(dir: string, files: Array<{ rel: string; size: numbe
     );
     let done = 0;
     for (const f of todo) {
+      await whenIdle();
       const row = { rel_path: f.rel, size: f.size, mtime_ms: Math.round(f.mtimeMs), duration: null as number | null, width: null as number | null, height: null as number | null, video_codec: null as string | null, recorded_at: null as string | null, probed_at: new Date().toISOString(), error: null as string | null };
       try {
         const j = JSON.parse(await run(ffprobePath(), ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', path.join(dir, f.rel)], 60_000));
@@ -271,6 +305,52 @@ export function setRotation(id: string, degrees: number, by: string | null): Lib
   return m;
 }
 
+/**
+ * ℹ️ What's inside one video — the picture's codec, profile, bit depth, interlacing, size — and
+ * anything about it that phones often can't show (they decode in hardware, which handles less
+ * than a computer's browser: a phone can play the sound but show a black picture).
+ */
+export async function videoDetails(abs: string): Promise<{ summary: string; phone_problems: string[] }> {
+  const j = JSON.parse(await run(ffprobePath(), ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', abs], 60_000));
+  type St = { codec_type?: string; codec_name?: string; codec_tag_string?: string; profile?: string; level?: number; pix_fmt?: string; width?: number; height?: number; field_order?: string; bit_rate?: string; avg_frame_rate?: string };
+  const streams = (j.streams ?? []) as St[];
+  const v = streams.find((x) => x.codec_type === 'video');
+  const a = streams.filter((x) => x.codec_type === 'audio');
+  const rate = (r?: string) => {
+    const [n, d] = (r ?? '').split('/').map(Number);
+    return n && d ? Math.round((n / d) * 100) / 100 : null;
+  };
+  const kbps = Math.round(Number(v?.bit_rate ?? j.format?.bit_rate ?? 0) / 1000);
+  const problems: string[] = [];
+  if (v) {
+    const c = v.codec_name ?? '';
+    const pf = v.pix_fmt ?? '';
+    if (/10|12/.test(pf)) problems.push(`${/10/.test(pf) ? '10' : '12'}-bit picture (${pf}) — most phones only play 8-bit ${c === 'hevc' ? 'HEVC/' : ''}H.264`);
+    if (/422|444/.test(pf)) problems.push(`${/422/.test(pf) ? '4:2:2' : '4:4:4'} colour (${pf}) — phones only play 4:2:0`);
+    if (v.field_order && !['progressive', 'unknown'].includes(v.field_order)) problems.push(`interlaced picture (${v.field_order}) — phones often show it black or broken`);
+    if (c === 'h264' && (v.level ?? 0) > 51) problems.push(`H.264 level ${(v.level ?? 0) / 10} — higher than most phones handle (5.1)`);
+    if ((v.width ?? 0) > 3840 || (v.height ?? 0) > 2160) problems.push(`very large picture (${v.width}×${v.height})`);
+    if (c === 'hevc') problems.push(`HEVC${v.codec_tag_string === 'hev1' ? ' (tagged hev1, which Android/Chrome often refuse — hvc1 is the one they play)' : ''} — only plays on phones with an HEVC decoder`);
+    if (['mpeg4', 'msmpeg4v3', 'mpeg2video', 'mpeg1video', 'vc1', 'wmv3'].includes(c)) problems.push(`${c} video — browsers don't play it`);
+    if (kbps > 40000) problems.push(`a very high bitrate (${Math.round(kbps / 1000)} Mbit/s)`);
+  }
+  for (const x of a) if (['ac3', 'eac3', 'dts', 'truehd', 'pcm_s16le', 'pcm_s24le'].includes(x.codec_name ?? '')) problems.push(`${x.codec_name} sound — many phones play the picture silently or not at all`);
+  const summary = v
+    ? [
+        `${v.codec_name}${v.codec_tag_string && !/^\[/.test(v.codec_tag_string) ? ` (${v.codec_tag_string})` : ''}${v.profile ? ` ${v.profile}` : ''}${v.level ? ` level ${v.codec_name === 'h264' ? v.level / 10 : v.level}` : ''}`,
+        `${v.width}×${v.height}`,
+        v.pix_fmt,
+        v.field_order && v.field_order !== 'unknown' ? v.field_order : null,
+        rate(v.avg_frame_rate) ? `${rate(v.avg_frame_rate)} fps` : null,
+        kbps ? `${(kbps / 1000).toFixed(1)} Mbit/s` : null,
+        a.length ? `sound: ${a.map((x) => x.codec_name).join(', ')}` : 'no sound',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : 'no picture track';
+  return { summary, phone_problems: problems };
+}
+
 /** Put newly read lengths into the cached list without walking the share again. */
 function applyInfo() {
   if (!cache) return;
@@ -303,8 +383,8 @@ export async function posterFor(id: string): Promise<string | null> {
       (async () => {
         const found = await findMovie(id);
         if (!found) return null;
-        // Two at a time, so a page of posters doesn't swamp a Pi.
-        if (posterRunning >= 2) await new Promise<void>((r) => posterQueue.push(r));
+        // Two at a time, so a page of posters doesn't swamp a Pi — one while someone's watching a movie.
+        while (posterRunning >= (someoneWatching() ? 1 : 2)) await new Promise<void>((r) => posterQueue.push(r));
         posterRunning++;
         try {
           await fs.mkdir(postersDir, { recursive: true });
@@ -343,8 +423,9 @@ export const COPY_EXTS = new Set(['.mpg', '.mpeg']);
 const mp4Of = (rel: string) => rel.slice(0, rel.length - path.extname(rel).length) + '.mp4';
 export const mp4CopiesOn = () => getSetting('movie_mp4_copies') !== 'off';
 
-export const copyStatus: { running: string | null; percent: number | null; waiting: number; made: number; failed: Array<{ file: string; error: string }> } = {
+export const copyStatus: { running: string | null; percent: number | null; paused: boolean; waiting: number; made: number; failed: Array<{ file: string; error: string }> } = {
   running: null,
+  paused: false,
   percent: null,
   waiting: 0,
   made: 0,
@@ -365,6 +446,7 @@ async function makeMp4Copies(dir: string, files: Array<{ rel: string; size: numb
       const src = path.join(dir, f.rel);
       const target = path.join(dir, mp4Of(f.rel));
       const part = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.part`);
+      await whenIdle();
       copyStatus.running = f.rel;
       copyStatus.percent = null;
       try {
@@ -377,7 +459,7 @@ async function makeMp4Copies(dir: string, files: Array<{ rel: string; size: numb
           '-nostdin', '-y', '-v', 'error', '-progress', 'pipe:1', '-i', src,
           '-map', '0:v:0', '-map', '0:a?',
           '-vf', 'yadif=deint=interlaced',
-          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-threads', '2',
           '-c:a', 'aac', '-b:a', '192k',
           '-map_metadata', '0', '-map_chapters', '0',
           '-movflags', '+faststart+use_metadata_tags',
@@ -387,6 +469,24 @@ async function makeMp4Copies(dir: string, files: Array<{ rel: string; size: numb
         await new Promise<void>((resolve, reject) => {
           const proc = nice ? spawn('/usr/bin/nice', ['-n', '19', config.movies.ffmpegPath, ...args]) : spawn(config.movies.ffmpegPath, args);
           let err = '';
+          // Someone started watching: pause the copy (SIGSTOP) until they're done, then carry on.
+          let paused = false;
+          const pauser = setInterval(() => {
+            const w = someoneWatching();
+            if (w !== paused && proc.pid) {
+              try {
+                process.kill(proc.pid, w ? 'SIGSTOP' : 'SIGCONT');
+                paused = w;
+                copyStatus.paused = w;
+              } catch {
+                /* already finished */
+              }
+            }
+          }, 2000);
+          proc.on('close', () => {
+            clearInterval(pauser);
+            copyStatus.paused = false;
+          });
           proc.stdout.on('data', (c) => {
             const m = [...c.toString().matchAll(/out_time_us=(\d+)/g)].pop();
             if (m && dur) copyStatus.percent = Math.min(99, Math.round(Number(m[1]) / 1e6 / dur * 100));

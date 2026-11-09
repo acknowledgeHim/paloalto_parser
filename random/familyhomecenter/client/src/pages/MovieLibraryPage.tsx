@@ -359,6 +359,17 @@ function Player({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [rotErr, setRotErr] = useState<string | null>(null);
+  // ℹ️ What's inside the video, and whether this device seems to get no picture.
+  const [details, setDetails] = useState<{ summary: string; phone_problems: string[] } | null>(null);
+  const [noPicture, setNoPicture] = useState(false);
+  useEffect(() => {
+    api.get<{ summary: string; phone_problems: string[] }>(`/movie-library/${m.id}/info`).then(setDetails).catch(() => setDetails(null));
+  }, [m.id]);
+  const checkPicture = (v: HTMLVideoElement) =>
+    setTimeout(() => {
+      // Playing for a few seconds but no picture size: the device's decoder isn't showing it.
+      if (!v.paused && v.currentTime > 1 && (v.videoWidth === 0 || v.videoHeight === 0)) setNoPicture(true);
+    }, 4000);
   const rotate = (by: number) => {
     const degrees = (((m.rotation + by) % 360) + 360) % 360;
     onRotated(degrees);
@@ -428,10 +439,17 @@ function Player({
               }
             }}
             onPause={save}
+            onPlaying={(e) => checkPicture(e.currentTarget)}
             onEnded={() => onPlace(null)}
             onError={(e) => setFailed(mediaProblem(e.currentTarget))}
           />
           </Stage>
+        )}
+        {noPicture && (
+          <p className="settings-login__error">
+            📵 No picture is coming through on this device{details?.phone_problems.length ? ` — probably: ${details.phone_problems.join('; ')}` : ''}. Download it and play
+            it in VLC, or watch it on a computer.
+          </p>
         )}
         <p className="hint">
           {[fmtLength(m.duration), quality(m), fmtSize(m.size), m.recorded_at ? `recorded ${new Date(m.recorded_at).toLocaleDateString()}` : null].filter(Boolean).join(' · ')}
@@ -441,6 +459,21 @@ function Player({
           {/\.(mov|qt)$/i.test(m.file) && <> · <a href={`/api/movie-library/${m.id}/mp4`}>⬇ Download as .mp4</a></>}
           {m.original_rel && <> · <a href={`${src}?original=1&download=1`}>⬇ Original ({m.original_rel.split('.').pop()?.toUpperCase()})</a></>}
         </p>
+        {details && (
+          <details className="hint">
+            <summary>
+              ℹ️ Video details{details.phone_problems.length ? ' · ⚠️ may not play on phones' : ''}
+            </summary>
+            <code>{details.summary}</code>
+            {details.phone_problems.length > 0 && (
+              <ul>
+                {details.phone_problems.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+          </details>
+        )}
       </div>
     </div>
   );

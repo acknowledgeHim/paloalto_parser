@@ -8,8 +8,76 @@ interface Folder {
   via: string | null;
   problem: string | null;
 }
+interface Health {
+  cpus: number;
+  load: number[];
+  temp_c: number | null;
+  throttled: { now: string[]; since_boot: string[] } | null;
+  mem_total_mb: number;
+  mem_available_mb: number;
+  net: { iface: string; link_mbit: number | null; rx_mbit: number; tx_mbit: number } | null;
+  warnings: string[];
+  watching: Array<{ title: string; open: number }>;
+  copy_paused: boolean;
+}
+
+/** 🩺 How the Pi is doing, every few seconds while it's open — for "it freezes when two of us watch". */
+function PiHealth() {
+  const [open, setOpen] = useState(false);
+  const [h, setH] = useState<Health | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    const get = () =>
+      api
+        .get<Health>('/movie-library/health')
+        .then((x) => live && (setH(x), setErr(null)))
+        .catch((e) => live && setErr((e as Error).message));
+    void get();
+    const t = setInterval(get, 5000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [open]);
+  return (
+    <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>🩺 Pi health (if it's slow or freezes while people watch)</summary>
+      {err && <div className="settings-login__error">{err}</div>}
+      {!h ? (
+        <p className="hint">Looking…</p>
+      ) : (
+        <>
+          <ul className="hint">
+            <li>
+              🍿 Watching now: {h.watching.length ? h.watching.map((w) => w.title).join(', ') : 'nobody'}
+              {h.copy_paused ? ' · the .mp4 copier is paused until they finish' : ''}
+            </li>
+            <li>
+              🧠 CPU load {h.load[0]} (on {h.cpus} cores — up to {h.cpus} is fine){h.temp_c != null ? ` · 🌡️ ${h.temp_c} °C` : ''}
+            </li>
+            <li>💾 Memory: {h.mem_available_mb} MB free of {h.mem_total_mb} MB</li>
+            {h.net && (
+              <li>
+                🌐 Network ({h.net.iface}{h.net.link_mbit ? `, ${h.net.link_mbit} Mbit/s link` : ''}): in {h.net.rx_mbit} Mbit/s · out {h.net.tx_mbit} Mbit/s
+              </li>
+            )}
+            {h.throttled && <li>⚡ Power / heat: {h.throttled.now.length ? h.throttled.now.join(', ') : 'OK'}{h.throttled.since_boot.length && !h.throttled.now.length ? ` (earlier: ${h.throttled.since_boot.join(', ')})` : ''}</li>}
+          </ul>
+          {h.warnings.map((w) => (
+            <div key={w} className="settings-login__error">⚠️ {w}</div>
+          ))}
+          {h.warnings.length === 0 && <p className="hint">✅ Nothing looks wrong right now.</p>}
+        </>
+      )}
+    </details>
+  );
+}
+
 interface Copies {
   on: boolean;
+  paused?: boolean;
   running: string | null;
   percent: number | null;
   waiting: number;
@@ -120,7 +188,7 @@ export function MovieSettings() {
             <p className="hint">
               {info.mp4_copies.running ? (
                 <>
-                  ⏳ Copying <code>{info.mp4_copies.running}</code>
+                  {info.mp4_copies.paused ? '⏸️ Paused while someone watches —' : '⏳ Copying'} <code>{info.mp4_copies.running}</code>
                   {info.mp4_copies.percent != null ? ` — ${info.mp4_copies.percent}%` : ''}
                   {info.mp4_copies.waiting > 1 ? ` · ${info.mp4_copies.waiting - 1} more waiting` : ''}
                 </>
@@ -164,6 +232,8 @@ export function MovieSettings() {
               Videos wait in the Inbox until ffmpeg is installed on the Family Home Center: <code>sudo apt install -y ffmpeg</code>
             </div>
           )}
+
+          <PiHealth />
 
           <div className="task-form__row">
             <button type="button" className="secondary" disabled={busy} onClick={() => void load()}>
