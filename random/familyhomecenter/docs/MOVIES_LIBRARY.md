@@ -147,7 +147,7 @@ saved for everyone, and the poster in the list turns too.
 - **Background work steps aside while anyone's watching.** The .mpg → .mp4 copier pauses, and
   reading lengths and making posters wait (posters go one at a time). "Watching" means a movie was
   sent in the last 30 seconds.
-- **🩺 Pi health** (Settings → 🎬 Movies) shows who's watching, CPU load, temperature, memory, the
+- **📊 HomeCenter Resource Usage** (🛠️ More, parents) shows who's watching, CPU load, disk space, the app's own memory and CPU, temperature, memory, the
   network (link speed, and what's going in and out now), and whether the Pi is slowing itself down
   because it's too hot or short of power. It warns about the usual causes: a 100 Mbit or Wi-Fi link
   (every movie crosses it twice, NAS → Pi → viewer), heat, or a weak power supply.

@@ -113,6 +113,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { label: '🔑 Passwords', path: '/passwords' },
         { label: '📲 Phone apps', path: '/apps' },
         { label: '📹 Cameras', path: '/cameras', parent: true },
+        { label: '📊 HomeCenter Resource Usage', path: '/resources', parent: true },
         { label: '⚙️ Settings', path: '/settings' },
       ],
     },

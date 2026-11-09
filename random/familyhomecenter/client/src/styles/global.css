@@ -3174,3 +3174,9 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .token-wallet__log { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow: auto; }
 .token-wallet__plus { color: #2e7d32; }
 .token-wallet__minus { color: #c62828; }
+/* 📊 HomeCenter Resource Usage */
+.resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.resource-grid .panel h2 { margin-top: 0; }
+.resource-meter { height: 12px; border-radius: 6px; background: var(--border); overflow: hidden; }
+.resource-meter__fill { height: 100%; background: #43a047; border-radius: 6px; transition: width 0.4s; }
+.resource-meter__fill.is-high { background: #e53935; }

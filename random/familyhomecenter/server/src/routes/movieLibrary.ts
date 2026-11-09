@@ -51,7 +51,7 @@ movieLibraryRouter.get(
   })
 );
 
-/** GET /health — 🩺 how the Pi is doing, and who's watching (Settings → 🎬 Movies). */
+/** GET /health — how the Pi is doing (same as /api/resources, kept for older pages). */
 movieLibraryRouter.get(
   '/health',
   asyncHandler(async (_req, res) => {

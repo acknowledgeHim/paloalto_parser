@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
+import { config } from '../config.js';
 
 /**
  * 🩺 How the Pi is doing — for "it freezes when two people watch a movie": CPU load, temperature,
@@ -17,6 +18,11 @@ export interface Health {
   mem_available_mb: number;
   net: { iface: string; link_mbit: number | null; rx_mbit: number; tx_mbit: number } | null;
   warnings: string[];
+  /** 🗄️ disk space where the app keeps its data (and the main disk, if different) */
+  disks?: Array<{ what: string; path: string; total_gb: number; free_gb: number }>;
+  uptime_s?: number;
+  /** the Family Home Center program itself */
+  app?: { mem_mb: number; cpu_pct: number; up_s: number; db_mb: number | null };
 }
 
 const read = (p: string) => fsp.readFile(p, 'utf8').catch(() => null);
@@ -60,12 +66,29 @@ function throttled(): Promise<Health['throttled']> {
   });
 }
 
+async function disk(what: string, p: string) {
+  try {
+    const st = await fsp.statfs(p);
+    return { what, path: p, total_gb: Math.round(((st.blocks * st.bsize) / 1e9) * 10) / 10, free_gb: Math.round(((st.bavail * st.bsize) / 1e9) * 10) / 10 };
+  } catch {
+    return null;
+  }
+}
+
 export async function piHealth(): Promise<Health> {
   const iface = await defaultIface();
   const before = await netBytes();
+  const cpu0 = process.cpuUsage();
+  const t0 = Date.now();
   const [temp, thr, meminfo] = await Promise.all([read('/sys/class/thermal/thermal_zone0/temp'), throttled(), read('/proc/meminfo')]);
   await new Promise((r) => setTimeout(r, 1000)); // network: bytes over one second
   const after = await netBytes();
+  const cpu = process.cpuUsage(cpu0);
+  const cpuPct = Math.round(((cpu.user + cpu.system) / 1000 / Math.max(1, Date.now() - t0)) * 1000) / 10;
+  const [dataDisk, rootDisk, dbStat] = await Promise.all([disk('App data', config.dataDir), disk('Main disk', '/'), fsp.stat(config.dbPath).catch(() => null)]);
+  const disks = [dataDisk, rootDisk].filter((d): d is NonNullable<typeof d> => Boolean(d));
+  // Same disk twice? Show it once.
+  const uniq = disks.filter((d, i) => disks.findIndex((x) => x.total_gb === d.total_gb && x.free_gb === d.free_gb) === i);
   const avail = /MemAvailable:\s+(\d+)/.exec(meminfo ?? '');
   const speed = iface ? Number((await read(`/sys/class/net/${iface}/speed`))?.trim()) : NaN;
   const b = iface ? before.get(iface) : undefined;
@@ -82,12 +105,16 @@ export async function piHealth(): Promise<Health> {
         ? { iface, link_mbit: Number.isFinite(speed) && speed > 0 ? speed : null, rx_mbit: Math.round(((a.rx - b.rx) * 8) / 1e5) / 10, tx_mbit: Math.round(((a.tx - b.tx) * 8) / 1e5) / 10 }
         : null,
     warnings: [],
+    disks: uniq,
+    uptime_s: Math.round(os.uptime()),
+    app: { mem_mb: Math.round(process.memoryUsage().rss / 1048576), cpu_pct: cpuPct, up_s: Math.round(process.uptime()), db_mb: dbStat ? Math.round((dbStat.size / 1048576) * 10) / 10 : null },
   };
   const w = h.warnings;
   if (h.load[0] > h.cpus * 1.5) w.push(`The CPU is very busy (load ${h.load[0]} on ${h.cpus} cores).`);
   if (h.temp_c != null && h.temp_c >= 80) w.push(`It's hot (${h.temp_c} °C) — a Pi slows itself down above ~80 °C. A fan or heatsink case helps.`);
   if (h.throttled?.now.length) w.push(`Right now: ${h.throttled.now.join(', ')}.`);
   else if (h.throttled?.since_boot.length) w.push(`Since it started: ${h.throttled.since_boot.join(', ')}.${h.throttled.since_boot.some((t) => t.includes('power')) ? ' Use the official Pi power supply.' : ''}`);
+  for (const d of uniq) if (d.total_gb > 0 && d.free_gb / d.total_gb < 0.08) w.push(`${d.what} is nearly full: ${d.free_gb} GB free of ${d.total_gb} GB.`);
   if (h.mem_available_mb < 150) w.push(`Memory is nearly full (${h.mem_available_mb} MB free).`);
   if (h.net?.link_mbit != null && h.net.link_mbit <= 100)
     w.push(
