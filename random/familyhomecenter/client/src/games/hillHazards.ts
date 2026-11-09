@@ -4,6 +4,9 @@
  *    up in the air; if it lands on you (or you drive into it) you're squashed.
  *  - 🌕 The Moon: aliens in a flying saucer follow you and fire zappers. It glows before each shot
  *    and aims where you're heading, so change speed (gas or brake) when you see the glow.
+ *  - 🥚 With 🦘 Jump on too, Dino Land has dino eggs on the road: hop over them (+3). Squash
+ *    EGG_LIMIT of them and the next dinosaur you get under turns round and chases you for CHASE_TIME
+ *    seconds, jumping at you. Outrun it (or dodge its landings) and it gives up (+20).
  * No drawing here (HillHopperRun draws them), so the driver test can use it too.
  */
 import { HEAD, type Car, type Terrain, type World } from './hillPhysics.js';
@@ -21,6 +24,9 @@ const DINO_G = 8;
 const DINO_UP = 11; // jump speed: ~2.75 s in the air, ~7.5 m up
 export const CROUCH = 0.45; // seconds it crouches before a jump (a warning)
 const BOLT_SPEED = 7;
+export const EGG_LIMIT = 3;
+export const CHASE_TIME = 10;
+const CHASE_SPEED = 7; // m/s — slower than a car going flat out, faster than one dawdling
 const CHARGE = 1.0; // seconds it glows before firing
 
 export interface Dino {
@@ -32,6 +38,13 @@ export interface Dino {
   passed: boolean;
   /** when it last landed (for a little ground shake) */
   landed: number;
+  /** 😡 seconds left chasing you (after you squashed too many eggs) */
+  chase: number;
+}
+export interface Egg {
+  x: number;
+  broken: boolean;
+  passed: boolean;
 }
 export interface Bolt {
   x: number;
@@ -73,6 +86,10 @@ function carPoints(car: Car) {
 
 export class Hazards {
   dinos: Dino[] = [];
+  eggs: Egg[] = [];
+  /** eggs squashed since the last chase, and whether the next dinosaur is angry */
+  eggsBroken = 0;
+  angry = false;
   saucer: Saucer | null = null;
   /** 🛡️ zaps you can take on the Moon before it's over, and a moment of safety after each */
   shields = 3;
@@ -84,7 +101,9 @@ export class Hazards {
   constructor(
     private world: World,
     private terrain: Terrain,
-    startX: number
+    startX: number,
+    /** 🥚 eggs on the road (Dino Land with 🦘 Jump on) */
+    readonly withEggs = false
   ) {
     this.rand = rng(world.seed * 31 + 5);
     this.placedTo = startX + 70;
@@ -111,14 +130,48 @@ export class Hazards {
     if (this.world.id === 'dino') {
       // More dinosaurs further along the road (110–190 m apart).
       while (this.placedTo < car.x + 120) {
+        const prev = this.placedTo;
         this.placedTo += 110 + this.rand() * 80;
         // Somewhere flat-ish, so you can get going again after waiting for it to jump.
         for (let tries = 0; tries < 80 && !this.flat(this.placedTo); tries++) this.placedTo += 1.5;
-        this.dinos.push({ x: this.placedTo, y: 0, vy: 0, wait: 0.6 + this.rand() * 1.6, awake: false, passed: false, landed: -9 });
+        this.dinos.push({ x: this.placedTo, y: 0, vy: 0, wait: 0.6 + this.rand() * 1.6, awake: false, passed: false, landed: -9, chase: 0 });
+        // 🥚 eggs between the dinosaurs, on gentle ground, not right next to one
+        if (this.withEggs)
+          for (let x = prev + 22 + this.rand() * 10; x < this.placedTo - 16; x += 14 + this.rand() * 18)
+            if (Math.abs(this.terrain.slope(x)) < 0.35) this.eggs.push({ x, broken: false, passed: false });
       }
+      // 🥚 squashed, or hopped over?
+      for (const e of this.eggs) {
+        if (e.broken || e.passed || Math.abs(e.x - car.x) > 4) continue;
+        const gy = this.terrain.h(e.x);
+        if (car.wheels.some((w) => Math.abs(w.x - e.x) < 0.5 && w.y - gy < 0.42 + 0.35)) {
+          e.broken = true;
+          this.eggsBroken++;
+          if (this.eggsBroken >= EGG_LIMIT && !this.angry) {
+            this.angry = true;
+            say = `🥚 ${EGG_LIMIT} eggs squashed — the next 🦖 is ANGRY!`;
+          } else if (!this.angry) say = `🥚 Squashed an egg! (${this.eggsBroken}/${EGG_LIMIT})`;
+        } else if (car.x - 1.7 > e.x) {
+          e.passed = true;
+          coins += 3;
+          say = '🥚 Hopped it! +3';
+        }
+      }
+      if (this.eggs.length > 30) this.eggs = this.eggs.filter((e) => e.x > car.x - 40);
       for (const d of this.dinos) {
-        if (d.x < car.x - 40) continue;
+        if (d.x < car.x - 40 && d.chase <= 0) continue;
         if (!d.awake && d.x - car.x < 45) d.awake = true; // starts jumping once you're getting close
+        if (d.chase > 0) {
+          // 😡 Chasing: runs after you (faster while leaping) and jumps more often.
+          d.chase -= dt;
+          const gap = car.x - d.x;
+          d.x += Math.sign(gap) * Math.min(Math.abs(gap), CHASE_SPEED * (d.y > 0 ? 1 : 0.7) * dt);
+          if (d.chase <= 0) {
+            d.chase = 0;
+            coins += 20;
+            say = '🦖 It gave up! +20';
+          }
+        }
         if (d.awake) {
           if (d.y <= 0 && d.vy <= 0) {
             d.wait -= dt;
@@ -129,7 +182,7 @@ export class Hazards {
             if (d.y <= 0) {
               d.y = 0;
               d.vy = 0;
-              d.wait = 1.0 + this.rand() * 0.9;
+              d.wait = d.chase > 0 ? 0.35 + this.rand() * 0.35 : 1.0 + this.rand() * 0.9;
               d.landed = this.time;
             }
           }
@@ -142,9 +195,16 @@ export class Hazards {
           d.passed = true;
           coins += 15;
           say = '🦖 Made it under! +15';
+          if (this.angry) {
+            // 😡 Too many eggs: this one turns round and comes after you.
+            this.angry = false;
+            this.eggsBroken = 0;
+            d.chase = CHASE_TIME;
+            say = `🦖 Uh-oh — it’s chasing you! Get away for ${CHASE_TIME} s!`;
+          }
         }
       }
-      if (this.dinos.length > 6) this.dinos = this.dinos.filter((d) => d.x > car.x - 40);
+      if (this.dinos.length > 6) this.dinos = this.dinos.filter((d) => d.x > car.x - 40 || d.chase > 0);
     }
 
     const u = this.saucer;

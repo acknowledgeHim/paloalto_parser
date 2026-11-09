@@ -7,12 +7,14 @@ import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
 import { HAZARD_COINS, HAZARD_WORLDS } from './hillHazards.js';
-import { DEFAULT_CONTROLS, HillHopperRun, keyName, type Controls, type RunResult } from './HillHopperRun.js';
+import { DEFAULT_CONTROLS, HillHopperRun, jumpKeysOf, keyName, type Controls, type RunResult } from './HillHopperRun.js';
 
 interface Save {
   coins: number;
   upgrades: Upgrades;
   vehicle: string | null; // a Dress up vehicle id, or null for the buggy
+  /** 🦘 Jump on (Space or tapping the middle of the screen; in Dino Land with obstacles, eggs too) */
+  jump?: boolean;
   /** Picked in the garage here. Not picked: the game drives whatever vehicle the avatar has on in Dress up. */
   vehicle_picked?: boolean;
   controls: Controls;
@@ -60,7 +62,7 @@ export function HillHopperPage() {
   const catalog = useOutfitCatalog();
   const [info, setInfo] = useState<PlayInfo | null>(null);
   const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS, worlds: ['hills'], world: 'hills', bests: {}, obstacles: [] });
-  const [listening, setListening] = useState<'gas' | 'brake' | null>(null);
+  const [listening, setListening] = useState<'gas' | 'brake' | 'jump' | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
   /** What the avatar has on in 👕 Dress up (fresh from the server, not the profile loaded earlier). */
   const [worn, setWorn] = useState<Partial<Record<string, string>> | null>(null);
@@ -79,6 +81,7 @@ export function HillHopperPage() {
           upgrades: { ...NO_UPGRADES, ...(i.save?.upgrades ?? {}) },
           vehicle: i.save?.vehicle ?? null,
           vehicle_picked: i.save?.vehicle_picked ?? false,
+          jump: i.save?.jump ?? false,
           controls: { ...DEFAULT_CONTROLS, ...(i.save?.controls ?? {}) },
           worlds: [...new Set(['hills', ...(i.save?.worlds ?? [])])],
           world: i.save?.world ?? 'hills',
@@ -132,10 +135,11 @@ export function HillHopperPage() {
       const k = e.key.toLowerCase();
       setListening(null);
       if (k === 'escape') return;
-      const c = save.controls;
-      const other = listening === 'gas' ? 'brakeKeys' : 'gasKeys';
-      const mine = listening === 'gas' ? 'gasKeys' : 'brakeKeys';
-      void store({ ...save, controls: { ...c, [mine]: [k], [other]: c[other].filter((x) => x !== k) } });
+      const c = { ...save.controls, jumpKeys: jumpKeysOf(save.controls) };
+      const mine = listening === 'gas' ? 'gasKeys' : listening === 'brake' ? 'brakeKeys' : 'jumpKeys';
+      // A key does one thing: take it off the other pedals.
+      const next = { ...c, gasKeys: c.gasKeys.filter((x) => x !== k), brakeKeys: c.brakeKeys.filter((x) => x !== k), jumpKeys: c.jumpKeys.filter((x) => x !== k), [mine]: [k] };
+      void store({ ...save, controls: next });
     };
     window.addEventListener('keydown', pick);
     return () => window.removeEventListener('keydown', pick);
@@ -169,6 +173,7 @@ export function HillHopperPage() {
         upgrades={save.upgrades}
         world={world}
         obstacles={save.obstacles.includes(world.id)}
+        jump={save.jump ?? false}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -186,6 +191,12 @@ export function HillHopperPage() {
     const cost = UPGRADE_COST[lvl];
     if (lvl >= MAX_LEVEL || save.coins < cost) return;
     void store({ ...save, coins: save.coins - cost, upgrades: { ...save.upgrades, [k]: lvl + 1 } });
+  };
+  /** Take a level off (the coins it cost come back), e.g. if the car's too fast or bouncy. */
+  const remove = (k: keyof Upgrades) => {
+    const lvl = save.upgrades[k];
+    if (lvl <= 0) return;
+    void store({ ...save, coins: save.coins + UPGRADE_COST[lvl - 1], upgrades: { ...save.upgrades, [k]: lvl - 1 } });
   };
   const byId = new Map(members.map((m) => [m.id, m]));
 
@@ -311,12 +322,21 @@ export function HillHopperPage() {
 
       <section className="panel">
         <h2>🎮 Controls</h2>
-        {(['gas', 'brake'] as const).map((p) => {
-          const keys = p === 'gas' ? save.controls.gasKeys : save.controls.brakeKeys;
+        <label className="privacy-toggle">
+          <input type="checkbox" checked={save.jump ?? false} onChange={(e) => void store({ ...save, jump: e.target.checked })} />
+          <span>
+            🦘 Jump — tap the middle of the screen or press the jump key.{' '}
+            <span className="hint">
+              In 🦖 Dino Land with obstacles there are 🥚 eggs too: hop over them. Squash 3 and the next dinosaur chases you for 10 seconds!
+            </span>
+          </span>
+        </label>
+        {(['gas', 'brake', 'jump'] as const).filter((p) => p !== 'jump' || save.jump).map((p) => {
+          const keys = p === 'gas' ? save.controls.gasKeys : p === 'brake' ? save.controls.brakeKeys : jumpKeysOf(save.controls);
           return (
             <div key={p} className="hill-garage__upgrade">
               <span>
-                {p === 'gas' ? '🟢 Gas' : '🔴 Brake'} key: <strong>{keys.length ? keys.map(keyName).join(' / ') : 'none'}</strong>
+                {p === 'gas' ? '🟢 Gas' : p === 'brake' ? '🔴 Brake' : '🦘 Jump'} key: <strong>{keys.length ? keys.map(keyName).join(' / ') : 'none'}</strong>
               </span>
               <button type="button" className="secondary" onClick={() => setListening(listening === p ? null : p)}>
                 {listening === p ? 'Press a key… (Esc = cancel)' : 'Change'}
@@ -335,7 +355,7 @@ export function HillHopperPage() {
         <p className="hint">
           The on-screen pedals always work too (touch screens).{' '}
           <button type="button" className="link-button" onClick={() => void store({ ...save, controls: DEFAULT_CONTROLS })}>
-            Back to the usual keys (→ / D gas, ← / A brake)
+            Back to the usual keys (→ / D gas, ← / A brake, Space jump)
           </button>
         </p>
       </section>
@@ -355,16 +375,24 @@ export function HillHopperPage() {
                   ))}
                 </div>
               </div>
-              {lvl >= MAX_LEVEL ? (
-                <span className="hint">Max!</span>
-              ) : (
-                <button type="button" className="secondary" disabled={save.coins < cost} onClick={() => buy(k)}>
-                  🪙 {cost}
-                </button>
-              )}
+              <div className="hill-garage__upgrade-btns">
+                {lvl > 0 && (
+                  <button type="button" className="secondary" onClick={() => remove(k)} title={`Take one level off — get 🪙 ${UPGRADE_COST[lvl - 1]} back`}>
+                    − <span className="hint">+🪙 {UPGRADE_COST[lvl - 1]}</span>
+                  </button>
+                )}
+                {lvl >= MAX_LEVEL ? (
+                  <span className="hint">Max!</span>
+                ) : (
+                  <button type="button" className="secondary" disabled={save.coins < cost} onClick={() => buy(k)}>
+                    🪙 {cost}
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
+        <p className="hint">− takes a level off and gives its coins back (if the car's too fast or too bouncy for you).</p>
         <p className="hint">Coins come from the road (bigger ones further on), flips (+25) and big jumps (+10). They're only for this game — not 💎 tokens or ⭐ stars.</p>
       </section>
 
@@ -391,6 +419,7 @@ export function HillHopperPage() {
           <li>The car is bouncy: gas lifts the nose, and too much on a hill flips you over backwards. Ease off, or tap the brake to bring the nose down. Landing on your head — or on your back — ends the run.</li>
           <li>In the air, gas tips you back and brake tips you forward: land on your wheels, or do a flip for coins.</li>
           <li>Grab ⛽ cans before the tank runs dry. They get further apart the further you go.</li>
+          <li>🦘 With Jump on (🎮 Controls): tap the middle of the screen or press Space to hop.</li>
         </ul>
       </section>
       {error && <div className="settings-login__error">{error}</div>}

@@ -16,7 +16,7 @@ Tokens are the app's own currency, kept apart from the Prize Bank's ⭐ stars (s
 
 ## 👕 Dress up
 
-**Chores ▾ → 👕 Dress up**, or the 👕 link in a kid's Prize Bank column. Kids spend their 💎 tokens on pieces for their avatar. **👑 Parents dress up free:** every piece (vehicles too, so
+**Fun ▾ → 👕 Dress up**, or the 👕 link in a kid's Prize Bank column. Kids spend their 💎 tokens on pieces for their avatar. **👑 Parents dress up free:** every piece (vehicles too, so
 also in ⛰️ Hill Hopper) is theirs to wear, with no tokens needed.
 
 - **Pieces:** a hat, glasses, something in their hand, a pet, a vehicle and a bit of magic (sparkles, hearts, flames…), one of each at a time.
@@ -255,6 +255,11 @@ own avatar at the wheel wearing your hat.
   - 👽 **The Moon:** aliens in a flying saucer follow you. When it glows, a red target shows where
     the zapper will land: where you'd be if you kept going at the same speed. Speed up or slow down
     to dodge (+5 each miss). You have 🛡️🛡️🛡️ shields; the third zap ends the run.
+  **🦘 Jump** (garage → Controls, off unless you turn it on): tap the middle of the screen or press
+  the jump key (Space; change it there) to hop. With Jump on, 🦖 Dino Land also has 🥚 dino eggs on
+  the road: hop over one for +3. Squash 3 and the next dinosaur you get under turns round and
+  chases you for 10 s, jumping at you — outrun it (or dodge its landings) and it gives up (+20).
+  **−** next to an upgrade takes a level off and gives its coins back.
   Each world has its own course and its own **Best** (your Green Hills best from before carries over).
 - It's the same course every run, so the **Best** flag means something. **🏆 Family best**
   shows everyone's longest run.

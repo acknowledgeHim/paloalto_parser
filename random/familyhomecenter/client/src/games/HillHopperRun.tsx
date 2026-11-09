@@ -15,7 +15,7 @@ import {
   type Upgrades,
   type World,
 } from './hillPhysics.js';
-import { CROUCH, DINO, HAZARD_COINS, HAZARD_WORLDS, Hazards } from './hillHazards.js';
+import { CROUCH, DINO, EGG_LIMIT, HAZARD_COINS, HAZARD_WORLDS, Hazards } from './hillHazards.js';
 
 export interface Driver {
   id: string;
@@ -31,10 +31,15 @@ export interface Driver {
 export interface Controls {
   gasKeys: string[];
   brakeKeys: string[];
+  /** 🦘 keys that jump (when Jump is on); old saves don't have it → Space */
+  jumpKeys?: string[];
   /** pedals: only the on-screen pedals · buttons: left button = gas, right = brake · sides: right half = gas, left half = brake */
   mouse: 'pedals' | 'buttons' | 'sides';
 }
-export const DEFAULT_CONTROLS: Controls = { gasKeys: ['arrowright', 'd'], brakeKeys: ['arrowleft', 'a'], mouse: 'pedals' };
+export const DEFAULT_CONTROLS: Controls = { gasKeys: ['arrowright', 'd'], brakeKeys: ['arrowleft', 'a'], jumpKeys: [' '], mouse: 'pedals' };
+export const jumpKeysOf = (c: Controls) => c.jumpKeys ?? [' '];
+/** 🦘 how high a jump goes (m), whatever the gravity */
+const JUMP_HEIGHT = 1.7;
 
 const KEY_NAMES: Record<string, string> = { arrowright: '→', arrowleft: '←', arrowup: '↑', arrowdown: '↓', ' ': 'Space', shift: 'Shift', control: 'Ctrl', enter: 'Enter' };
 export const keyName = (k: string) => KEY_NAMES[k] ?? (k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
@@ -83,6 +88,7 @@ export function HillHopperRun({
   upgrades,
   world,
   obstacles = false,
+  jump = false,
   best,
   controls,
   onEnd,
@@ -93,18 +99,27 @@ export function HillHopperRun({
   world: World;
   /** ⚠️ dinosaurs / aliens on (worlds in HAZARD_WORLDS only) */
   obstacles?: boolean;
+  /** 🦘 jump: a key (Space) or tapping the middle of the screen */
+  jump?: boolean;
   best: number | null;
   controls: Controls;
   onEnd: (r: RunResult) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const pedal = useRef({ gas: false, brake: false });
+  /** 🦘 a jump asked for (when), used up by the next step on the ground */
+  const jumpAsk = useRef(0);
   const quit = useRef(false);
   const [, setPressed] = useState(0);
 
   useEffect(() => {
     const keys = (down: boolean) => (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
+      if (jump && jumpKeysOf(controls).includes(k)) {
+        if (down && !e.repeat) jumpAsk.current = performance.now();
+        e.preventDefault();
+        return;
+      }
       if (controls.gasKeys.includes(k)) pedal.current.gas = down;
       else if (controls.brakeKeys.includes(k)) pedal.current.brake = down;
       else return;
@@ -126,7 +141,7 @@ export function HillHopperRun({
       window.removeEventListener('keyup', ku);
       window.removeEventListener('blur', blur);
     };
-  }, [controls]);
+  }, [controls, jump]);
 
   useEffect(() => {
     const cv = canvas.current!;
@@ -137,7 +152,9 @@ export function HillHopperRun({
     const starField = Array.from({ length: 70 }, (_, i) => [((i * 7919) % 1000) / 1000, ((i * 104729) % 1000) / 1000, (i % 3) + 1]);
     const car: Car = newCar(terrain);
     const startX = car.x;
-    const hz = obstacles && HAZARD_WORLDS[world.id] ? new Hazards(world, terrain, startX) : null;
+    const hz = obstacles && HAZARD_WORLDS[world.id] ? new Hazards(world, terrain, startX, jump && world.id === 'dino') : null;
+    const jumpG = Math.sqrt(2 * world.gravity * JUMP_HEIGHT);
+    let jumpReady = 0; // seconds until another jump is allowed
     let shake = 0;
     let zoom = 1;
     // With obstacles on, no little 🦖 in the scenery (it'd look like a real one).
@@ -180,6 +197,15 @@ export function HillHopperRun({
       const input = p.gas && !p.brake ? 1 : p.brake && !p.gas ? -1 : 0;
       if (input !== 0) started = true;
       if (started) fuel = Math.max(0, fuel - FUEL_PER_SEC * world.fuelBurn * DT);
+      // 🦘 Jump: only from the ground (a press up to 0.2 s early still counts).
+      jumpReady = Math.max(0, jumpReady - DT);
+      if (jump && jumpAsk.current && performance.now() - jumpAsk.current < 200 && jumpReady <= 0 && car.wheels.some((w) => w.ground)) {
+        jumpAsk.current = 0;
+        jumpReady = 0.4;
+        started = true;
+        car.vy = Math.max(car.vy, 0) + jumpG;
+        for (const w of car.wheels) w.vy = Math.max(w.vy, 0) + jumpG;
+      }
       const r = step(car, terrain, stats, input, fuel > 0, DT);
       if (r.crashed) return finish(car.tipped > 1 ? 'tipped' : 'crash');
       if (hz) {
@@ -240,6 +266,14 @@ export function HillHopperRun({
       const emojiFont = (px: number) => `${Math.round(px)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      for (const e of hz.eggs) {
+        if (e.x < x0 - 1 || e.x > x1 + 1) continue;
+        ctx.font = emojiFont(S * (e.broken ? 0.75 : 0.85));
+        ctx.fillStyle = '#000';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(e.broken ? '🍳' : '🥚', sx(e.x), sy(terrain.h(e.x)) + S * 0.12);
+        ctx.textBaseline = 'middle';
+      }
       for (const d of hz.dinos) {
         const gy = terrain.h(d.x);
         if (d.x + 4 < x0) continue;
@@ -266,12 +300,18 @@ export function HillHopperRun({
         const sqY = crouch ? 0.82 : d.vy > 3 ? 1.08 : 1;
         ctx.save();
         ctx.translate(sx(d.x), sy(gy + d.y));
-        ctx.scale(1, sqY);
+        // 😡 a chasing one faces you (the emoji faces left; it's behind you, so turn it round)
+        ctx.scale(d.chase > 0 && car.x > d.x ? -1 : 1, sqY);
         ctx.font = emojiFont(DINO.h * S * 1.15);
         ctx.fillStyle = '#000'; // (emoji take the fill's see-through-ness)
         ctx.textBaseline = 'bottom';
         ctx.fillText('🦖', 0, S * 0.35);
         ctx.restore();
+        if (d.chase > 0) {
+          ctx.font = emojiFont(S * 1.1);
+          ctx.fillStyle = '#000';
+          ctx.fillText('💢', sx(d.x), sy(gy + d.y + DINO.h + 0.6));
+        }
       }
       const u = hz.saucer;
       if (u) {
@@ -329,6 +369,18 @@ export function HillHopperRun({
         ctx.fillRect(12, 76 + 44, 110, 26);
         ctx.fillStyle = '#fff';
         ctx.fillText('🛡️'.repeat(Math.max(0, hz.shields)), 20, 76 + 47);
+      }
+      if (hz.withEggs) {
+        const chasing = hz.dinos.find((d) => d.chase > 0);
+        const text = chasing ? `😡 🦖 ${Math.ceil(chasing.chase)} s` : hz.angry ? '😡 next 🦖 is angry!' : `🥚 ${hz.eggsBroken}/${EGG_LIMIT}`;
+        ctx.font = 'bold 16px system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        const w = ctx.measureText(text).width + 16;
+        ctx.fillStyle = chasing || hz.angry ? 'rgba(183,28,28,0.75)' : 'rgba(0,0,0,0.35)';
+        ctx.fillRect(12, 76 + 44, w, 26);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(text, 20, 76 + 49);
       }
     };
 
@@ -641,7 +693,9 @@ export function HillHopperRun({
       }
       if (!started) {
         ctx.textAlign = 'center';
-        const hint = `Hold GAS${controls.gasKeys.length ? ` (${controls.gasKeys.map(keyName).join(' / ')})` : ''} to go!  Ease off on hills — brake if the nose comes up`;
+        const hint = jump
+          ? `Hold GAS${controls.gasKeys.length ? ` (${controls.gasKeys.map(keyName).join(' / ')})` : ''} to go!  🦘 Jump: tap the middle${jumpKeysOf(controls).length ? ` or press ${jumpKeysOf(controls).map(keyName).join(' / ')}` : ''}`
+          : `Hold GAS${controls.gasKeys.length ? ` (${controls.gasKeys.map(keyName).join(' / ')})` : ''} to go!  Ease off on hills — brake if the nose comes up`;
         let size = Math.round(Math.min(26, W / 20));
         ctx.font = `bold ${size}px system-ui, sans-serif`;
         const fit = ctx.measureText(hint).width;
@@ -700,6 +754,13 @@ export function HillHopperRun({
         ref={canvas}
         className="hill-run__canvas"
         onPointerDown={(e) => {
+          // 🦘 the middle third of the screen jumps (when Jump is on)
+          const rx = (e.clientX - e.currentTarget.getBoundingClientRect().left) / e.currentTarget.clientWidth;
+          if (jump && e.button === 0 && rx > 1 / 3 && rx < 2 / 3) {
+            e.preventDefault();
+            jumpAsk.current = performance.now();
+            return;
+          }
           if (controls.mouse === 'pedals') return;
           e.preventDefault();
           const which =
