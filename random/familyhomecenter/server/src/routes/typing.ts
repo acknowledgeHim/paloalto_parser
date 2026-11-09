@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { isSelfOrParent } from '../services/rewards.js';
+import { addTokens } from '../services/tokens.js';
 
 // ⌨️ Typing practice (client/src/pages/TypingPage.tsx): lessons from the home row up, and the games —
 // Balloon Pop, Race, Whack-a-Key, Meteor Defense, Word Snake, Tower Builder, Silly Story, the family's
@@ -315,7 +316,7 @@ typingRouter.post('/:memberId/results', (req, res) => {
       `INSERT INTO typing_results (id, family_member_id, at, day, mode, level, wpm, accuracy, chars, seconds, score, passed, stars, speed_stars)
        VALUES (@id, @m, @at, @day, @mode, @level, @wpm, @accuracy, @chars, @seconds, @score, @passed, @stars, @speedStars)`
     ).run({ id: uuidv4(), m: id, at: now.toISOString(), day: localDay(now), mode, ...row, stars, speedStars });
-    if (stars) db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(stars, id);
+    if (stars) addTokens(id, stars, `⌨️ ${why}`); // 💎 typing pays tokens (the "stars" column here = tokens since tokens began)
   })();
   res.json({
     stars,

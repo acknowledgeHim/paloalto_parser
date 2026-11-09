@@ -317,20 +317,20 @@ tasksRouter.patch('/:id/reward', requireAdmin, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'not found' });
 
   const { reward_type, reward_amount, reward_text, reward_emoji } = req.body as {
-    reward_type?: 'stars' | 'money' | 'custom' | null;
+    reward_type?: 'stars' | 'money' | 'tokens' | 'custom' | null;
     reward_amount?: number | null;
     reward_text?: string | null;
     reward_emoji?: string | null;
   };
-  if (reward_type && reward_type !== 'stars' && reward_type !== 'money' && reward_type !== 'custom') {
-    return res.status(400).json({ error: 'reward_type must be "stars", "money", "custom", or null' });
+  if (reward_type && reward_type !== 'stars' && reward_type !== 'money' && reward_type !== 'tokens' && reward_type !== 'custom') {
+    return res.status(400).json({ error: 'reward_type must be "stars", "money", "tokens", "custom", or null' });
   }
   const text = typeof reward_text === 'string' ? reward_text.trim().slice(0, 80) : '';
   if (reward_type === 'custom' && !text) return res.status(400).json({ error: 'Type what they earn — e.g. "Movie time"' });
   const updated: Task = {
     ...existing,
     reward_type: reward_type ?? null,
-    reward_amount: reward_type === 'stars' || reward_type === 'money' ? Number(reward_amount) || 0 : null,
+    reward_amount: reward_type === 'stars' || reward_type === 'money' || reward_type === 'tokens' ? Number(reward_amount) || 0 : null,
     reward_text: reward_type === 'custom' ? text : null,
     reward_emoji: reward_type && typeof reward_emoji === 'string' && reward_emoji.trim() ? reward_emoji.trim().slice(0, 16) : null,
   };

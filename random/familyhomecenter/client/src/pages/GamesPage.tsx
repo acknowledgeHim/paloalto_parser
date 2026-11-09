@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { TokenWallet } from '../components/TokenWallet.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 interface ShelfGame {
@@ -17,13 +18,13 @@ interface ShelfGame {
   best: number | null;
 }
 interface Shelf {
-  star_balance: number;
+  token_balance: number;
   plays_free: boolean;
   games: ShelfGame[];
 }
 
 /**
- * 🎮 Games: each game is unlocked once with Prize Bank stars, then played as much as you like.
+ * 🎮 Games: each game is unlocked once with 💎 tokens, then played as much as you like.
  * Parents play free, and can unlock (or refund) a game for a kid.
  */
 export function GamesPage() {
@@ -51,7 +52,7 @@ export function GamesPage() {
     try {
       const s = await api.post<Shelf>(`/games/${memberId}/${path}`, { game_id: gameId, acting_member_id: activeProfile?.id ?? null, ...extra });
       setShelves((all) => ({ ...all, [memberId]: s }));
-      void refresh(); // star balances
+      void refresh(); // token balances
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -68,8 +69,9 @@ export function GamesPage() {
 
       {activeProfile && mine && (
         <>
+          {!mine.plays_free && <TokenWallet member={activeProfile} onChange={() => void load()} />}
           <p className="hint">
-            {mine.plays_free ? 'Parents play free.' : <>⭐ {mine.star_balance} stars to spend · unlock a game once, then play it as much as you like. Earn stars with chores and to-dos.</>}
+            {mine.plays_free ? 'Parents play free.' : <>💎 {mine.token_balance} tokens to spend · unlock a game once, then play it as much as you like. Earn tokens in ⌨️ Typing.</>}
           </p>
           <div className="games-page__grid">
             {mine.games.map((g) => (
@@ -87,8 +89,8 @@ export function GamesPage() {
                   </Link>
                 )}
                 {!g.owned && (
-                  <button type="button" className={g.unlocked ? 'secondary' : undefined} disabled={busy || mine.star_balance < g.stars} onClick={() => void act('unlock', activeProfile.id, g.id)}>
-                    {mine.star_balance < g.stars ? `${g.stars} ⭐ to keep it — ${g.stars - mine.star_balance} more to go` : `🔓 Unlock for good: ${g.stars} ⭐`}
+                  <button type="button" className={g.unlocked ? 'secondary' : undefined} disabled={busy || mine.token_balance < g.stars} onClick={() => void act('unlock', activeProfile.id, g.id)}>
+                    {mine.token_balance < g.stars ? `${g.stars} 💎 to keep it — ${g.stars - mine.token_balance} more to go` : `🔓 Unlock for good: ${g.stars} 💎`}
                   </button>
                 )}
               </div>
@@ -101,7 +103,7 @@ export function GamesPage() {
         <section className="panel">
           <h2>Kids' games</h2>
           <p className="hint">
-            Unlock a game for good for a kid (it uses their stars) or give the stars back — or 🎟️ give them a number of plays (each go uses one; when they run
+            Unlock a game for good for a kid (it uses their 💎 tokens) or give them back — or 🎟️ give them a number of plays (each go uses one; when they run
             out it locks again). Their scores and progress are kept either way.
           </p>
           {kids.map((k) => {
@@ -110,7 +112,7 @@ export function GamesPage() {
             return (
               <div key={k.id} className="games-page__kid">
                 <span className="games-page__kid-name">
-                  <MemberAvatar member={k} size={28} /> {k.name} · ⭐ {s.star_balance}
+                  <MemberAvatar member={k} size={28} /> {k.name} · 💎 {s.token_balance}
                 </span>
                 {s.games.map((g) => {
                   const key = `${k.id}|${g.id}`;
@@ -120,13 +122,13 @@ export function GamesPage() {
                         {g.emoji} {g.name}
                       </strong>
                       {g.owned ? (
-                        <button type="button" className="secondary" disabled={busy} onClick={() => window.confirm(`Lock ${g.name} again and give ${k.name} back ${g.stars} ⭐?`) && void act('refund', k.id, g.id)}>
+                        <button type="button" className="secondary" disabled={busy} onClick={() => window.confirm(`Lock ${g.name} again and give ${k.name} back what it cost?`) && void act('refund', k.id, g.id)}>
                           ✓ Theirs · ↶ refund
                         </button>
                       ) : (
                         <>
-                          <button type="button" className="secondary" disabled={busy || s.star_balance < g.stars} onClick={() => void act('unlock', k.id, g.id)}>
-                            🔓 For good ({g.stars} ⭐)
+                          <button type="button" className="secondary" disabled={busy || s.token_balance < g.stars} onClick={() => void act('unlock', k.id, g.id)}>
+                            🔓 For good ({g.stars} 💎)
                           </button>
                           <span className="games-page__plays">
                             🎟️ {g.plays_left ?? 0} left · give

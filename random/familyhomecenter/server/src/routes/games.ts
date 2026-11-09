@@ -4,8 +4,9 @@ import { db } from '../db.js';
 import { GAMES, gameOf } from '../services/games.js';
 import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
 import type { FamilyMember } from '../types.js';
+import { addTokens } from '../services/tokens.js';
 
-/** 🎮 Games: unlock with stars (parents play free), play, keep best runs and progress. */
+/** 🎮 Games: unlock with 💎 tokens (parents play free), play, keep best runs and progress. */
 export const gamesRouter = Router();
 
 const memberOf = (id: string) => db.prepare('SELECT * FROM family_members WHERE id = ?').get(id) as FamilyMember | undefined;
@@ -23,7 +24,7 @@ function shelf(m: FamilyMember) {
   const mine = unlockedFor(m);
   const passes = passesFor(m.id);
   return {
-    star_balance: m.star_balance,
+    token_balance: m.token_balance,
     plays_free: free(m),
     games: GAMES.map((g) => {
       const owned = free(m) || mine.has(g.id);
@@ -36,37 +37,41 @@ function shelf(m: FamilyMember) {
 /** GET /?member=ID — the games, which ones they can play, their best scores. */
 gamesRouter.get('/', (req, res) => {
   const m = memberOf(String(req.query.member ?? ''));
-  if (!m) return res.json({ star_balance: 0, plays_free: false, games: GAMES.map((g) => ({ ...g, unlocked: false, best: null })) });
+  if (!m) return res.json({ token_balance: 0, plays_free: false, games: GAMES.map((g) => ({ ...g, unlocked: false, best: null })) });
   res.json(shelf(m));
 });
 
-/** POST /:memberId/unlock { game_id, acting_member_id } — spend their stars on a game (once). */
+/** POST /:memberId/unlock { game_id, acting_member_id } — spend their 💎 tokens on a game (once). */
 gamesRouter.post('/:memberId/unlock', (req, res) => {
   const { memberId } = req.params;
   const { game_id, acting_member_id } = req.body ?? {};
-  if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their stars' });
+  if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
   const g = gameOf(String(game_id));
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (free(m) || unlockedFor(m).has(g.id)) return res.json(shelf(m));
-  if (m.star_balance < g.stars) return res.status(400).json({ error: `Needs ${g.stars} ⭐ — ${g.stars - m.star_balance} more to go` });
+  if (m.token_balance < g.stars) return res.status(400).json({ error: `Needs ${g.stars} 💎 — ${g.stars - m.token_balance} more to go` });
   db.transaction(() => {
-    db.prepare('UPDATE family_members SET star_balance = star_balance - ? WHERE id = ?').run(g.stars, m.id);
-    db.prepare('INSERT INTO game_unlocks (family_member_id, game_id, stars, unlocked_at) VALUES (?, ?, ?, ?)').run(m.id, g.id, g.stars, new Date().toISOString());
+    addTokens(m.id, -g.stars, `🎮 Unlocked: ${g.emoji} ${g.name}`, typeof acting_member_id === 'string' ? acting_member_id : null);
+    db.prepare("INSERT INTO game_unlocks (family_member_id, game_id, stars, unlocked_at, currency) VALUES (?, ?, ?, ?, 'tokens')").run(m.id, g.id, g.stars, new Date().toISOString());
   })();
   res.json(shelf(memberOf(m.id)!));
 });
 
-/** POST /:memberId/refund { game_id, acting_member_id } — parents: give the stars back and lock it again (scores and progress are kept). */
+/** POST /:memberId/refund { game_id, acting_member_id } — parents: give back what it cost (💎, or ⭐ if before tokens) and lock it again (scores and progress are kept). */
 gamesRouter.post('/:memberId/refund', (req, res) => {
   const { memberId } = req.params;
   const { game_id, acting_member_id } = req.body ?? {};
   if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
-  const row = db.prepare('SELECT stars FROM game_unlocks WHERE family_member_id = ? AND game_id = ?').get(memberId, game_id) as { stars: number } | undefined;
+  const row = db.prepare('SELECT stars, currency FROM game_unlocks WHERE family_member_id = ? AND game_id = ?').get(memberId, game_id) as
+    | { stars: number; currency: string | null }
+    | undefined;
   if (!row) return res.status(404).json({ error: 'not found' });
   db.transaction(() => {
     db.prepare('DELETE FROM game_unlocks WHERE family_member_id = ? AND game_id = ?').run(memberId, game_id);
-    db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(row.stars, memberId);
+    const g = gameOf(String(game_id));
+    if (row.currency === 'tokens') addTokens(memberId, row.stars, `🎮 Refund: ${g ? `${g.emoji} ${g.name}` : game_id}`, typeof acting_member_id === 'string' ? acting_member_id : null);
+    else db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(row.stars, memberId);
   })();
   res.json(shelf(memberOf(memberId)!));
 });

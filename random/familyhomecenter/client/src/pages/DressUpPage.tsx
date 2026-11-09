@@ -5,9 +5,10 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { useOutfitCatalog } from '../utils/outfits.js';
 import { DressedAvatar } from '../components/DressedAvatar.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
+import { TokenWallet } from '../components/TokenWallet.js';
 
 /**
- * 👕 Dress up: spend Prize Bank stars on hats, glasses, pets, vehicles and magic for your avatar — it wears
+ * 👕 Dress up: spend 💎 tokens on hats, glasses, pets, vehicles and magic for your avatar — it wears
  * them everywhere their avatar shows up. Tap a piece to try it on; buy it to keep it.
  */
 export function DressUpPage() {
@@ -50,13 +51,13 @@ export function DressUpPage() {
   const wear = (slot: OutfitSlot, item: OutfitItem | null) =>
     run(() => api.put<Closet>(`/outfits/${memberId}/wear`, { slot, item_id: item?.id ?? null, acting_member_id: acting }));
   const refund = (item: OutfitItem) => {
-    if (!window.confirm(`Take back the ${item.name} and give ${item.stars} ⭐ back?`)) return;
+    if (!window.confirm(`Take back the ${item.name} and give back what it cost?`)) return;
     void run(() => api.post<Closet>(`/outfits/${memberId}/refund`, { item_id: item.id, acting_member_id: acting }));
   };
 
   if (!member) return <div className="empty-state">Add your family in Settings first.</div>;
   const preview = { ...(closet?.outfit ?? {}), ...(tryOn ? { [tryOn.slot]: tryOn.id } : {}) };
-  const stars = closet?.star_balance ?? member.star_balance ?? 0;
+  const tokens = closet?.token_balance ?? member.token_balance ?? 0;
 
   return (
     <div className="dress-up-page">
@@ -79,22 +80,23 @@ export function DressUpPage() {
         </div>
         <div className="dress-up__who">
           <h2>{member.name}</h2>
-          <div className="dress-up__stars">{closet?.free ? '👑 Parents dress up free — tap anything to wear it' : `⭐ ${stars} stars to spend`}</div>
+          <div className="dress-up__stars">{closet?.free ? '👑 Parents dress up free — tap anything to wear it' : `💎 ${tokens} tokens to spend`}</div>
           {tryOn && (
             <div className="dress-up__tryon">
-              Trying on the <strong>{tryOn.emoji} {tryOn.name}</strong> · {tryOn.stars} ⭐
+              Trying on the <strong>{tryOn.emoji} {tryOn.name}</strong> · {tryOn.stars} 💎
               {mayChange && (
-                <button type="button" disabled={busy || stars < tryOn.stars} onClick={() => buy(tryOn)}>
-                  {stars < tryOn.stars ? `${tryOn.stars - stars} more ⭐ to go` : `Buy it`}
+                <button type="button" disabled={busy || tokens < tryOn.stars} onClick={() => buy(tryOn)}>
+                  {tokens < tryOn.stars ? `${tryOn.stars - tokens} more 💎 to go` : `Buy it`}
                 </button>
               )}
               <button type="button" className="link-button" onClick={() => setTryOn(null)}>Take it off</button>
             </div>
           )}
           {error && <div className="settings-login__error">{error}</div>}
-          <p className="hint">{closet?.free ? 'Tap a piece to put it on, tap again to take it off.' : 'Tap a piece to try it on. Earn stars with chores and to-dos.'}</p>
+          <p className="hint">{closet?.free ? 'Tap a piece to put it on, tap again to take it off.' : 'Tap a piece to try it on. Earn 💎 tokens in ⌨️ Typing.'}</p>
         </div>
       </section>
+      {!closet?.free && <TokenWallet member={member} refreshKey={closet} />}
 
       {catalog?.slots.map((slot) => {
         const wearing = closet?.outfit[slot.id];
@@ -125,7 +127,7 @@ export function DressUpPage() {
                       >
                         <span className="dress-up__emoji">{item.emoji}</span>
                         <span className="dress-up__name">{item.name}</span>
-                        <span className="dress-up__price">{on ? '✓ Wearing' : closet?.free ? 'Free' : owned ? 'Yours' : `${item.stars} ⭐`}</span>
+                        <span className="dress-up__price">{on ? '✓ Wearing' : closet?.free ? 'Free' : owned ? 'Yours' : `${item.stars} 💎`}</span>
                       </button>
                       {(closet?.bought ?? closet?.owned ?? []).includes(item.id) && isParent && (
                         <button type="button" className="link-button dress-up__refund" onClick={() => refund(item)}>

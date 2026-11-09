@@ -51,6 +51,8 @@ export interface FamilyMember {
   can_add_grocery?: 0 | 1;
   /** Prize Bank running totals. */
   star_balance: number;
+  /** 💎 app tokens (typing → Dress up, Games); separate from stars */
+  token_balance?: number;
   money_balance: number;
   /** Whether this person has their own password set — never the password/hash itself. */
   has_password: boolean;
@@ -94,7 +96,7 @@ export interface Task {
   time_of_day: string | null;
   /** Prize Bank reward for completing this task; null reward_type means no reward. Only settable
    *  via a Settings-password-gated endpoint — see Settings page's Prize Bank section. */
-  reward_type: 'stars' | 'money' | 'custom' | null;
+  reward_type: 'stars' | 'money' | 'tokens' | 'custom' | null;
   reward_amount: number | null;
   /** A custom reward (reward_type 'custom'): what they earn ("Movie time"). */
   reward_text?: string | null;
@@ -374,6 +376,8 @@ export interface Closet {
   free?: boolean;
   outfit: Partial<Record<OutfitSlot, string>>;
   star_balance: number;
+  /** 💎 what pieces are bought with */
+  token_balance?: number;
 }
 
 // ---- 📔 Journal, 📏 heights, 📝 notes ----
@@ -795,7 +799,7 @@ export interface PendingJob {
   goal_type: 'times' | 'hours' | null;
   goal_amount: number | null;
   goal_minutes?: number | null;
-  reward_type: 'stars' | 'money' | 'custom' | null;
+  reward_type: 'stars' | 'money' | 'tokens' | 'custom' | null;
   reward_amount: number | null;
   reward_text: string | null;
   reward_emoji: string | null;

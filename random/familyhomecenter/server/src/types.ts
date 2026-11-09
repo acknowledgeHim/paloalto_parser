@@ -20,6 +20,8 @@ export interface FamilyMember {
   complete_sound: string | null;
   /** Prize Bank running totals — credited on completing a reward task, spent on star-cost prizes. */
   star_balance: number;
+  /** 💎 app tokens (typing, Dress up, Games) — separate from Prize Bank stars */
+  token_balance: number;
   money_balance: number;
   /** "<saltHex>:<hashHex>" (see services/auth.ts), or null for no login set. Never sent to the client. */
   password_hash: string | null;
@@ -85,7 +87,7 @@ export interface Task {
   time_of_day: string | null;
   /** Prize Bank reward for completing this task; null reward_type means no reward. Set only via
    *  PATCH /:id/reward (requires the Settings password) — see routes/tasks.ts. */
-  reward_type: 'stars' | 'money' | 'custom' | null;
+  reward_type: 'stars' | 'money' | 'tokens' | 'custom' | null;
   reward_amount: number | null;
   /** A custom reward (reward_type 'custom'): what it is ("Movie time"). And the reward's emoji, any
    *  type (null = 💲 money, ⭐ stars, 🎁 custom). */

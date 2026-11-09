@@ -353,7 +353,7 @@ export function HillHopperPage() {
             </div>
           );
         })}
-        <p className="hint">Coins come from the road (bigger ones further on), flips (+25) and big jumps (+10). They're only for this game — not Prize Bank stars.</p>
+        <p className="hint">Coins come from the road (bigger ones further on), flips (+25) and big jumps (+10). They're only for this game — not 💎 tokens or ⭐ stars.</p>
       </section>
 
       {info.top.length > 0 && (

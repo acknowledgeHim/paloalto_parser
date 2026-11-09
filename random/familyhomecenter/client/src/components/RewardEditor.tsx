@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { EmojiPicker } from './EmojiPicker.js';
 import { prizeEmoji } from '../utils/prizes.js';
 
-export type RewardType = 'stars' | 'money' | 'custom';
+export type RewardType = 'stars' | 'money' | 'tokens' | 'custom';
 
 export interface RewardValue {
   type: RewardType;
@@ -13,10 +13,10 @@ export interface RewardValue {
   emoji: string | null;
 }
 
-const REWARD_EMOJI = ['💲', '💵', '⭐', '🎁', '🎬', '🍿', '👫', '🚗', '🎮', '🍕', '🍦', '🏊', '🎳', '🛍️', '📱', '🏆'];
+const REWARD_EMOJI = ['💲', '💵', '⭐', '💎', '🎁', '🎬', '🍿', '👫', '🚗', '🎮', '🍕', '🍦', '🏊', '🎳', '🛍️', '📱', '🏆'];
 
 /**
- * What a chore/to-do pays: stars, money, or something typed in ("Movie time", "Friend time",
+ * What a chore/to-do pays: stars, money, 💎 tokens, or something typed in ("Movie time", "Friend time",
  * "Special trip") — plus its emoji (tap the emoji to change it).
  */
 export function RewardEditor({ value, onChange }: { value: RewardValue; onChange: (v: RewardValue) => void }) {
@@ -38,6 +38,7 @@ export function RewardEditor({ value, onChange }: { value: RewardValue; onChange
         <select value={value.type} onChange={(e) => set({ type: e.target.value as RewardType })}>
           <option value="stars">Stars</option>
           <option value="money">Money</option>
+          <option value="tokens">💎 Tokens (for Dress up and Games)</option>
           <option value="custom">Something else (type it in)</option>
         </select>
         {value.type === 'custom' ? (
@@ -50,11 +51,11 @@ export function RewardEditor({ value, onChange }: { value: RewardValue; onChange
         ) : (
           <input
             type="number"
-            min={value.type === 'stars' ? 1 : 0.01}
-            step={value.type === 'stars' ? 1 : 0.01}
+            min={value.type === 'money' ? 0.01 : 1}
+            step={value.type === 'money' ? 0.01 : 1}
             value={value.amount}
             onChange={(e) => set({ amount: Number(e.target.value) || 0 })}
-            aria-label={value.type === 'stars' ? 'Stars' : 'Dollars'}
+            aria-label={value.type === 'stars' ? 'Stars' : value.type === 'tokens' ? 'Tokens' : 'Dollars'}
           />
         )}
       </div>

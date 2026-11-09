@@ -4,8 +4,9 @@ import { db } from '../db.js';
 import { isAdminGateActive, isRequestAdmin, sessionMemberId, SESSION_COOKIE_NAME } from './auth.js';
 import type { Task } from '../types.js';
 import { notifyApproval } from './approvalEmail.js';
+import { addTokens } from './tokens.js';
 
-/** Does completing this pay anything? (money/stars need an amount; a custom reward needs its text) */
+/** Does completing this pay anything? (money/stars/tokens need an amount; a custom reward needs its text) */
 export function hasReward(task: Task | undefined): task is Task {
   if (!task?.reward_type) return false;
   return task.reward_type === 'custom' ? Boolean(task.reward_text) : Boolean(task.reward_amount);
@@ -33,7 +34,9 @@ export function creditReward(memberId: string, task: Task, sign: 1 | -1) {
     return;
   }
   const amount = (task.reward_amount ?? 0) * sign;
-  if (task.reward_type === 'stars') {
+  if (task.reward_type === 'tokens') {
+    addTokens(memberId, amount, sign > 0 ? `Did: ${task.title}` : `Undone: ${task.title}`);
+  } else if (task.reward_type === 'stars') {
     db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(Math.round(amount), memberId);
   } else if (task.reward_type === 'money') {
     db.prepare('UPDATE family_members SET money_balance = money_balance + ? WHERE id = ?').run(amount, memberId);
@@ -60,6 +63,11 @@ export function isSelfOrParent(req: Request, memberId: string, actingMemberId: u
   const self = sessionMemberId(req.cookies?.[SESSION_COOKIE_NAME] as string | undefined);
   if (self) return self === memberId;
   return actingMemberId === memberId;
+}
+
+/** Who's doing this (their login, or the person picked up top) — for history. */
+export function sessionActor(req: Request, actingMemberId: unknown): string | null {
+  return sessionMemberId(req.cookies?.[SESSION_COOKIE_NAME] as string | undefined) ?? (typeof actingMemberId === 'string' ? actingMemberId : null);
 }
 
 /** The completion rows a finished "times"/"hours" job gets: one per time-of-day slot (or one). */

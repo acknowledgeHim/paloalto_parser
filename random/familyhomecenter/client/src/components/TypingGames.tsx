@@ -13,10 +13,10 @@ import { KEY_ROWS, STORY_ENDINGS, dailyText, makeStory, wordsForTier, wpmOf, typ
 const accuracyOf = (right: number, wrong: number) => Math.round((right / Math.max(1, right + wrong)) * 1000) / 10;
 const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)];
 
-/** "+2 ⭐ New best" / "games have paid for today" under a finished round. */
+/** "+2 💎 New best" / "games have paid for today" under a finished round. */
 function EarnedLine({ earned }: { earned: Earned | null }) {
   if (!earned) return null;
-  if (earned.stars > 0) return <p className="typing-result__stars">+{earned.stars} ⭐ {earned.reason}</p>;
+  if (earned.stars > 0) return <p className="typing-result__stars">+{earned.stars} 💎 {earned.reason}</p>;
   return earned.reason ? <p className="hint">{earned.reason}</p> : null;
 }
 
@@ -25,7 +25,7 @@ function BestLine({ best, stars, unit = '' }: { best: number; stars: number; uni
     <span className="hint">
       Best {Math.round(best)}
       {unit}
-      {stars > 0 ? ` · beat it for +${stars} ⭐` : ''}
+      {stars > 0 ? ` · beat it for +${stars} 💎` : ''}
     </span>
   );
 }
@@ -1040,7 +1040,7 @@ export function SillyStory({
         <strong>📖 Silly Story</strong>
         <span className="hint">
           {best > 0 ? `Best ${Math.round(best)} wpm` : 'Type it with 90% right to count'}
-          {stars > 0 ? ` · ${best > 0 ? 'beat it' : 'finish one'} for +${stars} ⭐` : ''}
+          {stars > 0 ? ` · ${best > 0 ? 'beat it' : 'finish one'} for +${stars} 💎` : ''}
         </span>
       </div>
       <div className="story__page">
@@ -1182,7 +1182,7 @@ export function DailyChallenge({
           <strong>🏆 Today's challenge</strong>
           <span className="hint">
             Everyone types the same thing today — fastest with {daily.accuracy_needed}% right wins.
-            {stars > 0 && !doneToday ? ` Finish it for +${stars} ⭐.` : ''}
+            {stars > 0 && !doneToday ? ` Finish it for +${stars} 💎.` : ''}
           </span>
         </div>
         {state === 'countdown' ? (
@@ -1221,7 +1221,7 @@ export function DailyChallenge({
   );
 }
 
-// ---- 🛒 Shopping Spree (pretend money — nothing to do with the bank or ⭐) ----
+// ---- 🛒 Shopping Spree (pretend money — nothing to do with the bank or 💎) ----
 
 const STORE: Array<{ icon: string; name: string; price: number }> = [
   { icon: '🍬', name: 'candy', price: 1 },
@@ -1453,7 +1453,7 @@ export function ShoppingSpree({
                   {player?.name ?? 'Your shopper'} keeps grabbing things from the store — and they cost money! Type words to earn a
                   dollar a letter (five in a row without a slip: +$5 bonus). Run out of money and the trip's over.
                 </p>
-                <p className="hint">Pretend money — it's not your bank or your stars.</p>
+                <p className="hint">Pretend money — it's not your bank or your tokens.</p>
               </>
             )}
             <PointsPicker tier={tier} onChange={setTier} pool={pool} />

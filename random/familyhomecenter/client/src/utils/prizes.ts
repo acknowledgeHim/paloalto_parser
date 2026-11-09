@@ -3,8 +3,9 @@ import { api, type Prize, type Task } from '../api/client.js';
 import { formatHours } from './tasks.js';
 
 /** A prize's emoji: its own, else 💲 for money, ⭐ for stars, 🎁 for anything else. */
-export function prizeEmoji(prize: Pick<Prize, 'emoji' | 'reward_kind'>): string {
+export function prizeEmoji(prize: { emoji?: Prize['emoji']; reward_kind?: Prize['reward_kind'] | 'tokens' }): string {
   if (prize.emoji) return prize.emoji;
+  if (prize.reward_kind === 'tokens') return '💎';
   if (prize.reward_kind === 'money') return '💲';
   if (prize.reward_kind === 'stars') return '⭐';
   return '🎁';
@@ -30,7 +31,7 @@ export function taskRewardEmoji(task: Pick<Task, 'reward_type' | 'reward_emoji'>
 /** What a chore/to-do pays, for its badge: "$2.00", "3", "Movie time"; null if nothing. */
 export function taskRewardText(task: Pick<Task, 'reward_type' | 'reward_amount' | 'reward_text'>): string | null {
   if (task.reward_type === 'money' && task.reward_amount) return `$${task.reward_amount.toFixed(2)}`;
-  if (task.reward_type === 'stars' && task.reward_amount) return String(task.reward_amount);
+  if ((task.reward_type === 'stars' || task.reward_type === 'tokens') && task.reward_amount) return String(task.reward_amount);
   if (task.reward_type === 'custom' && task.reward_text) return task.reward_text;
   return null;
 }

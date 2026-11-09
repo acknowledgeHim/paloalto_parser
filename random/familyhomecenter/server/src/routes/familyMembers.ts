@@ -246,6 +246,7 @@ familyMembersRouter.post('/', requireAdmin, (req, res) => {
     chore_celebration: chore_celebration ?? null,
     todo_celebration: todo_celebration ?? null,
     star_balance: 0,
+    token_balance: 0,
     money_balance: 0,
     password_hash: null,
     is_parent: is_parent ? 1 : 0,

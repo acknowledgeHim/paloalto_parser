@@ -34,7 +34,7 @@ export function TypingSettings() {
       </label>
       {status && <p className="hint">{status}</p>}
       <p className="hint">
-        The ⭐ for each lesson and game: <Link to="/typing">Typing</Link> → ⭐ Stars.
+        The 💎 tokens for each lesson and game: <Link to="/typing">Typing</Link> → 💎 Tokens.
       </p>
     </section>
   );

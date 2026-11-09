@@ -38,7 +38,7 @@ import {
  * Defense, 🎈 Balloon Pop, 🐍 Word Snake, 🏁 Race and 🛒 Shopping Spree straight away, and 🧱 Tower
  * Builder, 📖 Silly Story and 🏆 the Daily Challenge once every lesson is passed (or for a parent).
  * The games are in components/TypingGames.tsx.
- * Progress is saved per person, and a parent picks the ⭐ each lesson and game is worth (server:
+ * Progress is saved per person, and a parent picks the 💎 each lesson and game is worth (server:
  * routes/typing.ts). Works with a real keyboard, or a tablet's on-screen one.
  */
 
@@ -156,7 +156,7 @@ export function TypingPage() {
             )}
           </span>
         ) : (
-          <span className="hint">Pick who you are up top to save your progress and earn ⭐.</span>
+          <span className="hint">Pick who you are up top to save your progress and earn 💎 tokens.</span>
         )}
       </div>
 
@@ -166,7 +166,7 @@ export function TypingPage() {
             [
               ['lessons', '📘 Lessons'],
               ...(Object.entries(MODE_LABELS) as Array<[Tab, string]>).filter(([k]) => k !== 'daily' || rewards?.daily_enabled),
-              ...(canManage ? [['stars', '⭐ Stars']] : []),
+              ...(canManage ? [['stars', '💎 Tokens']] : []),
             ] as Array<[Tab, string]>
           ).map(([key, label]) => (
             <button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? '' : 'secondary'} onClick={() => setTab(key)}>
@@ -247,7 +247,7 @@ export function TypingPage() {
                 </span>
                 <span className="hint">
                   {r.mode === 'shop' ? `${r.score} points · ` : r.mode === 'tower' ? `${r.score} ${r.score === 1 ? 'point' : 'points'} · ` : ['balloon', 'whack', 'meteor', 'snake'].includes(r.mode) ? `${r.score} points · ` : ''}
-                  {Math.round(r.wpm)} wpm · {Math.round(r.accuracy)}%{r.stars ? ` · +${r.stars} ⭐` : ''}
+                  {Math.round(r.wpm)} wpm · {Math.round(r.accuracy)}%{r.stars ? ` · +${r.stars} 💎` : ''}
                 </span>
               </li>
             ))}
@@ -286,7 +286,7 @@ function LessonList({
         {rewards?.speed_stars.length ? (
           <>
             {' '}
-            ⚡ Speed stars for passing a lesson fast: {rewards.speed_stars.map((t) => `${t.wpm} wpm = ${t.stars} ⭐`).join(' · ')} (each lesson pays up to its
+            ⚡ Speed tokens for passing a lesson fast: {rewards.speed_stars.map((t) => `${t.wpm} wpm = ${t.stars} 💎`).join(' · ')} (each lesson pays up to its
             fastest; go faster later for the rest).
           </>
         ) : null}{' '}
@@ -313,8 +313,8 @@ function LessonList({
               <span className="typing-lesson__keys">{l.newKeys ? l.newKeys.split('').join(' ').toUpperCase() : ' '}</span>
               <span className="hint">
                 {p ? `best ${Math.round(p.best_wpm)} wpm · ${Math.round(p.best_accuracy)}%` : `goal ${l.goalWpm} wpm`}
-                {!done && stars > 0 ? ` · +${stars} ⭐` : ''}
-                {!locked && more ? ` · ⚡ ${more.wpm} wpm: +${more.stars - (p?.speed_paid ?? 0)} ⭐` : ''}
+                {!done && stars > 0 ? ` · +${stars} 💎` : ''}
+                {!locked && more ? ` · ⚡ ${more.wpm} wpm: +${more.stars - (p?.speed_paid ?? 0)} 💎` : ''}
               </span>
             </button>
           );
@@ -429,7 +429,7 @@ function LessonRound({
           {Math.round(liveWpm)} wpm · {liveAcc}% · goal {level.goalWpm} wpm, {PASS_ACCURACY}%
           {(() => {
             const n = speed && nextSpeed(speed.tiers, speed.paid);
-            return n ? ` · ⚡ ${n.wpm} wpm = +${n.stars - speed!.paid} ⭐` : '';
+            return n ? ` · ⚡ ${n.wpm} wpm = +${n.stars - speed!.paid} 💎` : '';
           })()}
         </span>
       </div>
@@ -466,13 +466,13 @@ function LessonRound({
               {result.wpm < level.goalWpm ? `Speed goal: ${level.goalWpm} wpm.` : ''}
             </p>
           )}
-          {result.earned && result.earned.stars > 0 && <p className="typing-result__stars">+{result.earned.stars} ⭐ {result.earned.reason}</p>}
+          {result.earned && result.earned.stars > 0 && <p className="typing-result__stars">+{result.earned.stars} 💎 {result.earned.reason}</p>}
           {result.passed &&
             speed &&
             (() => {
               const got = Math.max(speed.paid, speedWorth(speed.tiers, result.wpm));
               const n = nextSpeed(speed.tiers, got);
-              return n ? <p className="hint">⚡ Type it at {n.wpm} wpm for {n.stars - got} more ⭐.</p> : null;
+              return n ? <p className="hint">⚡ Type it at {n.wpm} wpm for {n.stars - got} more 💎.</p> : null;
             })()}
           {result.passed && !passedBefore.current && stars === 0 && <p className="hint">Next lesson unlocked!</p>}
           <div className="typing-result__actions">
@@ -683,7 +683,7 @@ function BalloonPop({
         <span>{'❤️'.repeat(Math.max(0, lives))}</span>
         <span className="hint">
           Best {best}
-          {stars > 0 ? ` · beat it for +${stars} ⭐` : ''}
+          {stars > 0 ? ` · beat it for +${stars} 💎` : ''}
         </span>
       </div>
       <div className={`balloon__sky ${miss ? 'balloon__sky--miss' : ''}`}>
@@ -713,7 +713,7 @@ function BalloonPop({
                 <p>
                   Score <strong>{score}</strong>
                 </p>
-                {earned && earned.stars > 0 && <p className="typing-result__stars">+{earned.stars} ⭐ {earned.reason}</p>}
+                {earned && earned.stars > 0 && <p className="typing-result__stars">+{earned.stars} 💎 {earned.reason}</p>}
                 {earned && !earned.stars && earned.reason && <p className="hint">{earned.reason}</p>}
               </>
             )}
@@ -905,7 +905,7 @@ function Race({
               <p>
                 <strong>{Math.round(result.wpm)}</strong> words a minute · <strong>{Math.round(result.accuracy)}%</strong> right
               </p>
-              {earned && earned.stars > 0 && <p className="typing-result__stars">+{earned.stars} ⭐ {earned.reason}</p>}
+              {earned && earned.stars > 0 && <p className="typing-result__stars">+{earned.stars} 💎 {earned.reason}</p>}
               {earned && !earned.stars && earned.reason && <p className="hint">{earned.reason}</p>}
             </div>
           )}
@@ -953,9 +953,9 @@ function Race({
           </div>
           <p className="hint">
             {best > 0
-              ? `Your best winning speed: ${Math.round(best)} wpm${stars > 0 ? ` — win faster than that for +${stars} ⭐` : ''}`
+              ? `Your best winning speed: ${Math.round(best)} wpm${stars > 0 ? ` — win faster than that for +${stars} 💎` : ''}`
               : stars > 0
-                ? `Win your first race for +${stars} ⭐`
+                ? `Win your first race for +${stars} 💎`
                 : ''}
           </p>
           <button type="button" className="race__go" onClick={start}>
@@ -996,7 +996,7 @@ function Race({
   );
 }
 
-// ---- ⭐ Stars (parents) ----
+// ---- 💎 Tokens (parents) ----
 
 function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rewards) => void }) {
   const [draft, setDraft] = useState(rewards);
@@ -1015,9 +1015,9 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
   };
   return (
     <section className="panel typing-stars">
-      <h2>⭐ Stars for typing</h2>
+      <h2>💎 Tokens for typing</h2>
       <p className="hint">
-        How many ⭐ go into the Prize Bank. 0 = none. A lesson pays once, the first time it's passed. Changes apply from now on.
+        How many 💎 tokens typing earns — spent in 👕 Dress up and 🎮 Games (separate from Prize Bank ⭐ stars). 0 = none. A lesson pays once, the first time it's passed. Changes apply from now on.
       </p>
       <div className="typing-stars__grid">
         {LEVELS.map((l, i) => (
@@ -1036,10 +1036,10 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
           </label>
         ))}
       </div>
-      <h3>⚡ Speed stars for lessons</h3>
+      <h3>⚡ Speed tokens for lessons</h3>
       <p className="hint">
-        Stars for passing a lesson ({PASS_ACCURACY}% right) at a speed. A lesson is worth the highest speed reached, paid once per lesson: e.g. 10 wpm = 1 ⭐
-        and 20 wpm = 3 ⭐ means passing at 12 wpm pays 1, and later passing at 21 wpm pays 2 more (3 in all). This is on top of the stars for passing each lesson above.
+        Tokens for passing a lesson ({PASS_ACCURACY}% right) at a speed. A lesson is worth the highest speed reached, paid once per lesson: e.g. 10 wpm = 1 💎
+        and 20 wpm = 3 💎 means passing at 12 wpm pays 1, and later passing at 21 wpm pays 2 more (3 in all). This is on top of the tokens for passing each lesson above.
       </p>
       <div className="typing-speed-stars">
         {draft.speed_stars.map((t, i) => (
@@ -1059,11 +1059,11 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
               min={0}
               max={1000}
               inputMode="numeric"
-              aria-label="Stars"
+              aria-label="Tokens"
               value={t.stars}
               onChange={(e) => setDraft({ ...draft, speed_stars: draft.speed_stars.map((x, j) => (j === i ? { ...x, stars: num(e.target.value) } : x)) })}
             />
-            <span>⭐</span>
+            <span>💎</span>
             <button type="button" className="link-button" onClick={() => setDraft({ ...draft, speed_stars: draft.speed_stars.filter((_, j) => j !== i) })}>
               ✕ remove
             </button>
@@ -1079,7 +1079,7 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
         >
           + Add a speed
         </button>
-        {!draft.speed_stars.length && <p className="hint">No speed stars — lessons pay only the stars above.</p>}
+        {!draft.speed_stars.length && <p className="hint">No speed tokens — lessons pay only the tokens above.</p>}
       </div>
       <h3>Games</h3>
       <div className="typing-stars__grid">
@@ -1107,11 +1107,11 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
           </label>
         ))}
         <label>
-          <span>Game rounds that can pay ⭐ each day (not the Daily Challenge)</span>
+          <span>Game rounds that can pay 💎 each day (not the Daily Challenge)</span>
           <input type="number" min={0} inputMode="numeric" value={draft.games_per_day} onChange={(e) => setDraft({ ...draft, games_per_day: num(e.target.value) })} />
         </label>
       </div>
-      <p className="hint">🛒 Shopping Spree never pays ⭐ — its money is pretend, just for fun.</p>
+      <p className="hint">🛒 Shopping Spree never pays 💎 — its money is pretend, just for fun.</p>
       <label className="typing-stars__toggle">
         <input type="checkbox" checked={draft.daily_enabled} onChange={(e) => setDraft({ ...draft, daily_enabled: e.target.checked })} />
         Show the 🏆 Daily Challenge (its tab here, and today's results on the Family Board)

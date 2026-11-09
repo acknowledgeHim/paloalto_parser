@@ -3165,3 +3165,12 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .typing-speed-stars { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
 .typing-speed-stars__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .typing-speed-stars__row input { width: 5em; }
+/* 💎 Tokens wallet */
+.token-wallet { display: flex; flex-direction: column; gap: 8px; }
+.token-wallet__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.token-wallet__balance { font-size: 1.3em; }
+.token-wallet__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.token-wallet__row input[type='number'] { width: 6em; }
+.token-wallet__log { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow: auto; }
+.token-wallet__plus { color: #2e7d32; }
+.token-wallet__minus { color: #c62828; }

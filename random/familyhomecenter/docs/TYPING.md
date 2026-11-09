@@ -3,7 +3,7 @@
 ## In the app: 🎵 Fun → ⌨️ Typing
 
 It works on any device with a keyboard. On a tablet, tap the typing area to bring up the on-screen
-keyboard. Pick who you are in the profile switcher (top right) to save progress and earn stars.
+keyboard. Pick who you are in the profile switcher (top right) to save progress and earn 💎 tokens.
 
 - **📘 Lessons:** 16 lessons that start at the home row (F and J) and build up through every
   letter, capital letters, numbers and real sentences.
@@ -29,8 +29,8 @@ keyboard. Pick who you are in the profile switcher (top right) to save progress 
 - **🛒 Shopping Spree:** your avatar keeps grabbing things off a store shelf, and each one costs
   money. Type words to earn a dollar a letter (+$5 for five words in a row without a slip). Things
   get pricier and the grabbing gets quicker; when there isn't enough money to pay, the trip's over.
-  Score = dollars spent. **The money is pretend** — it never touches anyone's bank or stars, and this
-  game pays no ⭐.
+  Score = dollars spent. **The money is pretend** — it never touches anyone's bank or tokens, and this
+  game pays no 💎.
 
 **×2 / ×3 points:** Balloon Pop, Meteor Defense, Word Snake, Tower Builder and Shopping Spree ask
 before each round: **Normal**, **Double ×2** (longer words) or **Triple ×3** (the longest words).
@@ -53,15 +53,19 @@ how many lessons are left (the server refuses saving them too):
 - **🏆 Daily Challenge:** everyone types the same two sentences that day; a family leaderboard shows
   each person's best try (fastest at 80% right or better). Today's leaderboard also shows on the
   Family Board once someone's played. A parent can hide or show it: **Settings → ⌨️ Typing** (or
-  Typing → ⭐ Stars). Hiding it keeps everyone's results.
+  Typing → 💎 Tokens). Hiding it keeps everyone's results.
 
-- **⭐ Stars** (parents only): set how many Prize Bank stars each lesson and game pays. Any of them can be 0.
+- **💎 Tokens** (parents only): set how many 💎 tokens each lesson and game pays (tokens are spent in
+  👕 Dress up and 🎮 Games; Prize Bank ⭐ stars are separate). Any of them can be 0.
+  - **⚡ Speed tokens for lessons:** any number of speeds, e.g. 10 wpm = 1 💎 (the default) and
+    20 wpm = 3 💎. Passing a lesson (90% right) is worth the highest speed reached, once per lesson;
+    passing faster later pays the difference. On top of the per-lesson tokens.
   - A lesson pays once, the first time it's passed.
   - The games pay when someone beats their own best (top score; for Race and Silly Story, a faster
     winning speed). Shopping Spree never pays.
   - The Daily Challenge pays once a day for finishing it at 80% right.
   - "Game rounds that can pay each day" caps how many game rounds (not the Daily Challenge) can earn
-    stars per day (default 3).
+    tokens per day (default 3).
 
 Progress (lessons passed, best speeds, recent rounds) is kept per person in the database.
 

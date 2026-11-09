@@ -1,22 +1,35 @@
 # Fun extras
 
+## 💎 Tokens
+
+Tokens are the app's own currency, kept apart from the Prize Bank's ⭐ stars (stars are for prizes).
+- **Earned:** ⌨️ Typing (lessons, speed and game bests; a parent sets how many), chores and to-dos a
+  parent sets to pay **💎 Tokens**, swapping ⭐ stars for tokens, and a parent giving some.
+- **Spent:** 👕 Dress up and 🎮 Games.
+- **The 💎 wallet** (on the Games and Dress up pages): the balance, **⭐ → 💎 swap** (a parent sets the rate,
+  1 ⭐ = 1 💎 to start, 0 = off; stars can't be swapped back), **👑 Give / Take away** for parents, and
+  a history of every change.
+- When tokens arrived, everyone started with as many tokens as typing had paid them in stars so far.
+  Stars weren't changed. Things bought before then were bought with stars, so a refund gives stars
+  back; newer ones give tokens back. (New: `token_balance` column, `token_log` table, and a `currency`
+  column on `outfit_items` / `game_unlocks`. Nothing removed.)
+
 ## 👕 Dress up
 
-**Chores ▾ → 👕 Dress up**, or the 👕 link in a kid's Prize Bank column. Kids spend their Prize
-Bank ⭐ stars on pieces for their avatar. **👑 Parents dress up free:** every piece (vehicles too, so
-also in ⛰️ Hill Hopper) is theirs to wear, with no stars needed.
+**Chores ▾ → 👕 Dress up**, or the 👕 link in a kid's Prize Bank column. Kids spend their 💎 tokens on pieces for their avatar. **👑 Parents dress up free:** every piece (vehicles too, so
+also in ⛰️ Hill Hopper) is theirs to wear, with no tokens needed.
 
 - **Pieces:** a hat, glasses, something in their hand, a pet, a vehicle and a bit of magic (sparkles, hearts, flames…), one of each at a time.
-- **🚗 Vehicles** are the big things to save up for: 36 of them, and the fancier the ride, the more stars it costs:
-  - **20 ⭐:** roller skates, a skateboard, a scooter or a sled.
-  - **25–45 ⭐:** bikes, a canoe, a moped, a tractor, cars, a pickup, a sailboat, a camper van, a school bus.
-  - **50–60 ⭐:** an ambulance, a police car, a fire truck, a speedboat, a race car, a big rig, a yacht.
-  - **70–100 ⭐:** trains, a cable car, a parachute, a helicopter, planes, a cruise ship.
-  - **The top:** a 🚀 rocket (150 ⭐) and a 🛸 flying saucer (200 ⭐).
+- **🚗 Vehicles** are the big things to save up for: 36 of them, and the fancier the ride, the more tokens it costs:
+  - **20 💎:** roller skates, a skateboard, a scooter or a sled.
+  - **25–45 💎:** bikes, a canoe, a moped, a tractor, cars, a pickup, a sailboat, a camper van, a school bus.
+  - **50–60 💎:** an ambulance, a police car, a fire truck, a speedboat, a race car, a big rig, a yacht.
+  - **70–100 💎:** trains, a cable car, a parachute, a helicopter, planes, a cruise ship.
+  - **The top:** a 🚀 rocket (150 💎) and a 🛸 flying saucer (200 💎).
   The vehicle sits across the bottom of the avatar, so it looks like they are riding it.
-- **Trying and buying:** tap a piece to try it on, then **Buy it** to spend the stars. Tap a piece you own to wear it or take it off.
+- **Trying and buying:** tap a piece to try it on, then **Buy it** to spend the tokens. Tap a piece you own to wear it or take it off.
 - **Where it shows:** everywhere their avatar shows up: the floor plan, the Prize Bank, Who's home, the name switcher, chores, lists, the replay and so on. Small avatars next to names keep their pieces tucked in close.
-- **Who can change it:** a kid can only spend their own stars. A parent can do it for anyone, and can **↶ refund** a piece, which gives the stars back.
+- **Who can change it:** a kid can only spend their own tokens. A parent can do it for anyone, and can **↶ refund** a piece, which gives the tokens back.
 
 ## 🌗 Day and night on the floor plan
 
@@ -188,21 +201,21 @@ No existing data changes.
 
 ## 🎮 Games
 
-**🎵 Fun → 🎮 Games** (`/#/games`). Each game is **unlocked once with Prize Bank ⭐ stars**, then
+**🎵 Fun → 🎮 Games** (`/#/games`). Each game is **unlocked once with 💎 tokens**, then
 played as much as you like.
 
 - **Parents play free.** In **Kids' games** a parent can unlock a game for a kid (it uses the kid's
-  stars) or **↶ refund** it (stars back, game locked again; scores and progress are kept).
+  tokens) or **↶ refund** it (tokens back, game locked again; scores and progress are kept).
 - **🎟️ Plays:** a parent can give a kid a number of plays of a game instead (Kids' games → give N
   plays). Each go uses one. When they run out, the game locks again, unless the kid unlocks it for
-  good with stars. Plays add up, and **take away** clears them. Kept in the new `game_passes` table.
+  good with tokens. Plays add up, and **take away** clears them. Kept in the new `game_passes` table.
 - Kids' access has a **Games** switch (Settings → Kids' access). A kid whose sections were already
   picked by hand needs it ticked.
 - Kept per person, in new tables (`game_unlocks`, `game_scores`, `game_saves`; no existing data
   changes): unlocks, every run's score, and in-game progress.
 - Adding a game: an entry in `server/src/services/games.ts` and a page in `client/src/games/`.
 
-### ⛰️ Hill Hopper (25 ⭐)
+### ⛰️ Hill Hopper (25 💎)
 
 A side-scrolling hill driver. You drive your 👕 Dress up ride (or a buggy in your colour), with your
 own avatar at the wheel wearing your hat.
@@ -220,7 +233,7 @@ own avatar at the wheel wearing your hat.
   you go, so you can drive carefully and still reach the next one.
 - **🪙 Coins** come from the road (5, then 10 after 600 m, then 25 after 1500 m), plus flips (+25)
   and big jumps (+10). They buy **upgrades**: engine, tires, springs and fuel tank, 5 levels each
-  (100 → 2000 coins). Coins stay in the game; they're not Prize Bank stars.
+  (100 → 2000 coins). Coins stay in the game; they're not Prize Bank tokens.
 - **🌍 Worlds**, unlocked with game coins in the garage (once bought, pick any of them to drive in):
 
   | World | 🪙 | How it drives | Coins |
@@ -246,7 +259,7 @@ own avatar at the wheel wearing your hat.
 - It's the same course every run, so the **Best** flag means something. **🏆 Family best**
   shows everyone's longest run.
 
-### 🧱 Brick Tumble (20 ⭐)
+### 🧱 Brick Tumble (20 💎)
 
 A falling-bricks game, our own version (not a copy of any particular one). Bricks of four squares
 fall into a 10 × 20 well. Move and turn them, fill a row from side to side to clear it, and don't
@@ -262,5 +275,5 @@ let the pile reach the top.
   level 1, 3, 5, 7 or 10.
 - **🎨 Brick looks**, unlocked by your best score: Bright (free), 🍬 Candy 3,000, 🍓 Fruit 8,000,
   🐾 Animals 15,000, 🌌 Space 30,000.
-- 🏆 Family best, 🎟️ parent-given plays and unlocking with stars all work like Hill Hopper.
+- 🏆 Family best, 🎟️ parent-given plays and unlocking with tokens all work like Hill Hopper.
 

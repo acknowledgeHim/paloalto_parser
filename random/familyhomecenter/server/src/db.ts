@@ -1433,3 +1433,53 @@ export function setSetting(key: string, value: string): void {
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   ).run(key, value);
 }
+
+// 💎 Tokens: earned and spent inside the app (typing, chores set to pay tokens, swapping stars) and
+// spent on 👕 Dress up and 🎮 Games. Prize Bank ⭐ stars stay separate.
+try {
+  db.exec('ALTER TABLE family_members ADD COLUMN token_balance INTEGER NOT NULL DEFAULT 0');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+// What a dress-up piece / game unlock was paid in: 'tokens', or NULL = ⭐ stars (before tokens), so a
+// refund gives back the right thing.
+for (const table of ['outfit_items', 'game_unlocks']) {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT`);
+  } catch (err) {
+    if (!(err as Error).message.includes('duplicate column')) throw err;
+  }
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS token_log (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    delta INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    by_member_id TEXT,
+    at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_token_log_member ON token_log (family_member_id, at);
+`);
+// Once, when tokens arrive: everyone starts with as many tokens as typing has paid them so far (in
+// stars). Their stars aren't touched. Only the new token_balance column is set.
+if (!getSetting('tokens_started')) {
+  db.transaction(() => {
+    const now = new Date().toISOString();
+    const rows = db
+      .prepare("SELECT family_member_id AS id, SUM(stars) AS n FROM typing_results WHERE stars > 0 GROUP BY family_member_id")
+      .all() as Array<{ id: string; n: number }>;
+    for (const r of rows) {
+      if (!db.prepare('SELECT 1 FROM family_members WHERE id = ?').get(r.id)) continue;
+      db.prepare('UPDATE family_members SET token_balance = token_balance + ? WHERE id = ?').run(r.n, r.id);
+      db.prepare('INSERT INTO token_log (id, family_member_id, delta, reason, by_member_id, at) VALUES (?, ?, ?, ?, NULL, ?)').run(
+        `start-${r.id}`,
+        r.id,
+        r.n,
+        'Starting tokens: what typing had earned so far',
+        now
+      );
+    }
+    setSetting('tokens_started', now);
+  })();
+}
