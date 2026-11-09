@@ -15,6 +15,7 @@ import {
   type Upgrades,
   type World,
 } from './hillPhysics.js';
+import { CROUCH, DINO, HAZARD_COINS, HAZARD_WORLDS, Hazards } from './hillHazards.js';
 
 export interface Driver {
   id: string;
@@ -40,7 +41,7 @@ export interface RunResult {
   distance: number;
   coins: number;
   flips: number;
-  why: 'crash' | 'tipped' | 'fuel' | 'quit';
+  why: 'crash' | 'tipped' | 'fuel' | 'quit' | 'squashed' | 'zapped';
 }
 
 /** Vehicle pictures that already face right (most vehicle emoji face left, so they're mirrored). */
@@ -62,7 +63,7 @@ const LOOKS: Record<string, Look> = {
   desert: { sky: ['#ffb74d', '#fff3e0'], far: ['#f0c27b', '#e6a957'], ground: ['#e9c27a', '#c8954a'], edge: '#f6d796', orb: { color: 'rgba(255, 250, 220, 0.95)', glow: true }, decor: ['🌵', '🌵', '🐪', '🦂', '🏜️'] },
   jungle: { sky: ['#4db6ac', '#c8f7e6'], far: ['#2e7d32', '#1b5e20'], ground: ['#5d4037', '#3e2723'], edge: '#2e7d32', orb: { color: 'rgba(255, 255, 200, 0.7)' }, decor: ['🌴', '🌿', '🦜', '🐒', '🌺', '🐍'] },
   ice: { sky: ['#90caf9', '#f1f8ff'], far: ['#e3f2fd', '#bbdefb'], ground: ['#cfe8ff', '#90b8de'], edge: '#ffffff', orb: { color: 'rgba(255, 255, 255, 0.9)' }, decor: ['⛄', '🐧', '🌨️', '🏔️', '🦭'] },
-  dino: { sky: ['#bf360c', '#ffcc80'], far: ['#6d4c41', '#4e342e'], ground: ['#8d6e63', '#4e342e'], edge: '#7cb342', orb: { emoji: '🌋' }, decor: ['🦕', '🦖', '🌿', '🥚', '🌴'] },
+  dino: { sky: ['#bf360c', '#ffcc80'], far: ['#6d4c41', '#4e342e'], ground: ['#8d6e63', '#4e342e'], edge: '#7cb342', orb: { emoji: '🌋' }, decor: ['🦕', '🌿', '🥚', '🌴'] },
   water: { sky: ['#29b6f6', '#e1f5fe'], far: ['#4fc3f7', '#0288d1'], ground: ['#f4d58d', '#c9a45c'], edge: '#ffe082', orb: { color: 'rgba(255, 245, 157, 0.95)' }, decor: ['🌴', '🐚', '🦀', '⛱️', '🐢'] },
   candy: { sky: ['#f8bbd0', '#fff0f6'], far: ['#ce93d8', '#f48fb1'], ground: ['#f06292', '#ad1457'], edge: '#fff59d', orb: { emoji: '🍬' }, decor: ['🍭', '🍬', '🧁', '🍩', '🍦'] },
   moon: { sky: ['#000010', '#1a1a2e'], far: ['#3a3a4a', '#2a2a36'], ground: ['#b0b0b0', '#6e6e6e'], edge: '#d6d6d6', orb: { emoji: '🌍' }, stars: true, decor: ['🚩', '🛰️', '👨‍🚀', '🪨'] },
@@ -79,6 +80,7 @@ export function HillHopperRun({
   vehicle,
   upgrades,
   world,
+  obstacles = false,
   best,
   controls,
   onEnd,
@@ -87,6 +89,8 @@ export function HillHopperRun({
   vehicle: string | null;
   upgrades: Upgrades;
   world: World;
+  /** ⚠️ dinosaurs / aliens on (worlds in HAZARD_WORLDS only) */
+  obstacles?: boolean;
   best: number | null;
   controls: Controls;
   onEnd: (r: RunResult) => void;
@@ -131,6 +135,9 @@ export function HillHopperRun({
     const starField = Array.from({ length: 70 }, (_, i) => [((i * 7919) % 1000) / 1000, ((i * 104729) % 1000) / 1000, (i % 3) + 1]);
     const car: Car = newCar(terrain);
     const startX = car.x;
+    const hz = obstacles && HAZARD_WORLDS[world.id] ? new Hazards(world, terrain, startX) : null;
+    let shake = 0;
+    let zoom = 1;
     const pickups: Pickup[] = [];
     let placedTo = placePickups(terrain, 400, pickups, 40);
     const fuelAt = fuelSpots(20000).map((x) => ({ x, taken: false }));
@@ -159,7 +166,7 @@ export function HillHopperRun({
     const finish = (why: RunResult['why']) => {
       if (ended) return;
       ended = true;
-      onEnd({ distance: Math.max(0, Math.floor(maxX - startX)), coins, flips, why });
+      onEnd({ distance: Math.max(0, Math.floor(maxX - startX)), coins: hz ? Math.round(coins * HAZARD_COINS) : coins, flips, why });
     };
 
     const say = (text: string) => (toast = { text, until: performance.now() + 1600 });
@@ -171,6 +178,12 @@ export function HillHopperRun({
       if (started) fuel = Math.max(0, fuel - FUEL_PER_SEC * world.fuelBurn * DT);
       const r = step(car, terrain, stats, input, fuel > 0, DT);
       if (r.crashed) return finish(car.tipped > 1 ? 'tipped' : 'crash');
+      if (hz) {
+        const h = hz.update(car, DT, startX);
+        coins += h.coins;
+        if (h.say) say(h.say);
+        if (h.hit) return finish(h.hit);
+      }
       // Flips: count the turning done while both wheels are off the ground.
       if (!r.grounded) {
         airRot += car.w * DT;
@@ -218,6 +231,103 @@ export function HillHopperRun({
       if (pickups.length > 400) pickups.splice(0, pickups.findIndex((c) => c.x > car.x - 30));
     };
 
+    const drawHazards = (x0: number, x1: number, sx: (x: number) => number, sy: (y: number) => number, S: number, W: number, H: number) => {
+      if (!hz) return;
+      const emojiFont = (px: number) => `${Math.round(px)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const d of hz.dinos) {
+        const gy = terrain.h(d.x);
+        if (d.x + 4 < x0) continue;
+        if (d.x - 4 > x1) {
+          // 🦖 coming up: a warning at the right edge
+          const ahead = d.x - car.x;
+          if (ahead < 70) {
+            ctx.font = 'bold 16px system-ui, sans-serif';
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(W - 112, H * 0.42 - 18, 104, 36);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(`🦖 ${Math.round(ahead)} m ▶`, W - 60, H * 0.42);
+          }
+          continue;
+        }
+        // its shadow: bigger and darker the closer it is to the ground
+        const k = Math.max(0, 1 - d.y / 8);
+        ctx.fillStyle = `rgba(0,0,0,${0.15 + 0.25 * k})`;
+        ctx.beginPath();
+        ctx.ellipse(sx(d.x), sy(gy) + 2, DINO.halfW * S * (0.6 + 0.4 * k), S * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // crouching just before a jump (the warning), stretched while going up
+        const crouch = d.y <= 0 && d.vy <= 0 && d.awake && d.wait < CROUCH;
+        const sqY = crouch ? 0.82 : d.vy > 3 ? 1.08 : 1;
+        ctx.save();
+        ctx.translate(sx(d.x), sy(gy + d.y));
+        ctx.scale(1, sqY);
+        ctx.font = emojiFont(DINO.h * S * 1.15);
+        ctx.fillStyle = '#000'; // (emoji take the fill's see-through-ness)
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('🦖', 0, S * 0.35);
+        ctx.restore();
+      }
+      const u = hz.saucer;
+      if (u) {
+        if (u.aim && u.aim.x > x0 && u.aim.x < x1) {
+          // 🎯 where the next shot is going
+          const ax = sx(u.aim.x);
+          const ay = sy(u.aim.y - 0.4);
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
+          ctx.strokeStyle = `rgba(255,23,68,${0.5 + 0.5 * pulse})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.ellipse(ax, ay, S * 0.9, S * 0.3, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(ax - S, ay);
+          ctx.lineTo(ax + S, ay);
+          ctx.stroke();
+        }
+        for (const b of u.bolts) {
+          const bx = sx(b.x);
+          const by = sy(b.y);
+          const n = Math.hypot(b.vx, b.vy) || 1;
+          ctx.strokeStyle = 'rgba(118,255,3,0.35)';
+          ctx.lineWidth = S * 0.45;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx - (b.vx / n) * S * 1.2, by + (b.vy / n) * S * 1.2);
+          ctx.stroke();
+          ctx.strokeStyle = '#ccff90';
+          ctx.lineWidth = S * 0.15;
+          ctx.stroke();
+          ctx.lineCap = 'butt';
+        }
+        const ux = sx(u.x);
+        const uy = sy(u.y);
+        if (u.charge > 0) {
+          const glow = ctx.createRadialGradient(ux, uy + S * 0.5, 0, ux, uy + S * 0.5, S * 2.2);
+          glow.addColorStop(0, `rgba(118,255,3,${0.9 - u.charge * 0.5})`);
+          glow.addColorStop(1, 'rgba(118,255,3,0)');
+          ctx.fillStyle = glow;
+          ctx.fillRect(ux - S * 2.5, uy - S * 2, S * 5, S * 5);
+        }
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000';
+        ctx.font = emojiFont(S * 2.4);
+        ctx.fillText('🛸', ux, uy + S * 0.2);
+        ctx.font = emojiFont(S * 0.9);
+        ctx.fillText('👽', ux, uy - S * 1.0);
+        // 🛡️ shields left
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(12, 76 + 44, 110, 26);
+        ctx.fillStyle = '#fff';
+        ctx.fillText('🛡️'.repeat(Math.max(0, hz.shields)), 20, 76 + 47);
+      }
+    };
+
     const draw = () => {
       const dpr = window.devicePixelRatio || 1;
       const W = cv.clientWidth;
@@ -227,11 +337,18 @@ export function HillHopperRun({
         cv.height = Math.round(H * dpr);
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const S = Math.max(22, Math.min(W / 22, H / 11)); // pixels per metre
+      // 🦖 zoom out (and look higher) while a dinosaur is close, so you can see it jump
+      const near = hz?.dinos.some((d) => d.x - car.x < 22 && d.x - car.x > -8) ?? false;
+      zoom += ((near ? 0.68 : 1) - zoom) * 0.04;
+      const S = Math.max(15, Math.min(W / 22, H / 11) * zoom); // pixels per metre
       camY += (car.y - camY) * 0.08;
       const camX = car.x - (W * 0.32) / S;
       const sx = (x: number) => (x - camX) * S;
-      const sy = (y: number) => H * 0.58 - (y - camY) * S;
+      // 🦖 the ground shakes for a moment when a dinosaur lands nearby
+      shake = 0;
+      if (hz) for (const d of hz.dinos) if (Math.abs(d.x - car.x) < 25) shake = Math.max(shake, Math.max(0, 0.35 - (hz.time - d.landed)) * 0.6);
+      const shakeY = shake ? Math.sin(performance.now() / 18) * shake * S : 0;
+      const sy = (y: number) => H * (0.58 + (1 - zoom) * 0.4) - (y - camY) * S + shakeY;
 
       // Sky, sun / moon / planet, stars, far hills (they move slower — parallax).
       const sky = ctx.createLinearGradient(0, 0, 0, H);
@@ -395,6 +512,7 @@ export function HillHopperRun({
         ctx.restore();
       }
       ctx.save();
+      if (hz?.shielding) ctx.globalAlpha = Math.floor(performance.now() / 90) % 2 ? 0.35 : 1;
       ctx.translate(sx(car.x), sy(car.y));
       ctx.rotate(-car.a);
       if (vehicle) {
@@ -456,6 +574,8 @@ export function HillHopperRun({
       }
       ctx.restore();
 
+      if (hz) drawHazards(x0, x1, sx, sy, S, W, H);
+
       // 🌊 The sea, see-through, over everything below sea level.
       if (world.water != null) {
         const wy = sy(world.water);
@@ -491,7 +611,7 @@ export function HillHopperRun({
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect(pad, pad + 32, 150, 26);
       ctx.fillStyle = '#fff';
-      ctx.fillText(`🪙 ${coins}`, pad + 8, pad + 35);
+      ctx.fillText(`🪙 ${coins}${hz ? ` ×${HAZARD_COINS}` : ''}`, pad + 8, pad + 35);
       const dist = Math.max(0, Math.floor(maxX - startX));
       ctx.textAlign = 'right';
       ctx.font = 'bold 22px system-ui, sans-serif';

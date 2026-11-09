@@ -234,6 +234,13 @@ own avatar at the wheel wearing your hat.
   | 🌕 The Moon | 2600 | low gravity, giant floaty jumps | ×2 |
   | ☀️ The Sun | 3500 | heavy gravity; the heat burns fuel fast | ×2.5 |
 
+  **⚠️ Add obstacles** (a switch on the world's card, once it's unlocked; ×1.5 coins while on):
+  - 🦖 **Dino Land:** big dinosaurs stand on the road and jump. They crouch just before a jump.
+    Drive underneath while one is in the air (+15 coins); if it lands on you, or you drive into it,
+    you're squashed. A "🦖 40 m ▶" sign warns you one is coming, and the camera zooms out near one.
+  - 👽 **The Moon:** aliens in a flying saucer follow you. When it glows, a red target shows where
+    the zapper will land: where you'd be if you kept going at the same speed. Speed up or slow down
+    to dodge (+5 each miss). You have 🛡️🛡️🛡️ shields; the third zap ends the run.
   Each world has its own course and its own **Best** (your Green Hills best from before carries over).
 - It's the same course every run, so the **Best** flag means something. **🏆 Family best**
   shows everyone's longest run.

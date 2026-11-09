@@ -6,6 +6,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
+import { HAZARD_COINS, HAZARD_WORLDS } from './hillHazards.js';
 import { DEFAULT_CONTROLS, HillHopperRun, keyName, type Controls, type RunResult } from './HillHopperRun.js';
 
 interface Save {
@@ -17,6 +18,8 @@ interface Save {
   worlds: string[];
   world: string;
   bests: Record<string, number>;
+  /** ⚠️ worlds with obstacles turned on (🦖 dino, 👽 moon) */
+  obstacles: string[];
 }
 interface PlayInfo {
   owned: boolean;
@@ -39,6 +42,8 @@ const WHY: Record<RunResult['why'], string> = {
   tipped: '🙃 Flipped over! Ease off the gas (or brake) when the nose comes up.',
   fuel: '⛽ Out of fuel.',
   quit: '✕ Stopped.',
+  squashed: '🦖 Squashed by a dinosaur! Wait for it to jump, then zoom underneath.',
+  zapped: '👽 Zapped by the aliens! When the saucer glows, speed up or slow down.',
 };
 const MOUSE_LABEL: Record<Controls['mouse'], string> = {
   pedals: 'Click / tap the on-screen pedals',
@@ -52,7 +57,7 @@ export function HillHopperPage() {
   const me = activeProfile;
   const catalog = useOutfitCatalog();
   const [info, setInfo] = useState<PlayInfo | null>(null);
-  const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS, worlds: ['hills'], world: 'hills', bests: {} });
+  const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS, worlds: ['hills'], world: 'hills', bests: {}, obstacles: [] });
   const [listening, setListening] = useState<'gas' | 'brake' | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +80,7 @@ export function HillHopperPage() {
           world: i.save?.world ?? 'hills',
           // Runs from before worlds existed were all on Green Hills.
           bests: { hills: i.best ?? 0, ...(i.save?.bests ?? {}) },
+          obstacles: i.save?.obstacles ?? [],
         });
       })
       .catch((e) => setError((e as Error).message));
@@ -150,6 +156,7 @@ export function HillHopperPage() {
         vehicle={vehicleEmoji}
         upgrades={save.upgrades}
         world={world}
+        obstacles={save.obstacles.includes(world.id)}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -192,7 +199,8 @@ export function HillHopperPage() {
         <div>
           <div className="hill-garage__name">{me.name}</div>
           <div className="hint">
-            🪙 {save.coins} coins · {world.emoji} {world.name} · Best {save.bests[world.id] ?? 0} m
+            🪙 {save.coins} coins · {world.emoji} {world.name}
+            {save.obstacles.includes(world.id) ? ` + ${HAZARD_WORLDS[world.id]?.emoji ?? ''} obstacles` : ''} · Best {save.bests[world.id] ?? 0} m
           </div>
         </div>
         <div className="hill-garage__go-wrap">
@@ -235,6 +243,20 @@ export function HillHopperPage() {
                 <span className="hint">{w.blurb}</span>
                 {have && save.bests[w.id] ? <span className="hint">🏁 Best {save.bests[w.id]} m</span> : null}
                 {w.coinMul > 1 && <span className="hint">🪙 ×{w.coinMul} coins</span>}
+                {have && HAZARD_WORLDS[w.id] && (
+                  <label className="privacy-toggle hill-garage__obstacles">
+                    <input
+                      type="checkbox"
+                      checked={save.obstacles.includes(w.id)}
+                      onChange={(e) =>
+                        void store({ ...save, world: w.id, obstacles: e.target.checked ? [...save.obstacles, w.id] : save.obstacles.filter((x) => x !== w.id) })
+                      }
+                    />
+                    <span>
+                      {HAZARD_WORLDS[w.id].emoji} Add obstacles <span className="hint">— {HAZARD_WORLDS[w.id].text} 🪙 ×{HAZARD_COINS}</span>
+                    </span>
+                  </label>
+                )}
                 {on ? (
                   <span className="hill-garage__world-on">✓ Driving here</span>
                 ) : have ? (
