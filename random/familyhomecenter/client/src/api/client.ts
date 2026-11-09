@@ -366,7 +366,12 @@ export interface OutfitCatalog {
   items: OutfitItem[];
 }
 export interface Closet {
+  /** what they can wear (for a parent: everything) */
   owned: string[];
+  /** what was actually bought with stars (can be refunded) */
+  bought?: string[];
+  /** 👑 a parent: dresses up free */
+  free?: boolean;
   outfit: Partial<Record<OutfitSlot, string>>;
   star_balance: number;
 }

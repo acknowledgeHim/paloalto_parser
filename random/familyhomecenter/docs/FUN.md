@@ -3,7 +3,8 @@
 ## 👕 Dress up
 
 **Chores ▾ → 👕 Dress up**, or the 👕 link in a kid's Prize Bank column. Kids spend their Prize
-Bank ⭐ stars on pieces for their avatar.
+Bank ⭐ stars on pieces for their avatar. **👑 Parents dress up free:** every piece (vehicles too, so
+also in ⛰️ Hill Hopper) is theirs to wear, with no stars needed.
 
 - **Pieces:** a hat, glasses, something in their hand, a pet, a vehicle and a bit of magic (sparkles, hearts, flames…), one of each at a time.
 - **🚗 Vehicles** are the big things to save up for: 36 of them, and the fancier the ride, the more stars it costs:

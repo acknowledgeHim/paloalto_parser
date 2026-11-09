@@ -79,7 +79,7 @@ export function DressUpPage() {
         </div>
         <div className="dress-up__who">
           <h2>{member.name}</h2>
-          <div className="dress-up__stars">⭐ {stars} stars to spend</div>
+          <div className="dress-up__stars">{closet?.free ? '👑 Parents dress up free — tap anything to wear it' : `⭐ ${stars} stars to spend`}</div>
           {tryOn && (
             <div className="dress-up__tryon">
               Trying on the <strong>{tryOn.emoji} {tryOn.name}</strong> · {tryOn.stars} ⭐
@@ -92,7 +92,7 @@ export function DressUpPage() {
             </div>
           )}
           {error && <div className="settings-login__error">{error}</div>}
-          <p className="hint">Tap a piece to try it on. Earn stars with chores and to-dos.</p>
+          <p className="hint">{closet?.free ? 'Tap a piece to put it on, tap again to take it off.' : 'Tap a piece to try it on. Earn stars with chores and to-dos.'}</p>
         </div>
       </section>
 
@@ -125,9 +125,9 @@ export function DressUpPage() {
                       >
                         <span className="dress-up__emoji">{item.emoji}</span>
                         <span className="dress-up__name">{item.name}</span>
-                        <span className="dress-up__price">{on ? '✓ Wearing' : owned ? 'Yours' : `${item.stars} ⭐`}</span>
+                        <span className="dress-up__price">{on ? '✓ Wearing' : closet?.free ? 'Free' : owned ? 'Yours' : `${item.stars} ⭐`}</span>
                       </button>
-                      {owned && isParent && (
+                      {(closet?.bought ?? closet?.owned ?? []).includes(item.id) && isParent && (
                         <button type="button" className="link-button dress-up__refund" onClick={() => refund(item)}>
                           ↶ refund
                         </button>

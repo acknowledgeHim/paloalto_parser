@@ -17,7 +17,9 @@ function closet(memberId: string) {
   const owned = (db.prepare('SELECT item_id FROM outfit_items WHERE family_member_id = ?').all(memberId) as Array<{ item_id: string }>).map(
     (r) => r.item_id
   );
-  return { owned, outfit: parseOutfit(member.avatar_outfit), star_balance: member.star_balance };
+  // 👑 Parents dress up free: every piece is theirs to wear (nothing is bought or stored for it).
+  const free = member.is_parent === 1;
+  return { owned: free ? OUTFIT_ITEMS.map((i) => i.id) : owned, bought: owned, free, outfit: parseOutfit(member.avatar_outfit), star_balance: member.star_balance };
 }
 
 outfitsRouter.get('/:memberId', (req, res) => {
@@ -35,7 +37,7 @@ outfitsRouter.post('/:memberId/buy', (req, res) => {
   if (!item) return res.status(400).json({ error: 'No such outfit piece' });
   const c = closet(memberId);
   if (!c) return res.status(404).json({ error: 'not found' });
-  if (c.owned.includes(item.id)) return res.status(400).json({ error: 'Already have it' });
+  if (c.owned.includes(item.id)) return res.status(400).json({ error: c.free ? 'Parents can wear everything free' : 'Already have it' });
   if (c.star_balance < item.stars) return res.status(400).json({ error: `Needs ${item.stars} ⭐ — ${item.stars - c.star_balance} more to go` });
   db.transaction(() => {
     db.prepare('UPDATE family_members SET star_balance = star_balance - ? WHERE id = ?').run(item.stars, memberId);
