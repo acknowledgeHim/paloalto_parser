@@ -152,6 +152,8 @@ export function LearningSettingsPage() {
         {status && <span className="hint">{status}</span>}
       </div>
 
+      <LessonTokenSettings />
+
       <section className="panel">
         <h2>🗣️ Speaking the words</h2>
         <p className="hint">
@@ -168,5 +170,115 @@ export function LearningSettingsPage() {
         </button>
       </section>
     </div>
+  );
+}
+
+type LessonSubject = 'grammar' | 'math' | 'history';
+const LESSON_LABELS: Record<LessonSubject, string> = { grammar: '📖 Grammar lessons', math: '📖 Math lessons', history: '🇺🇸 US History' };
+interface LessonRow {
+  id: string;
+  grade: number;
+  title: string;
+  topic: string;
+  tokens_set: number | null;
+  hidden: boolean;
+}
+
+/** 📖 Lessons: tokens for passing each lesson's quiz (the subject's usual amount, or per lesson), and the pass mark. */
+function LessonTokenSettings() {
+  const { activeProfile } = useFamilyMembers();
+  const [settings, setSettings] = useState<Record<LessonSubject, { tokens: number; pass_pct: number }> | null>(null);
+  const [lessons, setLessons] = useState<Record<string, LessonRow[]>>({});
+  const [grades, setGrades] = useState<string[]>([]);
+  const [changed, setChanged] = useState<Record<string, number | null>>({});
+  const [status, setStatus] = useState<string | null>(null);
+
+  const load = () => {
+    api.get<Record<LessonSubject, { tokens: number; pass_pct: number }>>('/learning/lessons/settings').then(setSettings).catch(() => {});
+    for (const s of Object.keys(LESSON_LABELS))
+      api
+        .get<{ grades: string[]; lessons: LessonRow[] }>(`/learning/lessons?subject=${s}&all=1`)
+        .then((r) => {
+          setGrades(r.grades);
+          setLessons((x) => ({ ...x, [s]: r.lessons }));
+        })
+        .catch(() => {});
+  };
+  useEffect(load, []);
+  if (!settings) return null;
+
+  const save = async () => {
+    setStatus('Saving…');
+    try {
+      await api.put('/learning/lessons/settings', settings);
+      for (const [id, tokens] of Object.entries(changed)) await api.put(`/learning/lessons/${id}`, { tokens, acting_member_id: activeProfile?.id ?? null });
+      setChanged({});
+      load();
+      setStatus('Saved ✓');
+    } catch (e) {
+      setStatus((e as Error).message);
+    }
+  };
+
+  return (
+    <section className="panel">
+      <h2>📖 Lessons — 💎 tokens</h2>
+      <p className="hint">
+        Passing a lesson's quiz pays once per lesson, for lessons at the kid's grade or higher. Each lesson pays the usual amount for its subject unless you set
+        its own. Edit the lessons themselves (what's read and quizzed) on each lesson page with ✏️ Edit.
+      </p>
+      {(Object.keys(LESSON_LABELS) as LessonSubject[]).map((s) => (
+        <div key={s} className="lesson-settings__subject">
+          <h3>{LESSON_LABELS[s]}</h3>
+          <label className="learning-settings__perday">
+            Usual amount per lesson:
+            <input type="number" min={0} max={1000} value={settings[s].tokens} onChange={(e) => setSettings({ ...settings, [s]: { ...settings[s], tokens: Math.max(0, Math.round(Number(e.target.value) || 0)) } })} /> 💎
+          </label>
+          <label className="learning-settings__perday">
+            Pass mark:
+            <select value={settings[s].pass_pct} onChange={(e) => setSettings({ ...settings, [s]: { ...settings[s], pass_pct: Number(e.target.value) } })}>
+              {[50, 60, 67, 70, 75, 80, 90, 100].map((p) => (
+                <option key={p} value={p}>
+                  {p}% right
+                </option>
+              ))}
+            </select>
+          </label>
+          <details>
+            <summary>Set a different amount for single lessons ({(lessons[s] ?? []).length})</summary>
+            <div className="lesson-settings__list">
+              {(lessons[s] ?? []).map((l) => {
+                const v = l.id in changed ? changed[l.id] : l.tokens_set;
+                return (
+                  <div key={l.id} className="lesson-settings__row">
+                    <span>
+                      <span className="hint">{grades[l.grade]} · </span>
+                      {l.title}
+                      {l.hidden ? ' 🙈' : ''}
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={1000}
+                      placeholder={`${settings[s].tokens} (usual)`}
+                      value={v ?? ''}
+                      aria-label={`Tokens for ${l.title}`}
+                      onChange={(e) => setChanged({ ...changed, [l.id]: e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <p className="hint">Leave a box empty to use the usual amount.</p>
+          </details>
+        </div>
+      ))}
+      <div className="typing-stars__actions">
+        <button type="button" onClick={() => void save()}>
+          Save lesson tokens
+        </button>
+        {status && <span className="hint">{status}</span>}
+      </div>
+    </section>
   );
 }

@@ -184,6 +184,11 @@ export function TapMistakesPage({ game }: { game: TapGame }) {
           ))}
           <li>Try any grade. Tokens come from your own grade or higher (a parent sets your grade).</li>
         </ul>
+        {game.subject === 'grammar' && (
+          <p>
+            <Link to="/grammar/lessons">📖 Grammar lessons</Link> — the rules in plain words, with a quiz for 💎.
+          </p>
+        )}
         {person?.is_parent && <Link to="/learning/settings">⚙️ Grades & tokens</Link>}
       </section>
     </div>

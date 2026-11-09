@@ -93,7 +93,35 @@ Answers that need rounding say so. Some problems are tap-a-choice instead (like 
 the right answer and a tip, and that answer is then final. Problem types live in
 `server/src/services/mathGen.ts`.
 
+## 📖 Lessons: Grammar, Math and 🇺🇸 US History
+
+Read a lesson (a rule, formula or piece of history in plain words, with examples), then take its quiz.
+Passing (80% right by default) pays 💎 tokens **once per lesson**, for lessons at the kid's grade or
+higher. Kids can read any lesson; younger-grade ones are for practice.
+
+- **📖 Grammar lessons:** 27 lessons, K–12 (capitals, there/their/they're, I/me, who/whom, …).
+- **📖 Math lessons:** 28 lessons, K–12 (make a 10, long division, fractions, equations, slope,
+  quadratics, the Pythagorean theorem, SOH-CAH-TOA, sequences, derivatives, integrals).
+- **🇺🇸 US History:** the Declaration of Independence, the Constitution, the Revolutionary War, the
+  Civil War, WWI and WWII. It starts simple for K–2 and adds detail for 3–5 and 6–8. In 9–12 it goes
+  piece by piece: Articles I, II, III, IV–VII, the Bill of Rights, the later amendments, federalism,
+  Reconstruction, the Gettysburg Address, and more. A lesson's grade is the top of the grades it's
+  written for (K–2 lessons are "2nd grade").
+
+**Parents can edit everything.** Open any lesson and tap **✏️ Edit** to change the text, the quiz
+(questions, choices, the right answer, an optional "why"), the grade and topic, or its tokens. You can
+also **hide** a lesson; it's kept, and untick to show it again. **＋ New lesson** adds your own.
+Lessons are never deleted. A later update adds new built-in lessons but never overwrites ones you've
+edited.
+
+**Tokens:** 📚 Learning → ⚙️ Grades & tokens → 📖 Lessons sets each subject's usual amount (1 💎;
+history 2 💎), the pass mark, and optionally an amount for a single lesson.
+
+Lesson text markup: `## ` heading, `- ` bullet, `1. ` step, `**bold**`, ✅ / ❌ example lines, and a
+blank line between paragraphs.
+
 ## Data
 
-New tables only: `learning_grades` (each kid's grade) and `learning_results` (every round: grade,
-right out of 10, tokens, the words missed). Settings in `settings.learning_rewards`.
+New tables only: `learning_grades` (each kid's grade), `learning_results` (every round: grade,
+right out of 10, tokens, the words missed), `learning_lessons` (the lessons, built-in and parents'), and
+`learning_lessons_done` (every quiz taken). Settings in `settings.learning_rewards`.

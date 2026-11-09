@@ -1507,3 +1507,36 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_learning_results_member ON learning_results (family_member_id, subject, at);
 `);
+
+// 📖 Lessons (📚 Learning: Grammar, Math, US History): a reading, then a quiz. Built-in ones are
+// added once (never over a parent's edits); parents can edit, add and hide (never delete) them.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS learning_lessons (
+    id TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    topic TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    quiz TEXT NOT NULL DEFAULT '[]',
+    tokens INTEGER,
+    sort INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    builtin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_lessons_subject ON learning_lessons (subject, grade, sort);
+  CREATE TABLE IF NOT EXISTS learning_lessons_done (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    lesson_id TEXT NOT NULL,
+    at TEXT NOT NULL,
+    correct INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    passed INTEGER NOT NULL DEFAULT 0,
+    tokens INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_lessons_done_member ON learning_lessons_done (family_member_id, lesson_id);
+`);

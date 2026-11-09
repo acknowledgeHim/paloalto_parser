@@ -172,6 +172,9 @@ export function MathPage() {
           <li>6th grade is Pre-Algebra, then Algebra, Algebra II, Geometry, Trigonometry, Pre-Calculus and Calculus in 12th.</li>
           <li>Try any grade. Tokens come from your own grade or higher (a parent sets your grade).</li>
         </ul>
+        <p>
+          <Link to="/math/lessons">📖 Math lessons</Link> — rules, formulas and theorems in plain words, with a quiz for 💎.
+        </p>
         {person?.is_parent && <Link to="/learning/settings">⚙️ Grades & tokens</Link>}
       </section>
     </div>

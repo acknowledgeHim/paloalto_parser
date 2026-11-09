@@ -32,6 +32,7 @@ import { GamesPage } from './pages/GamesPage.js';
 import { HillHopperPage } from './games/HillHopperPage.js';
 import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { ResourceUsagePage } from './pages/ResourceUsagePage.js';
+import { GRAMMAR_LESSONS, HISTORY_LESSONS, LessonsPage, MATH_LESSONS } from './pages/LessonsPage.js';
 import { MathPage } from './pages/MathPage.js';
 import { SpellingPage } from './pages/SpellingPage.js';
 import { GRAMMAR_GAME, SPELLCHECK_GAME, TapMistakesPage } from './pages/TapMistakesPage.js';
@@ -157,6 +158,9 @@ export function App() {
           <Route path="/spelling" element={<SpellingPage />} />
           <Route path="/spelling/spot" element={<TapMistakesPage key="spellcheck" game={SPELLCHECK_GAME} />} />
           <Route path="/math" element={<MathPage />} />
+          <Route path="/math/lessons" element={<LessonsPage key="math" config={MATH_LESSONS} />} />
+          <Route path="/grammar/lessons" element={<LessonsPage key="grammar" config={GRAMMAR_LESSONS} />} />
+          <Route path="/history" element={<LessonsPage key="history" config={HISTORY_LESSONS} />} />
           <Route path="/grammar" element={<TapMistakesPage key="grammar" game={GRAMMAR_GAME} />} />
           <Route path="/learning/settings" element={<LearningSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
