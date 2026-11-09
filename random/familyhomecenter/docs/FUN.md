@@ -203,11 +203,17 @@ played as much as you like.
 A side-scrolling hill driver. You drive your 👕 Dress up ride (or a buggy in your colour), with your
 own avatar at the wheel wearing your hat.
 
-- **GAS** (right pedal, → / D) and **BRAKE** (left pedal, ← / A; it reverses once stopped). The
-  big pedals are made for the touch screen.
-- **Balance:** too much gas on a hill tips you over backwards. If your head touches the ground,
-  the run's over. In the air, gas tips you back and brake tips you forward.
-- **⛽ Fuel** runs down while you drive. Grab cans, which get further apart the further you go.
+- **Controls** (🎮 Controls in the garage, saved per person):
+  - **Keys:** gas → / D and brake ← / A to start with. Press **Change**, then any key.
+  - **Mouse:** the on-screen pedals, *or* hold the left button for gas and the right button for brake,
+    *or* hold the right half of the game for gas and the left half for brake.
+  - The big on-screen pedals always work too, for the touch screen. Brake reverses once stopped.
+- **It's bouncy:** gas lifts the nose (the engine twists the car back). Too much on a climb flips you
+  over, so ease off or tap the brake. Holding gas the whole way flips you before ~200 m. The run
+  ends if your head touches the ground, or if you end up on your back or standing on your tail
+  for a second. In the air, gas tips you back and brake tips you forward.
+- **⛽ Fuel** runs down while you drive. Cans come every ~150 m at first, a little further apart as
+  you go, so you can drive carefully and still reach the next one.
 - **🪙 Coins** come from the road (5, then 10 after 600 m, then 25 after 1500 m), plus flips (+25)
   and big jumps (+10). They buy **upgrades**: engine, tires, springs and fuel tank, 5 levels each
   (100 → 2000 coins). Coins stay in the game; they're not Prize Bank stars.

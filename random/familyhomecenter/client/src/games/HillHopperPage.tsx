@@ -5,12 +5,13 @@ import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, type Upgrades } from './hillPhysics.js';
-import { HillHopperRun, type RunResult } from './HillHopperRun.js';
+import { DEFAULT_CONTROLS, HillHopperRun, keyName, type Controls, type RunResult } from './HillHopperRun.js';
 
 interface Save {
   coins: number;
   upgrades: Upgrades;
   vehicle: string | null; // a Dress up vehicle id, or null for the buggy
+  controls: Controls;
 }
 interface PlayInfo {
   save: Partial<Save> | null;
@@ -26,7 +27,17 @@ const UPGRADE_LABEL: Record<keyof Upgrades, string> = {
   springs: '🪀 Springs — smoother over bumps',
   tank: '⛽ Fuel tank — drive longer between cans',
 };
-const WHY: Record<RunResult['why'], string> = { crash: '💥 Bonk! Your head hit the ground.', fuel: '⛽ Out of fuel.', quit: '✕ Stopped.' };
+const WHY: Record<RunResult['why'], string> = {
+  crash: '💥 Bonk! Your head hit the ground.',
+  tipped: '🙃 Flipped over! Ease off the gas (or brake) when the nose comes up.',
+  fuel: '⛽ Out of fuel.',
+  quit: '✕ Stopped.',
+};
+const MOUSE_LABEL: Record<Controls['mouse'], string> = {
+  pedals: 'Click / tap the on-screen pedals',
+  buttons: 'Hold the left mouse button for gas, the right one for brake (anywhere on the game)',
+  sides: 'Hold the right half of the game for gas, the left half for brake (mouse or finger)',
+};
 
 /** ⛰️ Hill Hopper: the garage (upgrades, which ride to drive, best runs), then the run itself. */
 export function HillHopperPage() {
@@ -34,7 +45,8 @@ export function HillHopperPage() {
   const me = activeProfile;
   const catalog = useOutfitCatalog();
   const [info, setInfo] = useState<PlayInfo | null>(null);
-  const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null });
+  const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS });
+  const [listening, setListening] = useState<'gas' | 'brake' | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -51,6 +63,7 @@ export function HillHopperPage() {
           coins: i.save?.coins ?? 0,
           upgrades: { ...NO_UPGRADES, ...(i.save?.upgrades ?? {}) },
           vehicle: i.save?.vehicle !== undefined ? i.save.vehicle : worn,
+          controls: { ...DEFAULT_CONTROLS, ...(i.save?.controls ?? {}) },
         });
       })
       .catch((e) => setError((e as Error).message));
@@ -81,6 +94,24 @@ export function HillHopperPage() {
     }
   };
 
+  // "Press a key…": the next key pressed becomes that pedal's key.
+  useEffect(() => {
+    if (!listening) return;
+    const pick = (e: KeyboardEvent) => {
+      e.preventDefault();
+      const k = e.key.toLowerCase();
+      setListening(null);
+      if (k === 'escape') return;
+      const c = save.controls;
+      const other = listening === 'gas' ? 'brakeKeys' : 'gasKeys';
+      const mine = listening === 'gas' ? 'gasKeys' : 'brakeKeys';
+      void store({ ...save, controls: { ...c, [mine]: [k], [other]: c[other].filter((x) => x !== k) } });
+    };
+    window.addEventListener('keydown', pick);
+    return () => window.removeEventListener('keydown', pick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening]);
+
   if (!me) {
     return (
       <div className="panel">
@@ -107,6 +138,7 @@ export function HillHopperPage() {
         vehicle={vehicleEmoji}
         upgrades={save.upgrades}
         best={info.best}
+        controls={save.controls}
         onEnd={(r) => {
           setPlaying(false);
           setLast({ r, newBest: r.distance > (info.best ?? 0) });
@@ -173,6 +205,37 @@ export function HillHopperPage() {
       </section>
 
       <section className="panel">
+        <h2>🎮 Controls</h2>
+        {(['gas', 'brake'] as const).map((p) => {
+          const keys = p === 'gas' ? save.controls.gasKeys : save.controls.brakeKeys;
+          return (
+            <div key={p} className="hill-garage__upgrade">
+              <span>
+                {p === 'gas' ? '🟢 Gas' : '🔴 Brake'} key: <strong>{keys.length ? keys.map(keyName).join(' / ') : 'none'}</strong>
+              </span>
+              <button type="button" className="secondary" onClick={() => setListening(listening === p ? null : p)}>
+                {listening === p ? 'Press a key… (Esc = cancel)' : 'Change'}
+              </button>
+            </div>
+          );
+        })}
+        <div className="hill-garage__mouse" role="radiogroup" aria-label="Mouse">
+          {(Object.keys(MOUSE_LABEL) as Array<Controls['mouse']>).map((m) => (
+            <label key={m} className="privacy-toggle">
+              <input type="radio" name="hill-mouse" checked={save.controls.mouse === m} onChange={() => void store({ ...save, controls: { ...save.controls, mouse: m } })} />
+              <span>🖱️ {MOUSE_LABEL[m]}</span>
+            </label>
+          ))}
+        </div>
+        <p className="hint">
+          The on-screen pedals always work too (touch screens).{' '}
+          <button type="button" className="link-button" onClick={() => void store({ ...save, controls: DEFAULT_CONTROLS })}>
+            Back to the usual keys (→ / D gas, ← / A brake)
+          </button>
+        </p>
+      </section>
+
+      <section className="panel">
         <h2>🔧 Upgrades</h2>
         {UPGRADE_KEYS.map((k) => {
           const lvl = save.upgrades[k];
@@ -219,8 +282,8 @@ export function HillHopperPage() {
       <section className="panel">
         <h2>How to play</h2>
         <ul className="hint">
-          <li><strong>GAS</strong> (right pedal, → or D) to go; <strong>BRAKE</strong> (left pedal, ← or A) to slow down or back up.</li>
-          <li>Too much gas on a hill tips you over backwards — ease off. If your head touches the ground, the run's over.</li>
+          <li><strong>GAS</strong> to go, <strong>BRAKE</strong> to slow down or back up — keys and mouse are set under 🎮 Controls.</li>
+          <li>The car is bouncy: gas lifts the nose, and too much on a hill flips you over backwards. Ease off, or tap the brake to bring the nose down. Landing on your head — or on your back — ends the run.</li>
           <li>In the air, gas tips you back and brake tips you forward: land on your wheels, or do a flip for coins.</li>
           <li>Grab ⛽ cans before the tank runs dry. They get further apart the further you go.</li>
         </ul>

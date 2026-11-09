@@ -31,6 +31,25 @@ function mulberry32(seed: number) {
 
 const STEP = 6; // metres between hill points
 
+/**
+ * The feel of the game in one place (tuned with a simulated driver: holding gas the whole way
+ * flips over well before 300 m; easing off and braking on climbs gets much further).
+ */
+export const TUNE = {
+  bumpStart: 1.3, // bump size at the start…
+  bumpGrow: 300, // …growing by 1 m every this many metres…
+  bumpMax: 3.0, // …up to this
+  react: 0.55, // how much the engine twists the body back (wheelies / flipping over on climbs)
+  groundTilt: 2.0, // gas / brake tipping the body while on the ground
+  airTilt: 5.5, // … and in the air
+  bounce: 1.25, // how hard the ground pushes back (1 = no bounce)
+  springK: 170,
+  springC: 4.5,
+  firstCan: 150, // fuel can spacing
+  canGap: 150,
+  canGapGrow: 12,
+};
+
 /** The same course every run (so "Best" means something): flat to start, then hills that get bigger the further you go. */
 export class Terrain {
   private pts: number[] = [];
@@ -48,7 +67,7 @@ export class Terrain {
         continue;
       }
       const prev = this.pts[k - 1];
-      const size = Math.min(0.9 + x / 450, 2.8); // how big the bumps get
+      const size = Math.min(TUNE.bumpStart + x / TUNE.bumpGrow, TUNE.bumpMax); // how big the bumps get
       const trend = Math.sin(x / 140) * 0.9 + 0.25; // long climbs and dips, mostly uphill
       this.pts.push(prev + trend * size * 0.6 + (this.rand() * 2 - 1) * size);
     }
@@ -98,11 +117,11 @@ export function placePickups(t: Terrain, upTo: number, into: Pickup[], from: num
 /** Fuel cans: further apart the further you go. */
 export function fuelSpots(upTo: number): number[] {
   const out: number[] = [];
-  let x = 220;
-  let gap = 230;
+  let x = TUNE.firstCan;
+  let gap = TUNE.canGap;
   while (x < upTo) {
     out.push(x);
-    gap += 25;
+    gap += TUNE.canGapGrow;
     x += gap;
   }
   return out;
@@ -130,6 +149,8 @@ export interface Car {
   vy: number;
   w: number;
   wheels: [Wheel, Wheel];
+  /** How long it's been standing on its tail / lying on its back (over 1 s = tipped over). */
+  tipped: number;
 }
 
 export const WHEEL_R = 0.42;
@@ -151,7 +172,7 @@ const BODY_PTS = [
 export function newCar(t: Terrain, x = 6): Car {
   const y = t.h(x) + WHEEL_R + 0.75;
   const wheel = (ax: number): Wheel => ({ x: x + ax, y: y - 0.5, vx: 0, vy: 0, spin: 0, angle: 0, ground: false, ax, ay: -0.5 });
-  return { x, y, a: 0, vx: 0, vy: 0, w: 0, wheels: [wheel(-1.05), wheel(1.05)] };
+  return { x, y, a: 0, vx: 0, vy: 0, w: 0, wheels: [wheel(-1.05), wheel(1.05)], tipped: 0 };
 }
 
 export interface Stats {
@@ -168,8 +189,8 @@ export function statsFor(u: Upgrades): Stats {
     torque: 1.7 * (1 + 0.22 * u.engine),
     maxSpeed: 13 + 2.6 * u.engine,
     grip: 0.95 + 0.14 * u.tires,
-    k: 230 + 30 * u.springs,
-    c: 9 + 1.2 * u.springs,
+    k: TUNE.springK + 25 * u.springs,
+    c: TUNE.springC + 1.1 * u.springs, // better springs: less bouncy
     tank: 100 * (1 + 0.25 * u.tank),
   };
 }
@@ -219,9 +240,13 @@ export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolea
   const maxSpin = s.maxSpeed / WHEEL_R;
   for (const wh of car.wheels) {
     if (drive > 0) {
-      if (wh.spin < maxSpin) wh.spin += ((drive * s.torque) / IW) * dt;
+      if (wh.spin < maxSpin) {
+        wh.spin += ((drive * s.torque) / IW) * dt;
+        // The wheels push back on the body: accelerating lifts the nose (and can flip you over).
+        if (wh.ground) car.w += ((TUNE.react * drive * s.torque) / I) * dt;
+      }
     } else if (drive < 0) {
-      if (wh.spin > 0.5) wh.spin *= Math.exp(-9 * dt); // brake
+      if (wh.spin > 0.5) wh.spin = Math.max(0, wh.spin * Math.exp(-12 * dt) - 30 * dt); // brake — firmly
       else if (wh.spin > -maxSpin * 0.35) wh.spin -= ((s.torque * 0.6) / IW) * dt; // reverse, slower
     } else {
       wh.spin *= Math.exp(-0.25 * dt); // rolling slowly to a stop
@@ -231,7 +256,7 @@ export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolea
 
   // Tilt: gas = nose up, brake = nose down. A lot in the air, a little on the ground (wheelies).
   const grounded = car.wheels.some((wh) => wh.ground);
-  car.w += pedal * (grounded ? 1.6 : 5.5) * dt * (fuel || !grounded ? 1 : 0);
+  car.w += pedal * (grounded ? TUNE.groundTilt : TUNE.airTilt) * dt * (fuel || !grounded ? 1 : 0);
   car.w *= Math.exp(-(grounded ? 0.6 : 0.25) * dt);
 
   // Move.
@@ -258,7 +283,7 @@ export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolea
     const vn = wh.vx * nx + wh.vy * ny;
     let jn = 0;
     if (vn < 0) {
-      jn = -vn * MW * 1.05;
+      jn = -vn * MW * TUNE.bounce;
       wh.vx += (nx * jn) / MW;
       wh.vy += (ny * jn) / MW;
     }
@@ -300,6 +325,10 @@ export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolea
 
   // The driver's head touching the ground = the end.
   const head = rot(car, HEAD.x, HEAD.y);
-  const crashed = head.y - HEAD.r * 0.7 < t.h(head.x);
+  // Standing on its tail or lying on its back (turned 90°+ from the ground) for a second: tipped over.
+  const rel = Math.atan2(Math.sin(car.a - Math.atan(t.slope(car.x))), Math.cos(car.a - Math.atan(t.slope(car.x))));
+  const nearGround = car.y - t.h(car.x) < 2.2;
+  car.tipped = Math.abs(rel) > 1.5 && nearGround ? car.tipped + dt : 0;
+  const crashed = head.y - HEAD.r * 0.7 < t.h(head.x) || car.tipped > 1;
   return { crashed, grounded };
 }

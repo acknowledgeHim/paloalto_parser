@@ -23,16 +23,28 @@ export interface Driver {
   hat: string | null;
 }
 
+/** How gas and brake are worked: keys (each a KeyboardEvent.key, lower case) and the mouse. */
+export interface Controls {
+  gasKeys: string[];
+  brakeKeys: string[];
+  /** pedals: only the on-screen pedals · buttons: left button = gas, right = brake · sides: right half = gas, left half = brake */
+  mouse: 'pedals' | 'buttons' | 'sides';
+}
+export const DEFAULT_CONTROLS: Controls = { gasKeys: ['arrowright', 'd'], brakeKeys: ['arrowleft', 'a'], mouse: 'pedals' };
+
+const KEY_NAMES: Record<string, string> = { arrowright: '→', arrowleft: '←', arrowup: '↑', arrowdown: '↓', ' ': 'Space', shift: 'Shift', control: 'Ctrl', enter: 'Enter' };
+export const keyName = (k: string) => KEY_NAMES[k] ?? (k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
+
 export interface RunResult {
   distance: number;
   coins: number;
   flips: number;
-  why: 'crash' | 'fuel' | 'quit';
+  why: 'crash' | 'tipped' | 'fuel' | 'quit';
 }
 
 /** Vehicle pictures that already face right (most vehicle emoji face left, so they're mirrored). */
 const FACES_RIGHT = new Set(['🚀', '✈️', '🛸', '🪂', '🛩️']);
-const FUEL_PER_SEC = 4;
+const FUEL_PER_SEC = 3.5;
 const DT = 1 / 240;
 
 /**
@@ -44,12 +56,14 @@ export function HillHopperRun({
   vehicle,
   upgrades,
   best,
+  controls,
   onEnd,
 }: {
   driver: Driver;
   vehicle: string | null;
   upgrades: Upgrades;
   best: number | null;
+  controls: Controls;
   onEnd: (r: RunResult) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -60,8 +74,8 @@ export function HillHopperRun({
   useEffect(() => {
     const keys = (down: boolean) => (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (k === 'arrowright' || k === 'd' || k === 'arrowup' || k === 'w') pedal.current.gas = down;
-      else if (k === 'arrowleft' || k === 'a' || k === 'arrowdown' || k === 's') pedal.current.brake = down;
+      if (controls.gasKeys.includes(k)) pedal.current.gas = down;
+      else if (controls.brakeKeys.includes(k)) pedal.current.brake = down;
       else return;
       e.preventDefault();
       setPressed((n) => n + 1);
@@ -70,11 +84,18 @@ export function HillHopperRun({
     const ku = keys(false);
     window.addEventListener('keydown', kd);
     window.addEventListener('keyup', ku);
+    // Let go of everything if the window loses focus (a key-up would never arrive).
+    const blur = () => {
+      pedal.current.gas = false;
+      pedal.current.brake = false;
+    };
+    window.addEventListener('blur', blur);
     return () => {
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
+      window.removeEventListener('blur', blur);
     };
-  }, []);
+  }, [controls]);
 
   useEffect(() => {
     const cv = canvas.current!;
@@ -122,7 +143,7 @@ export function HillHopperRun({
       if (input !== 0) started = true;
       if (started) fuel = Math.max(0, fuel - FUEL_PER_SEC * DT);
       const r = step(car, terrain, stats, input, fuel > 0, DT);
-      if (r.crashed) return finish('crash');
+      if (r.crashed) return finish(car.tipped > 1 ? 'tipped' : 'crash');
       // Flips: count the turning done while both wheels are off the ground.
       if (!r.grounded) {
         airRot += car.w * DT;
@@ -412,7 +433,11 @@ export function HillHopperRun({
         ctx.textAlign = 'center';
         ctx.font = `bold ${Math.round(Math.min(26, W / 20))}px system-ui, sans-serif`;
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillText('Hold GAS to go!  In the air: gas tips back, brake tips forward', W / 2, H * 0.3);
+        ctx.fillText(
+          `Hold GAS${controls.gasKeys.length ? ` (${controls.gasKeys.map(keyName).join(' / ')})` : ''} to go!  Ease off on hills — brake if the nose comes up`,
+          W / 2,
+          H * 0.3
+        );
       }
     };
 
@@ -434,6 +459,17 @@ export function HillHopperRun({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Which pointer (mouse button / finger) is holding which pedal on the game area.
+  const held = useRef(new Map<number, 'gas' | 'brake'>());
+  const letGo = (id: number) => {
+    const which = held.current.get(id);
+    if (!which) return;
+    held.current.delete(id);
+    if (![...held.current.values()].includes(which)) pedal.current[which] = false;
+    setPressed((n) => n + 1);
+  };
+  const keysFor = (ks: string[]) => (ks.length ? ` (${ks.map(keyName).join(' / ')})` : '');
+
   const hold = (which: 'gas' | 'brake', down: boolean) => (e: React.PointerEvent) => {
     e.preventDefault();
     pedal.current[which] = down;
@@ -443,7 +479,32 @@ export function HillHopperRun({
 
   return (
     <div className="hill-run">
-      <canvas ref={canvas} className="hill-run__canvas" />
+      <canvas
+        ref={canvas}
+        className="hill-run__canvas"
+        onPointerDown={(e) => {
+          if (controls.mouse === 'pedals') return;
+          e.preventDefault();
+          const which =
+            controls.mouse === 'buttons'
+              ? e.button === 2
+                ? 'brake'
+                : e.button === 0
+                  ? 'gas'
+                  : null
+              : e.clientX - e.currentTarget.getBoundingClientRect().left > e.currentTarget.clientWidth / 2
+                ? 'gas'
+                : 'brake';
+          if (!which) return;
+          held.current.set(e.pointerId, which);
+          pedal.current[which] = true;
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+          setPressed((n) => n + 1);
+        }}
+        onPointerUp={(e) => letGo(e.pointerId)}
+        onPointerCancel={(e) => letGo(e.pointerId)}
+        onContextMenu={(e) => e.preventDefault()}
+      />
       <button type="button" className="hill-run__quit secondary" onClick={() => (quit.current = true)}>
         ✕ Stop
       </button>
@@ -457,6 +518,7 @@ export function HillHopperRun({
         aria-label="Brake"
       >
         BRAKE
+        <small>{keysFor(controls.brakeKeys)}</small>
       </button>
       <button
         type="button"
@@ -468,6 +530,7 @@ export function HillHopperRun({
         aria-label="Gas"
       >
         GAS
+        <small>{keysFor(controls.gasKeys)}</small>
       </button>
     </div>
   );
