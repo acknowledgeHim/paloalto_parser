@@ -76,6 +76,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
       label: '🏡 Family',
       items: [
         { section: 'calendar', label: '📅 Calendar', path: '/calendar' },
+        { section: 'meals', label: '🍽️ Meals', path: '/meals', badge: openVotes },
         { section: 'board', label: '📝 Notes', path: '/notes' },
         { section: 'board', label: '📔 Journal & gratitude', path: '/journal' },
         { section: 'board', label: '👪 Relatives', path: '/relatives' },
@@ -93,7 +94,6 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { label: '✅ To approve', path: '/approvals', badge: pendingApprovals, parent: true },
       ],
     },
-    { label: '🍽️ Meals', items: [{ section: 'meals', label: '🍽️ Meals', path: '/meals', badge: openVotes }] },
     {
       label: '🎵 Fun',
       items: [

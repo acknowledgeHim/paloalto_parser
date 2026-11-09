@@ -54,7 +54,7 @@ weather has them.
 2. Everyone taps their pick, and can change it until the vote closes. The list shows who still has to vote.
 3. A parent taps **🏆 Close the vote**. The winner goes on the meal plan, with its recipe. A tie is a coin flip.
 
-The Meals menu shows a red count while a vote is open.
+🏡 Family → 🍽️ Meals (in the menu) shows a red count while a vote is open.
 
 ## 📬 Weekly report (Settings → 📬 Email)
 
