@@ -32,6 +32,8 @@ import { GamesPage } from './pages/GamesPage.js';
 import { HillHopperPage } from './games/HillHopperPage.js';
 import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { ResourceUsagePage } from './pages/ResourceUsagePage.js';
+import { SpellingPage } from './pages/SpellingPage.js';
+import { LearningSettingsPage } from './pages/LearningSettingsPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { HeightsPage } from './pages/HeightsPage.js';
 import { NotesPage } from './components/StickyNotes.js';
@@ -150,6 +152,8 @@ export function App() {
           <Route path="/passwords" element={<PasswordsPage />} />
           <Route path="/apps" element={<PhoneAppsPage />} />
           <Route path="/typing" element={<TypingPage />} />
+          <Route path="/spelling" element={<SpellingPage />} />
+          <Route path="/learning/settings" element={<LearningSettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/cameras" element={<CamerasPage />} />
         </Routes>

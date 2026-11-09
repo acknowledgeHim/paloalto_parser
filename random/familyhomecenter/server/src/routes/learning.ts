@@ -1,0 +1,232 @@
+import { Router } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import { db, getSetting, setSetting } from '../db.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
+import { isParentRequest, isSelfOrParent, sessionActor } from '../services/rewards.js';
+import { speak, speechEngine } from '../services/speech.js';
+import { GRADE_NAMES, WORDS } from '../services/spellingWords.js';
+import { addTokens } from '../services/tokens.js';
+import type { FamilyMember } from '../types.js';
+
+/**
+ * 📚 Learning: 🔤 Spelling (and more subjects to come). Each kid has a school grade a parent sets;
+ * they can practise any grade, but only rounds at their grade or higher earn 💎 tokens. A round is
+ * 10 random items, checked here (not in the browser), and pays by the parent's "% right → tokens"
+ * levels — the lowest level is the pass mark — up to so many paying rounds a day.
+ */
+export const learningRouter = Router();
+
+export const SUBJECTS = ['spelling'] as const;
+export type Subject = (typeof SUBJECTS)[number];
+const ROUND_SIZE = 10;
+
+// ---- ⚙️ settings ----
+
+export interface Tier {
+  pct: number;
+  tokens: number;
+}
+export interface SubjectRewards {
+  tiers: Tier[];
+  /** rounds a day that can pay tokens (0 = no tokens) */
+  per_day: number;
+}
+type Rewards = Record<Subject, SubjectRewards>;
+const SETTING = 'learning_rewards';
+const DEFAULT: SubjectRewards = { tiers: [{ pct: 80, tokens: 1 }, { pct: 100, tokens: 2 }], per_day: 3 };
+
+function cleanTiers(v: unknown, fallback: Tier[]): Tier[] {
+  if (!Array.isArray(v)) return fallback;
+  const byPct = new Map<number, number>();
+  for (const t of v.slice(0, 10)) {
+    const pct = Math.round(Number((t as Tier)?.pct));
+    const tokens = Math.round(Number((t as Tier)?.tokens));
+    if (pct >= 10 && pct <= 100 && pct % 10 === 0 && tokens >= 0 && tokens <= 1000) byPct.set(pct, tokens);
+  }
+  return [...byPct].map(([pct, tokens]) => ({ pct, tokens })).sort((a, b) => a.pct - b.pct);
+}
+function readRewards(): Rewards {
+  let saved: Partial<Record<Subject, Partial<SubjectRewards>>> = {};
+  try {
+    saved = JSON.parse(getSetting(SETTING, '{}'));
+  } catch {
+    /* defaults */
+  }
+  const out = {} as Rewards;
+  for (const s of SUBJECTS) {
+    const x = saved[s] ?? {};
+    const pd = Math.round(Number(x.per_day));
+    out[s] = { tiers: cleanTiers(x.tiers, DEFAULT.tiers), per_day: Number.isFinite(pd) && pd >= 0 && pd <= 100 ? pd : DEFAULT.per_day };
+  }
+  return out;
+}
+/** Tokens for this % right: the highest level reached (0 below the lowest = didn't pass). */
+const worth = (tiers: Tier[], pct: number) => tiers.filter((t) => pct >= t.pct).reduce((m, t) => Math.max(m, t.tokens), 0);
+const passMark = (tiers: Tier[]) => tiers[0]?.pct ?? 100;
+
+learningRouter.get('/settings', (_req, res) => res.json({ rewards: readRewards(), grades: GRADE_NAMES }));
+
+learningRouter.put('/settings', requireAdmin, (req, res) => {
+  const cur = readRewards();
+  const b = (req.body?.rewards ?? {}) as Partial<Record<Subject, Partial<SubjectRewards>>>;
+  for (const s of SUBJECTS) {
+    if (!b[s]) continue;
+    if (b[s]!.tiers !== undefined) cur[s].tiers = cleanTiers(b[s]!.tiers, cur[s].tiers);
+    const pd = Math.round(Number(b[s]!.per_day));
+    if (b[s]!.per_day !== undefined && Number.isFinite(pd) && pd >= 0 && pd <= 100) cur[s].per_day = pd;
+  }
+  setSetting(SETTING, JSON.stringify(cur));
+  res.json({ rewards: readRewards(), grades: GRADE_NAMES });
+});
+
+// ---- 👧 people ----
+
+const memberOf = (id: string) => db.prepare('SELECT * FROM family_members WHERE id = ?').get(id) as FamilyMember | undefined;
+const gradeOf = (id: string) => (db.prepare('SELECT grade FROM learning_grades WHERE family_member_id = ?').get(id) as { grade: number } | undefined)?.grade ?? null;
+function localDay(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const paidToday = (id: string, subject: Subject) =>
+  (db.prepare('SELECT COUNT(*) AS n FROM learning_results WHERE family_member_id = ? AND subject = ? AND day = ? AND tokens > 0').get(id, subject, localDay()) as { n: number }).n;
+
+/** Why a round at this grade won't pay (null = it can). */
+function noTokensWhy(m: FamilyMember, subject: Subject, grade: number): string | null {
+  if (m.is_parent === 1) return 'Parents practise just for fun';
+  const g = gradeOf(m.id);
+  if (g === null) return 'A parent needs to set your grade first (📚 Learning → ⚙️ Grades & tokens)';
+  if (grade < g) return `Below your grade (${GRADE_NAMES[g]}) — practise for fun, or try your grade or higher for tokens`;
+  const r = readRewards()[subject];
+  if (!r.per_day || !r.tiers.some((t) => t.tokens > 0)) return 'This game pays no tokens right now';
+  if (paidToday(m.id, subject) >= r.per_day) return `Tokens done for today (${r.per_day} round${r.per_day === 1 ? '' : 's'}) — come back tomorrow`;
+  return null;
+}
+
+/** GET /:memberId — their grade, and for each subject: bests by grade and recent rounds. */
+learningRouter.get('/people/:memberId', (req, res) => {
+  const m = memberOf(req.params.memberId);
+  if (!m) return res.status(404).json({ error: 'not found' });
+  const subjects = Object.fromEntries(
+    SUBJECTS.map((s) => [
+      s,
+      {
+        best: db.prepare('SELECT grade, MAX(correct) AS correct, COUNT(*) AS rounds FROM learning_results WHERE family_member_id = ? AND subject = ? GROUP BY grade').all(m.id, s),
+        recent: db.prepare('SELECT grade, at, correct, total, tokens FROM learning_results WHERE family_member_id = ? AND subject = ? ORDER BY at DESC LIMIT 15').all(m.id, s),
+        paid_today: paidToday(m.id, s),
+      },
+    ])
+  );
+  res.json({ grade: gradeOf(m.id), is_parent: m.is_parent === 1, token_balance: m.token_balance, subjects });
+});
+
+/** PUT /people/:memberId/grade { grade (0 = K … 12), acting_member_id } — parents. */
+learningRouter.put('/people/:memberId/grade', (req, res) => {
+  const { grade, acting_member_id } = req.body ?? {};
+  if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can set the grade' });
+  const m = memberOf(req.params.memberId);
+  if (!m) return res.status(404).json({ error: 'not found' });
+  const g = Math.round(Number(grade));
+  if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  db.prepare(
+    `INSERT INTO learning_grades (family_member_id, grade, set_by, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(family_member_id) DO UPDATE SET grade = excluded.grade, set_by = excluded.set_by, updated_at = excluded.updated_at`
+  ).run(m.id, g, sessionActor(req, acting_member_id), new Date().toISOString());
+  res.json({ grade: gradeOf(m.id) });
+});
+
+// ---- 🎯 rounds ----
+
+interface Round {
+  id: string;
+  member: string;
+  subject: Subject;
+  grade: number;
+  started: number;
+  /** what's right for each item (spelling: the word) */
+  answers: string[];
+}
+const rounds = new Map<string, Round>();
+const sweep = () => {
+  const old = Date.now() - 2 * 3600_000;
+  for (const [k, r] of rounds) if (r.started < old) rounds.delete(k);
+};
+
+function pick<T>(list: T[], n: number): T[] {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+
+/** POST /spelling/start { member_id, grade, acting_member_id } — 10 random words at that grade. */
+learningRouter.post('/spelling/start', (req, res) => {
+  const { member_id, grade, acting_member_id } = req.body ?? {};
+  const m = memberOf(String(member_id));
+  if (!m) return res.status(404).json({ error: 'not found' });
+  if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
+  const g = Math.round(Number(grade));
+  if (!(g >= 0 && g < WORDS.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  sweep();
+  // No word twice in a round (a few lists repeat a word on purpose across grades, not within one).
+  const seen = new Set<string>();
+  const words = pick(WORDS[g], WORDS[g].length).filter((w) => !seen.has(w.word.toLowerCase()) && seen.add(w.word.toLowerCase())).slice(0, ROUND_SIZE);
+  const r: Round = { id: uuidv4(), member: m.id, subject: 'spelling', grade: g, started: Date.now(), answers: words.map((w) => w.word) };
+  rounds.set(r.id, r);
+  res.json({
+    round_id: r.id,
+    grade: g,
+    // The word is needed to say it out loud; the screen never shows it until it's been answered.
+    words: words.map((w) => ({ word: w.word, sentence: w.sentence, meaning: w.meaning })),
+    tokens: noTokensWhy(m, 'spelling', g) ? null : readRewards().spelling.tiers,
+    no_tokens_why: noTokensWhy(m, 'spelling', g),
+  });
+});
+
+const same = (a: string, b: string) => a.trim().toLowerCase().replace(/\s+/g, ' ') === b.trim().toLowerCase();
+
+/** POST /round/:id/finish { answers: string[], acting_member_id } — checked here; pays tokens. */
+learningRouter.post('/round/:id/finish', (req, res) => {
+  const r = rounds.get(req.params.id);
+  if (!r) return res.status(404).json({ error: 'That round has expired — start a new one' });
+  const { answers, acting_member_id } = req.body ?? {};
+  if (!isSelfOrParent(req, r.member, acting_member_id)) return res.status(403).json({ error: "That's someone else's round" });
+  const m = memberOf(r.member);
+  if (!m) return res.status(404).json({ error: 'not found' });
+  rounds.delete(r.id); // each round counts once
+  const given: string[] = Array.isArray(answers) ? answers.map((a) => String(a ?? '').slice(0, 60)) : [];
+  const items = r.answers.map((right, i) => ({ right, given: given[i] ?? '', ok: same(given[i] ?? '', right) }));
+  const correct = items.filter((x) => x.ok).length;
+  const pct = Math.round((correct / r.answers.length) * 100);
+  const rw = readRewards()[r.subject];
+  const why = noTokensWhy(m, r.subject, r.grade);
+  const tokens = why ? 0 : worth(rw.tiers, pct);
+  const now = new Date();
+  db.transaction(() => {
+    db.prepare(
+      'INSERT INTO learning_results (id, family_member_id, subject, grade, at, day, correct, total, tokens, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(uuidv4(), m.id, r.subject, r.grade, now.toISOString(), localDay(now), correct, r.answers.length, tokens, JSON.stringify(items.filter((x) => !x.ok)).slice(0, 4000));
+    if (tokens) addTokens(m.id, tokens, `🔤 Spelling: ${correct}/${r.answers.length} at ${GRADE_NAMES[r.grade]}`);
+  })();
+  res.json({ correct, total: r.answers.length, pct, passed: pct >= passMark(rw.tiers), tokens, no_tokens_why: tokens ? null : why, items });
+});
+
+// ---- 🗣️ speech, for browsers without voices ----
+
+learningRouter.get('/speech', asyncHandler(async (_req, res) => res.json({ engine: await speechEngine() })));
+
+/** GET /say?text=…&slow=1 — a WAV of it. Short texts only (a word, a sentence, a meaning). */
+learningRouter.get(
+  '/say',
+  asyncHandler(async (req, res) => {
+    const text = String(req.query.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (!text) return res.status(400).json({ error: 'Nothing to say' });
+    try {
+      const wav = await speak(text, req.query.slow === '1');
+      res.set('Cache-Control', 'private, max-age=86400').type('audio/wav').send(wav);
+    } catch (e) {
+      res.status(503).json({ error: (e as Error).message });
+    }
+  })
+);

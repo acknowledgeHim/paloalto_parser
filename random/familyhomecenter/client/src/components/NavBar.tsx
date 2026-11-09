@@ -102,7 +102,14 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { section: 'games', label: '🎮 Games', path: '/games' },
         { section: 'music', label: '🎵 Music', path: '/music' },
         { section: 'board', label: '🎞️ This week', path: '/recap' },
+      ],
+    },
+    {
+      label: '📚 Learning',
+      items: [
         { label: '⌨️ Typing', path: '/typing' },
+        { label: '🔤 Spelling', path: '/spelling' },
+        { label: '⚙️ Grades & tokens', path: '/learning/settings', parent: true },
       ],
     },
     {

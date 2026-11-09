@@ -1483,3 +1483,27 @@ if (!getSetting('tokens_started')) {
     setSetting('tokens_started', now);
   })();
 }
+
+// 📚 Learning (routes/learning.ts): each kid's school grade (set by a parent) and every finished
+// Spelling / Grammar round.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS learning_grades (
+    family_member_id TEXT PRIMARY KEY REFERENCES family_members(id) ON DELETE CASCADE,
+    grade INTEGER NOT NULL,
+    set_by TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS learning_results (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    at TEXT NOT NULL,
+    day TEXT NOT NULL,
+    correct INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    detail TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_results_member ON learning_results (family_member_id, subject, at);
+`);
