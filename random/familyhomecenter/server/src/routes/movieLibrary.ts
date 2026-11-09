@@ -10,7 +10,7 @@ import { requireAdmin } from '../middleware/requireAdmin.js';
 import { folderProblem, resolveShare } from '../services/sharePaths.js';
 import { piHealth } from '../services/piHealth.js';
 import { haveFfmpeg, MOV_EXTS, mp4Stream, videosLocation } from '../services/videoFiling.js';
-import { videoDetails, copyStatus, findMovie, setRotation, streamStarted, watchingNow, libraryDir, libraryLocation, listLibrary, mp4CopiesOn, posterFor } from '../services/movieLibrary.js';
+import { videoDetails, queueUpright, turnJobs, copyStatus, findMovie, setRotation, streamStarted, watchingNow, libraryDir, libraryLocation, listLibrary, mp4CopiesOn, posterFor } from '../services/movieLibrary.js';
 
 // 🎬 Movies section — every video on the movies share, to search, sort and watch
 // (services/movieLibrary.ts). Read-only: nothing on the share is ever changed or removed.
@@ -175,6 +175,18 @@ movieLibraryRouter.get(
     await sendVideo(req, res, abs);
   })
 );
+
+/** POST /:id/upright { degrees } (parents) — 💾 save a sideways video upright: a new .mp4 next to it, the original kept. */
+movieLibraryRouter.post('/:id/upright', requireAdmin, (req, res) => {
+  const problem = queueUpright(req.params.id, Number(req.body?.degrees));
+  if (problem) return res.status(400).json({ error: problem });
+  res.json(turnJobs.get(req.params.id));
+});
+
+/** GET /:id/upright — how that's going. */
+movieLibraryRouter.get('/:id/upright', (req, res) => {
+  res.json(turnJobs.get(req.params.id) ?? null);
+});
 
 /** GET /:id/info — ℹ️ what's inside the video, and what phones may not play (the player's "Video details"). */
 movieLibraryRouter.get(

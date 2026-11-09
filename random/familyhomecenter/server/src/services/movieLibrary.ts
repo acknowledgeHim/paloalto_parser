@@ -148,11 +148,12 @@ async function scan(): Promise<void> {
   const rank = (m: LibraryMovie) => {
     const e = path.extname(m.rel_path).toLowerCase();
     const extRank = ({ '.mp4': 0, '.m4v': 1, '.webm': 2, '.mov': 3 } as Record<string, number>)[e] ?? 4;
-    return (m.playable ? 0 : 10) + (m.video_codec === 'h264' ? 0 : 5) + extRank;
+    const upright = UPRIGHT.test(path.basename(m.rel_path, path.extname(m.rel_path))) ? -100 : 0; // a copy saved upright wins
+    return upright + (m.playable ? 0 : 10) + (m.video_codec === 'h264' ? 0 : 5) + extRank;
   };
   const groups = new Map<string, LibraryMovie[]>();
   for (const m of movies) {
-    const key = m.rel_path.slice(0, m.rel_path.length - path.extname(m.rel_path).length).toLowerCase();
+    const key = m.rel_path.slice(0, m.rel_path.length - path.extname(m.rel_path).length).replace(UPRIGHT, '').toLowerCase();
     groups.set(key, [...(groups.get(key) ?? []), m]);
   }
   const shown: LibraryMovie[] = [];
@@ -515,6 +516,113 @@ async function makeMp4Copies(dir: string, files: Array<{ rel: string; size: numb
     copyStatus.running = null;
     copyStatus.percent = null;
     copying = false;
+  }
+}
+
+/** "Clip (upright).mp4" — a copy saved the right way up, when "Clip.mp4" was already taken. */
+const UPRIGHT = / \(upright\)$/i;
+
+/**
+ * 💾 Save it upright: for a video recorded sideways (its "which way up" flag missing or wrong). A
+ * new .mp4 is made with the picture really turned — so it plays upright everywhere: phones, VLC,
+ * TVs, downloads — next to the original, which is never changed: "Clip.mov" → "Clip.mp4" (or
+ * "Clip (upright).mp4" when that's taken; never over an existing file). Date, location and other
+ * tags are kept. In the background, one at a time, paused while anyone's watching. 🎬 Movies then
+ * lists the pair once, showing the upright one.
+ */
+export const turnJobs = new Map<string, { title: string; degrees: number; state: 'waiting' | 'working' | 'done' | 'failed'; percent: number | null; note: string | null }>();
+let turning = false;
+
+export function queueUpright(id: string, degrees: number): string | null {
+  const m = cache?.movies.find((x) => x.id === id);
+  if (!m || !cache) return 'No such movie';
+  if (![90, 180, 270].includes(degrees)) return 'Turn it first (↺ / ↻)';
+  const j = turnJobs.get(id);
+  if (j && (j.state === 'waiting' || j.state === 'working')) return null;
+  turnJobs.set(id, { title: m.title, degrees, state: 'waiting', percent: null, note: null });
+  void runTurnJobs(cache.dir);
+  return null;
+}
+
+async function runTurnJobs(dir: string) {
+  if (turning) return;
+  turning = true;
+  try {
+    for (;;) {
+      const next = [...turnJobs.entries()].find(([, j]) => j.state === 'waiting');
+      if (!next) break;
+      const [id, job] = next;
+      const m = cache?.movies.find((x) => x.id === id);
+      if (!m) {
+        Object.assign(job, { state: 'failed', note: 'That movie is gone' });
+        continue;
+      }
+      await whenIdle();
+      job.state = 'working';
+      const src = path.join(dir, m.rel_path);
+      const base = m.rel_path.slice(0, m.rel_path.length - path.extname(m.rel_path).length).replace(UPRIGHT, '');
+      let target = path.join(dir, `${base}.mp4`);
+      if (fsSync.existsSync(target)) target = path.join(dir, `${base} (upright).mp4`);
+      const part = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.part`);
+      try {
+        if (fsSync.existsSync(target)) throw new Error(`${path.basename(target)} is already there — that one was left as it is`);
+        await fs.access(path.dirname(target), fsSync.constants.W_OK).catch(() => {
+          throw new Error("the folder can't be written to by the Family Home Center (read-only share?)");
+        });
+        const turn = job.degrees === 90 ? 'transpose=1' : job.degrees === 270 ? 'transpose=2' : 'hflip,vflip';
+        const args = [
+          '-nostdin', '-y', '-v', 'error', '-progress', 'pipe:1', '-i', src,
+          '-map', '0:v:0', '-map', '0:a?',
+          // ffmpeg first applies any "which way up" flag the file has (as the browser did), then our turn.
+          '-vf', `${turn},format=yuv420p`,
+          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-threads', '2',
+          '-c:a', 'aac', '-b:a', '192k',
+          '-map_metadata', '0', '-metadata:s:v:0', 'rotate=0',
+          '-metadata', 'major_brand=', '-metadata', 'minor_version=', '-metadata', 'compatible_brands=',
+          '-movflags', '+faststart+use_metadata_tags',
+          '-f', 'mp4', part,
+        ];
+        const nice = process.platform === 'linux' && fsSync.existsSync('/usr/bin/nice');
+        await new Promise<void>((resolve, reject) => {
+          const proc = nice ? spawn('/usr/bin/nice', ['-n', '10', config.movies.ffmpegPath, ...args]) : spawn(config.movies.ffmpegPath, args);
+          let err = '';
+          let paused = false;
+          const pauser = setInterval(() => {
+            const w = someoneWatching();
+            if (w !== paused && proc.pid) {
+              try {
+                process.kill(proc.pid, w ? 'SIGSTOP' : 'SIGCONT');
+                paused = w;
+              } catch {
+                /* finished */
+              }
+            }
+          }, 2000);
+          proc.stdout.on('data', (c) => {
+            const t = [...c.toString().matchAll(/out_time_us=(\d+)/g)].pop();
+            if (t && m.duration) job.percent = Math.min(99, Math.round((Number(t[1]) / 1e6 / m.duration) * 100));
+          });
+          proc.stderr.on('data', (c) => (err = (err + c.toString()).slice(-4000)));
+          proc.on('error', reject);
+          proc.on('close', (code) => {
+            clearInterval(pauser);
+            if (code === 0) resolve();
+            else reject(new Error(err.trim().split('\n').slice(-3).join(' ') || `ffmpeg exited with code ${code}`));
+          });
+        });
+        if (fsSync.existsSync(target)) throw new Error(`a ${path.basename(target)} appeared meanwhile — that one was kept as it is`);
+        await fs.rename(part, target);
+        const st = await fs.stat(src).catch(() => null);
+        if (st) await fs.utimes(target, st.atime, st.mtime).catch(() => {}); // sorts by "added" like the original
+        Object.assign(job, { state: 'done', percent: 100, note: path.basename(target) });
+        if (cache) cache.at = 0; // list it on the next look
+      } catch (err) {
+        await fs.unlink(part).catch(() => {}); // only ever our own half-made file
+        Object.assign(job, { state: 'failed', note: (err as Error).message.slice(0, 300) });
+      }
+    }
+  } finally {
+    turning = false;
   }
 }
 

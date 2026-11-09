@@ -3127,3 +3127,11 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .hill-run__pedal--gas { right: 16px; background: #43a047; }
 .hill-run__pedal small { display: block; font-size: 0.7em; font-weight: 600; opacity: 0.9; }
 .hill-garage__mouse { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+/* ✕ Remove from Keep watching (the movie stays) */
+.movie-card__wrap { position: relative; }
+.movie-card__wrap > .movie-card { width: 100%; }
+.movie-card__dismiss {
+  position: absolute; top: 6px; right: 6px; min-height: 32px; width: 32px; padding: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.9em; line-height: 1;
+}
+.movie-card__dismiss:hover { background: rgba(0, 0, 0, 0.85); }

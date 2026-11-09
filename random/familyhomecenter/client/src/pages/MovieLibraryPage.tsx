@@ -48,6 +48,8 @@ const SORTS: Array<{ key: SortKey; label: string; desc: boolean }> = [
 const PAGE = 120;
 const PREFS = 'familyhomecenter.movieLibrary.prefs';
 const RESUME = 'familyhomecenter.movieLibrary.resume';
+/** Movies taken off "Keep watching" (the place in them is kept; playing one again brings it back). */
+const DISMISSED = 'familyhomecenter.movieLibrary.dismissed';
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -134,6 +136,13 @@ export function MovieLibraryPage() {
   const [shown, setShown] = useState(PAGE);
   const [playing, setPlaying] = useState<LibraryMovie | null>(null);
   const [resume, setResume] = useState<Record<string, number>>(() => readJson(RESUME, {}));
+  const [dismissed, setDismissed] = useState<string[]>(() => readJson(DISMISSED, [] as string[]));
+  const dismiss = (id: string, off: boolean) =>
+    setDismissed((d) => {
+      const next = off ? [...new Set([...d, id])] : d.filter((x) => x !== id);
+      writeJson(DISMISSED, next);
+      return next;
+    });
 
   const load = (refresh = false) => {
     setRefreshing(refresh);
@@ -198,7 +207,7 @@ export function MovieLibraryPage() {
     return out;
   }, [movies, query, sort, desc, folder, year]);
 
-  const keepPlace = (id: string, t: number | null) =>
+  const keepPlace = (id: string, t: number | null) => {
     setResume((r) => {
       const next = { ...r };
       if (t == null) delete next[id];
@@ -206,7 +215,9 @@ export function MovieLibraryPage() {
       writeJson(RESUME, next);
       return next;
     });
-  const continuing = movies.filter((m) => resume[m.id] > 0);
+    if (t != null && dismissed.includes(id)) dismiss(id, false); // watching it again puts it back on Keep watching
+  };
+  const continuing = movies.filter((m) => resume[m.id] > 0 && !dismissed.includes(m.id));
 
   return (
     <div className="movie-library">
@@ -265,7 +276,20 @@ export function MovieLibraryPage() {
             <section>
               <h3>▶ Keep watching</h3>
               <div className="movie-library__grid">
-                {continuing.slice(0, 6).map((m) => <MovieCard key={m.id} m={m} at={resume[m.id]} onPlay={() => setPlaying(m)} />)}
+                {continuing.slice(0, 6).map((m) => (
+                  <div key={m.id} className="movie-card__wrap">
+                    <MovieCard m={m} at={resume[m.id]} onPlay={() => setPlaying(m)} />
+                    <button
+                      type="button"
+                      className="movie-card__dismiss"
+                      onClick={() => dismiss(m.id, true)}
+                      title="Remove from Keep watching (the movie stays; your place is kept)"
+                      aria-label={`Remove ${m.title} from Keep watching`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
               </div>
             </section>
           )}
@@ -306,6 +330,7 @@ export function MovieLibraryPage() {
           startAt={resume[playing.id] ?? 0}
           onPlace={(t) => keepPlace(playing.id, t)}
           onClose={() => setPlaying(null)}
+          isParent={isParent}
           onRotated={(rotation) => {
             setLib((l) => (l ? { ...l, movies: l.movies.map((x) => (x.id === playing.id ? { ...x, rotation } : x)) } : l));
             setPlaying((p) => (p ? { ...p, rotation } : p));
@@ -350,15 +375,35 @@ function Player({
   onPlace,
   onClose,
   onRotated,
+  isParent,
 }: {
   m: LibraryMovie;
   startAt: number;
   onPlace: (t: number | null) => void;
   onClose: () => void;
   onRotated: (degrees: number) => void;
+  isParent: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [rotErr, setRotErr] = useState<string | null>(null);
+  // 💾 Save it upright: a real upright .mp4 next to the original (made on the Pi, in the background).
+  type Job = { state: 'waiting' | 'working' | 'done' | 'failed'; percent: number | null; note: string | null; degrees: number };
+  const [job, setJob] = useState<Job | null>(null);
+  useEffect(() => {
+    let live = true;
+    const get = () => api.get<Job | null>(`/movie-library/${m.id}/upright`).then((j) => live && setJob(j)).catch(() => {});
+    void get();
+    const t = setInterval(get, 5000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [m.id]);
+  const saveUpright = () =>
+    api
+      .post<Job>(`/movie-library/${m.id}/upright`, { degrees: m.rotation })
+      .then(setJob)
+      .catch((e) => setRotErr((e as Error).message));
   // ℹ️ What's inside the video, and whether this device seems to get no picture.
   const [details, setDetails] = useState<{ summary: string; phone_problems: string[] } | null>(null);
   const [noPicture, setNoPicture] = useState(false);
@@ -454,7 +499,21 @@ function Player({
         <p className="hint">
           {[fmtLength(m.duration), quality(m), fmtSize(m.size), m.recorded_at ? `recorded ${new Date(m.recorded_at).toLocaleDateString()}` : null].filter(Boolean).join(' · ')}
           <br />
-          {m.rotation ? <>🔄 Shown turned {m.rotation === 180 ? 'upside down' : m.rotation === 90 ? 'right' : 'left'} — the file itself isn't changed.<br /></> : null}
+          {m.rotation ? (
+            <>
+              🔄 Shown turned {m.rotation === 180 ? 'upside down' : m.rotation === 90 ? 'right' : 'left'} — the file itself isn't changed.{' '}
+              {isParent && (!job || job.state === 'done' || job.state === 'failed') && job?.state !== 'done' && (
+                <button type="button" className="link-button" onClick={saveUpright} title="Makes an upright .mp4 next to it, so it plays the right way everywhere. The original is kept as it is.">
+                  💾 Save it upright
+                </button>
+              )}
+              <br />
+            </>
+          ) : null}
+          {job?.state === 'waiting' && <>⏳ Saving it upright — waiting its turn (it pauses while anyone's watching).<br /></>}
+          {job?.state === 'working' && <>⏳ Saving it upright{job.percent != null ? ` — ${job.percent}%` : ''} (pauses while anyone's watching).<br /></>}
+          {job?.state === 'done' && <>✅ Saved upright as <code>{job.note}</code> — it'll show here in place of this one (the original stays, under ⬇ Original).<br /></>}
+          {job?.state === 'failed' && <span className="settings-login__error">Couldn't save it upright: {job.note}<br /></span>}
           <code>{m.rel_path}</code> · <a href={`${src}?download=1`}>⬇ Download</a>
           {/\.(mov|qt)$/i.test(m.file) && <> · <a href={`/api/movie-library/${m.id}/mp4`}>⬇ Download as .mp4</a></>}
           {m.original_rel && <> · <a href={`${src}?original=1&download=1`}>⬇ Original ({m.original_rel.split('.').pop()?.toUpperCase()})</a></>}
