@@ -78,6 +78,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { section: 'calendar', label: '📅 Calendar', path: '/calendar' },
         { section: 'board', label: '📝 Notes', path: '/notes' },
         { section: 'board', label: '📔 Journal & gratitude', path: '/journal' },
+        { section: 'board', label: '👪 Relatives', path: '/relatives' },
         { section: 'board', label: '📏 Height chart', path: '/heights' },
         { section: 'contacts', label: '📇 Contacts', path: '/contacts' },
         { section: 'intercom', label: '📞 Intercom', path: '/intercom' },

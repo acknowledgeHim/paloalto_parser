@@ -1540,3 +1540,52 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_learning_lessons_done_member ON learning_lessons_done (family_member_id, lesson_id);
 `);
+
+// 👪 Relatives (routes/relatives.ts): family, living or not — names, dates, memories, and the photos
+// and home movies they're in. person_id links a face-recognition person (their faces count as their
+// photos); family_member_id links a household profile who is this relative (their birthday). Media
+// rows point at files by path (nothing is copied or touched); "untagging" sets hidden = 1.
+// New tables; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS relatives (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    nickname TEXT,
+    relation TEXT,
+    birth_date TEXT,
+    birth_place TEXT,
+    death_date TEXT,
+    death_place TEXT,
+    about TEXT,
+    person_id TEXT,
+    family_member_id TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+  );
+  CREATE TABLE IF NOT EXISTS relative_memories (
+    id TEXT PRIMARY KEY,
+    relative_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    author_member_id TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_relative_memories ON relative_memories (relative_id);
+  CREATE TABLE IF NOT EXISTS relative_media (
+    relative_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    rel_path TEXT NOT NULL,
+    added_by TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (relative_id, kind, rel_path)
+  );
+  CREATE TABLE IF NOT EXISTS birthday_greetings_seen (
+    family_member_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, day)
+  );
+`);

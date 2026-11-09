@@ -6,6 +6,7 @@ import { taskIcon } from '../utils/taskIcons.js';
 import { localDate } from '../utils/daylight.js';
 import { DressedAvatar } from './DressedAvatar.js';
 import { NoteCard } from './StickyNotes.js';
+import { birthdayLine, useBirthdays } from './Birthdays.js';
 
 export const OPEN_BRIEFING = 'open-morning-briefing';
 const SHOWN_KEY = 'familyhomecenter.briefing.shown';
@@ -53,6 +54,7 @@ export function MorningBriefing({ onClose }: { onClose: () => void }) {
   const [polls, setPolls] = useState<MealPoll[]>([]);
   const [notes, setNotes] = useState<StickyNote[]>([]);
   const [speaking, setSpeaking] = useState(false);
+  const birthdays = useBirthdays(undefined).data?.today ?? [];
   const today = localDate();
 
   useEffect(() => {
@@ -99,6 +101,7 @@ export function MorningBriefing({ onClose }: { onClose: () => void }) {
       `${greeting().replace(/^\S+\s/, '')} It's ${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}.`,
       day ? `Today will be ${day.description.toLowerCase()}, with a high of ${Math.round(day.high)} and a low of ${Math.round(day.low)}.` : '',
       ...tips.map((t) => t.replace(/^\S+\s/, '') + '.'),
+      ...birthdays.map((b) => birthdayLine(b).replace(/^\S+\s/, '')),
       ...people
         .filter((p) => p.first.length)
         .map((p) => `${p.member.name}, first up: ${p.first.map((t) => t.title).join(', then ')}.`),
@@ -136,6 +139,13 @@ export function MorningBriefing({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </header>
+      {birthdays.length > 0 && (
+        <div className="briefing__tips briefing__birthdays">
+          {birthdays.map((b) => (
+            <span key={b.id}>{birthdayLine(b)}</span>
+          ))}
+        </div>
+      )}
       {tips.length > 0 && (
         <div className="briefing__tips">
           {tips.map((t) => (

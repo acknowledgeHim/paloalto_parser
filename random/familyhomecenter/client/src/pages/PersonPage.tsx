@@ -10,6 +10,7 @@ import { CompletionTrendChart } from '../components/CompletionTrendChart.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
+import { MyPhotoMemorySettings } from '../components/Birthdays.js';
 import { canEditHistoricalTask, canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
@@ -283,6 +284,8 @@ export function PersonPage() {
             )
         )}
       </section>
+
+      {canEditProfile && <MyPhotoMemorySettings memberId={member.id} canEdit={canEditProfile} />}
 
       <section className="panel">
         <h2>Calendar — next {AGENDA_DAYS} days</h2>

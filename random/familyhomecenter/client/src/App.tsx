@@ -42,6 +42,8 @@ import { HeightsPage } from './pages/HeightsPage.js';
 import { NotesPage } from './components/StickyNotes.js';
 import { RecapPage } from './components/RecapStory.js';
 import { MorningBriefing, OPEN_BRIEFING, briefingDue, markBriefingShown } from './components/MorningBriefing.js';
+import { BirthdayHello } from './components/Birthdays.js';
+import { RelativesPage } from './pages/RelativesPage.js';
 import { useIdle } from './hooks/useIdle.js';
 import { api } from './api/client.js';
 import { useFamilyMembers } from './state/FamilyMemberContext.js';
@@ -121,6 +123,7 @@ export function App() {
       <NavBar />
       <CelebrationHost />
       {briefing && <MorningBriefing onClose={() => setBriefing(false)} />}
+      <BirthdayHello paused={briefing} />
       <main className="page-container">
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -136,6 +139,8 @@ export function App() {
           <Route path="/dress-up/:id" element={<SectionGate section="prizes"><DressUpPage /></SectionGate>} />
           <Route path="/journal" element={<SectionGate section="board"><JournalPage /></SectionGate>} />
           <Route path="/heights" element={<SectionGate section="board"><HeightsPage /></SectionGate>} />
+          <Route path="/relatives" element={<SectionGate section="board"><RelativesPage /></SectionGate>} />
+          <Route path="/relatives/:id" element={<SectionGate section="board"><RelativesPage /></SectionGate>} />
           <Route path="/notes" element={<SectionGate section="board"><NotesPage /></SectionGate>} />
           <Route path="/recap" element={<SectionGate section="board"><RecapPage /></SectionGate>} />
           <Route path="/board" element={<SectionGate section="board"><FamilyBoardPage /></SectionGate>} />

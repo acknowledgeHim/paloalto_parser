@@ -7,6 +7,7 @@ import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { OnThisDay } from '../components/OnThisDay.js';
+import { BirthdayCard, MyPhotoMemories } from '../components/Birthdays.js';
 import { WhosHome } from '../components/WhosHome.js';
 import { TodaysCook } from '../components/MealCooks.js';
 import { NotesBoard } from '../components/StickyNotes.js';
@@ -57,6 +58,7 @@ export function Dashboard() {
       </header>
 
       <WhosHome />
+      <BirthdayCard />
       {canSee('meals') && <TodaysCook />}
       {canSee('board') && <NotesBoard compact />}
 
@@ -83,6 +85,8 @@ export function Dashboard() {
         </section>
       )}
 
+      {/* 📸 Their own photos: shown even with Photos off for them */}
+      <MyPhotoMemories />
       {canSee('photos') && <OnThisDay />}
 
       <div className="dashboard__columns">
