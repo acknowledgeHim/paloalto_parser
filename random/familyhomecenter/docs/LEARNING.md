@@ -148,9 +148,14 @@ tried but not passed yet with their best score, each subject's 🔁 round, any r
 ⌨️ typing (each lesson passed or tried with speed, typing games played, lessons passed so far). A week with no learning leaves it
 out. **Send now** in Settings → Weekly report shows it straight away.
 
-- **📖 Grammar lessons:** 27 lessons, K–12 (capitals, there/their/they're, I/me, who/whom, …).
-- **📖 Math lessons:** 28 lessons, K–12 (make a 10, long division, fractions, equations, slope,
-  quadratics, the Pythagorean theorem, SOH-CAH-TOA, sequences, derivatives, integrals).
+- **📖 Grammar lessons:** 50+ for every grade, K–12 — about a school year each: letters and
+  sentences for K–2; nouns, verbs, punctuation and spelling rules for 3–5; clauses, usage and
+  essays for 6–8; rhetoric, style, research and college writing for 9–12.
+- **📖 Math lessons:** 50+ for every grade, K–12: counting and adding (K–2), times tables,
+  fractions and decimals (3–5), ratios, integers and equations (6–7), algebra 2 (8), geometry (9),
+  trigonometry (10), precalculus (11) and calculus (12).
+- Quiz choices come in a mixed-up order, so the right answer isn't always first. The big sets
+  live in `server/src/services/grammarLessons/` and `mathLessonsExtra/` (one file per grade).
 - **🇺🇸 US History:** the Declaration of Independence, the Constitution, the Revolutionary War, the
   Civil War, WWI and WWII. It starts simple for K–2 and adds detail for 3–5 and 6–8. In 9–12 it goes
   piece by piece: Articles I, II, III, IV–VII, the Bill of Rights, the later amendments, federalism,
