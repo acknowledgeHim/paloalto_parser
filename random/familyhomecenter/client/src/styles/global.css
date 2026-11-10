@@ -3559,3 +3559,35 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .typing-grades__row input[type='number'] { width: 5.5rem; }
 .typing-grades__row .typing-speed-stars { flex-basis: 100%; padding-left: 3.8rem; }
 @media (max-width: 520px) { .typing-grades__row .typing-speed-stars { padding-left: 0; } }
+
+/* 🏘️ Tiny Town */
+.town { display: flex; flex-direction: column; gap: 0.5rem; }
+.town__hud { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.9rem; padding: 0.5rem 0.75rem; border-radius: 10px; background: var(--panel-bg, rgba(127, 127, 127, 0.1)); font-variant-numeric: tabular-nums; }
+.town__name { font-size: 1.1rem; margin-right: auto; }
+.town__hud .is-bad, .town .is-bad { color: #c62828; font-weight: 700; }
+.town__speed { display: inline-flex; gap: 2px; }
+.town__speed button, .town__tax button { min-width: 2.2rem; padding: 0.2rem 0.4rem; }
+.town__speed button.is-on { outline: 3px solid #2e7d32; }
+.town__tax { display: inline-flex; align-items: center; gap: 0.3rem; }
+.town__tip { margin: 0; font-weight: 600; }
+.town__map { overflow: auto; max-height: 64vh; border-radius: 8px; border: 2px solid rgba(127, 127, 127, 0.35); background: #8ec454; overscroll-behavior: contain; }
+.town__canvas { display: block; touch-action: none; cursor: crosshair; }
+.town__canvas--pan { cursor: grab; }
+.town__canvas--look { cursor: help; }
+.town__view { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
+.town__view .is-on { outline: 3px solid #2e7d32; }
+.town__tools { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; }
+.town__group-title { font-size: 0.85rem; font-weight: 700; opacity: 0.8; margin-bottom: 0.2rem; }
+.town__group-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.town-tool { display: flex; flex-direction: column; align-items: center; min-width: 4.6rem; padding: 0.3rem 0.35rem; line-height: 1.15; }
+.town-tool.is-on { outline: 3px solid #2e7d32; }
+.town-tool.is-locked { opacity: 0.55; }
+.town-tool__emoji { font-size: 1.5rem; }
+.town-tool__name { font-size: 0.75rem; }
+.town-tool__cost { font-size: 0.7rem; opacity: 0.8; }
+.town__look h3 { margin: 0 0 0.25rem; }
+.town__why { margin: 0.25rem 0; padding-left: 1.2rem; }
+.town-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.75rem; }
+.town-slot { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 0.75rem; border-radius: 10px; border: 2px solid rgba(127, 127, 127, 0.3); text-align: center; }
+.town-slot.is-empty { border-style: dashed; }
+.town-slot__emoji { font-size: 2.4rem; }

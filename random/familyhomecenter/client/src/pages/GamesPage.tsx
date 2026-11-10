@@ -34,7 +34,7 @@ interface GameRule {
   plays: number;
   features?: Record<string, number>;
 }
-const FEATURE_NAMES: Record<string, string> = { jump: '🦘 Jump', obstacles: '⚠️ Obstacles', glide: '🪂 Glider' };
+const FEATURE_NAMES: Record<string, string> = { jump: '🦘 Jump', obstacles: '⚠️ Obstacles', glide: '🪂 Glider', 'big-map': '🗺️ Bigger land', fun: '🎡 Fun places' };
 
 /**
  * 🎮 Games: each game is unlocked with 💎 tokens — for good, or for a number of plays a parent sets per

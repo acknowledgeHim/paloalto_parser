@@ -35,6 +35,18 @@ export const GAMES: Game[] = [
     blurb:
       'Falling bricks: move and turn them as they drop, fill a row from side to side to clear it, and don’t let the pile reach the top. It speeds up as you go — big scores unlock new brick looks.',
   },
+  {
+    id: 'tiny-town',
+    emoji: '🏘️',
+    name: 'Tiny Town',
+    stars: 30,
+    blurb:
+      'Build your own town: lay roads, put up homes, and give people jobs, power, water and parks. Happy people move in and pay taxes, so you can build more — schools, a stadium, all the way to a rocket base.',
+    features: [
+      { id: 'big-map', name: '🗺️ Bigger land', cost: 5 },
+      { id: 'fun', name: '🎡 Fun places', cost: 5 },
+    ],
+  },
 ];
 
 export const gameOf = (id: string) => GAMES.find((g) => g.id === id);
