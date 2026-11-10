@@ -29,6 +29,8 @@ interface GameRule {
   plays: number;
   /** 🔓 each extra's price in 💎 (0 = free for everyone) */
   features: Record<string, number>;
+  /** 💎 each token-shop item's price (0 = free for everyone) */
+  shop: Record<string, number>;
 }
 const RULES_KEY = 'game_rules';
 function rules(): Record<string, GameRule> {
@@ -46,16 +48,18 @@ function rules(): Record<string, GameRule> {
         cost: n(saved[g.id]?.cost, g.stars),
         plays: n(saved[g.id]?.plays, 0),
         features: Object.fromEntries((g.features ?? []).map((f) => [f.id, n(saved[g.id]?.features?.[f.id], f.cost)])),
+        shop: Object.fromEntries((g.shop ?? []).map((f) => [f.id, n(saved[g.id]?.shop?.[f.id], f.cost)])),
       },
     ])
   );
 }
-const ruleOf = (gameId: string): GameRule => rules()[gameId] ?? { cost: 0, plays: 0, features: {} };
+const ruleOf = (gameId: string): GameRule => rules()[gameId] ?? { cost: 0, plays: 0, features: {}, shop: {} };
 
 /** GET /settings — each game's cost and plays per unlock. */
 gamesRouter.get('/settings', (_req, res) => res.json(rules()));
 /** PUT /settings { [gameId]: { cost, plays } } (parents). Unlocks already bought for good stay theirs (a parent can refund them). */
 gamesRouter.put('/settings', requireAdmin, (req, res) => {
+  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can set what games cost' });
   const cur = rules();
   const b = (req.body ?? {}) as Record<string, Partial<GameRule>>;
   for (const g of GAMES) {
@@ -73,6 +77,13 @@ gamesRouter.put('/settings', requireAdmin, (req, res) => {
       const v = Math.round(Number(v0));
       if (!(v >= 0 && v <= 10000)) return res.status(400).json({ error: `${g.name} ${f.name}: 0–10000` });
       cur[g.id].features[f.id] = v;
+    }
+    for (const f of g.shop ?? []) {
+      const v0 = x.shop?.[f.id];
+      if (v0 === undefined) continue;
+      const v = Math.round(Number(v0));
+      if (!(v >= 0 && v <= 10000)) return res.status(400).json({ error: `${g.name} ${f.name}: 0–10000` });
+      cur[g.id].shop[f.id] = v;
     }
   }
   setSetting(RULES_KEY, JSON.stringify(cur));
@@ -231,6 +242,41 @@ function featuresFor(m: FamilyMember, gameId: string, save: unknown) {
   );
 }
 
+/** 💎 The token shop: each item's price for them (parents: free) and the coins it gives. */
+function shopFor(m: FamilyMember, gameId: string) {
+  const prices = ruleOf(gameId).shop;
+  return Object.fromEntries((gameOf(gameId)?.shop ?? []).map((f) => [f.id, { name: f.name, cost: free(m) ? 0 : (prices[f.id] ?? f.cost), coins: f.coins ?? 0 }]));
+}
+
+/**
+ * POST /:gameId/play/:memberId/buy { item, acting_member_id } — 💎 buy something in the game's token
+ * shop (each time: a bag of coins, a special building). Answers with what it gives and their balance.
+ */
+gamesRouter.post('/:gameId/play/:memberId/buy', (req, res) => {
+  const { gameId, memberId } = req.params;
+  const { item, acting_member_id } = req.body ?? {};
+  if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
+  const g = gameOf(gameId);
+  const m = memberOf(memberId);
+  if (!g || !m) return res.status(404).json({ error: 'not found' });
+  if (!mayPlay(m, g.id)) return res.status(403).json({ error: 'Unlock it first' });
+  const it = shopFor(m, g.id)[String(item)];
+  if (!it) return res.status(404).json({ error: 'No such thing in the shop' });
+  if (m.token_balance < it.cost) return res.status(400).json({ error: `Needs ${it.cost} 💎 — ${it.cost - m.token_balance} more to go` });
+  db.transaction(() => {
+    if (it.cost) addTokens(m.id, -it.cost, `💎 ${g.emoji} ${g.name}: ${it.name}`, typeof acting_member_id === 'string' ? acting_member_id : null);
+    db.prepare('INSERT INTO game_purchases (id, family_member_id, game_id, item, cost, bought_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      uuidv4(),
+      m.id,
+      g.id,
+      String(item),
+      it.cost,
+      new Date().toISOString()
+    );
+  })();
+  res.json({ item: String(item), coins: it.coins, cost: it.cost, token_balance: memberOf(m.id)!.token_balance });
+});
+
 /** POST /:gameId/play/:memberId/feature { feature, acting_member_id } — 🔓 buy an extra with 💎. */
 gamesRouter.post('/:gameId/play/:memberId/feature', (req, res) => {
   const { gameId, memberId } = req.params;
@@ -280,7 +326,7 @@ gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
     data = null;
   }
   const owned = free(m) || unlockedFor(m).has(g.id);
-  res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0, features: featuresFor(m, g.id, data) });
+  res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0, features: featuresFor(m, g.id, data), shop: shopFor(m, g.id), token_balance: m.token_balance });
 });
 
 /** POST /:gameId/play/:memberId/result { score, detail, save, acting_member_id } — a finished run, and progress to keep. */

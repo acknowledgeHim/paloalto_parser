@@ -19,6 +19,8 @@ interface ShelfGame {
   /** 0 = unlocking is for good; N = unlocking buys N plays (a parent sets it per game) */
   plays_per_unlock: number;
   best: number | null;
+  /** 💎 the game's token shop, with the usual prices */
+  shop?: Array<{ id: string; name: string; cost: number; coins?: number }>;
 }
 interface Shelf {
   token_balance: number;
@@ -33,7 +35,17 @@ interface GameRule {
   cost: number;
   plays: number;
   features?: Record<string, number>;
+  /** 💎 each token-shop item's price (🏘️ Tiny Town) */
+  shop?: Record<string, number>;
 }
+/** 💎 Token-shop price levels: the usual prices times this (whole tokens, at least 1 unless the usual is 0). */
+const PRICE_LEVELS: Array<[string, number]> = [
+  ['🪶 Cheap (½)', 0.5],
+  ['⚖️ Usual', 1],
+  ['💰 Pricey (×2)', 2],
+  ['💎 Very pricey (×3)', 3],
+];
+
 const FEATURE_NAMES: Record<string, string> = { jump: '🦘 Jump', obstacles: '⚠️ Obstacles', glide: '🪂 Glider', 'big-map': '🗺️ Bigger land', fun: '🎡 Fun places' };
 
 /**
@@ -60,7 +72,7 @@ export function GamesPage() {
     if (!rules) return;
     setRulesNote(null);
     try {
-      setRules(await api.put<Record<string, GameRule>>('/games/settings', rules));
+      setRules(await api.put<Record<string, GameRule>>('/games/settings', { ...rules, acting_member_id: activeProfile?.id ?? null }));
       setRulesNote('Saved ✓');
       void load();
     } catch (e) {
@@ -202,7 +214,8 @@ export function GamesPage() {
             For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
             uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs (use ↶ refund
             above to take one back). 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump, 🪂 Glider and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
-            already had one switched on keeps it.
+            already had one switched on keeps it. 💎 Token shop items (🏘️ Tiny Town's coin bags and special buildings) are bought each time: pick a price
+            level, or set each one.
           </p>
           <p className="hint">
             ⏰ How many games — or minutes — a day for each kid: <Link to="/learning/settings">📚 Learning → ⚙️ Grades & tokens → Daily limits</Link>.
@@ -237,6 +250,36 @@ export function GamesPage() {
                     <span className="hint">{cost ? '' : '(free)'}</span>
                   </label>
                 ))}
+                {g.shop && g.shop.length > 0 && (
+                  <div className="games-page__shop">
+                    <div>
+                      💎 <strong>Token shop</strong> (bought each time, inside the game) — price level:{' '}
+                      {PRICE_LEVELS.map(([label, x]) => {
+                        const prices = Object.fromEntries(g.shop!.map((it) => [it.id, it.cost ? Math.max(1, Math.round(it.cost * x)) : 0]));
+                        const on = g.shop!.every((it) => (r.shop?.[it.id] ?? it.cost) === prices[it.id]);
+                        return (
+                          <button key={label} type="button" className={`secondary${on ? ' is-on' : ''}`} aria-pressed={on} onClick={() => setRules({ ...rules, [g.id]: { ...r, shop: prices } })}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {g.shop.map((it) => (
+                      <label key={it.id} className="games-page__extra">
+                        {it.name}: 💎{' '}
+                        <input
+                          type="number"
+                          min={0}
+                          max={10000}
+                          value={r.shop?.[it.id] ?? it.cost}
+                          onChange={(e) => setRules({ ...rules, [g.id]: { ...r, shop: { ...r.shop, [it.id]: Math.max(0, Math.round(Number(e.target.value) || 0)) } } })}
+                          aria-label={`${g.name} ${it.name} cost in tokens`}
+                        />{' '}
+                        <span className="hint">{(r.shop?.[it.id] ?? it.cost) ? `(usual ${it.cost})` : '(free)'}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

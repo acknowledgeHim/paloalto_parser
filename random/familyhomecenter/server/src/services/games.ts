@@ -13,6 +13,8 @@ export interface Game {
   minutesOnly?: boolean;
   /** 🔓 extras inside the game a kid unlocks with 💎 too (a parent sets the price; 0 = free) */
   features?: Array<{ id: string; name: string; cost: number }>;
+  /** 💎 a token shop inside the game: bought each time (coins: in-game coins it gives) — parent-set prices */
+  shop?: Array<{ id: string; name: string; cost: number; coins?: number }>;
 }
 
 export const GAMES: Game[] = [
@@ -48,6 +50,17 @@ export const GAMES: Game[] = [
     features: [
       { id: 'big-map', name: '🗺️ Bigger land', cost: 5 },
       { id: 'fun', name: '🎡 Fun places', cost: 5 },
+    ],
+    // Keep the building ids in sync with `token` in client/src/games/townLogic.ts.
+    shop: [
+      { id: 'coins-small', name: '🪙 Bag of 500 coins', cost: 1, coins: 500 },
+      { id: 'coins-big', name: '🪙 Chest of 3,000 coins', cost: 5, coins: 3000 },
+      { id: 'rainbow', name: '🌈 Rainbow garden', cost: 2 },
+      { id: 'beach', name: '🏖️ Beach', cost: 2 },
+      { id: 'coaster', name: '🎢 Roller coaster', cost: 3 },
+      { id: 'circus', name: '🎪 Circus', cost: 3 },
+      { id: 'hotel', name: '🏨 Hotel', cost: 4 },
+      { id: 'spacepad', name: '🛸 Space pad', cost: 6 },
     ],
   },
 ];

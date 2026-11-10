@@ -338,6 +338,16 @@ games (a parent sets the price, or gives 🎟️ plays); parents play free.
   250, museum 400, rocket base 1,000.
 - **🔓 Extras (💎, 5 each by default, parent-set):** 🗺️ *Bigger land* (48 × 36 instead of 30 × 22,
   for all their towns) and 🎡 *Fun places* (fun park, zoo, aquarium by the water, castle).
+- **💎 Token shop:** the tokens kids earn (📚 Learning, ⌨️ Typing, chores) can be spent inside their
+  town, each time they want something: 🪙 a bag of 500 coins (1 💎) or a chest of 3,000 (5 💎), and
+  special buildings that only tokens can buy: 🌈 rainbow garden (2), 🏖️ beach by the water (2),
+  🎢 roller coaster (3), 🎪 circus (3), 🏨 hotel with 20 jobs (4) and 🛸 space pad (6). The Family
+  Home Center takes the tokens before it's built, so it shows in their token history, and the
+  town saves straight away. Clearing a token building asks first and doesn't give tokens back.
+  Parents buy free.
+- **Parents set the prices:** 🎮 Games → ⚙️ What each game costs → 🏘️ Tiny Town → 💎 Token shop.
+  Pick a price level (🪶 Cheap ½, ⚖️ Usual, 💰 Pricey ×2, 💎 Very pricey ×3) or set each one (0 =
+  free). Only a parent can change what games cost (the Family Home Center checks).
 - **Three towns** per person, each with its own land. Kids can 🔄 Start over (it asks first), which
   replaces that town with new land.
 - ⏸ ▶ ⏩ speeds. It saves every 30 days, on 💾 Save & exit, and when the page closes.

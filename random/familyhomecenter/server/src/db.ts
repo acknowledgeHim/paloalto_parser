@@ -1615,6 +1615,15 @@ db.exec(`
     unlocked_at TEXT NOT NULL,
     PRIMARY KEY (family_member_id, game_id, feature)
   );
+  -- 💎 Things bought with tokens inside a game (🏘️ Tiny Town's coin bags and special buildings), one row each.
+  CREATE TABLE IF NOT EXISTS game_purchases (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    item TEXT NOT NULL,
+    cost INTEGER NOT NULL,
+    bought_at TEXT NOT NULL
+  );
   -- ⏰ Daily limits: how many times and how long each person used each activity, per day.
   CREATE TABLE IF NOT EXISTS activity_usage (
     family_member_id TEXT NOT NULL,

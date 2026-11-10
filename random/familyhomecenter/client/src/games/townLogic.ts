@@ -14,7 +14,7 @@ export const SMALL = { x0: 9, y0: 7, w: 30, h: 22 };
 export const FULL = { x0: 0, y0: 0, w: W, h: H };
 export type Region = typeof SMALL;
 
-export type Cat = 'road' | 'home' | 'work' | 'service' | 'nature' | 'utility' | 'fun';
+export type Cat = 'road' | 'home' | 'work' | 'service' | 'nature' | 'utility' | 'fun' | 'special';
 
 export interface Building {
   ch: string;
@@ -29,6 +29,8 @@ export interface Building {
   needPop: number;
   /** a 💎 extra it comes with */
   feature?: 'fun';
+  /** 💎 bought with tokens from the shop (this item id, the same as server/src/services/games.ts), not with 🪙 */
+  token?: string;
   homes?: number;
   jobs?: number;
   power?: number;
@@ -82,6 +84,13 @@ export const BUILDINGS: Building[] = [
   B({ ch: 'F', id: 'funpark', emoji: '🎡', name: 'Fun park', cat: 'fun', cost: 600, upkeep: 3, needPop: 60, feature: 'fun', jobs: 6, happy: [6, 20], tip: 'Homes within 6 tiles are much happier.' }),
   B({ ch: 'Z', id: 'zoo', emoji: '🦁', name: 'Zoo', cat: 'fun', cost: 700, upkeep: 4, needPop: 120, feature: 'fun', jobs: 8, townHappy: 4, tip: 'The whole town is happier.' }),
   B({ ch: 'Q', id: 'aquarium', emoji: '🐠', name: 'Aquarium', cat: 'fun', cost: 700, upkeep: 4, needPop: 120, feature: 'fun', jobs: 6, townHappy: 4, byWater: true, tip: 'The whole town is happier. Build it next to the water.' }),
+  // 💎 Token shop: bought with tokens each time one is built (a parent sets the prices). No 🪙, open from the start.
+  B({ ch: 'v', id: 'rainbow', emoji: '🌈', name: 'Rainbow garden', cat: 'special', cost: 0, upkeep: 0, needPop: 0, token: 'rainbow', happy: [4, 18], needsRoad: false, uses: 0, tip: 'Homes within 4 tiles are a lot happier. Bought with 💎.' }),
+  B({ ch: 'b', id: 'beach', emoji: '🏖️', name: 'Beach', cat: 'special', cost: 0, upkeep: 0, needPop: 0, token: 'beach', happy: [5, 15], needsRoad: false, uses: 0, byWater: true, tip: 'Homes within 5 tiles are happier. Next to the water. Bought with 💎.' }),
+  B({ ch: 'r', id: 'coaster', emoji: '🎢', name: 'Roller coaster', cat: 'special', cost: 0, upkeep: 0, needPop: 0, token: 'coaster', jobs: 8, happy: [6, 20], tip: '8 jobs, and homes within 6 tiles are much happier. Bought with 💎.' }),
+  B({ ch: 'i', id: 'circus', emoji: '🎪', name: 'Circus', cat: 'special', cost: 0, upkeep: 0, needPop: 0, token: 'circus', jobs: 6, townHappy: 5, tip: '6 jobs, and the whole town is happier. Bought with 💎.' }),
+  B({ ch: 'j', id: 'hotel', emoji: '🏨', name: 'Hotel', cat: 'special', cost: 0, upkeep: 0, needPop: 0, token: 'hotel', jobs: 20, tip: '20 jobs, and quiet. Bought with 💎.' }),
+  B({ ch: 'd', id: 'spacepad', emoji: '🛸', name: 'Space pad', cat: 'special', cost: 0, upkeep: 0, needPop: 0, token: 'spacepad', jobs: 12, townHappy: 8, tip: '12 jobs, and the whole town is proud of it. Bought with 💎.' }),
   B({ ch: 'C', id: 'castle', emoji: '🏰', name: 'Castle', cat: 'fun', cost: 800, upkeep: 2, needPop: 200, feature: 'fun', jobs: 4, townHappy: 5, tip: 'Every town should have one. The whole town is happier.' }),
 ];
 const BY_CH = new Map(BUILDINGS.map((b) => [b.ch, b]));

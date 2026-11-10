@@ -3591,3 +3591,8 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .town-slot { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 0.75rem; border-radius: 10px; border: 2px solid rgba(127, 127, 127, 0.3); text-align: center; }
 .town-slot.is-empty { border-style: dashed; }
 .town-slot__emoji { font-size: 2.4rem; }
+.town__group--shop { flex-basis: 100%; padding: 0.4rem 0.6rem; border-radius: 10px; background: rgba(38, 166, 154, 0.12); }
+.town-shop { margin: 0.25rem 0; padding-left: 1.2rem; columns: 2 14rem; }
+.games-page__shop { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; align-items: center; padding: 0.4rem 0; }
+.games-page__shop > div:first-child { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.games-page__shop button.is-on { outline: 3px solid #2e7d32; }

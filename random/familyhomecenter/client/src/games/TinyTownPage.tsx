@@ -22,6 +22,9 @@ interface PlayInfo {
   best: number | null;
   top: Array<{ member_id: string; score: number }>;
   features?: Record<string, { name: string; cost: number; owned: boolean }>;
+  /** 💎 the token shop: each thing's price for them (parents: 0) and the 🪙 a bag gives */
+  shop?: Record<string, { name: string; cost: number; coins: number }>;
+  token_balance?: number;
 }
 
 const NAMES = ['Maple Hollow', 'Sunny Creek', 'Pine Ridge', 'Willow Bend', 'Cloverfield', 'Pebble Bay', 'Honey Hill', 'Fox Glen', 'Bluebell Vale', 'Oak Harbor'];
@@ -105,7 +108,7 @@ export function TinyTownPage() {
     setError(null);
     try {
       const r = await api.post<{ features: PlayInfo['features'] }>(`/games/${GAME}/play/${me.id}/feature`, { feature: f, acting_member_id: me.id });
-      setInfo((i) => (i ? { ...i, features: r.features } : i));
+      setInfo((i) => (i ? { ...i, features: r.features, token_balance: (r as { token_balance?: number }).token_balance ?? i.token_balance } : i));
       void refreshMembers();
     } catch (e) {
       setError((e as Error).message);
@@ -138,6 +141,21 @@ export function TinyTownPage() {
         town={towns[playing]}
         region={region}
         owned={{ fun: has('fun') }}
+        shop={{
+          items: info.shop ?? {},
+          balance: info.token_balance ?? 0,
+          buy: async (item) => {
+            try {
+              const r = await api.post<{ coins: number; token_balance: number }>(`/games/${GAME}/play/${me.id}/buy`, { item, acting_member_id: me.id });
+              setInfo((i) => (i ? { ...i, token_balance: r.token_balance } : i));
+              void refreshMembers();
+              return { coins: r.coins };
+            } catch (e) {
+              window.alert((e as Error).message);
+              return null;
+            }
+          },
+        }}
         timeUp={timeUp}
         onSave={(t) => saveTown(playing, t, true)}
         onExit={(t) => {
@@ -246,6 +264,24 @@ export function TinyTownPage() {
         {unlock('big-map', 'more than twice the land to build on (all your towns)')}
         {unlock('fun', '🎡 fun park, 🦁 zoo, 🐠 aquarium and 🏰 castle — make the whole town happier')}
       </section>
+
+      {info.shop && Object.keys(info.shop).length > 0 && (
+        <section className="panel">
+          <h2>💎 Token shop</h2>
+          <p className="hint">
+            Spend the 💎 tokens you earn (📚 Learning, ⌨️ Typing, chores) inside your town — you have <strong>{info.token_balance ?? 0} 💎</strong>. Pick them from the
+            💎 Token shop under the map while you play.
+          </p>
+          <ul className="town-shop">
+            {Object.entries(info.shop).map(([id, it]) => (
+              <li key={id}>
+                {it.name} — <strong>{it.cost ? `${it.cost} 💎` : 'free'}</strong>
+                {it.coins ? '' : ' each'}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {info.top.length > 0 && (
         <section className="panel">

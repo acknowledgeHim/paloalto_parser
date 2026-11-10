@@ -34,6 +34,7 @@ const PAD: Record<Cat, string> = {
   nature: '',
   utility: '#e6d6f2',
   fun: '#fff3a6',
+  special: '#cdf3e6',
 };
 const GROUPS: Array<{ title: string; cats: Cat[] }> = [
   { title: '🛣️ Roads & homes', cats: ['road', 'home'] },
@@ -43,6 +44,14 @@ const GROUPS: Array<{ title: string; cats: Cat[] }> = [
   { title: '🏫 Town services', cats: ['service'] },
   { title: '🎡 Fun places', cats: ['fun'] },
 ];
+
+/** 💎 The token shop: what each thing costs this person (parents: 0) and the 🪙 a coin bag gives. */
+export interface TokenShop {
+  items: Record<string, { name: string; cost: number; coins: number }>;
+  balance: number;
+  /** spend the tokens (the server takes them): what it gave, or null if it didn't go through (it says why) */
+  buy: (item: string) => Promise<{ coins: number } | null>;
+}
 
 /** Emoji drawn once per size, then copied — much faster than drawing text every frame. */
 const glyphs = new Map<string, HTMLCanvasElement>();
@@ -66,6 +75,7 @@ export interface RunProps {
   town: Town;
   region: Region;
   owned: { fun: boolean };
+  shop: TokenShop;
   /** ⏰ a parent's minutes for today are used up: why (the town saves and closes soon) */
   timeUp: string | null;
   onSave: (t: Town) => void;
@@ -73,7 +83,7 @@ export interface RunProps {
 }
 
 /** 🏘️ Tiny Town: the map, the tools, and the days going by. */
-export function TinyTownRun({ town, region, owned, timeUp, onSave, onExit }: RunProps) {
+export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit }: RunProps) {
   const t = useRef<Town>({ ...town });
   const [, setTick] = useState(0);
   const redraw = () => setTick((n) => n + 1);
@@ -218,6 +228,7 @@ export function TinyTownRun({ town, region, owned, timeUp, onSave, onExit }: Run
     if (rx < 0 || ry < 0 || rx >= region.w || ry >= region.h) return null;
     return (region.y0 + ry) * W + region.x0 + rx;
   };
+  const buying = useRef(false);
   const act = (i: number) => {
     if (tool.kind === 'look') return setPicked(i);
     if (tool.kind !== 'build' && tool.kind !== 'bulldoze') return;
@@ -226,8 +237,44 @@ export function TinyTownRun({ town, region, owned, timeUp, onSave, onExit }: Run
       if (can.why) setMsg(can.why);
       return;
     }
+    if (tool.kind === 'bulldoze' && buildingOf(t.current.map[i])?.token) {
+      const b = buildingOf(t.current.map[i])!;
+      if (!window.confirm(`Clear the ${b.emoji} ${b.name}? It was bought with 💎, and clearing it doesn't give the tokens back.`)) return;
+    }
+    // 💎 Bought with tokens: the server takes them first, then it's built.
+    const tb = tool.kind === 'build' ? buildingOf(tool.ch) : undefined;
+    if (tb?.token) {
+      const price = shop.items[tb.token]?.cost ?? 0;
+      if (buying.current) return;
+      if (price > shop.balance) return setMsg(`${tb.emoji} ${tb.name} needs ${price} 💎 — you have ${shop.balance}. Earn more in 📚 Learning and ⌨️ Typing!`);
+      if (price && !window.confirm(`Build a ${tb.emoji} ${tb.name} here for ${price} 💎?`)) return;
+      buying.current = true;
+      void shop.buy(tb.token).then((r) => {
+        buying.current = false;
+        if (!r) return;
+        build(t.current, i, tool, region, owned);
+        setMsg(`${tb.emoji} ${tb.name} built!`);
+        onSave({ ...t.current }); // paid for: keep it straight away
+        redraw();
+      });
+      return;
+    }
     build(t.current, i, tool, region, owned);
     setMsg(null);
+    redraw();
+  };
+  const buyCoins = async (item: string) => {
+    const it = shop.items[item];
+    if (!it || buying.current) return;
+    if (it.cost > shop.balance) return setMsg(`That needs ${it.cost} 💎 — you have ${shop.balance}. Earn more in 📚 Learning and ⌨️ Typing!`);
+    if (it.cost && !window.confirm(`Trade ${it.cost} 💎 for ${it.coins.toLocaleString()} 🪙?`)) return;
+    buying.current = true;
+    const r = await shop.buy(item);
+    buying.current = false;
+    if (!r) return;
+    t.current.coins += r.coins;
+    onSave({ ...t.current }); // paid for: keep it straight away
+    setMsg(`+${r.coins.toLocaleString()} 🪙 for your town!`);
     redraw();
   };
   const onDown = (e: React.PointerEvent) => {
@@ -274,13 +321,15 @@ export function TinyTownRun({ town, region, owned, timeUp, onSave, onExit }: Run
       <button
         key={b.ch}
         type="button"
-        className={`town-tool${isOn(x) ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
+        className={`town-tool${isOn(x) ? ' is-on' : ''}${locked || (b.token && (shop.items[b.token]?.cost ?? 0) > shop.balance) ? ' is-locked' : ''}`}
         title={b.tip}
         onClick={() => (locked ? setMsg(b.feature === 'fun' && !owned.fun ? '🔒 Unlock 🎡 Fun places (in the town list) first' : `🔒 ${b.name} opens at ${b.needPop} people`) : choose(x))}
       >
         <span className="town-tool__emoji">{locked ? '🔒' : b.emoji}</span>
         <span className="town-tool__name">{b.name}</span>
-        <span className="town-tool__cost">{locked ? (b.feature === 'fun' && !owned.fun ? '💎' : `${b.needPop} 👥`) : `${b.cost} 🪙`}</span>
+        <span className="town-tool__cost">
+          {locked ? (b.feature === 'fun' && !owned.fun ? '💎' : `${b.needPop} 👥`) : b.token ? `${shop.items[b.token]?.cost ?? 0} 💎` : `${b.cost} 🪙`}
+        </span>
       </button>
     );
   };
@@ -297,6 +346,7 @@ export function TinyTownRun({ town, region, owned, timeUp, onSave, onExit }: Run
         <span title="Jobs (people working / jobs)">💼 {rep.employed}/{rep.jobs}</span>
         <span title="Power (made / used)" className={rep.power[1] > rep.power[0] ? 'is-bad' : ''}>⚡ {rep.power[0]}/{rep.power[1]}</span>
         <span title="Water (made / used)" className={rep.water[1] > rep.water[0] ? 'is-bad' : ''}>💧 {rep.water[0]}/{rep.water[1]}</span>
+        <span title="Your tokens (earned in Learning, Typing and chores) — spend them in the 💎 Token shop below">💎 {shop.balance}</span>
         <span title="Day">📅 {town_.day}</span>
         <span className="town__speed" role="radiogroup" aria-label="Speed">
           {['⏸', '▶', '⏩'].map((s, i) => (
@@ -406,6 +456,21 @@ export function TinyTownRun({ town, region, owned, timeUp, onSave, onExit }: Run
                 <span className="town-tool__cost">{x.kind === 'bulldoze' ? '½ back' : ' '}</span>
               </button>
             ))}
+          </div>
+        </div>
+        <div className="town__group town__group--shop">
+          <div className="town__group-title">💎 Token shop — you have {shop.balance} 💎</div>
+          <div className="town__group-row">
+            {Object.entries(shop.items)
+              .filter(([, it]) => it.coins > 0)
+              .map(([id, it]) => (
+                <button key={id} type="button" className={`town-tool${it.cost > shop.balance ? ' is-locked' : ''}`} title={`Trade ${it.cost} 💎 for ${it.coins.toLocaleString()} 🪙`} onClick={() => void buyCoins(id)}>
+                  <span className="town-tool__emoji">{it.coins >= 2000 ? '💰' : '🪙'}</span>
+                  <span className="town-tool__name">+{it.coins.toLocaleString()} 🪙</span>
+                  <span className="town-tool__cost">{it.cost} 💎</span>
+                </button>
+              ))}
+            {BUILDINGS.filter((b) => b.cat === 'special').map(toolButton)}
           </div>
         </div>
         {GROUPS.map((grp) => (
