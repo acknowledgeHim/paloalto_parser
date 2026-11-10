@@ -1547,6 +1547,17 @@ db.exec(`
     tokens INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_learning_lessons_done_member ON learning_lessons_done (family_member_id, lesson_id);
+  -- 🔁 a kid passed every lesson at their grade in a subject: from "at" on, each lesson pays again
+  -- (one row per time it happens; tries from before it count as an earlier round). New table only.
+  CREATE TABLE IF NOT EXISTS learning_lesson_rounds (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    lessons INTEGER NOT NULL,
+    at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_lesson_rounds_member ON learning_lesson_rounds (family_member_id, subject, at);
 `);
 
 // 👪 Relatives (routes/relatives.ts): family, living or not — names, dates, memories, and the photos

@@ -103,8 +103,32 @@ the right answer and a tip, and that answer is then final. Problem types live in
 ## 📖 Lessons: Grammar, Math and 🇺🇸 US History
 
 Read a lesson (a rule, formula or piece of history in plain words, with examples), then take its quiz.
-Passing (80% right by default) pays 💎 tokens **once per lesson**, for lessons at the kid's grade or
-higher. Kids can read any lesson; younger-grade ones are for practice.
+Passing (80% right by default) pays 💎 tokens for lessons at the kid's grade or higher, **once per
+lesson each 🔁 round**. Kids can read and retake any lesson as often as they like; younger-grade ones
+are for practice.
+
+**🔁 Rounds.** Once a lesson has paid, retaking it pays nothing until the kid has passed **every**
+lesson at their grade in that subject (e.g. all 3rd grade ➗ Math lessons). Then a new round
+starts and every lesson pays again, so kids move on to new lessons instead of redoing the easy
+ones. A round only counts lessons that have a quiz, pay tokens and aren't hidden. If a parent hides
+the last ones left, the round still finishes. The lessons page shows **Round N: X of Y lessons
+passed**, and marks each lesson ✅ Passed today, 💎 earned this round, or 💎 N still to earn.
+Lessons already paid before this change count as paid in round 1. Parents and kids without a
+grade have no rounds. (⌨️ Typing lessons still pay once each, as before.)
+
+### 📈 Progress (📚 Learning → 📈 Progress)
+
+One kid's learning, by subject. Kids see their own; parents pick any kid.
+
+- **Summary:** each lesson subject's 🔁 round bar at their grade, how many of that grade's lessons
+  they've ever passed, and how many rounds they've finished.
+- **Last 30 days chart** for the chosen subject: tries each day, passed ones vs. not yet. Hover or
+  tap and hold a bar to see the day.
+- **Every lesson**, by topic and grade: ⬜ not tried / 🟡 tried / ✅ passed, how many tries, best score,
+  last try. Tap a lesson to see **each try**: when, the score, passed or not, tokens, and which round.
+- **🎯 Practice rounds** (spelling, misspellings, grammar, math): % right in the last 30 rounds and a
+  table of every round.
+- **⌨️ Typing:** each typing lesson tried/passed, best speed, and every try.
 
 - **📖 Grammar lessons:** 27 lessons, K–12 (capitals, there/their/they're, I/me, who/whom, …).
 - **📖 Math lessons:** 28 lessons, K–12 (make a 10, long division, fractions, equations, slope,
@@ -162,7 +186,7 @@ kept on the server for 3 days, so it works on another screen too.
 
 New tables only: `learning_grades` (each kid's grade), `learning_results` (every round: grade,
 right out of 10, tokens, the words missed), `learning_lessons` (the lessons, built-in and parents'), and
-`learning_lessons_done` (every quiz taken), `learning_open_rounds` (practice rounds, kept so they
+`learning_lessons_done` (every quiz taken), `learning_lesson_rounds` (when each 🔁 round finished), `learning_open_rounds` (practice rounds, kept so they
 survive a restart; marked finished, never removed) and `learning_drafts` (💾 each person's saved
 spot), `learning_bonus_paid` (🎁 the bonus paid, one row per kid per day) and `activity_usage` (⏰ times and seconds per person, activity and day; limits in the
 `daily_limits` setting). Settings in `settings.learning_rewards` and `settings.learning_bonus`.

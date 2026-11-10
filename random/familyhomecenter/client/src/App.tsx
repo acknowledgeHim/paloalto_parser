@@ -38,6 +38,7 @@ import { MathPage } from './pages/MathPage.js';
 import { SpellingPage } from './pages/SpellingPage.js';
 import { GRAMMAR_GAME, SPELLCHECK_GAME, TapMistakesPage } from './pages/TapMistakesPage.js';
 import { LearningSettingsPage } from './pages/LearningSettingsPage.js';
+import { LearningProgressPage } from './pages/LearningProgressPage.js';
 import { JournalPage } from './pages/JournalPage.js';
 import { HeightsPage } from './pages/HeightsPage.js';
 import { NotesPage } from './components/StickyNotes.js';
@@ -170,6 +171,7 @@ export function App() {
           <Route path="/history" element={<LessonsPage key="history" config={HISTORY_LESSONS} />} />
           <Route path="/grammar" element={<TapMistakesPage key="grammar" game={GRAMMAR_GAME} />} />
           <Route path="/learning/settings" element={<LearningSettingsPage />} />
+          <Route path="/learning/progress" element={<LearningProgressPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/cameras" element={<CamerasPage />} />
         </Routes>

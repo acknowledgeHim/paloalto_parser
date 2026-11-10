@@ -3606,3 +3606,59 @@ body.game-full-lock { overflow: hidden; }
 .town:fullscreen, .town.is-fake-full { height: 100vh; height: 100dvh; overflow: auto; padding: 10px 14px; background: var(--bg); color: var(--text); box-sizing: border-box; }
 .town:fullscreen .town__map, .town.is-fake-full .town__map { max-height: calc(100dvh - 150px); }
 .town:fullscreen > *, .town.is-fake-full > * { flex-shrink: 0; }
+
+/* ---- 🔁 lesson rounds and 📈 learning progress ---- */
+.lesson-round { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 2px; }
+.lesson-round__label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: 0.95em; }
+.lesson-round .progress-bar__fill { background: #43a047; }
+.lesson-card.is-paid { border-color: #43a047; }
+.progress-summary { display: flex; flex-direction: column; gap: 6px; }
+.progress-summary__row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; min-height: 0; cursor: pointer; }
+.progress-summary__row:hover { border-color: var(--accent); }
+.progress-summary__name { font-weight: 700; }
+.progress-tabs { margin: 12px 0; }
+.progress-chart { margin: 0 0 12px; }
+.progress-chart figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-bottom: 4px; }
+.progress-chart svg { width: 100%; height: auto; max-height: 170px; display: block; }
+.progress-chart__axis { stroke: var(--border); stroke-width: 1; }
+.progress-chart__tick { fill: var(--text-muted); font-size: 11px; }
+.progress-bar-ok { fill: #43a047; }
+.progress-bar-no { fill: color-mix(in srgb, var(--text-muted) 45%, transparent); }
+.progress-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9em; color: var(--text-muted); }
+.progress-key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.progress-key.is-ok { background: #43a047; }
+.progress-key.is-no { background: color-mix(in srgb, var(--text-muted) 45%, transparent); margin-left: 8px; }
+.progress-count { margin: 10px 0 4px; }
+.progress-bar--split { display: flex; }
+.progress-bar--split .progress-bar__fill { border-radius: 0; }
+.progress-bar__fill.is-ok { background: #43a047; }
+.progress-bar__fill.is-no { background: color-mix(in srgb, #f59e0b 60%, transparent); }
+.progress-topic { margin: 16px 0 4px; }
+.progress-table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+.progress-table th { text-align: left; font-weight: 600; color: var(--text-muted); font-size: 0.85em; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.progress-table td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.progress-row.is-tried { cursor: pointer; }
+.progress-row.is-tried:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.progress-history td { background: var(--bg); }
+.progress-history ol { margin: 0; padding-left: 1.4em; }
+.progress-practice { margin: 10px 0; }
+.progress-practice__head { font-weight: 600; text-align: left; }
+.progress-spark { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin: 4px 0; }
+.progress-spark span { flex: 1 1 0; max-width: 14px; border-radius: 3px 3px 0 0; background: color-mix(in srgb, var(--text-muted) 45%, transparent); }
+.progress-spark span.is-ok { background: #43a047; }
+@media (max-width: 600px) {
+  .progress-table th:nth-child(4), .progress-table td:nth-child(4), .progress-table th:nth-child(5), .progress-table td:nth-child(5) { display: none; }
+  .progress-history td { display: table-cell !important; }
+}
+.lesson-round .progress-bar__fill { display: block; }
+.progress-table { table-layout: fixed; }
+.progress-table th:nth-child(1) { width: 38%; }
+.progress-table th:nth-child(2) { width: 24%; }
+.progress-table th:nth-child(3) { width: 8%; }
+.progress-table th:nth-child(4) { width: 8%; }
+@media (max-width: 600px) {
+  .progress-table th:nth-child(1) { width: 52%; }
+  .progress-table th:nth-child(2) { width: 34%; }
+  .progress-table td:nth-child(2) .hint { display: block; }
+  .progress-chart__tick { font-size: 18px; }
+}

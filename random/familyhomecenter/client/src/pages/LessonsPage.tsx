@@ -18,11 +18,24 @@ interface ListItem {
   builtin: boolean;
   questions: number;
   done: { passed: number; best: number; total: number; paid: number } | null;
+  /** 🔁 its tokens are already paid this round */
+  paid_this_round?: boolean;
+  passed_today?: boolean;
+}
+/** 🔁 a kid's round in a subject: every lesson at their grade pays once, then they all pay again */
+export interface RoundInfo {
+  number: number;
+  grade: number;
+  started_at: string | null;
+  total: number;
+  paid: number;
+  passed_today: number;
 }
 interface List {
   settings: { tokens: number; pass_pct: number };
   grades: string[];
   member: { grade: number | null; is_parent: boolean } | null;
+  round: RoundInfo | null;
   lessons: ListItem[];
 }
 interface QuizQ {
@@ -53,6 +66,7 @@ interface QuizResult {
   pass_pct: number;
   tokens: number;
   no_tokens_why: string | null;
+  round: { number: number; total: number; paid: number; new_round: boolean } | null;
   items: Array<{ q: string; choices: string[]; answer: number; given: number | null; ok: boolean; why: string | null }>;
 }
 
@@ -270,9 +284,11 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
           </div>
           {list.member?.grade != null && !list.member.is_parent && (
             <p className="hint">
-              Your grade: {list.grades[list.member.grade]}. Lessons at your grade or higher earn 💎 (once each, for passing the quiz with {list.settings.pass_pct}% right).
+              Your grade: {list.grades[list.member.grade]}. Lessons at your grade or higher earn 💎 for passing the quiz with {list.settings.pass_pct}% right — once each round. Pass every{' '}
+              {list.grades[list.member.grade]} lesson and a new round starts: they all pay again.
             </p>
           )}
+          {list.round && list.round.total > 0 && <RoundBar round={list.round} grades={list.grades} />}
           {isParent && (
             <div className="lesson-parent-bar">
               <button type="button" onClick={() => setEditing('new')}>
@@ -293,13 +309,22 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
             {shown
               .filter((l) => l.topic === t)
               .map((l) => (
-                <button key={l.id} type="button" className={`lesson-card${l.hidden ? ' is-hidden' : ''}${l.done?.passed ? ' is-done' : ''}`} onClick={() => void openLesson(l.id)}>
+                <button
+                  key={l.id}
+                  type="button"
+                  className={`lesson-card${l.hidden ? ' is-hidden' : ''}${l.done?.passed ? ' is-done' : ''}${l.paid_this_round ? ' is-paid' : ''}`}
+                  onClick={() => void openLesson(l.id)}
+                >
                   <span className="lesson-card__grade">{list?.grades[l.grade]}</span>
                   <strong>{l.title}</strong>
                   <span className="lesson-card__meta">
-                    {l.done?.passed ? '✅ Passed' : l.done ? `Tried · best ${l.done.best}/${l.done.total}` : `${l.questions} question${l.questions === 1 ? '' : 's'}`}
-                    {l.tokens > 0 && !l.done?.paid ? ` · 💎 ${l.tokens}` : ''}
-                    {l.done?.paid ? ` · +${l.done.paid} 💎 earned` : ''}
+                    {l.passed_today ? '✅ Passed today' : l.done?.passed ? '✅ Passed' : l.done ? `Tried · best ${l.done.best}/${l.done.total}` : `${l.questions} question${l.questions === 1 ? '' : 's'}`}
+                    {list?.round && l.paid_this_round
+                      ? ' · 💎 earned this round'
+                      : l.tokens > 0 && (list?.round ? l.grade >= list.round.grade : !l.done?.paid)
+                        ? ` · 💎 ${l.tokens}`
+                        : ''}
+                    {!list?.round && l.done?.paid ? ` · +${l.done.paid} 💎 earned` : ''}
                     {l.hidden ? ' · 🙈 hidden' : ''}
                   </span>
                 </button>
@@ -308,6 +333,28 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
         </section>
       ))}
       {list && !shown.length && <p className="hint">No lessons here yet.</p>}
+    </div>
+  );
+}
+
+/** 🔁 How far along this round is: X of Y lessons at their grade passed for tokens. */
+export function RoundBar({ round, grades }: { round: RoundInfo; grades: string[] }) {
+  const pct = round.total ? Math.round((round.paid / round.total) * 100) : 0;
+  const left = round.total - round.paid;
+  return (
+    <div className="lesson-round">
+      <div className="lesson-round__label">
+        <strong>
+          🔁 Round {round.number}: {round.paid} of {round.total} {grades[round.grade]} lessons passed
+        </strong>
+        <span className="hint">
+          {left === 0 ? 'all done!' : `${left} to go — then every lesson pays again`}
+          {round.passed_today ? ` · ${round.passed_today} passed today` : ''}
+        </span>
+      </div>
+      <div className="progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={round.total} aria-valuenow={round.paid} aria-label={`Round ${round.number}`}>
+        <span className="progress-bar__fill" style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
@@ -462,6 +509,13 @@ function LessonView({
             {result.pct === 100 ? '🌟 Perfect!' : result.passed ? '🎉 Passed!' : '💪 Not yet — read it again and retry'} {result.correct} / {result.total} right
           </h2>
           {result.tokens > 0 ? <p className="learning-result__tokens">+{result.tokens} 💎 tokens</p> : result.no_tokens_why ? <p className="hint">{result.no_tokens_why}</p> : null}
+          {result.round?.new_round ? (
+            <p className="learning-bonus is-done">🎉 You passed every lesson at your grade! Round {result.round.number} starts — every lesson pays 💎 again.</p>
+          ) : result.round && result.round.total > 0 ? (
+            <p className="hint">
+              🔁 Round {result.round.number}: {result.round.paid} of {result.round.total} lessons at your grade done.
+            </p>
+          ) : null}
           {!result.passed && <p className="hint">Passing needs {result.pass_pct}% right.</p>}
           <ol className="tap-results">
             {result.items.map((it, i) => (

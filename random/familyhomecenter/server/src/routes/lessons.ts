@@ -12,13 +12,16 @@ import type { FamilyMember } from '../types.js';
 
 /**
  * 📖 Lessons (📚 Learning → Grammar lessons, Math lessons, 🇺🇸 US History): read it, then take a
- * short quiz. Passing pays 💎 tokens once per lesson (the parent sets how many — per lesson, or the
- * subject's default), for lessons at the kid's grade or higher. Lessons live in learning_lessons:
+ * short quiz. Passing pays 💎 tokens (the parent sets how many — per lesson, or the subject's
+ * default), for lessons at the kid's grade or higher — once per lesson per 🔁 round: after a kid has
+ * passed every lesson at their grade in a subject, a new round starts and every lesson pays again
+ * (so they move on to new lessons instead of redoing the easy ones). Lessons can always be retried. Lessons live in learning_lessons:
  * the built-in ones are added once, and parents can edit, add and hide them (nothing is deleted).
  */
 export const lessonsRouter = Router();
 
-const SUBJECTS = ['grammar', 'math', 'history'] as const;
+export const LESSON_SUBJECTS = ['grammar', 'math', 'history'] as const;
+const SUBJECTS = LESSON_SUBJECTS;
 type Subject = (typeof SUBJECTS)[number];
 const LABEL: Record<Subject, string> = { grammar: '📝 Grammar lesson', math: '➗ Math lesson', history: '🇺🇸 US History' };
 
@@ -97,8 +100,72 @@ const quizOf = (r: Row): QuizItem[] => {
   }
 };
 const worth = (r: Row) => r.tokens ?? readSettings()[r.subject].tokens;
-const paidFor = (memberId: string, lessonId: string) =>
-  Boolean(db.prepare('SELECT 1 FROM learning_lessons_done WHERE family_member_id = ? AND lesson_id = ? AND tokens > 0').get(memberId, lessonId));
+
+// ---- 🔁 rounds: each lesson pays once a round; passing all of them at your grade starts a new one ----
+
+/** When their current round in this subject began ('' = the first round: everything so far). */
+const roundStart = (memberId: string, subject: Subject) =>
+  (db.prepare('SELECT MAX(at) AS at FROM learning_lesson_rounds WHERE family_member_id = ? AND subject = ?').get(memberId, subject) as { at: string | null }).at ?? '';
+const paidFor = (memberId: string, lessonId: string, since: string) =>
+  Boolean(db.prepare('SELECT 1 FROM learning_lessons_done WHERE family_member_id = ? AND lesson_id = ? AND tokens > 0 AND at > ?').get(memberId, lessonId, since));
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
+
+export interface LessonRound {
+  subject: Subject;
+  grade: number;
+  /** 1 = the first round */
+  number: number;
+  started_at: string | null;
+  /** the lessons at their grade that pay tokens (the ones a round is made of) */
+  lesson_ids: string[];
+  /** of those, the ones already paid this round */
+  paid_ids: string[];
+  /** lessons (any grade) passed today */
+  passed_today: number;
+}
+/** Where a kid is in this subject's round (null: parents, kids with no grade). Starts a new round
+ *  when every lesson in it is paid — also when a parent hid or changed the last ones left. */
+export function lessonRound(memberId: string, subject: Subject): LessonRound | null {
+  const m = memberOf(memberId);
+  const g = m && m.is_parent !== 1 ? gradeOf(m.id) : null;
+  if (!m || g === null) return null;
+  const set = (db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND grade = ? AND hidden = 0 ORDER BY sort, created_at').all(subject, g) as Row[]).filter(
+    (r) => quizOf(r).length > 0 && worth(r) > 0
+  );
+  const status = (): LessonRound => {
+    const since = roundStart(m.id, subject);
+    return {
+      subject,
+      grade: g,
+      number: 1 + (db.prepare('SELECT COUNT(*) AS n FROM learning_lesson_rounds WHERE family_member_id = ? AND subject = ?').get(m.id, subject) as { n: number }).n,
+      started_at: since || null,
+      lesson_ids: set.map((r) => r.id),
+      paid_ids: set.filter((r) => paidFor(m.id, r.id, since)).map((r) => r.id),
+      passed_today: (
+        db
+          .prepare(
+            'SELECT COUNT(DISTINCT d.lesson_id) AS n FROM learning_lessons_done d JOIN learning_lessons l ON l.id = d.lesson_id WHERE d.family_member_id = ? AND l.subject = ? AND d.passed = 1 AND d.at >= ?'
+          )
+          .get(m.id, subject, startOfToday()) as { n: number }
+      ).n,
+    };
+  };
+  const st = status();
+  if (!set.length || st.paid_ids.length < set.length) return st;
+  db.prepare('INSERT INTO learning_lesson_rounds (id, family_member_id, subject, grade, lessons, at) VALUES (?, ?, ?, ?, ?, ?)').run(
+    uuidv4(),
+    m.id,
+    subject,
+    g,
+    set.length,
+    new Date().toISOString()
+  );
+  return status();
+}
 
 function noTokensWhy(m: FamilyMember | undefined, r: Row): string | null {
   if (!m) return 'Pick who you are up top to earn tokens';
@@ -107,7 +174,11 @@ function noTokensWhy(m: FamilyMember | undefined, r: Row): string | null {
   if (g === null) return 'A parent needs to set your grade first (📚 Learning → ⚙️ Grades & tokens)';
   if (r.grade < g) return `Below your grade (${GRADE_NAMES[g]}) — for practice, no tokens`;
   if (!worth(r)) return 'This lesson pays no tokens';
-  if (paidFor(m.id, r.id)) return 'Already earned the tokens for this one';
+  const round = lessonRound(m.id, r.subject);
+  if (round && paidFor(m.id, r.id, round.started_at ?? '')) {
+    const left = round.lesson_ids.length - round.paid_ids.length;
+    return `Already earned this round 🔁 — pass the other ${left} ${GRADE_NAMES[g]} lesson${left === 1 ? '' : 's'} and every lesson pays again. You can still practise it.`;
+  }
   return null;
 }
 
@@ -116,6 +187,11 @@ lessonsRouter.get('/', (req, res) => {
   const subject = String(req.query.subject) as Subject;
   if (!SUBJECTS.includes(subject)) return res.status(400).json({ error: `subject: ${SUBJECTS.join(', ')}` });
   const m = req.query.member_id ? memberOf(String(req.query.member_id)) : undefined;
+  const round = m ? lessonRound(m.id, subject) : null;
+  const paidNow = new Set(m && round ? (db.prepare('SELECT DISTINCT lesson_id FROM learning_lessons_done WHERE family_member_id = ? AND tokens > 0 AND at > ?').all(m.id, round.started_at ?? '') as Array<{ lesson_id: string }>).map((x) => x.lesson_id) : []);
+  const passedToday = new Set(
+    m ? (db.prepare('SELECT DISTINCT lesson_id FROM learning_lessons_done WHERE family_member_id = ? AND passed = 1 AND at >= ?').all(m.id, startOfToday()) as Array<{ lesson_id: string }>).map((x) => x.lesson_id) : []
+  );
   const rows = db
     .prepare(`SELECT * FROM learning_lessons WHERE subject = ? ${req.query.all === '1' ? '' : 'AND hidden = 0'} ORDER BY grade, sort, created_at`)
     .all(subject) as Row[];
@@ -129,6 +205,7 @@ lessonsRouter.get('/', (req, res) => {
     settings: readSettings()[subject],
     grades: GRADE_NAMES,
     member: m ? { grade: gradeOf(m.id), is_parent: m.is_parent === 1 } : null,
+    round: round ? { number: round.number, grade: round.grade, started_at: round.started_at, total: round.lesson_ids.length, paid: round.paid_ids.length, passed_today: round.passed_today } : null,
     lessons: rows.map((r) => ({
       id: r.id,
       grade: r.grade,
@@ -140,6 +217,9 @@ lessonsRouter.get('/', (req, res) => {
       builtin: r.builtin === 1,
       questions: quizOf(r).length,
       done: done.get(r.id) ?? null,
+      /** 🔁 its tokens are already paid this round */
+      paid_this_round: paidNow.has(r.id),
+      passed_today: passedToday.has(r.id),
     })),
   });
 });
@@ -188,7 +268,13 @@ lessonsRouter.post('/:id/quiz', (req, res) => {
     );
     if (tokens) addTokens(m.id, tokens, `${LABEL[r.subject]}: ${r.title}`);
   })();
-  res.json({ correct, total: quiz.length, pct, passed, pass_pct: readSettings()[r.subject].pass_pct, tokens, no_tokens_why: tokens ? null : passed ? why : null, items });
+  // 🔁 That may have been the last one at their grade: a new round starts.
+  const before = tokens ? roundStart(m.id, r.subject) : '';
+  const round = tokens ? lessonRound(m.id, r.subject) : null;
+  const newRound = Boolean(round && (round.started_at ?? '') !== before);
+  res.json({
+    round: round ? { number: round.number, total: round.lesson_ids.length, paid: round.paid_ids.length, new_round: newRound } : null,
+    correct, total: quiz.length, pct, passed, pass_pct: readSettings()[r.subject].pass_pct, tokens, no_tokens_why: tokens ? null : passed ? why : null, items });
 });
 
 // ---- ✏️ parents: add, edit, hide ----
