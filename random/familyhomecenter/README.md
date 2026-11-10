@@ -167,6 +167,7 @@ Optional integrations, each with its own guide:
 - [docs/GOOGLE_CALENDAR_SETUP.md](docs/GOOGLE_CALENDAR_SETUP.md)
 - [docs/APPLE_CALENDAR_SETUP.md](docs/APPLE_CALENDAR_SETUP.md)
 - [docs/PHOTOS_SETUP.md](docs/PHOTOS_SETUP.md) (local folder or SMB share)
+- [docs/STORAGE_DRIVES.md](docs/STORAGE_DRIVES.md) (💽 two USB drives on the Pi: the family share + a nightly backup the Pi runs itself)
 - [docs/MUSIC_SETUP.md](docs/MUSIC_SETUP.md) (HiFiBerry DAC8x, ALSA zone mapping, MPD + librespot)
 - [docs/LETSENCRYPT_SETUP.md](docs/LETSENCRYPT_SETUP.md) (free trusted HTTPS that renews itself — no certificate warnings)
 - [docs/PASSWORDS_SETUP.md](docs/PASSWORDS_SETUP.md) (🔑 a private password manager for each person — Vaultwarden on the Pi)

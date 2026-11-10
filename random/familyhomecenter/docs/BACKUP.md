@@ -1,5 +1,8 @@
 # Backing up your data
 
+> 💽 With a backup drive plugged into the Pi, [STORAGE_DRIVES.md](STORAGE_DRIVES.md) sets up a
+> nightly job that runs this backup **and** copies it, the share and the Pi's settings to that drive.
+
 Everything the dashboard manages lives in `server/data/` — one SQLite database plus a few folders
 of uploaded files — and your settings live in the `.env` file. `scripts/backup-db.js` copies all of
 it to a timestamped folder.
