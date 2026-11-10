@@ -12,6 +12,7 @@ import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { MyPhotoMemorySettings } from '../components/Birthdays.js';
 import { LearningProgress } from './LearningProgressPage.js';
+import { TokenWallet } from '../components/TokenWallet.js';
 import { canEditHistoricalTask, canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
@@ -192,6 +193,14 @@ export function PersonPage() {
           <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>■</span> not done — tap a day for details.
         </p>
       </section>
+
+      {/* 💎 Their tokens: parents give or take away (with a reason), swap ⭐ → 💎; the kid sees their history. */}
+      {member.is_parent !== 1 && (activeProfile?.is_parent === 1 || activeProfile?.id === member.id) && (
+        <section className="panel person-tokens">
+          <h2>💎 Tokens</h2>
+          <TokenWallet member={member} startOpen onChange={() => load()} />
+        </section>
+      )}
 
       {/* 📚 Their learning (lessons, rounds, practice, typing) — kids only; they see their own, parents anyone's. */}
       {member.is_parent !== 1 && (activeProfile?.is_parent === 1 || activeProfile?.id === member.id) && (

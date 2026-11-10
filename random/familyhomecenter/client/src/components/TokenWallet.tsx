@@ -14,7 +14,7 @@ export interface Wallet {
  * spent on 👕 Dress up and 🎮 Games. Prize Bank ⭐ stars stay separate. Swap stars → tokens; parents
  * can give or take tokens and set the swap rate.
  */
-export function TokenWallet({ member, onChange, refreshKey }: { member: FamilyMember; onChange?: (w: Wallet) => void; refreshKey?: unknown }) {
+export function TokenWallet({ member, onChange, refreshKey, startOpen = false }: { member: FamilyMember; onChange?: (w: Wallet) => void; refreshKey?: unknown; startOpen?: boolean }) {
   const { members, activeProfile, refresh } = useFamilyMembers();
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   const mayUse = isParent || activeProfile?.id === member.id;
@@ -23,7 +23,7 @@ export function TokenWallet({ member, onChange, refreshKey }: { member: FamilyMe
   const [give, setGive] = useState('10');
   const [why, setWhy] = useState('');
   const [rate, setRate] = useState('');
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
