@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import * as B from './brickLogic.js';
+import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
 
 /** 🎨 How the bricks look. Unlocked by your best score (see SKINS in BrickTumblePage). */
 export interface Skin {
@@ -48,6 +49,7 @@ const KEYS: Record<string, Act> = {
 /** One game of 🧱 Brick Tumble, from the first brick to the pile reaching the top. */
 export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: Skin; startLevel: number; best: number | null; seed: number; onEnd: (r: BrickResult) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const screen = useFullscreen<HTMLDivElement>();
   const game = useRef<B.Game>(B.newGame(seed, startLevel));
   const held = useRef<Set<Act>>(new Set()); // move/drop buttons or keys being held
   const repeat = useRef<Record<string, number>>({});
@@ -434,8 +436,9 @@ export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: 
   );
 
   return (
-    <div className="brick-run">
+    <div className={`brick-run${screen.fake ? ' is-fake-full' : ''}`} ref={screen.ref}>
       <div className="brick-run__top">
+        <FullscreenButton full={screen.full} toggle={() => void screen.toggle()} className="brick-run__small" />
         <button type="button" className="brick-run__small" onClick={() => setPause(!paused.current)}>
           {isPaused ? '▶ Go' : '⏸ Pause'}
         </button>

@@ -21,6 +21,7 @@ import {
   type Tool,
   type Town,
 } from './townLogic.js';
+import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
 
 /** Days a second, by speed: ⏸ / ▶ / ⏩. */
 const SPEEDS = [0, 1500, 500];
@@ -95,6 +96,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
   const [msg, setMsg] = useState<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const screen = useFullscreen<HTMLDivElement>();
   const [tile, setTile] = useState(24);
   const rep = useMemo(() => report(t.current), [t.current.day, t.current.map, t.current.pops, t.current.tax]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -335,7 +337,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
   };
 
   return (
-    <div className="town">
+    <div className={`town${screen.fake ? ' is-fake-full' : ''}`} ref={screen.ref}>
       <div className="town__hud">
         <strong className="town__name">🏘️ {town_.name}</strong>
         <span title="People">👥 {rep.pop}</span>
@@ -365,6 +367,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
             +
           </button>
         </span>
+        <FullscreenButton full={screen.full} toggle={() => void screen.toggle()} className="secondary" />
         <button type="button" className="secondary" onClick={() => onExit({ ...t.current })}>
           💾 Save & exit
         </button>

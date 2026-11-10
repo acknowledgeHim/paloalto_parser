@@ -15,6 +15,7 @@ import {
   type Upgrades,
   type World,
 } from './hillPhysics.js';
+import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
 import { CROUCH, DINO, EGG_LIMIT, HAZARD_COINS, HAZARD_WORLDS, Hazards, sharkAt } from './hillHazards.js';
 
 export interface Driver {
@@ -130,6 +131,7 @@ export function HillHopperRun({
   onEnd: (r: RunResult) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const screen = useFullscreen<HTMLDivElement>();
   const pedal = useRef({ gas: false, brake: false });
   /** 🦘 a jump asked for (when), used up by the next step on the ground */
   const jumpAsk = useRef(0);
@@ -999,7 +1001,7 @@ export function HillHopperRun({
   };
 
   return (
-    <div className="hill-run">
+    <div className={`hill-run${screen.fake ? ' is-fake-full' : ''}`} ref={screen.ref}>
       <canvas
         ref={canvas}
         className="hill-run__canvas"
@@ -1048,6 +1050,7 @@ export function HillHopperRun({
       <button type="button" className="hill-run__quit secondary" onClick={() => (quit.current = true)}>
         ✕ Stop
       </button>
+      <FullscreenButton full={screen.full} toggle={() => void screen.toggle()} className="hill-run__full secondary" />
       <button
         type="button"
         className={`hill-run__pedal hill-run__pedal--brake${pedal.current.brake ? ' is-down' : ''}`}

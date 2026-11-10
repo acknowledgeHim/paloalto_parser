@@ -3596,3 +3596,13 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .games-page__shop { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; align-items: center; padding: 0.4rem 0; }
 .games-page__shop > div:first-child { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
 .games-page__shop button.is-on { outline: 3px solid #2e7d32; }
+
+/* ⛶ Games in full screen (utils/fullscreen.tsx): the browser's own, or filling the window where it isn't allowed */
+.is-fake-full { position: fixed !important; inset: 0; z-index: 10000; width: 100vw !important; max-width: none !important; margin: 0 !important; }
+body.game-full-lock { overflow: hidden; }
+.hill-run:fullscreen, .hill-run.is-fake-full, .brick-run:fullscreen, .brick-run.is-fake-full { height: 100vh; height: 100dvh; border-radius: 0; }
+.hill-run__full { position: absolute; top: 76px; left: 108px; min-height: 36px; padding: 0 12px; background: rgba(255,255,255,0.85); color: #1c2430; border: 1px solid rgba(0,0,0,0.2); }
+.brick-run__top .game-full-btn { margin-right: auto; }
+.town:fullscreen, .town.is-fake-full { height: 100vh; height: 100dvh; overflow: auto; padding: 10px 14px; background: var(--bg); color: var(--text); box-sizing: border-box; }
+.town:fullscreen .town__map, .town.is-fake-full .town__map { max-height: calc(100dvh - 150px); }
+.town:fullscreen > *, .town.is-fake-full > * { flex-shrink: 0; }

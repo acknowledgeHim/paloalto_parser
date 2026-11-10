@@ -213,6 +213,11 @@ number of plays.
   learning ones (📚 Learning → ⚙️ Grades & tokens). A run that's going always finishes; see
   [LEARNING.md](LEARNING.md#-daily-limits-parents--learning--️-grades--tokens--️-daily-limits).
 
+- **⛶ Full screen:** every game has a ⛶ Full screen button while playing (⛰️ Hill Hopper next to ✕
+  Stop, 🧱 Brick Tumble top left, 🏘️ Tiny Town in its top bar). The menus go away and the game
+  fills the screen; 🗗 Exit full screen or Esc goes back, and stopping the game leaves full screen
+  too. Where a browser doesn't allow real full screen (iPhone Safari), the game fills the window
+  instead. In Tiny Town the tools are below the map: scroll down.
 - **Parents play free.** In **Kids' games** a parent can unlock a game for a kid (it uses the kid's
   tokens) or **↶ refund** it (tokens back, game locked again; scores and progress are kept).
 - **🎟️ Plays:** a parent can give a kid a number of plays of a game instead (Kids' games → give N
