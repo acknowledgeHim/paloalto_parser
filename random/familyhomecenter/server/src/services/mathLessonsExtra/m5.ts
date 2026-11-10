@@ -37,6 +37,8 @@ Round to whole numbers to check if an answer makes sense.
 ? Is 6.2 × 4.9 = 3.038 reasonable? | *no | yes
 
 @ decimal-stories | Word problems | Decimal word problems
+Decide the operation first, estimate, then compute. Line up the points to add or subtract.
+
 ? Gas costs $3.50 a gallon. How much for 4 gallons? | *$14.00 | $12.50 | $7.50
 ? A 2.5 m board is cut into 5 equal pieces. Each piece is … | *0.5 m | 5 m | 2 m
 ? Ana ran 3.2 km and Ben ran 4.75 km. How much farther did Ben run? | *1.55 km | 1.45 km | 7.95 km
@@ -209,4 +211,12 @@ The **average** (mean): add all the values, then divide by how many there are.
 ? 64 × 5 = | *320 | 300 | 640
 ? 16 × 25 = | *400 | 250 | 1,600
 ? 9 × 22 = | *198 | 220 | 189
+
+@ powers-of-ten-patterns | Decimals | Dividing by 10, 100 and 1,000
+Each ÷10 moves every digit **one place right** — the number gets smaller.
+
+- 450 ÷ 10 = 45; 450 ÷ 100 = 4.5; 450 ÷ 1,000 = 0.45
+? 36 ÷ 100 = | *0.36 | 3.6 | 3,600
+? 7.2 ÷ 10 = | *0.72 | 72 | 0.072
+? 5 ÷ 1,000 = | *0.005 | 0.05 | 5,000
 `;

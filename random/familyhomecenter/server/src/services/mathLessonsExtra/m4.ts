@@ -83,6 +83,8 @@ Line up the places. Compare from the **left**.
 ? 1,000,000 ___ 999,999 | *> | < | =
 
 @ expanded-big | Place value | Expanded form of big numbers
+**Expanded form** writes a number as the sum of each digit's value. Skip the zeros.
+
 - 305,240 = 300,000 + 5,000 + 200 + 40
 ? 70,000 + 4,000 + 6 = | *74,006 | 74,600 | 7,406
 ? 528,000 in expanded form is … | *500,000 + 20,000 + 8,000 | 500 + 20 + 8 | 5,000 + 2,000 + 800
@@ -167,6 +169,8 @@ Compare **tenths** first, then **hundredths**. 0.5 is the same as 0.50.
 ? 5 cm = ___ mm | *50 | 500 | 5
 
 @ pounds-ounces | Measuring | Pounds and ounces
+To change pounds to ounces, **multiply by 16**. A loaf of bread is about 1 pound.
+
 - 1 pound (lb) = **16** ounces (oz)
 ? 2 lb = ___ oz | *32 | 20 | 16
 ? 3 lb 4 oz = ___ oz | *52 | 34 | 48
@@ -221,6 +225,8 @@ Angles side by side **add up**. A straight line is 180°; a full turn is 360°.
 ? Leo ran 2 miles. Mia ran 4 times as far. Mia ran … | *8 miles | 6 miles | 2 miles
 
 @ money-decimals-4 | Money | Money word problems with decimals
+Line up the **decimal points** when you add or subtract money. To find change, count up from the price.
+
 ? A book costs $8.75 and a pen $1.50. Total? | *$10.25 | $9.25 | $10.75
 ? You pay $20 for a $13.40 game. Change? | *$6.60 | $7.60 | $6.40
 ? 3 snacks at $1.25 each cost … | *$3.75 | $3.25 | $4.25
