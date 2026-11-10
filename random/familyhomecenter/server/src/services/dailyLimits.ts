@@ -15,6 +15,8 @@ export interface Activity {
   name: string;
   /** what one "time" is called: round, lesson, run */
   unit: string;
+  /** only a minutes-a-day limit makes sense (no rounds to count) */
+  minutes_only?: boolean;
 }
 
 export function activities(): Activity[] {
@@ -27,7 +29,7 @@ export function activities(): Activity[] {
     { id: 'lessons-math', name: '📖 Math lessons', unit: 'lesson' },
     { id: 'lessons-history', name: '🇺🇸 US History', unit: 'lesson' },
     { id: 'typing', name: '⌨️ Typing', unit: 'round' },
-    ...GAMES.map((g) => ({ id: `game:${g.id}`, name: `${g.emoji} ${g.name}`, unit: 'game' })),
+    ...GAMES.map((g) => ({ id: `game:${g.id}`, name: `${g.emoji} ${g.name}`, unit: 'game', ...(g.minutesOnly ? { minutes_only: true } : {}) })),
   ];
 }
 export const activityOf = (id: string) => activities().find((a) => a.id === id);
@@ -64,7 +66,7 @@ export function cleanLimits(raw: unknown): Record<string, Limit> {
   for (const a of activities()) {
     const x = (raw as Record<string, Partial<Limit>>)[a.id];
     if (!x) continue;
-    const l = { times: num(x.times, 100), minutes: num(x.minutes, 24 * 60) };
+    const l = { times: a.minutes_only ? null : num(x.times, 100), minutes: num(x.minutes, 24 * 60) };
     if (l.times !== null || l.minutes !== null) out[a.id] = l;
   }
   return out;
@@ -100,7 +102,9 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 export function status(memberId: string, activity: string): Status | null {
   const a = activityOf(activity);
   if (!a) return null;
-  const l = isParent(memberId) ? undefined : readLimits()[memberId]?.[activity];
+  const saved = isParent(memberId) ? undefined : readLimits()[memberId]?.[activity];
+  // Minutes-only activities never count times (whatever might be saved).
+  const l = saved && a.minutes_only ? { ...saved, times: null } : saved;
   const u = usage(memberId, activity);
   const usedMin = Math.floor(u.seconds / 60);
   let over: string | null = null;

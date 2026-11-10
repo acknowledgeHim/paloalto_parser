@@ -8,6 +8,8 @@ interface Activity {
   id: string;
   name: string;
   unit: string;
+  /** ⏰ minutes a day only (e.g. 🏘️ Tiny Town: a town keeps going, there are no rounds) */
+  minutes_only?: boolean;
 }
 type Limits = Record<string, { times: number | null; minutes: number | null }>;
 interface Settings {
@@ -86,10 +88,14 @@ export function DailyLimitSettings() {
           return (
             <div key={a.id} className="limits__row">
               <span>{a.name}</span>
-              <input inputMode="numeric" value={draft[a.id]?.times ?? ''} onChange={(e) => set(a.id, 'times', e.target.value)} placeholder="no limit" aria-label={`${a.name}: ${a.unit}s a day`} />
+              {a.minutes_only ? (
+                <span className="hint" title="This one keeps going (no rounds), so it's limited by minutes">minutes only</span>
+              ) : (
+                <input inputMode="numeric" value={draft[a.id]?.times ?? ''} onChange={(e) => set(a.id, 'times', e.target.value)} placeholder="no limit" aria-label={`${a.name}: ${a.unit}s a day`} />
+              )}
               <input inputMode="numeric" value={draft[a.id]?.minutes ?? ''} onChange={(e) => set(a.id, 'minutes', e.target.value)} placeholder="no limit" aria-label={`${a.name}: minutes a day`} />
               <span className="hint">
-                {u ? `${u.used_times} ${a.unit}${u.used_times === 1 ? '' : 's'} · ${u.used_minutes} min` : ''}
+                {u ? (a.minutes_only ? `${u.used_minutes} min` : `${u.used_times} ${a.unit}${u.used_times === 1 ? '' : 's'} · ${u.used_minutes} min`) : ''}
               </span>
             </div>
           );

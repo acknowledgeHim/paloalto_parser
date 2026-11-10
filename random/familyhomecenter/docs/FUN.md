@@ -338,10 +338,10 @@ games (a parent sets the price, or gives 🎟️ plays); parents play free.
   250, museum 400, rocket base 1,000.
 - **🔓 Extras (💎, 5 each by default, parent-set):** 🗺️ *Bigger land* (48 × 36 instead of 30 × 22,
   for all their towns) and 🎡 *Fun places* (fun park, zoo, aquarium by the water, castle).
-- **Three towns** per person, each with its own land. 🔄 Start over (it asks first) replaces one
-  with new land.
+- **Three towns** per person, each with its own land. Kids can 🔄 Start over (it asks first), which
+  replaces that town with new land.
 - ⏸ ▶ ⏩ speeds. It saves every 30 days, on 💾 Save & exit, and when the page closes.
-- **⏰ Daily limits:** a parent's *minutes* for Tiny Town are counted while a town is open. When
-  they run out, the town gets a minute to finish up, then saves and closes. (A town has no end of
-  its own, so this is how "finish what you started" works here.)
+- **⏰ Daily limits are minutes only** for Tiny Town (there's no "times a day" box: a town has no
+  rounds). Minutes count while a town is open. When they run out, the town gets a minute to finish
+  up, then saves and closes. Opening towns doesn't use anything up.
 - 🏆 The family board shows each person's biggest town ever (most people).

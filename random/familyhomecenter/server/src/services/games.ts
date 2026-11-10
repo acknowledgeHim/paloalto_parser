@@ -9,6 +9,8 @@ export interface Game {
   name: string;
   stars: number;
   blurb: string;
+  /** ⏰ daily limits for it are minutes only (it has no rounds or runs — e.g. a town that keeps going) */
+  minutesOnly?: boolean;
   /** 🔓 extras inside the game a kid unlocks with 💎 too (a parent sets the price; 0 = free) */
   features?: Array<{ id: string; name: string; cost: number }>;
 }
@@ -40,6 +42,7 @@ export const GAMES: Game[] = [
     emoji: '🏘️',
     name: 'Tiny Town',
     stars: 30,
+    minutesOnly: true,
     blurb:
       'Build your own town: lay roads, put up homes, and give people jobs, power, water and parks. Happy people move in and pay taxes, so you can build more — schools, a stadium, all the way to a rocket base.',
     features: [
