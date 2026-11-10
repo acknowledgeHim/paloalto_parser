@@ -271,23 +271,51 @@ SEVERITY_BY_CIS_ID: dict[str, str] = {
     "7.1.1": "MEDIUM", "7.2.1": "HIGH", "7.3.1": "MEDIUM", "7.3.2": "MEDIUM", "7.3.3": "MEDIUM",
 }
 
-# CIS benchmark ID → vulns.txt line ID (blank Vuln when nothing in the fixed
-# taxonomy really fits, rather than forcing one).
+# CIS benchmark ID → vulns.txt line ID. Direct associations only: a CIS
+# item gets a vuln only when its failure IS that vulns.txt entry (same
+# conventions as pa_analyzer.py, e.g. "profile not applied" → 31 Missing
+# Security Profile, weak TLS/cipher → 33). Items with no exact counterpart
+# in vulns.txt (trusted hosts, local-in policies, default admin ports, HA
+# group-id/monitor, ISDB deny policies, app-category blocking, host
+# quarantine, Security Fabric, GUI CDN/hostname, SNMP memory traps) have
+# no entry and leave the Vuln column blank rather than borrow a near one.
+# This is the vuln for the item's primary failure; where one CIS item can
+# fail for different reasons, the check picks the vuln per failure (see
+# CIS_ALT_VULNS), and a PASS-but-verify result never carries a vuln.
 VULN_BY_CIS_ID: dict[str, int] = {
     "1.1": 55, "1.2": 44, "1.3": 52,
     "2.1.1": 48, "2.1.2": 46, "2.1.3": 57, "2.1.4": 56, "2.1.5": 4, "2.1.6": 3, "2.1.7": 54,
     "2.1.8": 33, "2.1.9": 33, "2.1.10": 33, "2.1.12": 32,
     "2.2.1": 28, "2.2.2": 27,
-    "2.3.1": 53, "2.3.3": 47, "2.3.4": 32,
+    "2.3.1": 53, "2.3.3": 47,
     "2.4.1": 6, "2.4.4": 23, "2.4.5": 40,
     "2.5.1": 49, "2.5.3": 16,
-    "3.1": 5, "3.2": 26, "3.3": 22, "3.4": 32,
-    "4.1.1": 22, "4.1.2": 22, "4.2.1": 8, "4.2.2": 31, "4.2.3": 22, "4.2.4": 22, "4.2.5": 22,
-    "4.2.6": 22, "4.2.7": 22, "4.3.1": 19, "4.3.2": 32, "4.3.3": 19, "4.4.1": 20,
-    "4.5.1": 22, "4.5.2": 51, "4.5.3": 32, "4.5.4": 31,
-    "5.1.1": 22, "6.1.1": 9, "6.1.2": 33,
+    "3.1": 5, "3.2": 26, "3.4": 32,
+    "4.1.1": 22, "4.1.2": 31, "4.2.1": 8, "4.2.2": 31, "4.2.3": 22, "4.2.4": 22, "4.2.5": 22,
+    "4.2.6": 22, "4.2.7": 22, "4.3.1": 19, "4.3.2": 32, "4.3.3": 31, "4.4.1": 20,
+    "4.5.2": 51, "4.5.3": 32, "4.5.4": 31,
+    "6.1.1": 9, "6.1.2": 33,
     "7.1.1": 32, "7.2.1": 24, "7.3.1": 50, "7.3.2": 50, "7.3.3": 50,
 }
+
+# Other vulns a CIS item reports for a specific failure reason (documented
+# here so the mapping workbook lists every association the code can make):
+#   1.1    no secondary DNS only                  → none ("DNS Not Configured" is false)
+#   2.1.4  only one NTP server                    → 1  Secondary Ntp Server Not Configured
+#   2.1.10 TLS 1.2 still allowed (no 1.0/1.1)     → none (not a weak protocol)
+#   2.2.1  only minimum-length < 14               → 15 Minimum password length
+#   2.2.2  lockout duration out of range          → 10 Account Lockout Duration Not Configured Or Insufficient
+#   2.3.1  SNMP on with no v3 user, no v1/v2c     → none
+#   4.1.1  no IPS sensor applied at all           → 31 Missing Security Profile
+#   4.3.1  no DNS filter profile applied at all   → 31 Missing Security Profile
+#   6.1.2  only ssl-max-proto-ver below tls1-3    → none
+#   7.3.1  only 'reliable' disabled (still enc.)  → none
+#   7.3.x  encryption 'low'                       → 33 Weak Cipher Suite
+CIS_ALT_VULNS: dict[str, list[int]] = {
+    "2.1.4": [1], "2.2.1": [15], "2.2.2": [10], "4.1.1": [31], "4.3.1": [31],
+    "7.3.1": [33], "7.3.2": [33], "7.3.3": [33],
+}
+NO_VULN = 0   # explicit "no vulns.txt entry fits this failure" (blank Vuln column)
 
 # ── CIS Controls v8.1 ────────────────────────────────────────────────────────
 # Safeguard IDs come from each benchmark item's own CSCv8 reference data in
@@ -453,25 +481,25 @@ NATIVE_CHECKS: dict[str, tuple[int, list[str], list[str], list[str]]] = {
     "Policy Permits Insecure Protocol":         (17, ["3.10", "4.8"], ["1.2.6", "4.2.1"], ["CRY-05", "CFG-03"]),
     "Shadowed Firewall Policy":                 (34, ["4.2"], ["1.2.7"], ["NET-04.2"]),
     "Missing Security Profile":                 (31, ["10.1", "13.8"], ["5.2.1", "11.5.1"], ["NET-31", "END-04"]),
-    "No Deep SSL Inspection":                   (18, ["10.7"], ["5.2.2"], ["NET-20.1"]),
+    # vulns.txt #18 is about forwarding decrypted traffic for analysis, not
+    # whether decryption happens — no direct entry, so no vuln.
+    "No Deep SSL Inspection":                   (NO_VULN, ["3.10", "13.3"], ["11.5.1"], ["NET-20.1"]),
     "No Data Loss Prevention Profile":          (21, ["3.13"], ["1.3.2"], ["NET-03.5"]),
     "No User Identity In Policies":             (60, ["6.7"], ["7.2.1"], ["IAC-25"]),
-    "Password Minimum Length Below 14":         (15, ["5.2"], ["8.3.6"], ["IAC-15.1"]),
+    "Password Policy Disabled (Min Length 8)":  (15, ["5.2"], ["8.3.6"], ["IAC-15.1"]),
     "Password Complexity Not Enforced":         (28, ["5.2"], ["8.3.6"], ["IAC-15.1"]),
     "Password Expiry Not Enforced":             (13, ["5.2"], ["8.3.9"], ["IAC-14.1"]),
     "Password Reuse Allowed":                   (12, ["5.2"], ["8.3.7"], ["IAC-15"]),
     "Admin Lockout Duration Below 30 Minutes":  (11, ["5.2"], ["8.3.4"], ["CFG-04.1"]),
-    "Secondary NTP Server Not Configured":      (1, ["8.4"], ["10.6.1"], ["MON-11.1"]),
     "NTP Authentication Not Configured":        (7, ["8.4"], ["10.6.3"], ["MON-11.1", "CRY-06"]),
     "Default SNMP Community Name":              (2, ["4.7"], ["2.2.2"], ["IAC-14.4"]),
-    "Weak SNMPv3 Security":                     (39, ["12.6"], ["2.2.7"], ["CFG-04.7"]),
+    "Weak SNMPv3 Authentication":               (39, ["12.6"], ["2.2.7"], ["CFG-04.7"]),
+    "Weak SNMPv3 Encryption":                   (33, ["3.10"], ["2.2.7"], ["CRY-05"]),
     "Admin Without MFA":                        (39, ["6.5"], ["8.4.2"], ["IAC-06"]),
     "Weak IPsec Proposal":                      (33, ["3.10"], ["4.2.1"], ["CRY-04", "CRY-05"]),
     "Weak IPsec DH Group":                      (33, ["3.10"], ["4.2.1"], ["CRY-04", "CRY-05"]),
     "IKEv1 Aggressive Mode":                    (39, ["3.10"], ["4.2.1"], ["CRY-05"]),
     "IPsec PFS Disabled":                       (35, ["3.10"], ["4.2.1"], ["CRY-04", "CRY-05"]),
-    "Weak Admin GUI TLS Version":               (33, ["3.10"], ["2.2.7"], ["CRY-05"]),
-    "Weak SSL VPN TLS Version":                 (33, ["3.10"], ["4.2.1"], ["CRY-05"]),
     "Weak SSH Algorithms":                      (33, ["3.10"], ["2.2.7"], ["CRY-05"]),
     "Self-Signed Admin GUI Certificate":        (9, ["3.10"], ["4.2.1"], ["CRY-09", "CRY-12"]),
     "Syslog Over UDP":                          (38, ["3.10"], ["10.3.2"], ["MON-12.3"]),
@@ -1274,6 +1302,7 @@ class FortigateParser:
             cis_ids, pci_ids, scf_ids = (nat[1], nat[2], nat[3]) if nat else ([], [], [])
             if vuln_id is None and nat:
                 vuln_id = nat[0]
+        vuln_id = vuln_id or None          # NO_VULN (0) → blank
         canon = _vuln_controls().get(vuln_id) if vuln_id else None
         if canon:
             cis_ids, pci_ids, scf_ids = canon["cis_v8"], canon["pci_dss"], canon["scf"]
@@ -1316,31 +1345,42 @@ class FortigateParser:
         solution = cat.get("solution") or "See the CIS FortiGate Benchmark for remediation steps."
         status = res["status"]
         sev = res.get("severity") or SEVERITY_BY_CIS_ID.get(cid, "MEDIUM")
-        items = res.get("items") or []
-        self.cis_results[cid] = {
-            "level": lvl, "title": title, "status": status, "severity": sev if status == "FAIL" else "",
-            "evidence": res.get("evidence", "") or ("; ".join(f"{o}: {e}" for o, e, _ in items[:15])
-                                                   + (f" … (+{len(items) - 15} more)" if len(items) > 15 else "")),
-            "count": len(items),
-        }
+        # items: (object, evidence, line[, vuln]) — a 4th element overrides the vuln for that object.
+        items = [tuple(it) + (None,) * (4 - len(it)) for it in (res.get("items") or [])]
+        res_vuln = res.get("vuln", VULN_BY_CIS_ID.get(cid, NO_VULN))
         umbrella = f"[{lvl}] {cid} {title}"
+        vulns_used: list[int] = []
         if status == "FAIL":
             if items:
-                for obj, ev, ln in items:
-                    self._issue(sev, title, cid, obj, info, solution, details=ev, line=ln)
+                for obj, ev, ln, v in items:
+                    v = res_vuln if v is None else v
+                    vulns_used.append(v)
+                    self._issue(sev, title, cid, obj, info, solution, details=ev, line=ln, vuln_id=v)
             else:
+                vulns_used.append(res_vuln)
                 self._issue(sev, title, cid, umbrella, info, solution,
-                            details=res.get("evidence", ""), line=res.get("line", ""))
+                            details=res.get("evidence", ""), line=res.get("line", ""), vuln_id=res_vuln)
         elif status == "MANUAL":
+            # The vuln this item tests for, flagged Validated = N until reviewed.
+            vulns_used.append(res_vuln)
             self._issue(res.get("severity") or "INFO", f"{title} — Manual Review Required", cid, umbrella,
                         info, solution, details=res.get("evidence", ""), line=res.get("line", ""),
-                        validated=False)
+                        validated=False, vuln_id=res_vuln)
         elif status == "VERIFY":
+            # Configured (the check passed) — the vuln isn't present, so none is reported.
             self._issue("INFO", f"{title} — Verify Environment-Specific Value", cid, umbrella,
                         f"{title}: configured — confirm the value shown in Details is the one your "
                         "organization's standard requires. " + info,
                         "No action needed if the value shown is correct.",
-                        details=res.get("evidence", ""), line=res.get("line", ""), validated=False)
+                        details=res.get("evidence", ""), line=res.get("line", ""), validated=False,
+                        vuln_id=NO_VULN)
+        self.cis_results[cid] = {
+            "level": lvl, "title": title, "status": status, "severity": sev if status == "FAIL" else "",
+            "evidence": res.get("evidence", "") or ("; ".join(f"{o}: {e}" for o, e, _l, _v in items[:15])
+                                                   + (f" … (+{len(items) - 15} more)" if len(items) > 15 else "")),
+            "count": len(items),
+            "vulns": [v for v in dict.fromkeys(vulns_used) if v],
+        }
 
     # 1.x — network
     def _cis_1_1(self):
@@ -1351,7 +1391,7 @@ class FortigateParser:
             return {"status": "FAIL", "evidence": ev + " — no primary DNS server", "line": pl}
         if not s or s == "0.0.0.0":
             return {"status": "FAIL", "evidence": ev + " — no secondary DNS server", "line": pl,
-                    "severity": "LOW"}
+                    "severity": "LOW", "vuln": NO_VULN}
         if pd or sd:
             ev += " — FortiGuard DNS defaults; confirm these are your organization's trusted resolvers"
         return {"status": "VERIFY", "evidence": ev, "line": pl if not pd else ""}
@@ -1431,7 +1471,7 @@ class FortigateParser:
             return {"status": "FAIL", "evidence": "type custom but no NTP server configured", "line": tl}
         ev = "servers: " + ", ".join(s for s, _, _ in servers)
         if len(servers) < 2:
-            return {"status": "FAIL", "severity": "LOW", "line": servers[0][1],
+            return {"status": "FAIL", "severity": "LOW", "line": servers[0][1], "vuln": 1,
                     "evidence": ev + " — CIS expects a primary and a secondary NTP server"}
         return {"status": "VERIFY", "evidence": ev, "line": servers[0][1]}
 
@@ -1484,7 +1524,7 @@ class FortigateParser:
                     "line": ln if not dflt else ""}
         if vers != ["tlsv1-3"]:
             return {"status": "FAIL", "severity": "LOW", "evidence": ev + " — CIS: tlsv1-3 only",
-                    "line": ln if not dflt else ""}
+                    "line": ln if not dflt else "", "vuln": NO_VULN}
         return {"status": "PASS", "evidence": ev}
 
     def _cis_2_1_11(self):
@@ -1503,31 +1543,39 @@ class FortigateParser:
         ml, mll, md = self.eff("system password-policy", "minimum-length")
         ev = (f"status {self._show(st, sd)}; apply-to {self._show(ap, ad)}; "
               f"minimum-length {self._show(ml, md)}")
-        problems = []
         if st != "enable":
-            problems.append("password policy disabled")
+            # No policy at all = complexity not enforced (28); the resulting
+            # 8-character minimum is reported natively as its own vuln (15).
+            return {"status": "FAIL", "evidence": ev + " — password policy disabled", "vuln": 28,
+                    "line": sl if not sd else "", "severity": "HIGH"}
+        items = []
         missing = [x for x in ("admin-password", "ipsec-preshared-key") if x not in ap.split()]
         if missing:
-            problems.append(f"apply-to missing {', '.join(missing)}")
+            items.append(("system password-policy apply-to",
+                          f"apply-to {self._show(ap, ad)} — policy not enforced for {', '.join(missing)}",
+                          al if not ad else "", 28))
         if not ml.isdigit() or int(ml) < 14:
-            problems.append("minimum-length below 14")
-        if problems:
-            return {"status": "FAIL", "evidence": ev + " — " + "; ".join(problems),
-                    "line": sl if not sd else "", "severity": "HIGH" if st != "enable" else "MEDIUM"}
+            items.append(("system password-policy minimum-length",
+                          f"minimum-length {self._show(ml, md)} — below 14", mll if not md else "", 15))
+        if items:
+            return {"status": "FAIL", "items": items}
         return {"status": "PASS", "evidence": ev}
 
     def _cis_2_2_2(self):
         th, tl, td = self.eff("system global", "admin-lockout-threshold")
         du, dl, dd = self.eff("system global", "admin-lockout-duration")
         ev = f"admin-lockout-threshold {self._show(th, td)}; admin-lockout-duration {self._show(du, dd)}s"
-        problems = []
+        items = []
         if not th.isdigit() or not 1 <= int(th) <= 3:
-            problems.append("threshold above 3 attempts")
+            items.append(("system global admin-lockout-threshold",
+                          f"admin-lockout-threshold {self._show(th, td)} — more than 3 failed attempts allowed",
+                          tl if not td else "", 27))
         if not du.isdigit() or not 1 <= int(du) <= 900:
-            problems.append("duration outside the 1–900 s the benchmark checks for")
-        if problems:
-            return {"status": "FAIL", "evidence": ev + " — " + "; ".join(problems),
-                    "line": tl if not td else (dl if not dd else "")}
+            items.append(("system global admin-lockout-duration",
+                          f"admin-lockout-duration {self._show(du, dd)}s — outside the 1–900 s the benchmark "
+                          "checks for", dl if not dd else "", 10))
+        if items:
+            return {"status": "FAIL", "items": items}
         return {"status": "PASS", "evidence": ev}
 
     # 2.3.x — SNMP
@@ -1561,7 +1609,7 @@ class FortigateParser:
         if items:
             return {"status": "FAIL", "items": items}
         if not users:
-            return {"status": "FAIL", "severity": "LOW",
+            return {"status": "FAIL", "severity": "LOW", "vuln": NO_VULN,
                     "evidence": "SNMP agent enabled but no SNMPv3 user configured."}
         return {"status": "PASS", "evidence": f"SNMPv3 only ({len(users)} user(s))."}
 
@@ -1824,7 +1872,7 @@ class FortigateParser:
     def _cis_4_1_1(self):
         used = self._used_profiles("ips")
         if not used:
-            return {"status": "FAIL", "evidence": "No IPS sensor applied to any accept policy."}
+            return {"status": "FAIL", "evidence": "No IPS sensor applied to any accept policy.", "vuln": 31}
         blocking = [name for _l, name, n in self._profile_nodes("ips sensor", "ips")
                     if n.get("scan-botnet-connections", "disable") == "block"]
         if blocking:
@@ -1906,7 +1954,7 @@ class FortigateParser:
     def _cis_4_3_1(self):
         profs = self._profile_nodes("dnsfilter profile", "dns")
         if not profs:
-            return {"status": "FAIL", "evidence": "No DNS filter profile applied to any accept policy."}
+            return {"status": "FAIL", "evidence": "No DNS filter profile applied to any accept policy.", "vuln": 31}
         bad = [name for _l, name, n in profs if n.get("block-botnet", "disable") != "enable"]
         if bad:
             return {"status": "FAIL", "evidence": f"block-botnet not enabled in DNS filter profile(s) {', '.join(bad)}"}
@@ -2024,16 +2072,19 @@ class FortigateParser:
             mn, _, mnd = self.eff("vpn ssl settings", "ssl-min-proto-ver", n)
             mx, _, mxd = self.eff("vpn ssl settings", "ssl-max-proto-ver", n)
             al, _, ald = self.eff("vpn ssl settings", "algorithm", n)
-            probs = []
+            probs, weak = [], False
             if mn != "tls1-2" and mn != "tls1-3":
                 probs.append(f"ssl-min-proto-ver {mn}")
-            if mx != "tls1-3":
-                probs.append(f"ssl-max-proto-ver {mx}")
+                weak = True
             if al != "high":
                 probs.append(f"algorithm {al}")
+                weak = True
+            if mx != "tls1-3":
+                probs.append(f"ssl-max-proto-ver {mx}")
             if probs:
+                # Weak Cipher Suite only when old TLS / non-high ciphers are actually allowed.
                 items.append((f"{self._scope_tag(label)}vpn ssl settings", "; ".join(probs),
-                              n.ln("ssl-min-proto-ver")))
+                              n.ln("ssl-min-proto-ver"), 33 if weak else NO_VULN))
         return {"status": "FAIL", "items": items} if items else {"status": "PASS", "evidence": "TLS 1.2–1.3, high ciphers."}
 
     # 7.x — logging
@@ -2072,7 +2123,11 @@ class FortigateParser:
         enc, el, ed = self.eff("log fortianalyzer setting", "enc-algorithm")
         ev = f"reliable {self._show(rel, rd)}; enc-algorithm {self._show(enc, ed)}"
         if rel != "enable" or enc not in ("high", "high-medium"):
-            return {"status": "FAIL", "evidence": ev, "line": self.gnode("log fortianalyzer setting").line}
+            # Unencrypted Log Traffic only if encryption is actually off; 'low' = weak cipher;
+            # reliable disabled alone still sends encrypted logs.
+            vuln = 50 if enc == "disable" else (33 if enc == "low" else NO_VULN)
+            return {"status": "FAIL", "evidence": ev, "vuln": vuln,
+                    "line": self.gnode("log fortianalyzer setting").line}
         return {"status": "PASS", "evidence": ev}
 
     def _syslog_enc(self, devices: tuple[str, ...]):
@@ -2085,8 +2140,10 @@ class FortigateParser:
             mode, _, md = self.eff(f"log {sd} setting", "mode", n)
             enc, _, ed = self.eff(f"log {sd} setting", "enc-algorithm", n)
             if mode != "reliable" or enc not in ("high", "high-medium"):
+                # UDP or enc-algorithm disable = cleartext (50); 'low' over TLS = weak cipher (33).
+                v = 33 if (mode == "reliable" and enc == "low") else 50
                 items.append((f"log {sd} setting (server {n.get('server', '?')})",
-                              f"mode {self._show(mode, md)}; enc-algorithm {self._show(enc, ed)}", n.line))
+                              f"mode {self._show(mode, md)}; enc-algorithm {self._show(enc, ed)}", n.line, v))
         if not enabled:
             return {"status": "NA", "evidence": f"{'/'.join(devices)} not enabled."}
         return {"status": "FAIL", "items": items} if items else {"status": "PASS", "evidence": "Syslog over TLS (reliable, high)."}
@@ -2247,12 +2304,7 @@ class FortigateParser:
         st = self.eff("system password-policy", "status")[0]
         line = pp.line if pp is not None else ""
         if st == "enable":
-            ml = self.eff("system password-policy", "minimum-length")[0]
-            if ml.isdigit() and int(ml) < 14:
-                self._issue("MEDIUM", "Password Minimum Length Below 14", "", "system password-policy",
-                            f"Administrator password minimum length is {ml}.",
-                            "set minimum-length 14 (or higher) under config system password-policy.",
-                            details=f"minimum-length {ml}", line=line)
+            # minimum-length < 14 with the policy on is reported by CIS 2.2.1 (vuln 15).
             weak = [k for k in ("min-lower-case-letter", "min-upper-case-letter", "min-non-alphanumeric", "min-number")
                     if self.eff("system password-policy", k)[0] in ("", "0")]
             if weak:
@@ -2271,7 +2323,9 @@ class FortigateParser:
                             "set reuse-password disable (and reuse-password-limit 4+ where available).",
                             details="reuse-password enable", line=line)
         else:
-            self._issue("MEDIUM", "Password Minimum Length Below 14", "", "system password-policy",
+            # CIS 2.2.1 reports the disabled policy as complexity-not-enforced (28); the
+            # length gap that follows from it is its own vuln (15).
+            self._issue("MEDIUM", "Password Policy Disabled (Min Length 8)", "", "system password-policy",
                         "No administrator password policy is enforced (FortiOS default minimum is 8).",
                         "Enable config system password-policy with minimum-length 14.",
                         details="password-policy status disable", line=line)
@@ -2287,12 +2341,7 @@ class FortigateParser:
         sync = self.eff("system ntp", "ntpsync")[0]
         ntype = self.eff("system ntp", "type")[0]
         if sync == "enable" and ntype == "custom":
-            servers = self._ntp_servers()
-            if len(servers) == 1:
-                self._issue("LOW", "Secondary NTP Server Not Configured", "", "system ntp",
-                            "Only one NTP server is configured — no fallback if it becomes unreachable.",
-                            "Add a second NTP server under config system ntp / config ntpserver.",
-                            details=f"server {servers[0][0]}", line=servers[0][1])
+            servers = self._ntp_servers()   # a single server is reported by CIS 2.1.4 (vuln 1)
             unauth = [s for s, _l, auth in servers if not auth]
             if unauth:
                 self._issue("LOW", "NTP Authentication Not Configured", "", "system ntp",
@@ -2312,18 +2361,26 @@ class FortigateParser:
                 lvl = u.get("security-level", "no-auth-no-priv")
                 ap = u.get("auth-proto", "sha")
                 pp_ = u.get("priv-proto", "aes")
-                probs = []
+                auth_probs = []
+                if lvl == "no-auth-no-priv":
+                    auth_probs.append("security-level no-auth-no-priv (no authentication)")
+                elif ap == "md5":
+                    auth_probs.append("auth-proto md5")
+                if auth_probs:
+                    self._issue("MEDIUM", "Weak SNMPv3 Authentication", "", f"SNMPv3 user {uid}",
+                                f"SNMPv3 user {uid} does not use strong authentication.",
+                                "set security-level auth-priv and auth-proto sha256 (or higher).",
+                                details="; ".join(auth_probs), line=u.line)
+                enc_probs = []
                 if lvl != "auth-priv":
-                    probs.append(f"security-level {lvl}")
-                if lvl != "no-auth-no-priv" and ap == "md5":
-                    probs.append("auth-proto md5")
-                if lvl == "auth-priv" and pp_ == "des":
-                    probs.append("priv-proto des")
-                if probs:
-                    self._issue("MEDIUM", "Weak SNMPv3 Security", "", f"SNMPv3 user {uid}",
-                                f"SNMPv3 user {uid} is not using strong authentication and encryption.",
-                                "set security-level auth-priv, auth-proto sha256 (or higher), priv-proto aes256.",
-                                details="; ".join(probs), line=u.line)
+                    enc_probs.append(f"security-level {lvl} (no encryption)")
+                elif pp_ == "des":
+                    enc_probs.append("priv-proto des")
+                if enc_probs:
+                    self._issue("MEDIUM", "Weak SNMPv3 Encryption", "", f"SNMPv3 user {uid}",
+                                f"SNMPv3 user {uid} does not encrypt traffic with a strong cipher.",
+                                "set security-level auth-priv and priv-proto aes256.",
+                                details="; ".join(enc_probs), line=u.line)
         # MFA for local admins
         for name, a in self._admins():
             if a.get("remote-auth") == "enable":
@@ -2391,19 +2448,7 @@ class FortigateParser:
                                     f"{tag} offers weak ESP proposal(s): {', '.join(weak)}.",
                                     "Use aes256gcm or aes256-sha256.", details=f"proposal {' '.join(props)}",
                                     line=p.ln("proposal"))
-        val, ln, dflt = self.eff("system global", "admin-https-ssl-versions")
-        weak = [v for v in val.split() if v in ("sslv3", "tlsv1-0", "tlsv1-1")]
-        if weak:
-            self._issue("HIGH", "Weak Admin GUI TLS Version", "", "system global",
-                        f"The admin GUI accepts deprecated {', '.join(weak)}.",
-                        "set admin-https-ssl-versions tlsv1-3 (or tlsv1-2 tlsv1-3).",
-                        details=f"admin-https-ssl-versions {val}", line=ln)
-        for label, n in self._sslvpn():
-            mn = self.eff("vpn ssl settings", "ssl-min-proto-ver", n)[0]
-            if mn in ("tls1-0", "tls1-1", "sslv3"):
-                self._issue("HIGH", "Weak SSL VPN TLS Version", "", f"{self._scope_tag(label)}vpn ssl settings",
-                            f"SSL VPN accepts {mn}.", "set ssl-min-proto-ver tls1-2.",
-                            details=f"ssl-min-proto-ver {mn}", line=n.ln("ssl-min-proto-ver"))
+        # Weak admin-GUI / SSL VPN TLS versions are CIS 2.1.10 / 6.1.2 findings (vuln 33).
         g = self.gnode("system global")
         if g is not None:
             for key in ("ssh-enc-algo", "ssh-mac-algo", "ssh-kex-algo"):
@@ -2691,7 +2736,7 @@ class ExcelReporter:
         ws = self.wb.create_sheet("CIS Benchmark")
         ws.sheet_view.showGridLines = False
         headers = ["CIS ID", "Level", "Recommendation", "Status", "Severity", "Evidence", "Objects Failing",
-                   "CIS v8", "PCI DSS", "SCF"]
+                   "Vuln", "CIS v8", "PCI DSS", "SCF"]
         self._hdr(ws, headers)
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
@@ -2699,13 +2744,21 @@ class ExcelReporter:
         for r_i, cid in enumerate(sorted(self.p.cis_results, key=_id_key), 2):
             r = self.p.cis_results[cid]
             ref = self.p.catalog.get(cid, {}).get("reference", "")
-            vid = VULN_BY_CIS_ID.get(cid)
-            canon = _vuln_controls().get(vid) if vid else None
-            cis_ids = canon["cis_v8"] if canon else (_refs_from_reference(ref, "CSCv8") or CIS_V8_BY_CIS_ID.get(cid, []))
-            pci_ids = canon["pci_dss"] if canon else (_refs_from_reference(ref, "PCI-DSSv4.0") or PCI_BY_CIS_ID.get(cid, []))
-            scf_ids = canon["scf"] if canon else SCF_BY_CIS_ID.get(cid, [])
+            # The vuln(s) this item's own findings were tagged with (none for PASS / N/A /
+            # verify) and those vulns' canonical controls; otherwise the benchmark's refs.
+            cis_ids, pci_ids, scf_ids = [], [], []
+            for vid in r["vulns"]:
+                canon = _vuln_controls().get(vid) or {}
+                cis_ids += [x for x in canon.get("cis_v8", []) if x not in cis_ids]
+                pci_ids += [x for x in canon.get("pci_dss", []) if x not in pci_ids]
+                scf_ids += [x for x in canon.get("scf", []) if x not in scf_ids]
+            if not (cis_ids or pci_ids or scf_ids):
+                cis_ids = _refs_from_reference(ref, "CSCv8") or CIS_V8_BY_CIS_ID.get(cid, [])
+                pci_ids = _refs_from_reference(ref, "PCI-DSSv4.0") or PCI_BY_CIS_ID.get(cid, [])
+                scf_ids = SCF_BY_CIS_ID.get(cid, [])
+            vuln_txt = "\n".join(f"{v} — {self._vulns.get(v, '?')}" for v in r["vulns"])
             vals = [cid, r["level"], r["title"], status_label[r["status"]], r["severity"], r["evidence"],
-                    r["count"] or "", _cis_label(cis_ids), _pci_label(pci_ids), _scf_label(scf_ids)]
+                    r["count"] or "", vuln_txt, _cis_label(cis_ids), _pci_label(pci_ids), _scf_label(scf_ids)]
             bg = self._row_fill(r_i)
             for c_i, v in enumerate(vals, 1):
                 c = ws.cell(row=r_i, column=c_i, value=v)
@@ -2723,7 +2776,7 @@ class ExcelReporter:
                 elif bg:
                     c.fill = _fill(bg)
             ws.row_dimensions[r_i].height = 45
-        self._set_widths(ws, [9, 7, 50, 13, 11, 70, 9, 16, 18, 18])
+        self._set_widths(ws, [9, 7, 50, 13, 11, 70, 9, 34, 16, 18, 18])
 
     # ── Firewall policies ────────────────────────────────────────────────────
     def _sheet_policies(self):
