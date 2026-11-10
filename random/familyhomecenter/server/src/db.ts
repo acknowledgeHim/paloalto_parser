@@ -1506,6 +1506,14 @@ db.exec(`
     detail TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_learning_results_member ON learning_results (family_member_id, subject, at);
+  -- 🎁 the once-a-day bonus for maxing out the day's tokens in the parent's picked subjects
+  CREATE TABLE IF NOT EXISTS learning_bonus_paid (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    tokens INTEGER NOT NULL,
+    at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, day)
+  );
 `);
 
 // 📖 Lessons (📚 Learning: Grammar, Math, US History): a reading, then a quiz. Built-in ones are

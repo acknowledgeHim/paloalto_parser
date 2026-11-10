@@ -10,9 +10,21 @@ export interface SubjectRewards {
   tiers: Tier[];
   per_day: number;
 }
+/** 🎁 Parent-set: extra tokens once a day for maxing out every picked subject's paying rounds. */
+export interface LearningBonus {
+  tokens: number;
+  subjects: string[];
+}
 export interface LearningSettings {
   rewards: Record<string, SubjectRewards>;
   grades: string[];
+  bonus: LearningBonus;
+}
+/** Someone's bonus today: the subjects that count (and which are maxed), and what was paid (null = not yet). */
+export interface BonusStatus {
+  tokens: number;
+  subjects: Array<{ subject: string; name: string; done: boolean }>;
+  paid_today: number | null;
 }
 export interface LearningPerson {
   grade: number | null;
@@ -25,7 +37,7 @@ export interface LearningPerson {
       recent: Array<{ grade: number; at: string; correct: number; total: number; tokens: number }>;
       paid_today: number;
     }
-  >;
+  >;  bonus?: BonusStatus;
 }
 
 export const GRADE_SHORT = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];

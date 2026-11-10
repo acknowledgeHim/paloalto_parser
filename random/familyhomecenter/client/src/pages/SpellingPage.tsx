@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { BonusLine } from '../components/LearningBonus.js';
 import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
 import { say, stopSpeaking } from '../utils/speech.js';
 import { useDraft } from '../utils/autosave.js';
@@ -25,6 +26,8 @@ interface Finish {
   pct: number;
   passed: boolean;
   tokens: number;
+  /** 🎁 the day's bonus, paid by this round */
+  bonus?: number;
   no_tokens_why: string | null;
   items: Array<{ right: string; given: string; ok: boolean }>;
 }
@@ -126,6 +129,7 @@ export function SpellingPage() {
             {result.pct === 100 ? '🌟 Perfect!' : result.passed ? '🎉 Passed!' : '💪 Keep practising!'} {result.correct} / {result.total} right ({result.pct}%)
           </h2>
           {result.tokens > 0 ? <p className="learning-result__tokens">+{result.tokens} 💎 tokens</p> : result.no_tokens_why ? <p className="hint">{result.no_tokens_why}</p> : null}
+          {result.bonus ? <p className="learning-result__tokens">🎁 +{result.bonus} 💎 bonus — all of today's tokens earned!</p> : null}
           <ul className="learning-result__list">
             {result.items.map((it, i) => (
               <li key={i} className={it.ok ? 'is-ok' : 'is-wrong'}>
@@ -169,6 +173,7 @@ export function SpellingPage() {
               </>
             )}
           </p>
+          {person && !person.is_parent && <BonusLine bonus={person.bonus} />}
           {saved.draft && (
             <div className="learning-resume">
               <span>

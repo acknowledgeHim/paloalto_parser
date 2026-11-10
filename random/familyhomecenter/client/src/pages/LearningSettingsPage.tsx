@@ -4,7 +4,7 @@ import { DailyLimitSettings } from '../components/DailyLimitSettings.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
-import { type LearningSettings, type SubjectRewards } from '../utils/learning.js';
+import { type LearningBonus, type LearningSettings, type SubjectRewards } from '../utils/learning.js';
 import { say } from '../utils/speech.js';
 
 /** Names for each subject's settings. Subjects without an entry show by their id. */
@@ -25,6 +25,7 @@ export function LearningSettingsPage() {
   const kids = members.filter((m) => m.is_parent !== 1);
   const [settings, setSettings] = useState<LearningSettings | null>(null);
   const [draft, setDraft] = useState<Record<string, SubjectRewards> | null>(null);
+  const [bonus, setBonus] = useState<LearningBonus>({ tokens: 0, subjects: ['spelling', 'grammar', 'math'] });
   const [grades, setGrades] = useState<Record<string, number | null>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [engine, setEngine] = useState<string | null | undefined>(undefined);
@@ -36,6 +37,7 @@ export function LearningSettingsPage() {
     api.get<LearningSettings>('/learning/settings').then((s) => {
       setSettings(s);
       setDraft(s.rewards);
+      if (s.bonus) setBonus(s.bonus);
     });
     api.get<{ engine: string | null }>('/learning/speech').then((x) => setEngine(x.engine)).catch(() => setEngine(null));
   }, []);
@@ -62,9 +64,10 @@ export function LearningSettingsPage() {
   const save = async () => {
     setStatus('Saving…');
     try {
-      const s = await api.put<LearningSettings>('/learning/settings', { rewards: draft });
+      const s = await api.put<LearningSettings>('/learning/settings', { rewards: draft, bonus, acting_member_id: activeProfile?.id ?? null });
       setSettings(s);
       setDraft(s.rewards);
+      if (s.bonus) setBonus(s.bonus);
       setStatus('Saved ✓');
     } catch (e) {
       setStatus((e as Error).message);
@@ -150,6 +153,30 @@ export function LearningSettingsPage() {
           </section>
         );
       })}
+      <section className="panel">
+        <h2>🎁 Daily bonus</h2>
+        <p className="hint">
+          Extra 💎 once a day for a kid who earns all of the day's tokens (every paying round) in each subject ticked here. 0 = no bonus. A ticked subject set to pay
+          nothing is left out.
+        </p>
+        <label className="learning-settings__perday">
+          Bonus:{' '}
+          <input type="number" min={0} max={1000} value={bonus.tokens} onChange={(e) => setBonus({ ...bonus, tokens: Math.max(0, Math.min(1000, Math.round(Number(e.target.value) || 0))) })} /> 💎
+        </label>
+        <div>
+          {Object.keys(draft).map((subject) => (
+            <label key={subject} className="learning-settings__perday">
+              <input
+                type="checkbox"
+                checked={bonus.subjects.includes(subject)}
+                onChange={(e) => setBonus({ ...bonus, subjects: e.target.checked ? [...bonus.subjects, subject] : bonus.subjects.filter((x) => x !== subject) })}
+              />{' '}
+              {SUBJECT_LABELS[subject] ?? subject}
+              {draft[subject].per_day ? ` (${draft[subject].per_day} round${draft[subject].per_day === 1 ? '' : 's'})` : ' (pays nothing)'}
+            </label>
+          ))}
+        </div>
+      </section>
       <div className="typing-stars__actions">
         <button type="button" onClick={() => void save()}>
           Save tokens

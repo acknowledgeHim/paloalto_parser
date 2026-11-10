@@ -3189,6 +3189,8 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .learning-grade.is-mine { border-color: var(--accent); }
 .learning-grade.is-on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .learning-earn { font-weight: 700; color: #2e7d32; }
+.learning-bonus { font-weight: 600; color: #6a1b9a; margin: 0.25rem 0; }
+.learning-bonus.is-done { color: #2e7d32; }
 .learning-go { font-size: 1.2em; padding: 0 28px; min-height: 52px; }
 .learning-resume { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .learning-resume > span { flex: 1 1 220px; font-weight: 600; }

@@ -71,9 +71,61 @@ function readRewards(): Rewards {
 const worth = (tiers: Tier[], pct: number) => tiers.filter((t) => pct >= t.pct).reduce((m, t) => Math.max(m, t.tokens), 0);
 const passMark = (tiers: Tier[]) => tiers[0]?.pct ?? 100;
 
-learningRouter.get('/settings', (_req, res) => res.json({ rewards: readRewards(), grades: GRADE_NAMES }));
+// ---- 🎁 bonus: max out the day's paying rounds in each picked subject → extra tokens, once a day ----
+
+export interface Bonus {
+  /** 0 = no bonus */
+  tokens: number;
+  subjects: Subject[];
+}
+const BONUS_SETTING = 'learning_bonus';
+const BONUS_DEFAULT: Bonus = { tokens: 0, subjects: ['spelling', 'grammar', 'math'] };
+function cleanBonus(v: unknown, fallback: Bonus): Bonus {
+  const x = (v ?? {}) as Partial<Bonus>;
+  const t = Math.round(Number(x.tokens));
+  return {
+    tokens: x.tokens !== undefined && Number.isFinite(t) && t >= 0 && t <= 1000 ? t : fallback.tokens,
+    subjects: Array.isArray(x.subjects) ? SUBJECTS.filter((s) => x.subjects!.includes(s)) : fallback.subjects,
+  };
+}
+function readBonus(): Bonus {
+  try {
+    return cleanBonus(JSON.parse(getSetting(BONUS_SETTING, '{}')), BONUS_DEFAULT);
+  } catch {
+    return BONUS_DEFAULT;
+  }
+}
+/** The picked subjects that pay anything (one set to pay nothing can't be maxed, so it's left out). */
+const bonusSubjects = (b = readBonus(), rw = readRewards()) => b.subjects.filter((s) => rw[s].per_day > 0 && rw[s].tiers.some((t) => t.tokens > 0));
+const bonusPaidToday = (id: string) =>
+  (db.prepare('SELECT tokens FROM learning_bonus_paid WHERE family_member_id = ? AND day = ?').get(id, localDay()) as { tokens: number } | undefined)?.tokens ?? null;
+/** Where someone is with today's bonus: which subjects count, which are done, and whether it's paid. */
+function bonusStatus(id: string) {
+  const b = readBonus();
+  const rw = readRewards();
+  const subjects = bonusSubjects(b, rw);
+  return {
+    tokens: subjects.length ? b.tokens : 0,
+    subjects: subjects.map((s) => ({ subject: s, name: SUBJECT_NAMES[s], done: paidToday(id, s) >= rw[s].per_day })),
+    paid_today: bonusPaidToday(id),
+  };
+}
+/** Pay today's bonus if every picked subject is maxed out and it isn't paid yet. Returns what was paid. */
+function maybePayBonus(m: FamilyMember): number {
+  if (m.is_parent === 1) return 0;
+  const st = bonusStatus(m.id);
+  if (!st.tokens || !st.subjects.length || st.paid_today !== null || !st.subjects.every((x) => x.done)) return 0;
+  const ok = db.prepare('INSERT OR IGNORE INTO learning_bonus_paid (family_member_id, day, tokens, at) VALUES (?, ?, ?, ?)').run(m.id, localDay(), st.tokens, new Date().toISOString()).changes;
+  if (!ok) return 0;
+  addTokens(m.id, st.tokens, `🎁 Learning bonus: all of today's tokens in ${st.subjects.map((x) => x.name).join(', ')}`);
+  return st.tokens;
+}
+
+learningRouter.get('/settings', (_req, res) => res.json({ rewards: readRewards(), grades: GRADE_NAMES, bonus: readBonus() }));
 
 learningRouter.put('/settings', requireAdmin, (req, res) => {
+  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can set learning tokens' });
+  if (req.body?.bonus !== undefined) setSetting(BONUS_SETTING, JSON.stringify(cleanBonus(req.body.bonus, readBonus())));
   const cur = readRewards();
   const b = (req.body?.rewards ?? {}) as Partial<Record<Subject, Partial<SubjectRewards>>>;
   for (const s of SUBJECTS) {
@@ -83,7 +135,7 @@ learningRouter.put('/settings', requireAdmin, (req, res) => {
     if (b[s]!.per_day !== undefined && Number.isFinite(pd) && pd >= 0 && pd <= 100) cur[s].per_day = pd;
   }
   setSetting(SETTING, JSON.stringify(cur));
-  res.json({ rewards: readRewards(), grades: GRADE_NAMES });
+  res.json({ rewards: readRewards(), grades: GRADE_NAMES, bonus: readBonus() });
 });
 
 // ---- 👧 people ----
@@ -122,7 +174,7 @@ learningRouter.get('/people/:memberId', (req, res) => {
       },
     ])
   );
-  res.json({ grade: gradeOf(m.id), is_parent: m.is_parent === 1, token_balance: m.token_balance, subjects });
+  res.json({ grade: gradeOf(m.id), is_parent: m.is_parent === 1, token_balance: m.token_balance, subjects, bonus: bonusStatus(m.id) });
 });
 
 /** PUT /people/:memberId/grade { grade (0 = K … 12), acting_member_id } — parents. */
@@ -360,7 +412,9 @@ learningRouter.post('/round/:id/finish', (req, res) => {
     ).run(uuidv4(), m.id, r.subject, r.grade, now.toISOString(), localDay(now), correct, total, tokens, JSON.stringify(items.filter((x) => !(x as { ok: boolean }).ok)).slice(0, 4000));
     if (tokens) addTokens(m.id, tokens, `${SUBJECT_NAMES[r.subject]}: ${correct}/${total} at ${GRADE_NAMES[r.grade]}`);
   })();
-  res.json({ correct, total, pct, passed: pct >= passMark(rw.tiers), tokens, no_tokens_why: tokens ? null : why, items });
+  // 🎁 This round may have maxed out the last picked subject for today.
+  const bonus = tokens ? maybePayBonus(m) : 0;
+  res.json({ correct, total, pct, passed: pct >= passMark(rw.tiers), tokens, bonus, no_tokens_why: tokens ? null : why, items });
 });
 
 // ---- 💾 auto-save: where someone is in a round, a lesson or a typing lesson ----

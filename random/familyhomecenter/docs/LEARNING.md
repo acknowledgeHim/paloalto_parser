@@ -13,6 +13,11 @@ Each section on this page folds down to its heading — tap it to open or close.
   default). The highest level reached pays; the lowest level is the **pass mark**. Add or remove
   levels freely.
 - **Rounds a day that can pay** (default 3), so it's practice, not a token farm.
+- **🎁 Daily bonus** (default off): extra 💎 once a day for a kid who uses up all of the day's paying
+  rounds in every ticked subject (🔤 Spelling, 📝 Grammar and ➗ Math to start; 🔍 Spot the
+  misspellings can be ticked too). A ticked subject set to pay nothing is left out. The pages show
+  which are ✅ done so far; the round that finishes the last one pays it. Only a parent can change
+  any of these settings.
 - Parents can play too, just for fun (no tokens).
 - Answers are checked on the Family Home Center, not in the browser.
 
@@ -159,5 +164,5 @@ New tables only: `learning_grades` (each kid's grade), `learning_results` (every
 right out of 10, tokens, the words missed), `learning_lessons` (the lessons, built-in and parents'), and
 `learning_lessons_done` (every quiz taken), `learning_open_rounds` (practice rounds, kept so they
 survive a restart; marked finished, never removed) and `learning_drafts` (💾 each person's saved
-spot), and `activity_usage` (⏰ times and seconds per person, activity and day; limits in the
-`daily_limits` setting). Settings in `settings.learning_rewards`.
+spot), `learning_bonus_paid` (🎁 the bonus paid, one row per kid per day) and `activity_usage` (⏰ times and seconds per person, activity and day; limits in the
+`daily_limits` setting). Settings in `settings.learning_rewards` and `settings.learning_bonus`.
