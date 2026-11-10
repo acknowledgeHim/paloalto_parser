@@ -3551,3 +3551,11 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .backup-status__row.is-warn { border-left-color: #f9a825; }
 .backup-status__row.is-bad { border-left-color: #c62828; }
 .backup-status__row meter { width: 100%; max-width: 16rem; display: block; margin-top: 0.2rem; }
+
+/* ⌨️ Typing → 💎 Tokens → 🎒 By school grade */
+.typing-grades { display: flex; flex-direction: column; gap: 0.4rem; }
+.typing-grades__row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; padding: 0.4rem 0; border-bottom: 1px solid rgba(127, 127, 127, 0.2); }
+.typing-grades__name { min-width: 2.8rem; }
+.typing-grades__row input[type='number'] { width: 5.5rem; }
+.typing-grades__row .typing-speed-stars { flex-basis: 100%; padding-left: 3.8rem; }
+@media (max-width: 520px) { .typing-grades__row .typing-speed-stars { padding-left: 0; } }

@@ -60,7 +60,20 @@ export interface TypingRewards {
   game_levels: Record<TieredGame, number[]>;
   /** 🏁 Race: 💎 for winning at a new best speed, by the rival's level 1–10 on the Easy → Hard scale. */
   race_levels: number[];
+  /**
+   * 🎒 By school grade (K, 1st … 12th; the grade a parent set in 📚 Learning): the speed a kid in
+   * that grade must reach to pass a lesson (and so earn its tokens) — in place of each lesson's own
+   * goal. null = the lesson's own goal.
+   */
+  grade_wpm: Array<number | null>;
+  /** 🎒 ⚡ Speed tokens for kids in that grade. null = the speed_stars above (everyone else's). */
+  grade_speed_stars: Array<SpeedStar[] | null>;
 }
+
+/** K … 12th. */
+const GRADE_COUNT = 13;
+/** Lessons are passed with this % right (the same as the page's PASS_ACCURACY). */
+const PASS_ACCURACY = 90;
 
 /** Games played at Normal / Double ×2 / Triple ×3 (sent as their level). */
 const TIERED_GAMES = ['balloon', 'meteor', 'snake', 'tower'] as const;
@@ -115,6 +128,32 @@ function readRewards(): TypingRewards {
       })
     ) as Record<TieredGame, number[]>,
     race_levels: RACE_SPEEDS.map((_, i) => n(saved.race_levels?.[i], n(saved.race_best, 1))),
+    grade_wpm: Array.from({ length: GRADE_COUNT }, (_, i) => cleanGradeWpm(saved.grade_wpm?.[i], null)),
+    grade_speed_stars: Array.from({ length: GRADE_COUNT }, (_, i) => {
+      const v = saved.grade_speed_stars?.[i];
+      return Array.isArray(v) ? cleanSpeedStars(v, []) : null;
+    }),
+  };
+}
+
+/** A grade's pass speed: 1–250 wpm, or null (blank = each lesson's own goal). */
+function cleanGradeWpm(v: unknown, fallback: number | null): number | null {
+  if (v === null || v === '') return null;
+  if (v === undefined) return fallback;
+  const w = Math.round(Number(v));
+  return Number.isFinite(w) && w >= 1 && w <= 250 ? w : fallback;
+}
+
+/** What a person's school grade means for typing lessons: the pass speed (null = each lesson's
+ *  own goal) and the ⚡ speed tokens. Parents, and kids without a grade, get the general ones. */
+export function typingRuleFor(memberId: string, rewards = readRewards()) {
+  const m = db.prepare('SELECT is_parent FROM family_members WHERE id = ?').get(memberId) as { is_parent: number } | undefined;
+  const g = m && m.is_parent !== 1 ? (db.prepare('SELECT grade FROM learning_grades WHERE family_member_id = ?').get(memberId) as { grade: number } | undefined)?.grade : undefined;
+  const grade = typeof g === 'number' && g >= 0 && g < GRADE_COUNT ? g : null;
+  return {
+    grade,
+    goal_wpm: grade === null ? null : rewards.grade_wpm[grade],
+    speed_tiers: (grade === null ? null : rewards.grade_speed_stars[grade]) ?? rewards.speed_stars,
   };
 }
 
@@ -140,6 +179,13 @@ typingRouter.put('/settings/rewards', requireAdmin, (req, res) => {
         TIERED_GAMES.map((x) => [x, cur.game_levels[x].map((v, i) => (Array.isArray(g[x]) && g[x]![i] !== undefined ? clampTokens(g[x]![i], v) : v))])
       ) as Record<TieredGame, number[]>;
     } else if (k === 'race_levels') merged.race_levels = cur.race_levels.map((v, i) => (Array.isArray(b.race_levels) && b.race_levels[i] !== undefined ? clampTokens(b.race_levels[i], v) : v));
+    else if (k === 'grade_wpm') merged.grade_wpm = cur.grade_wpm.map((v, i) => (Array.isArray(b.grade_wpm) ? cleanGradeWpm(b.grade_wpm[i], v) : v));
+    else if (k === 'grade_speed_stars')
+      merged.grade_speed_stars = cur.grade_speed_stars.map((v, i) => {
+        if (!Array.isArray(b.grade_speed_stars) || b.grade_speed_stars[i] === undefined) return v;
+        const x = b.grade_speed_stars[i];
+        return Array.isArray(x) ? cleanSpeedStars(x, v ?? []) : null;
+      });
     else if (k === 'daily_enabled') merged.daily_enabled = typeof b.daily_enabled === 'boolean' ? b.daily_enabled : cur.daily_enabled;
     else if (b[k] !== undefined) (merged[k] as number) = Number(b[k]);
   }
@@ -263,6 +309,8 @@ typingRouter.get('/:memberId', (req, res) => {
     ),
     stars_today: starsToday(id),
     paid_games_today: paidGamesToday(id),
+    /** 🎒 their grade's lesson pass speed (null = each lesson's own goal) and ⚡ speed tokens */
+    ...typingRuleFor(id),
     recent: db
       .prepare('SELECT at, mode, level, wpm, accuracy, score, passed, stars FROM typing_results WHERE family_member_id = ? ORDER BY at DESC LIMIT 30')
       .all(id),
@@ -290,6 +338,9 @@ typingRouter.post('/:memberId/results', (req, res) => {
     score: Math.round(num(b.score, 1_000_000)),
     passed: b.passed ? 1 : 0,
   };
+  // 🎒 A grade's pass speed is checked here (it stands in for the lesson's own goal).
+  const rule = typingRuleFor(id);
+  if (mode === 'lesson' && rule.goal_wpm !== null) row.passed = row.accuracy >= PASS_ACCURACY && row.wpm >= rule.goal_wpm ? 1 : 0;
 
   // Earned? Worked out before saving, against what was there already.
   let earned = false;
@@ -318,6 +369,7 @@ typingRouter.post('/:memberId/results', (req, res) => {
     why = mode === 'race' ? 'Won a race at a new best speed' : `New ${GAME_NAMES[mode]} best speed`;
   }
   const rewards = readRewards();
+  const tiers = typingRuleFor(id, rewards).speed_tiers;
   let stars = 0;
   let capped = false;
   if (earned && mode === 'lesson') stars = rewards.levels[row.level - 1] ?? 0;
@@ -330,7 +382,7 @@ typingRouter.post('/:memberId/results', (req, res) => {
         n: number;
       }
     ).n;
-    speedStars = Math.max(0, speedWorth(rewards.speed_stars, row.wpm) - paid);
+    speedStars = Math.max(0, speedWorth(tiers, row.wpm) - paid);
     if (speedStars) {
       why = earned && stars ? `${why} at ${Math.floor(row.wpm)} wpm` : `Lesson ${row.level} at ${Math.floor(row.wpm)} wpm`;
       stars += speedStars;

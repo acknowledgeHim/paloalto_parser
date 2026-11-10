@@ -61,6 +61,14 @@ how many lessons are left (the server refuses saving them too):
     20 wpm = 3 💎. Passing a lesson (90% right) is worth the highest speed reached, once per lesson;
     passing faster later pays the difference. On top of the per-lesson tokens, and only for lessons
     whose own tokens are set above 0 (a 0-token lesson pays no speed tokens either).
+  - **🎒 By school grade:** for each grade (K … 12th, the grade set in 📚 Learning → ⚙️ Grades &
+    tokens) a parent can set the **speed to pass** a lesson, e.g. 3rd = 10 wpm, 6th = 20 wpm. A kid in
+    that grade then needs that speed (and 90% right) on every lesson to pass it, earn its tokens and
+    open the next, in place of each lesson's own goal. Blank = the lesson's own goal. Each grade
+    can also have **its own ⚡ speed tokens** (tick "Own ⚡ speed tokens"); otherwise it uses the
+    general ones. Parents, and kids with no grade set, use the lesson goals and general speed
+    tokens. The Family Home Center checks the grade's speed itself when a lesson is saved. Lessons
+    already passed stay passed.
   - A lesson pays once, the first time it's passed.
   - The games pay when someone beats their own best (top score; for Race and Silly Story, a faster
     winning speed). Shopping Spree never pays.
