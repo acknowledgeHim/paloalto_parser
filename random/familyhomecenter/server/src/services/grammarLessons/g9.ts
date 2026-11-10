@@ -381,4 +381,38 @@ Hyphenate compound modifiers **before** a noun, not after.
 ? Which follows that advice? | *The meeting ended early. | The meeting, which was scheduled, ended at an earlier time than planned.
 ? "Needless words" are … | *words that add no meaning | all adjectives | long words
 ? Concise writing is usually … | *clearer | less correct
+
+@ appositive-restrictive | Punctuation | Essential appositives
+An appositive needs commas only if it's **extra**. If it identifies **which one**, no commas.
+
+- My brother **Sam** plays piano. (I have more than one brother — no commas)
+- My only brother**, Sam,** plays piano. (extra info — commas)
+? You have two sisters. Which is right? | *My sister Ana is a nurse. | My sister, Ana, is a nurse.
+? Which is right? | *The poet Langston Hughes wrote "Harlem." | The poet, Langston Hughes, wrote "Harlem."
+? Which is right? | *Our principal, Dr. Lee, retired. | Our principal Dr. Lee, retired.
+
+@ subordination-coordination | Sentences | Coordination vs. subordination
+- **Coordination** treats ideas as **equal**: I studied, and I passed.
+- **Subordination** makes one idea **less important**: Because I studied, I passed.
+? Which shows that one idea causes the other? | *Because it snowed, school closed. | It snowed, and school closed.
+? Which treats two ideas as equal? | *She sings, and he plays guitar. | Although she sings, he plays guitar.
+? Subordination uses words like … | *although, because, when | and, but, or
+
+@ word-order-emphasis | Sentences | Putting key words at the end
+The **end** of a sentence is a strong spot. Put the most important idea there.
+
+- Weak: **Courage** is what the firefighter showed.
+- Strong: The firefighter showed **courage**.
+? Which ends with the key idea? | *After years of work, she finally won the gold. | She finally won the gold after years of work had passed by.
+? The strongest position in a sentence is often … | *the end | the middle | inside parentheses
+? Which emphasizes "silence"? | *When the music stopped, there was only silence. | Silence was there when the music stopped.
+
+@ quotation-integration-9 | Writing | Changing quotes with brackets
+Use **brackets** to change a word so a quote fits your sentence's grammar.
+
+- Original: "I am tired of fighting."
+- Your sentence: Chief Joseph declared that he "[was] tired of fighting."
+? Brackets in a quote show … | *your own changes | the author's mistake | a citation
+? "[sic]" in a quote means … | *the error was in the original | the writer is sick | skip this
+? Which is right? | *She said she "[had] never seen the ocean." | She said she "had never seen the ocean (changed)."
 `;
