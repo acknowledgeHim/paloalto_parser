@@ -1560,6 +1560,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_learning_lesson_rounds_member ON learning_lesson_rounds (family_member_id, subject, at);
 `);
 
+// 🔁 A lesson a parent made repeatable: passing it pays tokens up to this many times each round
+// (NULL = once, like every lesson). New column only.
+try {
+  db.exec('ALTER TABLE learning_lessons ADD COLUMN pay_times INTEGER');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 // 👪 Relatives (routes/relatives.ts): family, living or not — names, dates, memories, and the photos
 // and home movies they're in. person_id links a face-recognition person (their faces count as their
 // photos); family_member_id links a household profile who is this relative (their birthday). Media

@@ -116,6 +116,11 @@ passed**, and marks each lesson ✅ Passed today, 💎 earned this round, or �
 Lessons already paid before this change count as paid in round 1. Parents and kids without a
 grade have no rounds. (⌨️ Typing lessons still pay once each, as before.)
 
+**🔁 Repeatable lessons.** In a lesson's ✏️ Edit, a parent can set **Passing pays tokens N times
+each round** (1–50; 1 is the usual). A repeatable lesson pays again each time it's passed, up to N
+times a round. It counts toward finishing the round after its first pass, and pays N times again
+in the next round.
+
 ### 📈 Progress (📚 Learning → 📈 Progress)
 
 One kid's learning, by subject. Kids see their own; parents pick any kid. The same thing is on each
@@ -127,16 +132,20 @@ kid's profile page (Family Board → tap the kid) as **📚 Learning progress**.
   tap and hold a bar to see the day.
 - **Every lesson**, by topic and grade: ⬜ not tried / 🟡 tried / ✅ passed, how many tries, best score,
   last try. Tap a lesson to see **each try**: when, the score, passed or not, tokens, and which round.
-- **🎯 Practice rounds** (spelling, misspellings, grammar, math): % right in the last 30 rounds and a
+- **🔤 Spelling:** rounds a day (chart), % right lately, each grade's rounds and score, **words to
+  practise** (missed most often, and what they wrote instead), and every round with its missed words.
+- **⌨️ Typing:** lessons passed of 16 and best speed, each typing lesson tried/passed with every
+  try, and the typing games played (how often, best, tokens).
+- **🎯 Other practice** (misspellings, grammar, math rounds): % right in the last 30 rounds and a
   table of every round.
-- **⌨️ Typing:** each typing lesson tried/passed, best speed, and every try.
 
 ### 📬 In the weekly email
 
 The Sunday 6pm weekly report each parent gets for each kid (Settings → Weekly report) has a
 **📚 Learning** part. It lists every lesson passed that week (subject, grade, tokens, tries), the ones
 tried but not passed yet with their best score, each subject's 🔁 round, any round finished,
-practice rounds (how many, % right) and typing lessons passed. A week with no learning leaves it
+🔤 spelling (rounds, words right, tokens, and the words to practise), other practice rounds, and
+⌨️ typing (each lesson passed or tried with speed, typing games played, lessons passed so far). A week with no learning leaves it
 out. **Send now** in Settings → Weekly report shows it straight away.
 
 - **📖 Grammar lessons:** 27 lessons, K–12 (capitals, there/their/they're, I/me, who/whom, …).

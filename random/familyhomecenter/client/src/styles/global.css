@@ -3665,3 +3665,4 @@ body.game-full-lock { overflow: hidden; }
 /* 📚 on a kid's profile page the progress sits inside one section: no boxes inside the box */
 .person-learning .progress-view > .panel { border: none; box-shadow: none; padding: 0; margin: 12px 0 0; background: none; }
 .person-tokens > .token-wallet { border: none; box-shadow: none; padding: 0; margin: 0; background: none; }
+.progress-words { display: flex; flex-wrap: wrap; gap: 6px 14px; list-style: none; padding: 0; margin: 4px 0 8px; }

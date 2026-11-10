@@ -84,6 +84,8 @@ interface Row {
   body: string;
   quiz: string;
   tokens: number | null;
+  /** 🔁 pays up to this many times a round (null = once) */
+  pay_times: number | null;
   sort: number;
   hidden: number;
   builtin: number;
@@ -106,8 +108,11 @@ const worth = (r: Row) => r.tokens ?? readSettings()[r.subject].tokens;
 /** When their current round in this subject began ('' = the first round: everything so far). */
 const roundStart = (memberId: string, subject: Subject) =>
   (db.prepare('SELECT MAX(at) AS at FROM learning_lesson_rounds WHERE family_member_id = ? AND subject = ?').get(memberId, subject) as { at: string | null }).at ?? '';
-const paidFor = (memberId: string, lessonId: string, since: string) =>
-  Boolean(db.prepare('SELECT 1 FROM learning_lessons_done WHERE family_member_id = ? AND lesson_id = ? AND tokens > 0 AND at > ?').get(memberId, lessonId, since));
+const paidCount = (memberId: string, lessonId: string, since: string) =>
+  (db.prepare('SELECT COUNT(*) AS n FROM learning_lessons_done WHERE family_member_id = ? AND lesson_id = ? AND tokens > 0 AND at > ?').get(memberId, lessonId, since) as { n: number }).n;
+const paidFor = (memberId: string, lessonId: string, since: string) => paidCount(memberId, lessonId, since) > 0;
+/** How many times passing it pays each round (1 unless a parent made it repeatable). */
+const payTimes = (r: Row) => Math.max(1, r.pay_times ?? 1);
 const startOfToday = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -175,8 +180,9 @@ function noTokensWhy(m: FamilyMember | undefined, r: Row): string | null {
   if (r.grade < g) return `Below your grade (${GRADE_NAMES[g]}) — for practice, no tokens`;
   if (!worth(r)) return 'This lesson pays no tokens';
   const round = lessonRound(m.id, r.subject);
-  if (round && paidFor(m.id, r.id, round.started_at ?? '')) {
+  if (round && paidCount(m.id, r.id, round.started_at ?? '') >= payTimes(r)) {
     const left = round.lesson_ids.length - round.paid_ids.length;
+    if (payTimes(r) > 1) return `Already earned its ${payTimes(r)} times this round 🔁 — ${left ? `pass the other ${left} ${GRADE_NAMES[g]} lesson${left === 1 ? '' : 's'} and every lesson pays again` : 'a new round starts soon'}. You can still practise it.`;
     return `Already earned this round 🔁 — pass the other ${left} ${GRADE_NAMES[g]} lesson${left === 1 ? '' : 's'} and every lesson pays again. You can still practise it.`;
   }
   return null;
@@ -188,7 +194,11 @@ lessonsRouter.get('/', (req, res) => {
   if (!SUBJECTS.includes(subject)) return res.status(400).json({ error: `subject: ${SUBJECTS.join(', ')}` });
   const m = req.query.member_id ? memberOf(String(req.query.member_id)) : undefined;
   const round = m ? lessonRound(m.id, subject) : null;
-  const paidNow = new Set(m && round ? (db.prepare('SELECT DISTINCT lesson_id FROM learning_lessons_done WHERE family_member_id = ? AND tokens > 0 AND at > ?').all(m.id, round.started_at ?? '') as Array<{ lesson_id: string }>).map((x) => x.lesson_id) : []);
+  const paidNow = new Map(
+    m && round
+      ? (db.prepare('SELECT lesson_id, COUNT(*) AS n FROM learning_lessons_done WHERE family_member_id = ? AND tokens > 0 AND at > ? GROUP BY lesson_id').all(m.id, round.started_at ?? '') as Array<{ lesson_id: string; n: number }>).map((x) => [x.lesson_id, x.n])
+      : []
+  );
   const passedToday = new Set(
     m ? (db.prepare('SELECT DISTINCT lesson_id FROM learning_lessons_done WHERE family_member_id = ? AND passed = 1 AND at >= ?').all(m.id, startOfToday()) as Array<{ lesson_id: string }>).map((x) => x.lesson_id) : []
   );
@@ -218,7 +228,10 @@ lessonsRouter.get('/', (req, res) => {
       questions: quizOf(r).length,
       done: done.get(r.id) ?? null,
       /** 🔁 its tokens are already paid this round */
-      paid_this_round: paidNow.has(r.id),
+      paid_this_round: (paidNow.get(r.id) ?? 0) >= payTimes(r),
+      /** 🔁 repeatable: pays up to pay_times a round; times_paid so far this round */
+      pay_times: payTimes(r),
+      times_paid: paidNow.get(r.id) ?? 0,
       passed_today: passedToday.has(r.id),
     })),
   });
@@ -228,7 +241,7 @@ lessonsRouter.get('/', (req, res) => {
 lessonsRouter.get('/:id', (req, res, next) => {
   const r = db.prepare('SELECT * FROM learning_lessons WHERE id = ?').get(req.params.id) as Row | undefined;
   if (!r) return res.status(404).json({ error: 'No such lesson' });
-  const base = { id: r.id, subject: r.subject, grade: r.grade, topic: r.topic, title: r.title, body: r.body, tokens: worth(r), tokens_set: r.tokens, hidden: r.hidden === 1, builtin: r.builtin === 1, updated_at: r.updated_at };
+  const base = { id: r.id, subject: r.subject, grade: r.grade, topic: r.topic, title: r.title, body: r.body, tokens: worth(r), tokens_set: r.tokens, pay_times: payTimes(r), hidden: r.hidden === 1, builtin: r.builtin === 1, updated_at: r.updated_at };
   if (req.query.edit === '1') return requireAdmin(req, res, () => res.json({ ...base, quiz: quizOf(r) }));
   const m = req.query.member_id ? memberOf(String(req.query.member_id)) : undefined;
   res.json({ ...base, quiz: quizOf(r).map((x) => ({ q: x.q, choices: x.choices })), no_tokens_why: noTokensWhy(m, r) });
@@ -299,6 +312,7 @@ interface Edit {
   body?: string;
   quiz?: unknown;
   tokens?: number | null;
+  pay_times?: number | null;
   hidden?: boolean;
   sort?: number;
   acting_member_id?: string;
@@ -334,6 +348,11 @@ function applyEdit(b: Edit, cur: Partial<Row>): Partial<Row> | string {
       out.tokens = t;
     }
   }
+  if (b.pay_times !== undefined) {
+    const t = b.pay_times === null ? 1 : Math.round(Number(b.pay_times));
+    if (!(t >= 1 && t <= 50)) return 'Pays tokens: 1–50 times a round';
+    out.pay_times = t === 1 ? null : t;
+  }
   if (b.hidden !== undefined) out.hidden = b.hidden ? 1 : 0;
   if (b.sort !== undefined && Number.isFinite(Number(b.sort))) out.sort = Math.round(Number(b.sort));
   return out;
@@ -347,9 +366,9 @@ lessonsRouter.post('/', requireAdmin, (req, res) => {
   const id = `p-${uuidv4()}`;
   const now = new Date().toISOString();
   db.prepare(
-    `INSERT INTO learning_lessons (id, subject, grade, topic, title, body, quiz, tokens, sort, hidden, builtin, created_at, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
-  ).run(id, r.subject, r.grade, r.topic, r.title, r.body, r.quiz, r.tokens ?? null, r.sort ?? 1000, r.hidden ?? 0, now, now, sessionActor(req, b.acting_member_id));
+    `INSERT INTO learning_lessons (id, subject, grade, topic, title, body, quiz, tokens, pay_times, sort, hidden, builtin, created_at, updated_at, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+  ).run(id, r.subject, r.grade, r.topic, r.title, r.body, r.quiz, r.tokens ?? null, r.pay_times ?? null, r.sort ?? 1000, r.hidden ?? 0, now, now, sessionActor(req, b.acting_member_id));
   res.json({ id });
 });
 
@@ -361,7 +380,7 @@ lessonsRouter.put('/:id', requireAdmin, (req, res) => {
   const r = applyEdit({ ...b, subject: undefined }, cur);
   if (typeof r === 'string') return res.status(400).json({ error: r });
   db.prepare(
-    'UPDATE learning_lessons SET grade = ?, topic = ?, title = ?, body = ?, quiz = ?, tokens = ?, hidden = ?, sort = ?, updated_at = ?, updated_by = ? WHERE id = ?'
-  ).run(r.grade, r.topic, r.title, r.body, r.quiz, r.tokens ?? null, r.hidden, r.sort, new Date().toISOString(), sessionActor(req, b.acting_member_id), cur.id);
+    'UPDATE learning_lessons SET grade = ?, topic = ?, title = ?, body = ?, quiz = ?, tokens = ?, pay_times = ?, hidden = ?, sort = ?, updated_at = ?, updated_by = ? WHERE id = ?'
+  ).run(r.grade, r.topic, r.title, r.body, r.quiz, r.tokens ?? null, r.pay_times ?? null, r.hidden, r.sort, new Date().toISOString(), sessionActor(req, b.acting_member_id), cur.id);
   res.json({ ok: true });
 });

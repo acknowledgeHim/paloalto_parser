@@ -40,13 +40,24 @@ interface Progress {
   member: { id: string; grade: number | null; is_parent: boolean };
   grades: string[];
   lessons: Record<LessonSubject, { round: RoundFull | null; rounds: Array<{ grade: number; lessons: number; at: string }>; lessons: LessonRow[] }>;
-  practice: Record<PracticeSubject, Array<{ grade: number; at: string; correct: number; total: number; tokens: number }>>;
+  practice: Record<PracticeSubject, PracticeRow[]>;
   typing: Array<{ level: number; at: string; wpm: number; accuracy: number; passed: number; tokens: number }>;
+  typing_games?: Array<{ mode: string; n: number; best_wpm: number | null; best_score: number | null; last: string; tokens: number | null }>;
 }
+interface PracticeRow {
+  grade: number;
+  at: string;
+  correct: number;
+  total: number;
+  tokens: number;
+  /** 🔤 spelling: the words it got wrong */
+  missed?: Array<{ right: string; given: string }>;
+}
+const TYPING_GAMES: Record<string, string> = { balloon: '🎈 Balloons', race: '🏎️ Race', whack: '🔨 Whack', meteor: '☄️ Meteors', tower: '🗼 Tower', snake: '🐍 Snake', story: '📖 Story', daily: '📅 Daily challenge', shop: '🛒 Shop' };
 
 const LESSON_NAMES: Record<LessonSubject, string> = { grammar: '📖 Grammar lessons', math: '📖 Math lessons', history: '🇺🇸 US History' };
 const PRACTICE_NAMES: Record<PracticeSubject, string> = { spelling: '🔤 Spelling', spellcheck: '🔍 Spot the misspellings', grammar: '📝 Grammar', math: '➗ Math' };
-type Tab = LessonSubject | 'practice' | 'typing';
+type Tab = LessonSubject | 'spelling' | 'practice' | 'typing';
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -102,13 +113,21 @@ export function LearningProgress({ memberId }: { memberId: string }) {
       {data.member.grade === null && !data.member.is_parent && <p className="hint">No school grade set yet — a parent sets it in 📚 Learning → ⚙️ Grades & tokens.</p>}
       <Summary data={data} onPick={setTab} />
       <div className="learning-grades progress-tabs" role="tablist" aria-label="Subject">
-        {(['math', 'grammar', 'history', 'practice', 'typing'] as Tab[]).map((t) => (
+        {(['math', 'grammar', 'history', 'spelling', 'typing', 'practice'] as Tab[]).map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} className={`learning-grade${tab === t ? ' is-on' : ''}`} onClick={() => setTab(t)}>
-            {t === 'practice' ? '🎯 Practice rounds' : t === 'typing' ? '⌨️ Typing' : LESSON_NAMES[t]}
+            {t === 'practice' ? '🎯 Other practice' : t === 'typing' ? '⌨️ Typing' : t === 'spelling' ? '🔤 Spelling' : LESSON_NAMES[t]}
           </button>
         ))}
       </div>
-      {tab === 'practice' ? <PracticeView data={data} /> : tab === 'typing' ? <TypingView data={data} /> : <LessonSubjectView key={tab} data={data} subject={tab} />}
+      {tab === 'practice' ? (
+        <PracticeView data={data} />
+      ) : tab === 'typing' ? (
+        <TypingView data={data} />
+      ) : tab === 'spelling' ? (
+        <SpellingView data={data} />
+      ) : (
+        <LessonSubjectView key={tab} data={data} subject={tab} />
+      )}
     </div>
   );
 }
@@ -140,6 +159,168 @@ function Summary({ data, onPick }: { data: Progress; onPick: (t: Tab) => void })
           </button>
         );
       })}
+      <SpellingSummary data={data} onPick={() => onPick('spelling')} />
+      <TypingSummary data={data} onPick={() => onPick('typing')} />
+    </section>
+  );
+}
+
+/** 🔤 rounds at their grade, how right lately, and the last week */
+function SpellingSummary({ data, onPick }: { data: Progress; onPick: () => void }) {
+  const rows = data.practice.spelling;
+  const last = rows.slice(0, 10);
+  const avg = last.length ? Math.round((last.reduce((a, r) => a + r.correct / r.total, 0) / last.length) * 100) : null;
+  const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
+  const week = rows.filter((r) => r.at >= weekAgo).length;
+  return (
+    <button type="button" className="progress-summary__row" onClick={onPick}>
+      <span className="progress-summary__name">🔤 Spelling</span>
+      {rows.length ? (
+        <>
+          <span>
+            <strong>{rows.length}</strong> round{rows.length === 1 ? '' : 's'} · last {last.length}: <strong>{avg}%</strong> right · {week} this week
+          </span>
+          <div className="progress-bar" aria-hidden="true">
+            <span className="progress-bar__fill is-ok" style={{ width: `${avg ?? 0}%`, display: 'block' }} />
+          </div>
+        </>
+      ) : (
+        <span className="hint">no spelling rounds yet</span>
+      )}
+    </button>
+  );
+}
+
+/** ⌨️ lessons passed of 16, best speed */
+function TypingSummary({ data, onPick }: { data: Progress; onPick: () => void }) {
+  const passed = new Set(data.typing.filter((t) => t.passed).map((t) => t.level)).size;
+  const best = data.typing.filter((t) => t.passed).reduce((m, t) => Math.max(m, t.wpm), 0);
+  const games = (data.typing_games ?? []).reduce((a, g) => a + g.n, 0);
+  return (
+    <button type="button" className="progress-summary__row" onClick={onPick}>
+      <span className="progress-summary__name">⌨️ Typing</span>
+      <span>
+        <strong>{passed}</strong> of {LEVELS.length} lessons passed{best ? ` · best ${best} wpm` : ''}
+        {games ? ` · ${games} game${games === 1 ? '' : 's'} played` : ''}
+      </span>
+      <div className="progress-bar" aria-hidden="true">
+        <span className="progress-bar__fill is-ok" style={{ width: `${(passed / LEVELS.length) * 100}%`, display: 'block' }} />
+      </div>
+    </button>
+  );
+}
+
+/** 🔤 Spelling: every round (grade, score, tokens, the words missed) and the words to practise. */
+function SpellingView({ data }: { data: Progress }) {
+  const rows = data.practice.spelling;
+  const [open, setOpen] = useState<number | null>(null);
+  const byGrade = new Map<number, PracticeRow[]>();
+  for (const r of rows) byGrade.set(r.grade, [...(byGrade.get(r.grade) ?? []), r]);
+  // Words missed, most often first, with the last time (rows are newest first).
+  const missed = new Map<string, { n: number; last: string; tries: string[] }>();
+  for (const r of rows)
+    for (const w of r.missed ?? []) {
+      const k = w.right;
+      const m = missed.get(k) ?? { n: 0, last: r.at, tries: [] };
+      m.n++;
+      if (w.given && m.tries.length < 3 && !m.tries.includes(w.given)) m.tries.push(w.given);
+      missed.set(k, m);
+    }
+  const words = [...missed].sort((a, b) => b[1].n - a[1].n || b[1].last.localeCompare(a[1].last));
+  const last = rows.slice(0, 30).reverse();
+  return (
+    <section className="panel">
+      <DayChart points={rows.map((r) => ({ at: r.at, ok: r.tokens > 0 || r.correct / r.total >= 0.8 }))} label="🔤 Spelling rounds" />
+      <p className="hint">Green = a round that earned tokens or got 80%+ right.</p>
+      {last.length > 0 && (
+        <>
+          <p className="progress-count">% right, the last {last.length} rounds:</p>
+          <div className="progress-spark" role="img" aria-label={`Spelling: % right in the last ${last.length} rounds`}>
+            {last.map((r, i) => (
+              <span key={i} className={r.tokens > 0 ? 'is-ok' : ''} style={{ height: `${Math.max(4, (r.correct / r.total) * 100)}%` }} title={`${when(r.at)} · ${GRADE_SHORT[r.grade]} · ${r.correct}/${r.total}`} />
+            ))}
+          </div>
+        </>
+      )}
+      {byGrade.size > 0 && (
+        <table className="progress-table">
+          <thead>
+            <tr>
+              <th>Grade</th>
+              <th>Rounds</th>
+              <th>Words right</th>
+              <th>Best</th>
+              <th>Last</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...byGrade].sort((a, b) => a[0] - b[0]).map(([g, rs]) => {
+              const right = rs.reduce((a, r) => a + r.correct, 0);
+              const all = rs.reduce((a, r) => a + r.total, 0);
+              return (
+                <tr key={g}>
+                  <td>{data.grades[g]}</td>
+                  <td>{rs.length}</td>
+                  <td>
+                    {Math.round((right / all) * 100)}% ({right}/{all})
+                  </td>
+                  <td>{Math.max(...rs.map((r) => r.correct))}/10</td>
+                  <td>{when(rs[0].at)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <h3 className="progress-topic">📝 Words to practise</h3>
+      {words.length ? (
+        <ul className="progress-words">
+          {words.slice(0, 60).map(([w, m]) => (
+            <li key={w} title={`last missed ${when(m.last)}`}>
+              <strong>{w}</strong>
+              {m.n > 1 && <span className="hint"> ×{m.n}</span>}
+              {m.tries.length > 0 && <span className="hint"> (wrote {m.tries.join(', ')})</span>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="hint">{rows.length ? 'No words missed — every word right!' : 'No spelling rounds yet.'}</p>
+      )}
+      <h3 className="progress-topic">Every round</h3>
+      <table className="progress-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Grade</th>
+            <th>Score</th>
+            <th>Tokens</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <Fragment key={i}>
+              <tr className={`progress-row${r.missed?.length ? ' is-tried' : ''}`} onClick={() => r.missed?.length && setOpen(open === i ? null : i)}>
+                <td>
+                  {r.missed?.length ? (open === i ? '▾ ' : '▸ ') : ''}
+                  {when(r.at)}
+                </td>
+                <td>{data.grades[r.grade]}</td>
+                <td>
+                  {r.correct}/{r.total}
+                </td>
+                <td>{r.tokens ? `+${r.tokens} 💎` : ''}</td>
+              </tr>
+              {open === i && (
+                <tr className="progress-history">
+                  <td colSpan={4}>
+                    Missed: {(r.missed ?? []).map((w) => `${w.right}${w.given ? ` (wrote "${w.given}")` : ''}`).join(', ')}
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }
@@ -326,12 +507,13 @@ function LessonSubjectView({ data, subject }: { data: Progress; subject: LessonS
 /** 🎯 Practice rounds (10 random items): % right each time, newest last. */
 function PracticeView({ data }: { data: Progress }) {
   const [open, setOpen] = useState<PracticeSubject | null>(null);
-  const all = (Object.keys(PRACTICE_NAMES) as PracticeSubject[]).flatMap((s) => data.practice[s].map((r) => ({ at: r.at, ok: r.tokens > 0 || r.correct / r.total >= 0.8 })));
+  const subjects = (Object.keys(PRACTICE_NAMES) as PracticeSubject[]).filter((s) => s !== 'spelling');
+  const all = subjects.flatMap((s) => data.practice[s].map((r) => ({ at: r.at, ok: r.tokens > 0 || r.correct / r.total >= 0.8 })));
   return (
     <section className="panel">
-      <DayChart points={all} label="🎯 Practice rounds" />
+      <DayChart points={all} label="🎯 Misspellings, grammar and math practice" />
       <p className="hint">Green = a round that earned tokens or got 80%+ right.</p>
-      {(Object.keys(PRACTICE_NAMES) as PracticeSubject[]).map((s) => {
+      {subjects.map((s) => {
         const rows = data.practice[s];
         const last = rows.slice(0, 30).reverse();
         const avg = last.length ? Math.round((last.reduce((a, r) => a + r.correct / r.total, 0) / last.length) * 100) : null;
@@ -386,6 +568,7 @@ function PracticeView({ data }: { data: Progress }) {
 
 /** ⌨️ Typing lessons, in order: tried / passed, best speed, and each try. */
 function TypingView({ data }: { data: Progress }) {
+  const games = data.typing_games ?? [];
   const [open, setOpen] = useState<number | null>(null);
   const byLevel = new Map<number, Progress['typing']>();
   for (const t of data.typing) byLevel.set(t.level, [...(byLevel.get(t.level) ?? []), t]);
@@ -445,6 +628,33 @@ function TypingView({ data }: { data: Progress }) {
           })}
         </tbody>
       </table>
+      {games.length > 0 && (
+        <>
+          <h3 className="progress-topic">🎮 Typing games</h3>
+          <table className="progress-table">
+            <thead>
+              <tr>
+                <th>Game</th>
+                <th>Played</th>
+                <th>Best</th>
+                <th>Tokens</th>
+                <th>Last</th>
+              </tr>
+            </thead>
+            <tbody>
+              {games.map((g) => (
+                <tr key={g.mode}>
+                  <td>{TYPING_GAMES[g.mode] ?? g.mode}</td>
+                  <td>{g.n}×</td>
+                  <td>{g.best_score ? `${g.best_score} pts` : g.best_wpm ? `${g.best_wpm} wpm` : ''}</td>
+                  <td>{g.tokens ? `+${g.tokens} 💎` : ''}</td>
+                  <td>{when(g.last)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </section>
   );
 }

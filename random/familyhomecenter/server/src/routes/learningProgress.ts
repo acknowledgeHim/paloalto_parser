@@ -16,6 +16,23 @@ export const learningProgressRouter = Router();
 
 const MAX_ROWS = 2000;
 
+interface PracticeRow {
+  grade: number;
+  at: string;
+  correct: number;
+  total: number;
+  tokens: number;
+}
+/** 🔤 The words a spelling round got wrong (its detail keeps the missed items: { right, given }). */
+function missedWords(detail: string | null): Array<{ right: string; given: string }> {
+  try {
+    const items = JSON.parse(detail ?? '[]') as Array<{ right?: unknown; given?: unknown }>;
+    return Array.isArray(items) ? items.filter((x) => typeof x?.right === 'string').map((x) => ({ right: String(x.right), given: String(x.given ?? '') })) : [];
+  } catch {
+    return []; // detail is cut at 4000 characters, so a long one may not parse
+  }
+}
+
 learningProgressRouter.get('/:memberId', (req, res) => {
   const m = db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.memberId) as FamilyMember | undefined;
   if (!m) return res.status(404).json({ error: 'not found' });
@@ -57,14 +74,24 @@ learningProgressRouter.get('/:memberId', (req, res) => {
   const practice = Object.fromEntries(
     PRACTICE_SUBJECTS.map((s) => [
       s,
-      db.prepare('SELECT grade, at, correct, total, tokens FROM learning_results WHERE family_member_id = ? AND subject = ? ORDER BY at DESC LIMIT ?').all(m.id, s, MAX_ROWS),
+      (
+        db.prepare('SELECT grade, at, correct, total, tokens, detail FROM learning_results WHERE family_member_id = ? AND subject = ? ORDER BY at DESC LIMIT ?').all(m.id, s, MAX_ROWS) as Array<
+          PracticeRow & { detail: string | null }
+        >
+      ).map(({ detail, ...r }) => (s === 'spelling' ? { ...r, missed: missedWords(detail) } : r)),
     ])
   );
   const typing = db
     .prepare("SELECT level, at, wpm, accuracy, passed, stars + speed_stars AS tokens FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' ORDER BY at DESC LIMIT ?")
     .all(m.id, MAX_ROWS);
+  // ⌨️ typing games and the daily challenge: how many, best, last
+  const typing_games = db
+    .prepare(
+      "SELECT mode, COUNT(*) AS n, MAX(wpm) AS best_wpm, MAX(score) AS best_score, MAX(at) AS last, SUM(stars) AS tokens FROM typing_results WHERE family_member_id = ? AND mode != 'lesson' GROUP BY mode ORDER BY n DESC"
+    )
+    .all(m.id);
 
-  res.json({ member: { id: m.id, grade, is_parent: m.is_parent === 1 }, grades: GRADE_NAMES, lessons, practice, typing });
+  res.json({ member: { id: m.id, grade, is_parent: m.is_parent === 1 }, grades: GRADE_NAMES, lessons, practice, typing, typing_games });
 });
 
 // ---- 📬 the weekly report email (Sunday, to parents): the lessons each kid passed that week ----
@@ -72,6 +99,12 @@ learningProgressRouter.get('/:memberId', (req, res) => {
 const SUBJECT_LABEL: Record<string, string> = { grammar: '📝 Grammar', math: '➗ Math', history: '🇺🇸 History' };
 const PRACTICE_LABEL: Record<string, string> = { spelling: '🔤 Spelling', spellcheck: '🔍 Misspellings', grammar: '📝 Grammar', math: '➗ Math' };
 const MAX_LINES = 30;
+/** ⌨️ Typing lesson names — keep in sync with LEVELS in client/src/utils/typing.ts. */
+const TYPING_LESSONS = [
+  'Pointer fingers', 'Middle fingers', 'Ring fingers', 'Little fingers', 'The whole home row', 'Reach up: E and I', 'Reach up: R and U', 'Stretch: T and Y',
+  'In the middle: G and H', 'Reach up: W and O', 'Little fingers up: Q and P', 'Bottom row: C V B N M , .', 'Last letters: X and Z', 'Capital letters (Shift)', 'Numbers', 'Real sentences',
+];
+const TYPING_GAMES: Record<string, string> = { balloon: '🎈 Balloons', race: '🏎️ Race', whack: '🔨 Whack', meteor: '☄️ Meteors', tower: '🗼 Tower', snake: '🐍 Snake', story: '📖 Story', daily: '📅 Daily challenge', shop: '🛒 Shop' };
 
 /** Lines for one kid's week (start…end are local YYYY-MM-DD days, both included). */
 export function learningWeekLines(member: FamilyMember, start: string, end: string): string[] {
@@ -101,16 +134,46 @@ export function learningWeekLines(member: FamilyMember, start: string, end: stri
     if (r && r.lesson_ids.length && (done || tries.some((t) => t.subject === s)))
       lines.push(`🔁 ${SUBJECT_LABEL[s]} round ${r.number}: ${r.paid_ids.length} of ${r.lesson_ids.length} ${GRADE_NAMES[r.grade]} lessons passed`);
   }
+  // 🔤 Spelling: rounds, how right, tokens, and the words missed (to practise)
+  const spell = db
+    .prepare("SELECT grade, correct, total, tokens, detail FROM learning_results WHERE family_member_id = ? AND subject = 'spelling' AND at >= ? AND at < ?")
+    .all(member.id, from, to) as Array<PracticeRow & { detail: string | null }>;
+  if (spell.length) {
+    const right = spell.reduce((a, r) => a + r.correct, 0);
+    const all = spell.reduce((a, r) => a + r.total, 0);
+    const tok = spell.reduce((a, r) => a + r.tokens, 0);
+    const grades = [...new Set(spell.map((r) => GRADE_NAMES[r.grade]))].join(', ');
+    lines.push(`🔤 Spelling: ${spell.length} round${spell.length === 1 ? '' : 's'} (${grades}) · ${right} of ${all} words right (${Math.round((right / all) * 100)}%)${tok ? ` · +${tok} 💎` : ''}`);
+    const missed = new Map<string, number>();
+    for (const r of spell) for (const w of missedWords(r.detail)) missed.set(w.right, (missed.get(w.right) ?? 0) + 1);
+    if (missed.size)
+      lines.push(
+        `🔤 Words to practise: ${[...missed]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 25)
+          .map(([w, n]) => (n > 1 ? `${w} ×${n}` : w))
+          .join(', ')}${missed.size > 25 ? ` …and ${missed.size - 25} more` : ''}`
+      );
+  }
   const practice = db
-    .prepare('SELECT subject, COUNT(*) AS n, AVG(CAST(correct AS REAL) / total) AS avg FROM learning_results WHERE family_member_id = ? AND at >= ? AND at < ? GROUP BY subject')
+    .prepare("SELECT subject, COUNT(*) AS n, AVG(CAST(correct AS REAL) / total) AS avg FROM learning_results WHERE family_member_id = ? AND subject != 'spelling' AND at >= ? AND at < ? GROUP BY subject")
     .all(member.id, from, to) as Array<{ subject: string; n: number; avg: number }>;
   if (practice.length) lines.push(`🎯 Practice: ${practice.map((p) => `${PRACTICE_LABEL[p.subject] ?? p.subject} ${p.n}× (${Math.round(p.avg * 100)}% right)`).join(', ')}`);
-  const typed = db
-    .prepare("SELECT level, MAX(wpm) AS wpm FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' AND passed = 1 AND at >= ? AND at < ? GROUP BY level ORDER BY level")
-    .all(member.id, from, to) as Array<{ level: number; wpm: number }>;
-  if (typed.length) lines.push(`⌨️ Typing lessons passed: ${typed.map((t) => `#${t.level} (${t.wpm} wpm)`).join(', ')}`);
+  // ⌨️ Typing: lesson tries and passes, best speed, games
+  const typing = db
+    .prepare("SELECT level, MAX(passed) AS passed, MAX(wpm) AS wpm, MAX(accuracy) AS acc, COUNT(*) AS n FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' AND at >= ? AND at < ? GROUP BY level ORDER BY level")
+    .all(member.id, from, to) as Array<{ level: number; passed: number; wpm: number; acc: number; n: number }>;
+  const games = db
+    .prepare("SELECT mode, COUNT(*) AS n FROM typing_results WHERE family_member_id = ? AND mode != 'lesson' AND at >= ? AND at < ? GROUP BY mode ORDER BY n DESC")
+    .all(member.id, from, to) as Array<{ mode: string; n: number }>;
+  const tname = (n: number) => `${n}. ${TYPING_LESSONS[n - 1] ?? 'Lesson'}`;
+  for (const t of typing.filter((x) => x.passed)) lines.push(`⌨️ Typing lesson passed: ${tname(t.level)} — ${t.wpm} wpm${t.n > 1 ? ` · ${t.n} tries` : ''}`);
+  for (const t of typing.filter((x) => !x.passed)) lines.push(`⌨️ Typing lesson tried, not passed yet: ${tname(t.level)} — best ${t.wpm} wpm, ${t.acc}% right, ${t.n} tr${t.n === 1 ? 'y' : 'ies'}`);
+  if (games.length) lines.push(`⌨️ Typing games: ${games.map((g) => `${TYPING_GAMES[g.mode] ?? g.mode} ×${g.n}`).join(', ')}`);
+  const passedAll = (db.prepare("SELECT COUNT(DISTINCT level) AS n FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' AND passed = 1").get(member.id) as { n: number }).n;
+  if (typing.length) lines.push(`⌨️ Typing so far: ${passedAll} of ${TYPING_LESSONS.length} lessons passed`);
   // Nothing at all this week: leave the section out.
-  return tries.length || practice.length || typed.length ? lines : [];
+  return tries.length || practice.length || spell.length || typing.length || games.length ? lines : [];
 }
 
 addWeeklyReportSection((member, start, end) => ({ heading: '📚 Learning', lines: learningWeekLines(member, start, end) }));

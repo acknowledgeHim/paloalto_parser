@@ -21,6 +21,9 @@ interface ListItem {
   /** 🔁 its tokens are already paid this round */
   paid_this_round?: boolean;
   passed_today?: boolean;
+  /** 🔁 repeatable lessons pay up to pay_times a round */
+  pay_times?: number;
+  times_paid?: number;
 }
 /** 🔁 a kid's round in a subject: every lesson at their grade pays once, then they all pay again */
 export interface RoundInfo {
@@ -53,6 +56,7 @@ interface Lesson {
   body: string;
   tokens: number;
   tokens_set: number | null;
+  pay_times?: number;
   hidden: boolean;
   builtin: boolean;
   quiz: QuizQ[];
@@ -320,7 +324,9 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
                   <span className="lesson-card__meta">
                     {l.passed_today ? '✅ Passed today' : l.done?.passed ? '✅ Passed' : l.done ? `Tried · best ${l.done.best}/${l.done.total}` : `${l.questions} question${l.questions === 1 ? '' : 's'}`}
                     {list?.round && l.paid_this_round
-                      ? ' · 💎 earned this round'
+                      ? ` · 💎 earned this round${(l.pay_times ?? 1) > 1 ? ` (${l.pay_times}×)` : ''}`
+                      : list?.round && (l.pay_times ?? 1) > 1 && l.tokens > 0 && l.grade >= list.round.grade
+                        ? ` · 💎 ${l.tokens} · 🔁 ${l.times_paid ?? 0} of ${l.pay_times} times this round`
                       : l.tokens > 0 && (list?.round ? l.grade >= list.round.grade : !l.done?.paid)
                         ? ` · 💎 ${l.tokens}`
                         : ''}
@@ -461,7 +467,7 @@ function LessonView({
       <section className="panel">
         <p className="hint">
           {lesson.topic} · {grades[lesson.grade]}
-          {lesson.tokens > 0 ? ` · 💎 ${lesson.tokens} for passing` : ''}
+          {lesson.tokens > 0 ? ` · 💎 ${lesson.tokens} for passing${(lesson.pay_times ?? 1) > 1 ? ` · 🔁 up to ${lesson.pay_times}× a round` : ''}` : ''}
           {lesson.hidden ? ' · 🙈 hidden from kids' : ''}
         </p>
         <h1>{lesson.title}</h1>
@@ -578,6 +584,7 @@ function LessonEditor({ subject, id, grades, defaultTokens, onDone }: { subject:
       title: d.title,
       body: d.body,
       tokens: d.tokens_set,
+      pay_times: d.pay_times ?? 1,
       hidden: d.hidden,
       quiz: d.quiz.map((q) => ({ ...q, choices: q.choices.filter((c) => c.trim()) })),
       acting_member_id: activeProfile?.id,
@@ -684,6 +691,21 @@ function LessonEditor({ subject, id, grades, defaultTokens, onDone }: { subject:
             <input type="number" min={0} max={1000} value={d.tokens_set} onChange={(e) => setD({ ...d, tokens_set: Math.max(0, Math.round(Number(e.target.value) || 0)) })} /> 💎
           </label>
         )}
+        <label className="learning-settings__perday">
+          🔁 Passing pays tokens
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={d.pay_times ?? 1}
+            onChange={(e) => setD({ ...d, pay_times: Math.min(50, Math.max(1, Math.round(Number(e.target.value) || 1))) })}
+            aria-label="Times it pays each round"
+          />
+          time{(d.pay_times ?? 1) === 1 ? '' : 's'} each round
+        </label>
+        <p className="hint">
+          1 = the usual: once, until every lesson at the kid's grade is passed and a new round starts. More = a repeatable lesson: retaking and passing it pays again, up to that many times a round.
+        </p>
         <label className="learning-settings__perday">
           <input type="checkbox" checked={d.hidden} onChange={(e) => setD({ ...d, hidden: e.target.checked })} /> 🙈 Hide from kids (it's kept — un-tick to show it again)
         </label>
