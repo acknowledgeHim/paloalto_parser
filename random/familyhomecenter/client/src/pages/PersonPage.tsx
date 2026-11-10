@@ -11,6 +11,7 @@ import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { InternetUsageCharts } from '../components/InternetUsageCharts.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { MyPhotoMemorySettings } from '../components/Birthdays.js';
+import { LearningProgress } from './LearningProgressPage.js';
 import { canEditHistoricalTask, canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
@@ -191,6 +192,14 @@ export function PersonPage() {
           <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>■</span> not done — tap a day for details.
         </p>
       </section>
+
+      {/* 📚 Their learning (lessons, rounds, practice, typing) — kids only; they see their own, parents anyone's. */}
+      {member.is_parent !== 1 && (activeProfile?.is_parent === 1 || activeProfile?.id === member.id) && (
+        <section className="panel person-learning">
+          <h2>📚 Learning progress</h2>
+          <LearningProgress memberId={member.id} />
+        </section>
+      )}
 
       {/* Their own time online (Internet page) — only for someone with a device set up there. */}
       <section className="panel" style={showInternet ? undefined : { display: 'none' }}>

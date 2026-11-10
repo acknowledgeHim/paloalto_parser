@@ -118,7 +118,8 @@ grade have no rounds. (⌨️ Typing lessons still pay once each, as before.)
 
 ### 📈 Progress (📚 Learning → 📈 Progress)
 
-One kid's learning, by subject. Kids see their own; parents pick any kid.
+One kid's learning, by subject. Kids see their own; parents pick any kid. The same thing is on each
+kid's profile page (Family Board → tap the kid) as **📚 Learning progress**.
 
 - **Summary:** each lesson subject's 🔁 round bar at their grade, how many of that grade's lessons
   they've ever passed, and how many rounds they've finished.
@@ -129,6 +130,14 @@ One kid's learning, by subject. Kids see their own; parents pick any kid.
 - **🎯 Practice rounds** (spelling, misspellings, grammar, math): % right in the last 30 rounds and a
   table of every round.
 - **⌨️ Typing:** each typing lesson tried/passed, best speed, and every try.
+
+### 📬 In the weekly email
+
+The Sunday 6pm weekly report each parent gets for each kid (Settings → Weekly report) has a
+**📚 Learning** part. It lists every lesson passed that week (subject, grade, tokens, tries), the ones
+tried but not passed yet with their best score, each subject's 🔁 round, any round finished,
+practice rounds (how many, % right) and typing lessons passed. A week with no learning leaves it
+out. **Send now** in Settings → Weekly report shows it straight away.
 
 - **📖 Grammar lessons:** 27 lessons, K–12 (capitals, there/their/they're, I/me, who/whom, …).
 - **📖 Math lessons:** 28 lessons, K–12 (make a 10, long division, fractions, equations, slope,

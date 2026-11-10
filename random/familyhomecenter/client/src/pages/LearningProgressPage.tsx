@@ -59,19 +59,6 @@ export function LearningProgressPage() {
   const choices = isParent ? kids : activeProfile ? [activeProfile] : [];
   const [who, setWho] = useState<string | null>(null);
   const memberId = who && choices.some((c) => c.id === who) ? who : choices[0]?.id ?? null;
-  const [data, setData] = useState<Progress | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('math');
-
-  useEffect(() => {
-    setData(null);
-    setError(null);
-    if (!memberId) return;
-    api
-      .get<Progress>(`/learning/progress/${memberId}`)
-      .then(setData)
-      .catch((e) => setError((e as Error).message));
-  }, [memberId]);
 
   return (
     <div className="learning-page progress-page">
@@ -88,21 +75,40 @@ export function LearningProgressPage() {
           ))}
         </div>
       )}
-      {error && <div className="settings-login__error">{error}</div>}
-      {data && (
-        <>
-          {data.member.grade === null && !data.member.is_parent && <p className="hint">No school grade set yet — a parent sets it in 📚 Learning → ⚙️ Grades & tokens.</p>}
-          <Summary data={data} onPick={setTab} />
-          <div className="learning-grades progress-tabs" role="tablist" aria-label="Subject">
-            {(['math', 'grammar', 'history', 'practice', 'typing'] as Tab[]).map((t) => (
-              <button key={t} type="button" role="tab" aria-selected={tab === t} className={`learning-grade${tab === t ? ' is-on' : ''}`} onClick={() => setTab(t)}>
-                {t === 'practice' ? '🎯 Practice rounds' : t === 'typing' ? '⌨️ Typing' : LESSON_NAMES[t]}
-              </button>
-            ))}
-          </div>
-          {tab === 'practice' ? <PracticeView data={data} /> : tab === 'typing' ? <TypingView data={data} /> : <LessonSubjectView key={tab} data={data} subject={tab} />}
-        </>
-      )}
+      {memberId && <LearningProgress key={memberId} memberId={memberId} />}
+    </div>
+  );
+}
+
+/** 📈 One kid's learning progress — on the 📈 Progress page and on their profile page (👤 /person/:id). */
+export function LearningProgress({ memberId }: { memberId: string }) {
+  const [data, setData] = useState<Progress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('math');
+
+  useEffect(() => {
+    setData(null);
+    setError(null);
+    api
+      .get<Progress>(`/learning/progress/${memberId}`)
+      .then(setData)
+      .catch((e) => setError((e as Error).message));
+  }, [memberId]);
+
+  if (error) return <div className="settings-login__error">{error}</div>;
+  if (!data) return <p className="hint">Loading…</p>;
+  return (
+    <div className="progress-view">
+      {data.member.grade === null && !data.member.is_parent && <p className="hint">No school grade set yet — a parent sets it in 📚 Learning → ⚙️ Grades & tokens.</p>}
+      <Summary data={data} onPick={setTab} />
+      <div className="learning-grades progress-tabs" role="tablist" aria-label="Subject">
+        {(['math', 'grammar', 'history', 'practice', 'typing'] as Tab[]).map((t) => (
+          <button key={t} type="button" role="tab" aria-selected={tab === t} className={`learning-grade${tab === t ? ' is-on' : ''}`} onClick={() => setTab(t)}>
+            {t === 'practice' ? '🎯 Practice rounds' : t === 'typing' ? '⌨️ Typing' : LESSON_NAMES[t]}
+          </button>
+        ))}
+      </div>
+      {tab === 'practice' ? <PracticeView data={data} /> : tab === 'typing' ? <TypingView data={data} /> : <LessonSubjectView key={tab} data={data} subject={tab} />}
     </div>
   );
 }
