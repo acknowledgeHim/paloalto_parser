@@ -3,7 +3,7 @@ import { countTime } from '../services/dailyLimits.js';
 import { v4 as uuidv4 } from 'uuid';
 import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { isSelfOrParent } from '../services/rewards.js';
+import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
 import { addTokens } from '../services/tokens.js';
 
 // ⌨️ Typing practice (client/src/pages/TypingPage.tsx): lessons from the home row up, and the games —
@@ -127,6 +127,7 @@ const clampTokens = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Mat
 
 /** PUT /settings/rewards — parent only. */
 typingRouter.put('/settings/rewards', requireAdmin, (req, res) => {
+  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can set typing tokens' });
   const cur = readRewards();
   const b = req.body as Partial<TypingRewards>;
   const merged: TypingRewards = { ...cur };
@@ -321,9 +322,9 @@ typingRouter.post('/:memberId/results', (req, res) => {
   let capped = false;
   if (earned && mode === 'lesson') stars = rewards.levels[row.level - 1] ?? 0;
   // ⚡ Speed stars: passing a lesson at the parent's speeds. Worth the highest speed reached, less
-  // what that lesson's speed already paid.
+  // what that lesson's speed already paid. Only for lessons a parent has set tokens on (> 0).
   let speedStars = 0;
-  if (mode === 'lesson' && row.passed) {
+  if (mode === 'lesson' && row.passed && (rewards.levels[row.level - 1] ?? 0) > 0) {
     const paid = (
       db.prepare("SELECT COALESCE(SUM(speed_stars), 0) AS n FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' AND level = ?").get(id, row.level) as {
         n: number;

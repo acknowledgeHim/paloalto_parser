@@ -217,7 +217,7 @@ export function TypingPage() {
         <LessonRound
           level={playing}
           stars={rewards?.levels[playing.n - 1] ?? 0}
-          speed={rewards ? { tiers: rewards.speed_stars, paid: progress?.levels.find((l) => l.level === playing.n)?.speed_paid ?? 0 } : undefined}
+          speed={rewards && (rewards.levels[playing.n - 1] ?? 0) > 0 ? { tiers: rewards.speed_stars, paid: progress?.levels.find((l) => l.level === playing.n)?.speed_paid ?? 0 } : undefined}
           alreadyPassed={passed.has(playing.n)}
           resume={saved.draft?.level === playing.n ? saved.draft : null}
           onSpot={(d, now) => (now ? saved.save : saved.saveSoon)(d)}
@@ -345,7 +345,7 @@ function LessonList({
         {rewards?.speed_stars.length ? (
           <>
             {' '}
-            ⚡ Speed tokens for passing a lesson fast: {rewards.speed_stars.map((t) => `${t.wpm} wpm = ${t.stars} 💎`).join(' · ')} (each lesson pays up to its
+            ⚡ Speed tokens for passing a lesson fast: {rewards.speed_stars.map((t) => `${t.wpm} wpm = ${t.stars} 💎`).join(' · ')} (each lesson with tokens pays up to its
             fastest; go faster later for the rest).
           </>
         ) : null}{' '}
@@ -358,7 +358,7 @@ function LessonList({
           const done = passed.has(l.n);
           const locked = l.n > nextOpen;
           const stars = rewards?.levels[l.n - 1] ?? 0;
-          const more = nextSpeed(rewards?.speed_stars, p?.speed_paid ?? 0);
+          const more = stars > 0 ? nextSpeed(rewards?.speed_stars, p?.speed_paid ?? 0) : undefined;
           return (
             <button
               key={l.n}
@@ -1096,13 +1096,14 @@ function Race({
 // ---- 💎 Tokens (parents) ----
 
 function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rewards) => void }) {
+  const { activeProfile } = useFamilyMembers();
   const [draft, setDraft] = useState(rewards);
   const [status, setStatus] = useState<string | null>(null);
   const num = (v: string) => Math.max(0, Math.min(1000, Math.round(Number(v) || 0)));
   const save = async () => {
     setStatus('Saving…');
     try {
-      const saved = await api.put<Rewards>('/typing/settings/rewards', draft);
+      const saved = await api.put<Rewards>('/typing/settings/rewards', { ...draft, acting_member_id: activeProfile?.id ?? null });
       onSaved(saved);
       setDraft(saved);
       setStatus('Saved ✓');
@@ -1136,7 +1137,7 @@ function StarSettings({ rewards, onSaved }: { rewards: Rewards; onSaved: (r: Rew
       <h3>⚡ Speed tokens for lessons</h3>
       <p className="hint">
         Tokens for passing a lesson ({PASS_ACCURACY}% right) at a speed. A lesson is worth the highest speed reached, paid once per lesson: e.g. 10 wpm = 1 💎
-        and 20 wpm = 3 💎 means passing at 12 wpm pays 1, and later passing at 21 wpm pays 2 more (3 in all). This is on top of the tokens for passing each lesson above.
+        and 20 wpm = 3 💎 means passing at 12 wpm pays 1, and later passing at 21 wpm pays 2 more (3 in all). This is on top of the tokens for passing each lesson above, and only for lessons set above 0 there.
       </p>
       <div className="typing-speed-stars">
         {draft.speed_stars.map((t, i) => (

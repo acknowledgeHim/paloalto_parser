@@ -55,11 +55,12 @@ how many lessons are left (the server refuses saving them too):
   Family Board once someone's played. A parent can hide or show it: **Settings → ⌨️ Typing** (or
   Typing → 💎 Tokens). Hiding it keeps everyone's results.
 
-- **💎 Tokens** (parents only): set how many 💎 tokens each lesson and game pays (tokens are spent in
+- **💎 Tokens** (parents only — the server turns down anyone else): set how many 💎 tokens each lesson and game pays (tokens are spent in
   👕 Dress up and 🎮 Games; Prize Bank ⭐ stars are separate). Any of them can be 0.
   - **⚡ Speed tokens for lessons:** any number of speeds, e.g. 10 wpm = 1 💎 (the default) and
     20 wpm = 3 💎. Passing a lesson (90% right) is worth the highest speed reached, once per lesson;
-    passing faster later pays the difference. On top of the per-lesson tokens.
+    passing faster later pays the difference. On top of the per-lesson tokens, and only for lessons
+    whose own tokens are set above 0 (a 0-token lesson pays no speed tokens either).
   - A lesson pays once, the first time it's passed.
   - The games pay when someone beats their own best (top score; for Race and Silly Story, a faster
     winning speed). Shopping Spree never pays.

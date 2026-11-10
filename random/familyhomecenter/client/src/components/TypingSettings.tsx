@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
+import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 
 /** Settings → ⌨️ Typing: show or hide the 🏆 Daily Challenge (routes/typing.ts, setting typing_rewards). */
 export function TypingSettings() {
+  const { activeProfile } = useFamilyMembers();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   useEffect(() => {
@@ -16,7 +18,7 @@ export function TypingSettings() {
     setEnabled(on);
     setStatus('Saving…');
     try {
-      const saved = await api.put<{ daily_enabled: boolean }>('/typing/settings/rewards', { daily_enabled: on });
+      const saved = await api.put<{ daily_enabled: boolean }>('/typing/settings/rewards', { daily_enabled: on, acting_member_id: activeProfile?.id ?? null });
       setEnabled(saved.daily_enabled);
       setStatus('Saved ✓');
     } catch (err) {
