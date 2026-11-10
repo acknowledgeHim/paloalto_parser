@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { backupStatus } from '../services/backupStatus.js';
 
 export const settingsRouter = Router();
 
@@ -24,6 +25,12 @@ settingsRouter.get('/', (_req, res) => {
   const result: Record<string, string> = {};
   for (const key of KEYS) result[key] = getSetting(key);
   res.json(result);
+});
+
+/** GET /backup-status — 💾 the Settings card: the Pi's nightly backup and weekly check (docs/STORAGE_DRIVES.md),
+ *  the app's newest own backup, and the share drive's free space. Read-only. */
+settingsRouter.get('/backup-status', requireAdmin, (_req, res, next) => {
+  backupStatus().then((s) => res.json(s), next);
 });
 
 settingsRouter.patch('/', requireAdmin, (req, res) => {

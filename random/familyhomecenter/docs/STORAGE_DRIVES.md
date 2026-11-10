@@ -533,6 +533,14 @@ journalctl -fu fhc-backup        # watch it (Ctrl-C stops watching, not the back
 
 ### 9e. Is it working?
 
+**On the screen: ⚙️ Settings → 💾 Backups** shows the last nightly backup and weekly check (✅ / ⚠️ /
+❌, with the message), how full the backup and share drives are, and the app's newest own backup. It
+warns if the nightly backup hasn't run for 1½ days or the check for 9 days. It reads the status
+files below (they're readable by everyone, so the app can read them without root). Different
+locations? Set `BACKUP_STATUS_DIR` / `SHARE_DIR` in `.env`.
+
+Or in a terminal:
+
 ```bash
 cat /var/lib/fhc-backup/status.json    # last nightly backup: ok / warning / failed + message
 cat /var/lib/fhc-backup/check.json     # last weekly check

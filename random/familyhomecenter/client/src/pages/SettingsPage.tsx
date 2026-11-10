@@ -16,6 +16,7 @@ import { PrizeBankSettings } from '../components/PrizeBankSettings.js';
 import { DeviceCertificateSettings } from '../components/DeviceCertificateSettings.js';
 import { TokenSettings } from '../components/TokenSettings.js';
 import { TypingSettings } from '../components/TypingSettings.js';
+import { BackupStatusSettings } from '../components/BackupStatusSettings.js';
 
 interface AuthStatus {
   member_id: string | null;
@@ -297,6 +298,8 @@ export function SettingsPage() {
       <HomeScreenSettings />
 
       <CameraSettings />
+
+      <BackupStatusSettings />
 
       <DeviceCertificateSettings />
 
