@@ -10,5 +10,6 @@ import { G_7 } from './g7.js';
 import { G_8 } from './g8.js';
 import { G_9 } from './g9.js';
 import { G_10 } from './g10.js';
+import { G_11 } from './g11.js';
 
-export const GRAMMAR_TEXT: string[] = [G_K, G_1, G_2, G_3, G_4, G_5, G_6, G_7, G_8, G_9, G_10];
+export const GRAMMAR_TEXT: string[] = [G_K, G_1, G_2, G_3, G_4, G_5, G_6, G_7, G_8, G_9, G_10, G_11];
