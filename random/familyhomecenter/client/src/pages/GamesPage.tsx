@@ -170,9 +170,33 @@ export function GamesPage() {
                         {g.emoji} {g.name}
                       </strong>
                       {g.owned ? (
-                        <button type="button" className="secondary" disabled={busy} onClick={() => window.confirm(`Lock ${g.name} again and give ${k.name} back what it cost?`) && void act('refund', k.id, g.id)}>
-                          ✓ Theirs · ↶ refund
-                        </button>
+                        <span className="games-page__plays">
+                          <span>✓ Theirs for good{g.plays_per_unlock ? ` (bought before the ${playsText(g.plays_per_unlock)} rule)` : ''}</span>
+                          {g.plays_per_unlock > 0 && (
+                            <button
+                              type="button"
+                              className="secondary"
+                              disabled={busy}
+                              onClick={() =>
+                                window.confirm(`Switch ${k.name}'s ${g.name} to ${playsText(g.plays_per_unlock)}? After those they earn tokens and unlock it again. No tokens are given back; scores and progress are kept.`) &&
+                                void act('relock', k.id, g.id, { plays: g.plays_per_unlock })
+                              }
+                            >
+                              🎟️ Switch to {playsText(g.plays_per_unlock)}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="link-button"
+                            disabled={busy}
+                            onClick={() => window.confirm(`Lock ${g.name} for ${k.name} again, with no tokens back? Scores and progress are kept.`) && void act('relock', k.id, g.id, { plays: 0 })}
+                          >
+                            🔒 Lock again
+                          </button>
+                          <button type="button" className="link-button" disabled={busy} onClick={() => window.confirm(`Lock ${g.name} again and give ${k.name} back what it cost?`) && void act('refund', k.id, g.id)}>
+                            ↶ Refund
+                          </button>
+                        </span>
                       ) : (
                         <>
                           <button type="button" className="secondary" disabled={busy || s.token_balance < g.stars} onClick={() => void act('unlock', k.id, g.id)}>
@@ -212,8 +236,8 @@ export function GamesPage() {
           <h2>⚙️ What each game costs</h2>
           <p className="hint">
             For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
-            uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs (use ↶ refund
-            above to take one back). 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump, 🪂 Glider and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
+            uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs until you
+            change that in Kids' games above: 🎟️ Switch to plays, 🔒 Lock again (no tokens back) or ↶ Refund. 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump, 🪂 Glider and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
             already had one switched on keeps it. 💎 Token shop items (🏘️ Tiny Town's coin bags and special buildings) are bought each time: pick a price
             level, or set each one.
           </p>

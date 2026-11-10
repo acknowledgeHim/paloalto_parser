@@ -12,8 +12,10 @@ import { addTokens } from '../services/tokens.js';
 export const gamesRouter = Router();
 
 const memberOf = (id: string) => db.prepare('SELECT * FROM family_members WHERE id = ?').get(id) as FamilyMember | undefined;
+/** An unlock a parent 🔒 locked again (game_unlock_ends) doesn't count any more. */
+const NOT_ENDED = 'NOT EXISTS (SELECT 1 FROM game_unlock_ends e WHERE e.family_member_id = u.family_member_id AND e.game_id = u.game_id AND e.unlocked_at = u.unlocked_at)';
 const unlockedFor = (m: FamilyMember) =>
-  new Set((db.prepare('SELECT game_id FROM game_unlocks WHERE family_member_id = ?').all(m.id) as Array<{ game_id: string }>).map((r) => r.game_id));
+  new Set((db.prepare(`SELECT game_id FROM game_unlocks u WHERE family_member_id = ? AND ${NOT_ENDED}`).all(m.id) as Array<{ game_id: string }>).map((r) => r.game_id));
 const free = (m: FamilyMember) => m.is_parent === 1;
 const best = (memberId: string, gameId: string) =>
   (db.prepare('SELECT MAX(score) AS s FROM game_scores WHERE family_member_id = ? AND game_id = ?').get(memberId, gameId) as { s: number | null }).s;
@@ -137,7 +139,11 @@ gamesRouter.post('/:memberId/unlock', (req, res) => {
       ).run(m.id, g.id, r.plays, by, now);
     } else {
       addTokens(m.id, -r.cost, `🎮 Unlocked: ${g.emoji} ${g.name}`, by);
-      db.prepare("INSERT INTO game_unlocks (family_member_id, game_id, stars, unlocked_at, currency) VALUES (?, ?, ?, ?, 'tokens')").run(m.id, g.id, r.cost, now);
+      // (an old unlock a parent locked again is reused: its end stays recorded in game_unlock_ends)
+      db.prepare(
+        `INSERT INTO game_unlocks (family_member_id, game_id, stars, unlocked_at, currency) VALUES (?, ?, ?, ?, 'tokens')
+         ON CONFLICT(family_member_id, game_id) DO UPDATE SET stars = excluded.stars, unlocked_at = excluded.unlocked_at, currency = excluded.currency`
+      ).run(m.id, g.id, r.cost, now);
     }
   })();
   res.json(shelf(memberOf(m.id)!));
@@ -148,7 +154,7 @@ gamesRouter.post('/:memberId/refund', (req, res) => {
   const { memberId } = req.params;
   const { game_id, acting_member_id } = req.body ?? {};
   if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
-  const row = db.prepare('SELECT stars, currency FROM game_unlocks WHERE family_member_id = ? AND game_id = ?').get(memberId, game_id) as
+  const row = db.prepare(`SELECT stars, currency FROM game_unlocks u WHERE family_member_id = ? AND game_id = ? AND ${NOT_ENDED}`).get(memberId, game_id) as
     | { stars: number; currency: string | null }
     | undefined;
   if (!row) return res.status(404).json({ error: 'not found' });
@@ -159,6 +165,43 @@ gamesRouter.post('/:memberId/refund', (req, res) => {
     else db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(row.stars, memberId);
   })();
   res.json(shelf(memberOf(memberId)!));
+});
+
+/**
+ * POST /:memberId/relock { game_id, plays, acting_member_id } (parents) — 🔒 a game they unlocked for good
+ * goes back to locked, with no refund; plays > 0 gives them that many 🎟️ plays instead (e.g. what one
+ * unlock is worth now). Scores, towns and extras are kept.
+ */
+gamesRouter.post('/:memberId/relock', (req, res) => {
+  const { memberId } = req.params;
+  const { game_id, plays, acting_member_id } = req.body ?? {};
+  if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
+  const g = gameOf(String(game_id));
+  const m = memberOf(memberId);
+  if (!g || !m) return res.status(404).json({ error: 'not found' });
+  const row = db.prepare(`SELECT unlocked_at FROM game_unlocks u WHERE family_member_id = ? AND game_id = ? AND ${NOT_ENDED}`).get(m.id, g.id) as { unlocked_at: string } | undefined;
+  if (!row) return res.status(404).json({ error: `${m.name} hasn't unlocked ${g.name} for good` });
+  const n = Math.round(Number(plays ?? 0));
+  if (!Number.isFinite(n) || n < 0 || n > 1000) return res.status(400).json({ error: 'How many plays? (0–1000)' });
+  const now = new Date().toISOString();
+  const by = typeof acting_member_id === 'string' ? acting_member_id : null;
+  db.transaction(() => {
+    db.prepare('INSERT INTO game_unlock_ends (id, family_member_id, game_id, unlocked_at, ended_at, ended_by, plays_given) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      uuidv4(),
+      m.id,
+      g.id,
+      row.unlocked_at,
+      now,
+      by,
+      n
+    );
+    if (n > 0)
+      db.prepare(
+        `INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = plays_left + excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`
+      ).run(m.id, g.id, n, by, now);
+  })();
+  res.json(shelf(memberOf(m.id)!));
 });
 
 /** Can they open the game (garage, saving a run)? Bought, free, or ever given plays (even if used up — so a last run still saves). */

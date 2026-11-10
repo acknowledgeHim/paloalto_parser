@@ -1560,6 +1560,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_learning_lesson_rounds_member ON learning_lesson_rounds (family_member_id, subject, at);
 `);
 
+// 🔒 A game a kid had unlocked for good that a parent locked again or switched to plays (no refund).
+// The unlock row stays; it counts as ended while this table has a row for that same unlock.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_unlock_ends (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    ended_by TEXT,
+    plays_given INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_game_unlock_ends_member ON game_unlock_ends (family_member_id, game_id);
+`);
+
 // 🔁 A lesson a parent made repeatable: passing it pays tokens up to this many times each round
 // (NULL = once, like every lesson). New column only.
 try {

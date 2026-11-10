@@ -207,8 +207,15 @@ number of plays.
 - **⚙️ What each game costs** (parents, bottom of the Games page): per game, the 💎 cost and how
   many plays an unlock is good for. **0 plays = for good** (the default). With a number, unlocking
   gives that many 🎟️ plays; each go uses one, and when they're used up the kid earns tokens and
-  unlocks it again (buying again while some are left adds more). Games already unlocked for good
-  stay theirs — ↶ refund takes one back. Saved in the `game_rules` setting; no data changes.
+  unlocks it again (buying again while some are left adds more). **Games a kid already unlocked
+  for good stay theirs** — setting plays later doesn't change those. In **Kids' games** each one shows
+  "✓ Theirs for good (bought before the N plays rule)" with:
+  - **🎟️ Switch to N plays:** from now on it's N plays, then they earn and unlock it again (no
+    tokens back).
+  - **🔒 Lock again:** locked, no tokens back.
+  - **↶ Refund:** locked, tokens back.
+  Scores, towns and extras are kept in every case. Each switch or lock is kept in the
+  `game_unlock_ends` table; nothing is deleted.
 - **⏰ Daily limits** per kid and per game — games a day and/or minutes a day — are set with the
   learning ones (📚 Learning → ⚙️ Grades & tokens). A run that's going always finishes; see
   [LEARNING.md](LEARNING.md#-daily-limits-parents--learning--️-grades--tokens--️-daily-limits).
