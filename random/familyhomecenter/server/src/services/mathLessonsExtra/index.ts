@@ -9,5 +9,6 @@ import { M_6 } from './m6.js';
 import { M_7 } from './m7.js';
 import { M_8 } from './m8.js';
 import { M_9 } from './m9.js';
+import { M_10 } from './m10.js';
 
-export const MATH_EXTRA_TEXT: string[] = [M_K, M_1, M_2, M_3, M_4, M_5, M_6, M_7, M_8, M_9];
+export const MATH_EXTRA_TEXT: string[] = [M_K, M_1, M_2, M_3, M_4, M_5, M_6, M_7, M_8, M_9, M_10];
