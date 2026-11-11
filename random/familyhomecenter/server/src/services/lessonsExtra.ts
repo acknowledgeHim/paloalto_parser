@@ -2,6 +2,7 @@ import type { LessonSeed } from './lessonContent.js';
 import { parseLessons } from './mathLessonsParse.js';
 import { GRAMMAR_TEXT } from './grammarLessons/index.js';
 import { MATH_EXTRA_TEXT } from './mathLessonsExtra/index.js';
+import { SCIENCE_TEXT } from './scienceLessons/index.js';
 
 /**
  * 📖 The big lesson sets: ~50 📝 grammar and ~50 ➗ math lessons for each grade, K–12 — about a
@@ -12,4 +13,5 @@ import { MATH_EXTRA_TEXT } from './mathLessonsExtra/index.js';
 export const EXTRA_LESSONS: LessonSeed[] = [
   ...GRAMMAR_TEXT.flatMap((t, g) => (t ? parseLessons('grammar', g, t, { shuffle: true }) : [])),
   ...MATH_EXTRA_TEXT.flatMap((t, g) => (t ? parseLessons('math', g, t, { shuffle: true }) : [])),
+  ...SCIENCE_TEXT.flatMap((t, g) => (t ? parseLessons('science', g, t, { shuffle: true }) : [])),
 ];
