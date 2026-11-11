@@ -100,7 +100,7 @@ Answers that need rounding say so. Some problems are tap-a-choice instead (like 
 the right answer and a tip, and that answer is then final. Problem types live in
 `server/src/services/mathGen.ts`.
 
-## 📖 Lessons: Grammar, Math and 🇺🇸 US History
+## 📖 Lessons: Grammar, Math, 🔬 Science and 🇺🇸 US History
 
 Read a lesson (a rule, formula or piece of history in plain words, with examples), then take its quiz.
 Passing (80% right by default) pays 💎 tokens for lessons at the kid's grade or higher, **once per
@@ -154,6 +154,11 @@ out. **Send now** in Settings → Weekly report shows it straight away.
 - **📖 Math lessons:** 50+ for every grade, K–12: counting and adding (K–2), times tables,
   fractions and decimals (3–5), ratios, integers and equations (6–7), algebra 2 (8), geometry (9),
   trigonometry (10), precalculus (11) and calculus (12).
+- **🔬 Science lessons:** about 20 for every grade, K–12, grouped by branch: ⚡ Physics,
+  🧪 Chemistry, 🧬 Biology and 🌍 Earth & space. K–8 mix all four; 9th grade is mostly biology,
+  10th chemistry, 11th physics, and 12th earth & space plus advanced topics (biotech, relativity,
+  nuclear power). Many lessons have a 🧪 lab built in (see below). The set lives in
+  `server/src/services/scienceLessons/` (one file per grade).
 - Quiz choices come in a mixed-up order, so the right answer isn't always first. The big sets
   live in `server/src/services/grammarLessons/` and `mathLessonsExtra/` (one file per grade).
 - **🇺🇸 US History:** the Declaration of Independence, the Constitution, the Revolutionary War, the
@@ -169,14 +174,33 @@ Lessons are never deleted. A later update adds new built-in lessons but never ov
 edited.
 
 **Tokens:** 📚 Learning → ⚙️ Grades & tokens → 📖 Lessons sets each subject's usual amount (1 💎;
-history 2 💎), the pass mark, and optionally an amount for a single lesson.
+history and science 2 💎), the pass mark, and optionally an amount for a single lesson.
 
 Lesson text markup: `## ` heading, `- ` bullet, `1. ` step, `**bold**`, ✅ / ❌ example lines, and a
-blank line between paragraphs.
+blank line between paragraphs. A line `🧪 lab: pendulum` puts that science lab in the lesson (any
+subject; the ✏️ Edit hint lists the lab names).
+
+### 🧪 Science labs (🔬 Science → 🧪 All the labs, or the menu's 🧪 Science labs)
+
+30 hands-on simulations kids can play with: sliders, buttons and live readouts, each with a few
+🎯 **Try this** goals that tick off as they're reached.
+
+- **⚡ Physics:** push & friction, pendulum, projectile, falling (with/without air), lever, spring,
+  float or sink, mixing hot and cold water, circuits (series/parallel), sound (plays the tone) and
+  light & color.
+- **🧪 Chemistry:** states of matter, build an atom, pH (a simplified model for kids), dissolving,
+  balancing equations, gas laws and flame colors.
+- **🧬 Biology:** plant growth, cell parts, Punnett squares, predator & prey, peppered moths,
+  reaction time and heart rate.
+- **🌍 Earth & space:** moon phases, seasons, the rock cycle, weight on other planets and
+  earthquake waves.
+
+Labs are practice: they don't pay 💎 and don't count toward daily limits. Tokens come from passing
+the lesson's quiz. Code: `client/src/labs/` (`catalog.ts` lists them).
 
 ## ⏰ Daily limits (parents: 📚 Learning → ⚙️ Grades & tokens → ⏰ Daily limits)
 
-For each kid, and for each of 🔤 Spelling, 🔍 Spot the misspellings, 📝 Grammar, ➗ Math, the three 📖
+For each kid, and for each of 🔤 Spelling, 🔍 Spot the misspellings, 📝 Grammar, ➗ Math, the four 📖
 lesson sets, ⌨️ Typing and each 🎮 game: **times a day** (rounds, lessons, games) and/or **minutes a
 day**. Blank = no limit; 0 = off for the day. Parents have no limits.
 
