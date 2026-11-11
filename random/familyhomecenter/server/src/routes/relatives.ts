@@ -34,6 +34,8 @@ interface Relative {
   about: string | null;
   person_id: string | null;
   family_member_id: string | null;
+  /** 📷 their default picture (a photo path), picked by a parent; null = the usual one */
+  cover_path: string | null;
   hidden: number;
   created_at: string;
   updated_at: string;
@@ -120,7 +122,9 @@ relativesRouter.get(
     const out = [];
     for (const r of rows) {
       const paths = [...(await relativePhotoPaths(r))].filter((p) => idFor.has(p));
-      out.push({ ...summary(r), photo_count: paths.length, cover_photo_id: paths.length ? idFor.get(paths[0])! : null });
+      // 📷 the picked default picture, while it's still one of theirs; else the first
+      const cover = r.cover_path && paths.includes(r.cover_path) ? r.cover_path : paths[0];
+      out.push({ ...summary(r), photo_count: paths.length, cover_photo_id: cover ? idFor.get(cover)! : null });
     }
     res.json(out);
   })
@@ -231,8 +235,11 @@ relativesRouter.get(
       .map((x) => lib.movies.find((m) => m.rel_path === x.rel_path))
       .filter(Boolean)
       .map((m) => ({ id: m!.id, title: m!.title, year: m!.year, recorded_at: m!.recorded_at }));
+    const coverId = r.cover_path ? photos.find((p) => pathOf.get(p.id) === r.cover_path)?.id ?? null : null;
     res.json({
       ...summary(r),
+      // 📷 the picked default picture (null: none picked, or it isn't one of theirs any more)
+      cover_photo_id: coverId,
       memories,
       photos: photos.map((p) => {
         const rel = pathOf.get(p.id) ?? '';
@@ -371,6 +378,25 @@ relativesRouter.post(
     setMedia(r.id, 'photo', toPaths(req.body?.add), 0, by);
     setMedia(r.id, 'photo', toPaths(req.body?.remove), 1, by);
     res.json({ ok: true });
+  })
+);
+
+/** PUT /:id/cover { photo_id | null, acting_member_id } (parents) — their default picture, one of
+ *  the photos on their page; null goes back to the usual one. The photo itself isn't touched. */
+relativesRouter.put(
+  '/:id/cover',
+  asyncHandler(async (req, res) => {
+    const r = relOf(req.params.id);
+    if (!r) return res.status(404).json({ error: 'not found' });
+    if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can change this' });
+    let cover: string | null = null;
+    if (req.body?.photo_id) {
+      const p = (await photoPathsById()).get(String(req.body.photo_id));
+      if (!p || !(await relativePhotoPaths(r)).has(p)) return res.status(400).json({ error: 'Pick one of the photos on their page' });
+      cover = p;
+    }
+    db.prepare('UPDATE relatives SET cover_path = ?, updated_at = ?, updated_by = ? WHERE id = ?').run(cover, new Date().toISOString(), sessionActor(req, req.body?.acting_member_id), r.id);
+    res.json({ ok: true, cover_path: cover });
   })
 );
 

@@ -1182,6 +1182,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS journal_entries_member ON journal_entries(family_member_id, date);
 `);
 
+// 👪 A relative's default picture, picked by a parent from their tagged photos: the photo's path
+// under the photos folder (NULL = the usual one). New column only; the photo itself isn't touched.
+try {
+  db.exec('ALTER TABLE relatives ADD COLUMN cover_path TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+
 // 🫙 Who a gratitude-jar note is about, set by hand (services/gratitudePeople.ts): tagged = 1 adds
 // them, 0 takes off a name match that's wrong. Name matches themselves aren't stored. New table only;
 // no foreign keys, so removing someone never removes these rows.

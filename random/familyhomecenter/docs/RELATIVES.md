@@ -25,6 +25,10 @@ hidden** brings them back).
 - **💬 Memories** — anyone can add one; whoever wrote it (or a parent) can edit or hide it.
 - **📷 Photos** — the linked face's photos, plus **＋ Tag photos** (the usual photo picker). **✕**
   takes a photo off this relative's page only: the photo, its face names and the file are untouched.
+- **⭐ Their picture** (parents) — tap ☆ on any of their photos to make it the picture on the
+  Relatives list and at the top of their page. Tap ⭐ again to go back to the usual one (the newest).
+  If that photo is later taken off their page, the usual one comes back.
+- **🫙 Thankful for …** — gratitude-jar notes that name them (or are tagged to them).
 - **🎬 Home movies** — **＋ Tag home movies** from 🎬 Movies (search by name, folder or year); ▶
   plays it right there.
 - Photos and movies show only for people who can see Photos / Movies (Settings → Kids' access).

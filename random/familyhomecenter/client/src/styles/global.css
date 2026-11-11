@@ -3500,6 +3500,22 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
   border: 0;
   border-radius: 999px;
 }
+.relatives__star {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 0 0.4rem;
+  min-height: 0;
+  line-height: 1.5;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+}
+.relatives__star.is-on {
+  background: rgba(255, 196, 0, 0.9);
+  color: #000;
+}
 .relatives__movies {
   margin: 0.5rem 0 0;
   padding-left: 1.2rem;

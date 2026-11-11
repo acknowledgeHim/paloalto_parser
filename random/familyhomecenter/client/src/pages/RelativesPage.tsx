@@ -316,6 +316,9 @@ function RelativeView({ id }: { id: string }) {
   if (!r) return <p className="hint">Loading…</p>;
   const photos = canSee('photos') ? r.photos : [];
   const shownMemories = r.memories.filter((m) => !m.hidden || isParent);
+  // 📷 their default picture: the one a parent picked (if it's still here), else the newest
+  const coverId = photos.find((p) => p.id === r.cover_photo_id)?.id ?? photos[photos.length - 1]?.id;
+  const setCover = (photoId: string | null) => void run(() => api.put(`/relatives/${r.id}/cover`, { photo_id: photoId, acting_member_id: acting }));
 
   return (
     <div className="relatives-page">
@@ -323,7 +326,7 @@ function RelativeView({ id }: { id: string }) {
         <Link to="/relatives">‹ Relatives</Link>
       </p>
       <header className="relatives__head">
-        {photos[0] ? <img src={`/api/photos/${photos[photos.length - 1].id}/image`} alt="" className="relatives__cover relatives__cover--big" /> : <div className="relatives__cover relatives__cover--big relatives__cover--none">{r.living ? '🙂' : '🕊️'}</div>}
+        {photos[0] ? <img src={`/api/photos/${coverId}/image`} alt="" className="relatives__cover relatives__cover--big" /> : <div className="relatives__cover relatives__cover--big relatives__cover--none">{r.living ? '🙂' : '🕊️'}</div>}
         <div>
           <h1>
             {r.name}
@@ -423,6 +426,7 @@ function RelativeView({ id }: { id: string }) {
           <p className="hint">
             {r.person ? `Every photo with ${r.person.name}’s face (from 👥 People), plus any tagged here. ` : 'Link their face in ✏️ Edit to bring in every photo they’re in, or tag photos here. '}
             ✕ takes a photo off this page only — the photo itself isn’t touched.
+            {isParent && photos.length > 1 && ' ⭐ makes a photo their picture on the Relatives list and up top.'}
           </p>
           <button type="button" className="secondary" onClick={() => setPicking(true)}>
             ＋ Tag photos
@@ -434,6 +438,17 @@ function RelativeView({ id }: { id: string }) {
                   <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
                   <ThumbYear photoId={p.id} />
                 </button>
+                {isParent && photos.length > 1 && (
+                  <button
+                    type="button"
+                    className={`relatives__star${r.cover_photo_id === p.id ? ' is-on' : ''}`}
+                    title={r.cover_photo_id === p.id ? 'Their picture — tap to go back to the usual one' : 'Make this their picture'}
+                    aria-pressed={r.cover_photo_id === p.id}
+                    onClick={() => setCover(r.cover_photo_id === p.id ? null : p.id)}
+                  >
+                    {r.cover_photo_id === p.id ? '⭐' : '☆'}
+                  </button>
+                )}
                 <button type="button" className="relatives__untag" title="Take off this page" onClick={() => void run(() => api.post(`/relatives/${r.id}/photos`, { remove: [p.id], acting_member_id: acting }))}>
                   ✕
                 </button>
