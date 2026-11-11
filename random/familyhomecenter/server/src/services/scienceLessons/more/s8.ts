@@ -239,13 +239,16 @@ They took millions of years to form, so they're **nonrenewable**.
 ? Oil formed mostly from tiny … | *ocean organisms | rocks
 ? Fossil fuels are … | *nonrenewable | renewable
 
-@ climate-solutions-8 | 🌍 Earth & space | Reducing climate change
-Ways to reduce greenhouse gases:
-- Switch to **solar, wind** and other clean power.
-- Use **electric** and efficient vehicles, transit, bikes.
-- Better **insulation** and efficient appliances.
-- Protect and plant **forests**, which absorb CO₂.
-? Which reduces CO₂ emissions? | *wind power | burning coal
-? Forests help because trees absorb … | *carbon dioxide | oxygen
-? Insulating homes reduces energy needed for … | *heating and cooling | lighting only
+@ nature-power-8 | 🌍 Earth & space | Electricity from wind, water and sun
+Nature has energy we can turn into electricity:
+- **Wind turbines:** moving air spins blades that turn a **generator**.
+- **Hydroelectric dams:** falling water spins a **turbine** and generator.
+- **Solar panels:** sunlight makes current directly — no moving parts.
+- **Geothermal plants:** Earth's underground heat makes steam to spin a turbine.
+Wind, water and sunlight are **renewable**: they don't run out.
+
+🧪 lab: circuit
+? A wind turbine turns moving air into electricity with a … | *generator | battery
+? Which makes electricity with no moving parts? | *solar panels | a dam
+? Hydroelectric power uses … water | *falling | frozen
 `;

@@ -31,18 +31,22 @@ Most **exoplanets** are found by the **transit** method (a star dims as a planet
 ? The habitable zone is where … could exist | *liquid water | ice only
 ? Exoplanets orbit … | *other stars | the Moon
 
-@ energy-budget | 🌍 Earth & space | Earth's energy budget
-Earth absorbs sunlight and gives off **infrared** heat. **Greenhouse gases** (CO₂, methane, water vapor) absorb some outgoing infrared, keeping Earth about **33°C warmer** than it would be. More greenhouse gas → more heat kept.
-? Earth gives off energy mainly as … | *infrared | X-rays
-? Without any greenhouse effect, Earth would be … | *much colder | much hotter
-? Which is a greenhouse gas? | *methane | nitrogen
+@ hydro-12 | ⚡ Physics | Hydroelectric power
+A dam stores water high up as **potential energy**. Falling water spins a turbine and generator.
+**Power = ρ × g × h × flow** (× efficiency, often ~90%).
+- 10 m³/s falling 50 m: 1,000 × 9.8 × 50 × 10 ≈ **4.9 MW** before losses.
+Hoover Dam can produce about **2,000 MW**.
+? Doubling the height the water falls makes the power … | *double | four times bigger
+? Water at a dam stores … energy before it falls | *potential | chemical
+? 5 m³/s falling 20 m gives about … before losses | *1 MW | 100 kW | 10 MW
 
-@ feedbacks | 🌍 Earth & space | Climate feedbacks
-- **Positive feedback** (amplifies): melting ice exposes dark ocean → absorbs more heat → more melting.
-- **Negative feedback** (dampens): more plant growth can absorb more CO₂.
-? Melting ice causing more warming is a … feedback | *positive | negative
-? A feedback that reduces a change is … | *negative | positive
-? Ice reflects sunlight because it has a high … | *albedo | density
+@ geothermal-12 | 🌍 Earth & space | Geothermal energy
+Earth's inside is hot — from its formation and from **radioactive decay**. Underground temperature rises about **25–30°C per kilometer** of depth.
+- **Geothermal power plants** use underground steam or hot water to spin turbines (Iceland gets about a quarter of its electricity this way).
+- **Ground-source heat pumps** use the steady ~10–15°C a few meters down to heat and cool homes.
+? Earth's internal heat comes partly from … | *radioactive decay | the Moon
+? 3 km down, the rock is roughly … warmer than the surface | *80°C | 8°C | 800°C
+? Geothermal plants are common in volcanic places like … | *Iceland | the Sahara
 
 @ ocean-currents | 🌍 Earth & space | Ocean currents
 **Surface currents** are driven by **wind**; deep currents by **density** (cold, salty water sinks) — the "global conveyor belt". The **Gulf Stream** carries warm water north, keeping Western Europe mild.
@@ -72,11 +76,15 @@ The **moment magnitude** scale is logarithmic: each whole step is about **32×**
 ? Wet sandy soil acting like a liquid during shaking is … | *liquefaction | erosion
 ? Undersea megathrust earthquakes can cause … | *tsunamis | hurricanes
 
-@ sustainability | 🌍 Earth & space | Sustainability
-Using resources so future generations can meet their needs: renewable energy, efficient buildings, water conservation, recycling, protecting habitats. **Carbon footprint** measures the greenhouse gases from an activity.
-? Which reduces a carbon footprint the most? | *switching from coal to wind power | using paper cups
-? Sustainability means meeting today's needs without … | *harming future generations' ability to meet theirs | ever using resources
-? Which resource is renewable? | *solar energy | natural gas
+@ power-grid-12 | ⚡ Physics | How the power grid works
+1. **Power plants** generate electricity.
+2. **Step-up transformers** raise it to very high voltage (often 100,000 V or more) to cut losses in long lines.
+3. **Substations** step it down; local lines carry it to neighborhoods.
+4. A transformer on a pole or box steps it down to **120/240 V** for homes (in the US, at **60 Hz**).
+Supply must match demand **every second**, so grid operators constantly adjust.
+? Long-distance lines use high voltage to … | *reduce energy loss | make it faster
+? US homes get electricity at … | *120/240 V | 100,000 V
+? The US grid's AC frequency is … | *60 Hz | 50 Hz
 
 @ biotech | 🧬 Biology | Biotechnology
 - **PCR** copies DNA millions of times.

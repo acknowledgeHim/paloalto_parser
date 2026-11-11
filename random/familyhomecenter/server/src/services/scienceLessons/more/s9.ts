@@ -238,12 +238,12 @@ Sustainable forestry, protected areas and replanting help.
 ? Without trees, soil … more | *erodes | grows
 ? Which helps reduce deforestation? | *protected areas | more clearing
 
-@ range-shift-9 | 🌍 Earth & space | Climate and where species live
-As climates warm, many species move **toward the poles** or **uphill** to stay in their comfortable temperatures. Species that can't move fast enough may decline.
-Coral reefs **bleach** when the water gets too warm.
-
-🧪 lab: seasons
-? As climate warms, many species shift … | *toward the poles | toward the equator
-? Mountain species may move … | *uphill | downhill
-? Corals bleach when the water gets too … | *warm | cold
+@ biofuels-9 | 🧬 Biology | Biofuels and biogas
+Living things store the Sun's energy, and we can turn it into fuel:
+- **Ethanol:** **yeast** ferment the sugar in corn or sugarcane into alcohol fuel.
+- **Biodiesel:** made from vegetable oils and used cooking oil.
+- **Biogas:** bacteria break down manure and food waste **without oxygen**, making **methane** to burn.
+? Ethanol fuel is made by … fermenting sugar | *yeast | algae only
+? Biogas is mostly … | *methane | oxygen
+? The bacteria that make biogas work … | *without oxygen | only in sunlight
 `;

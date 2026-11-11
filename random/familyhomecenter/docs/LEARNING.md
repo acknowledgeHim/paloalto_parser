@@ -157,7 +157,8 @@ out. **Send now** in Settings → Weekly report shows it straight away.
 - **🔬 Science lessons:** 50+ for every grade, K–12, grouped by branch: ⚡ Physics,
   🧪 Chemistry, 🧬 Biology and 🌍 Earth & space. K–8 mix all four; 9th grade is mostly biology,
   10th chemistry, 11th physics, and 12th earth & space plus advanced topics (biotech, relativity,
-  nuclear power). Many lessons have a 🧪 lab built in (see below). The set lives in
+  nuclear power). Energy lessons stick to how things work: solar panels, wind, hydro, tidal,
+  geothermal, the power grid, energy storage and fuel cells. Many lessons have a 🧪 lab built in (see below). The set lives in
   `server/src/services/scienceLessons/` (one file per grade, plus a second set in `more/`).
 - Quiz choices come in a mixed-up order, so the right answer isn't always first. The big sets
   live in `server/src/services/grammarLessons/` and `mathLessonsExtra/` (one file per grade).
@@ -171,7 +172,8 @@ out. **Send now** in Settings → Weekly report shows it straight away.
 (questions, choices, the right answer, an optional "why"), the grade and topic, or its tokens. You can
 also **hide** a lesson; it's kept, and untick to show it again. **＋ New lesson** adds your own.
 Lessons are never deleted. A later update adds new built-in lessons but never overwrites ones you've
-edited.
+edited. When a built-in lesson is replaced by a newer one, the old one is **hidden** once (only if
+you never edited it) — its tries stay, and you can untick hide to bring it back.
 
 **Tokens:** 📚 Learning → ⚙️ Grades & tokens → 📖 Lessons sets each subject's usual amount (1 💎;
 history and science 2 💎), the pass mark, and optionally an amount for a single lesson.

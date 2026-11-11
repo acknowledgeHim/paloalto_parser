@@ -1536,6 +1536,12 @@ db.exec(`
     updated_by TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_learning_lessons_subject ON learning_lessons (subject, grade, sort);
+  -- Built-in lessons swapped for new ones: each is hidden once (if no parent edited it), then
+  -- recorded here so a parent who un-hides it keeps it. Nothing is deleted. (routes/lessons.ts)
+  CREATE TABLE IF NOT EXISTS learning_lessons_retired (
+    lesson_id TEXT PRIMARY KEY,
+    at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS learning_lessons_done (
     id TEXT PRIMARY KEY,
     family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,

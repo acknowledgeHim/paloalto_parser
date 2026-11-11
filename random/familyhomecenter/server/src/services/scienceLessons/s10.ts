@@ -138,11 +138,14 @@ On a heating curve, temperature **stays flat** during melting and boiling — th
 ? Energy during boiling goes into … | *separating particles | speeding them up
 ? Steam at 100°C can burn worse than water at 100°C because it … | *releases extra energy when it condenses | is hotter
 
-@ ocean-acidification | 🌍 Earth & space | Ocean acidification
-Oceans absorb CO₂ from the air. CO₂ + H₂O → carbonic acid, so the ocean's pH **drops**. This makes it harder for corals and shellfish to build **calcium carbonate** shells.
-? Ocean acidification is caused by absorbing … | *carbon dioxide | oxygen
-? Lower ocean pH harms … | *shell-building animals | sharks only
-? As the ocean absorbs more CO₂, its pH … | *goes down | goes up
+@ carbonic-acid-10 | 🧪 Chemistry | Carbonic acid and fizzy water
+Soda water is made by forcing **CO₂** into water under **pressure**. Some of it reacts: **CO₂ + H₂O ⇌ H₂CO₃** (carbonic acid), a **weak acid** — so soda water has a pH around **4**.
+Open the bottle and the pressure drops, so gas comes out of solution as **bubbles**. Cold water holds more gas, so warm soda goes flat faster.
+
+🧪 lab: ph
+? Carbonic acid forms from CO₂ and … | *water | salt
+? Opening a soda bottle makes bubbles because the … drops | *pressure | temperature
+? Carbonic acid is a … acid | *weak | strong
 
 @ biochem-10 | 🧬 Biology | Chemistry in living things
 Living things are mostly **C, H, O, N, P and S**. Carbon forms **4 bonds**, so it can build long chains and rings — the backbone of sugars, fats, proteins and DNA.

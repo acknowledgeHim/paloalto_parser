@@ -58,12 +58,15 @@ Earth's early air had almost **no free oxygen**. **Cyanobacteria** doing photosy
 ? The Great Oxidation Event was about … | *2.4 billion years ago | 66 million years ago
 ? The ozone layer made it possible for life to … | *live on land | live in the ocean
 
-@ ice-cores-12 | 🌍 Earth & space | Reading ice cores
-Air bubbles trapped in Antarctic ice hold samples of ancient atmosphere going back about **800,000 years**. They show CO₂ and temperature rising and falling **together**.
-CO₂ never topped about 300 ppm in that record; today it's above **420 ppm**.
-? Ice core bubbles contain samples of ancient … | *air | seawater
-? In ice cores, CO₂ and temperature … | *rise and fall together | are unrelated
-? Today's CO₂ level is … anything in the 800,000-year record | *higher than | lower than
+@ tidal-12 | 🌍 Earth & space | Tidal and wave power
+**Tides** rise and fall on a schedule set by the Moon, so tidal power is **predictable**.
+- **Tidal barrages** trap water at high tide and release it through turbines (France's La Rance plant has run since **1966**).
+- **Tidal stream turbines** sit in fast currents like underwater windmills.
+- **Wave energy** devices ride the up-and-down motion of waves.
+Water is about **800×** denser than air, so even slow currents carry lots of energy.
+? Tidal power is predictable because tides follow the … | *Moon | wind
+? Water is about … times denser than air | *800 | 8
+? A tidal barrage traps water at … tide | *high | low
 
 @ milankovitch-12 | 🌍 Earth & space | Ice age cycles
 Slow changes in Earth's orbit (**Milankovitch cycles**) pace the ice ages:
@@ -74,14 +77,16 @@ Slow changes in Earth's orbit (**Milankovitch cycles**) pace the ice ages:
 🧪 lab: seasons
 ? Ice ages have been paced by changes in Earth's … | *orbit and tilt | magnetic field
 ? Earth's tilt cycles over about … | *41,000 years | 1,000 years
-? Today's warming is happening … than Milankovitch changes | *much faster | at the same speed
+? Precession is a slow … of Earth's axis | *wobble | flip
 
-@ climate-models-12 | 🌍 Earth & space | Climate models
-Climate models divide the planet into a **3D grid** and use the laws of physics for air, oceans, ice and sunlight. Scientists test them by **hindcasting** — checking that they reproduce past climate.
-Future projections depend on how much greenhouse gas we emit (**scenarios**).
-? Models are tested by checking they reproduce … | *past climate | tomorrow's weather exactly
-? Climate models are built on the laws of … | *physics | chance
-? Projections differ mostly because of different … | *emission scenarios | grid colors
+@ energy-storage-12 | ⚡ Physics | Storing energy: batteries and pumped hydro
+Electricity has to be used the moment it's made, so the grid stores extra energy for later:
+- **Pumped hydro:** pump water uphill when power is spare, let it fall through turbines when needed (about **70–80%** comes back). It's the largest kind of grid storage.
+- **Batteries:** store energy chemically; respond in milliseconds.
+- **Flywheels:** store it as spinning motion.
+? Pumped hydro stores energy as … | *gravitational potential energy | heat
+? About how much of the stored energy comes back from pumped hydro? | *70–80% | 100% | 10%
+? Storage is needed because sun and wind … | *vary through the day | never stop
 
 @ sea-level-12 | 🌍 Earth & space | Rising seas
 Sea level rises from **thermal expansion** (warm water takes more space) and **melting land ice** (glaciers, Greenland, Antarctica). Melting **floating** sea ice barely changes sea level — like ice melting in a glass.
@@ -166,12 +171,15 @@ They pack lots of energy, but damaged cells can overheat and catch **fire**.
 ? Charging a lithium-ion battery moves the ions … | *back to the anode | out of the battery
 ? A swollen, damaged phone battery is a … risk | *fire | magnet
 
-@ carbon-capture-12 | 🧪 Chemistry | Capturing carbon
-**Carbon capture** grabs CO₂ from smokestacks or directly from the air (**direct air capture**), then stores it deep underground or turns it into products. Forests, soils and wetlands capture carbon naturally.
-It's still expensive, so cutting emissions remains the main tool.
-? Direct air capture removes CO₂ from … | *the air | the ocean floor
-? Captured CO₂ can be stored … | *deep underground | in the ozone layer
-? Which captures carbon naturally? | *forests | volcanoes
+@ fuel-cell-12 | 🧪 Chemistry | Hydrogen fuel cells
+A **fuel cell** combines **hydrogen** and **oxygen** to make electricity: **2H₂ + O₂ → 2H₂O**.
+At the anode, H₂ splits into protons and electrons; the electrons travel through the circuit (the current), and at the cathode they join oxygen and protons to make **water** — the only exhaust.
+Hydrogen is made by **electrolysis** of water or from natural gas.
+
+🧪 lab: circuit
+? A hydrogen fuel cell's only exhaust is … | *water | smoke
+? In a fuel cell, the current is made of … | *electrons | hydrogen atoms
+? Hydrogen can be made from water by … | *electrolysis | freezing
 
 @ plastics-12 | 🧪 Chemistry | Plastics and recycling
 Plastics are **polymers** made mostly from oil. Codes **1 (PET)** and **2 (HDPE)** are the most recycled. Plastics break into **microplastics** that are now found from oceans to rain.

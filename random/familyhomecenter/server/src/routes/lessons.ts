@@ -38,6 +38,36 @@ function seed(list: LessonSeed[]) {
 // (new lists go on the end, so the lessons already added keep their order)
 seed([...GRAMMAR_LESSONS, ...MATH_LESSONS, ...HISTORY_LESSONS, ...MORE_MATH_LESSONS, ...EXTRA_LESSONS]);
 
+// ---- built-in lessons replaced by newer ones (2026-11-11: climate-change topics → how energy
+// is made from sun, wind, water, heat and hydrogen). Each old one is hidden ONCE, and only if no
+// parent edited it; it stays in the database with all its tries, and a parent can un-hide it.
+const RETIRED = [
+  's-7-climate-change-7',
+  's-8-climate-solutions-8',
+  's-9-range-shift-9',
+  's-10-ocean-acidification',
+  's-12-energy-budget',
+  's-12-feedbacks',
+  's-12-sustainability',
+  's-12-ice-cores-12',
+  's-12-climate-models-12',
+  's-12-carbon-capture-12',
+];
+function retire(ids: string[]) {
+  const seen = db.prepare('SELECT 1 FROM learning_lessons_retired WHERE lesson_id = ?');
+  const hide = db.prepare('UPDATE learning_lessons SET hidden = 1 WHERE id = ? AND builtin = 1 AND updated_by IS NULL');
+  const mark = db.prepare('INSERT INTO learning_lessons_retired (lesson_id, at) VALUES (?, ?)');
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    for (const id of ids) {
+      if (seen.get(id)) continue;
+      hide.run(id);
+      mark.run(id, now);
+    }
+  })();
+}
+retire(RETIRED);
+
 // ---- ⚙️ settings: default tokens per lesson and the pass mark, per subject ----
 interface LessonSettings {
   tokens: number;

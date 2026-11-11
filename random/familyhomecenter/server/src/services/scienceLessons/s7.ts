@@ -154,11 +154,16 @@ Resources like **oil**, **metals** and **fresh water** are found unevenly on Ear
 ? Groundwater pumped faster than rain refills it will … | *run low | grow
 ? Recycling metals helps because metal ores are … | *limited | unlimited
 
-@ climate-change-7 | 🌍 Earth & space | Climate change
-Burning fossil fuels adds **carbon dioxide** to the air. CO₂ traps heat (the **greenhouse effect**), raising Earth's average temperature. Effects: melting ice, rising seas, stronger heat waves.
-? Burning fossil fuels releases … | *carbon dioxide | oxygen
-? The greenhouse effect … heat | *traps | blocks all
-? One effect of global warming is … | *rising sea levels | more ice at the poles
+@ solar-panels-7 | ⚡ Physics | How solar panels work
+A solar panel is made of **solar cells** — thin layers of **silicon**. When sunlight (photons) hits a cell, it knocks **electrons** loose, and an electric field built into the cell pushes them one way: an **electric current**.
+- Panels make **direct current (DC)**; an **inverter** changes it to the **AC** used in homes.
+- Most panels turn about **20%** of the sunlight into electricity.
+- They make the most power when facing the Sun straight on, with no shade.
+
+🧪 lab: light
+? Solar cells are mostly made of … | *silicon | copper
+? Sunlight knocks loose … in a solar cell | *electrons | protons
+? An inverter changes the panel's DC into … | *AC | heat
 
 @ seasons-7 | 🌍 Earth & space | The reason for the seasons
 Seasons are caused by Earth's **23.5° tilt**, not distance from the Sun (Earth is actually **closest** to the Sun in January!). The tilted hemisphere gets **more direct** sunlight and **longer days**.
