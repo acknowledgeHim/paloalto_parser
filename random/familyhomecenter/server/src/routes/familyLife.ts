@@ -4,6 +4,7 @@ import { db } from '../db.js';
 import { todayStr } from '../utils/recurrence.js';
 import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
 import { addWeeklyReportSection } from '../services/weeklyReport.js';
+import { linkedKeys, matchPeople, peopleFor, personExists, setPerson, type PersonKind } from '../services/gratitudePeople.js';
 
 /**
  * Family life: 📔 journal & 🫙 gratitude jar, 📏 height chart, 📝 sticky notes, and 🏠 who's home.
@@ -45,11 +46,43 @@ journalRouter.get('/', (req, res) => {
   );
 });
 
-/** GET /jar — everyone's gratitude notes. */
+/** Gratitude notes with who each is about. */
+const withPeople = (rows: Entry[]) => {
+  const people = peopleFor(rows);
+  return rows.map((e) => ({ ...e, people: people.get(e.id) ?? [] }));
+};
+const KINDS: PersonKind[] = ['member', 'relative'];
+
+/** GET /jar — everyone's gratitude notes, each with who it's about. */
 journalRouter.get('/jar', (_req, res) => {
-  res.json(
-    db.prepare(`SELECT * FROM journal_entries WHERE kind = 'gratitude' AND hidden_at IS NULL ORDER BY created_at DESC LIMIT 400`).all()
-  );
+  res.json(withPeople(db.prepare(`SELECT * FROM journal_entries WHERE kind = 'gratitude' AND hidden_at IS NULL ORDER BY created_at DESC LIMIT 400`).all() as Entry[]));
+});
+
+/** GET /jar/about?kind=member|relative&id= — the notes about someone (for their page). A relative
+ *  linked to a household member counts as the same person. */
+journalRouter.get('/jar/about', (req, res) => {
+  const kind = String(req.query.kind) as PersonKind;
+  const id = String(req.query.id ?? '');
+  if (!KINDS.includes(kind) || !id) return res.status(400).json({ error: 'kind (member or relative) and id' });
+  const keys = linkedKeys(kind, id);
+  const all = withPeople(db.prepare(`SELECT * FROM journal_entries WHERE kind = 'gratitude' AND hidden_at IS NULL ORDER BY created_at DESC`).all() as Entry[]);
+  res.json(all.filter((e) => e.people.some((p) => keys.has(`${p.kind}:${p.id}`))).slice(0, 200));
+});
+
+/** GET /jar/match?text=&writer_id= — who a note being written would be about (by name), to show as it's typed. */
+journalRouter.get('/jar/match', (req, res) => {
+  res.json(matchPeople(String(req.query.text ?? '').slice(0, 5000), String(req.query.writer_id ?? '')).map((c) => ({ kind: c.kind, id: c.id, name: c.name, auto: true })));
+});
+
+/** PUT /:id/people { kind, person_id, tagged, acting_member_id } — the writer or a parent says who a note is about. */
+journalRouter.put('/:id/people', (req, res) => {
+  const e = db.prepare('SELECT * FROM journal_entries WHERE id = ?').get(req.params.id) as Entry | undefined;
+  if (!e || e.kind !== 'gratitude') return res.status(404).json({ error: 'not found' });
+  const { kind, person_id, tagged, acting_member_id } = req.body ?? {};
+  if (!isSelfOrParent(req, e.family_member_id, acting_member_id)) return res.status(403).json({ error: 'Only the writer or a parent can' });
+  if (!KINDS.includes(kind) || !personExists(kind, String(person_id))) return res.status(400).json({ error: 'No such person' });
+  setPerson(e.id, kind, String(person_id), Boolean(tagged), acting_member_id ?? null);
+  res.json(withPeople([e])[0]);
 });
 
 /** GET /on-this-day?family_member_id=&acting_member_id= — the same day in years before: the jar,
@@ -94,7 +127,11 @@ journalRouter.post('/', (req, res) => {
     `INSERT INTO journal_entries (id, family_member_id, kind, date, text, mood, drawing, created_at)
      VALUES (@id, @family_member_id, @kind, @date, @text, @mood, @drawing, @created_at)`
   ).run(entry);
-  res.status(201).json(entry);
+  // 🫙 who it's about, picked by hand (names in it match on their own): [{ kind, id, tagged }]
+  if (entry.kind === 'gratitude' && Array.isArray(req.body?.people))
+    for (const p of req.body.people.slice(0, 30))
+      if (KINDS.includes(p?.kind) && personExists(p.kind, String(p.id))) setPerson(entry.id, p.kind, String(p.id), p.tagged !== false, acting_member_id ?? null);
+  res.status(201).json(entry.kind === 'gratitude' ? withPeople([entry])[0] : entry);
 });
 
 /** POST /:id/hide { acting_member_id } — the writer or a parent takes it off the page (kept). */

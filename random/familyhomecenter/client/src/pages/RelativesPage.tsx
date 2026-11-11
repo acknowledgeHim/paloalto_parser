@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ThankfulFor } from '../components/GratitudePeople.js';
 import { api, type Person } from '../api/client.js';
 import { PhotoPicker } from '../components/PhotoPicker.js';
 import { ThumbYear } from '../components/ThumbYear.js';
@@ -358,6 +359,8 @@ function RelativeView({ id }: { id: string }) {
           <p className="relatives__about">{r.about}</p>
         </section>
       )}
+
+      <ThankfulFor kind="relative" id={r.id} name={r.nickname || r.name} />
 
       <section className="panel">
         <h2>💬 Memories</h2>

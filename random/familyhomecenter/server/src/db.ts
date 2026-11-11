@@ -1182,6 +1182,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS journal_entries_member ON journal_entries(family_member_id, date);
 `);
 
+// 🫙 Who a gratitude-jar note is about, set by hand (services/gratitudePeople.ts): tagged = 1 adds
+// them, 0 takes off a name match that's wrong. Name matches themselves aren't stored. New table only;
+// no foreign keys, so removing someone never removes these rows.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS journal_entry_people (
+    entry_id TEXT NOT NULL,
+    person_kind TEXT NOT NULL,
+    person_id TEXT NOT NULL,
+    tagged INTEGER NOT NULL,
+    set_by TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (entry_id, person_kind, person_id)
+  );
+  CREATE INDEX IF NOT EXISTS journal_entry_people_person ON journal_entry_people(person_kind, person_id);
+`);
+
 // 📏 Height chart: each measurement, in inches, with an optional photo.
 db.exec(`
   CREATE TABLE IF NOT EXISTS heights (

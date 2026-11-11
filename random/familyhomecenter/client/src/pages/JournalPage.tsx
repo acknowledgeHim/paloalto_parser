@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { api, type FamilyMember, type JournalEntry } from '../api/client.js';
+import { api, type FamilyMember, type JournalEntry, type JournalPerson } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { DrawPad } from '../components/DrawPad.js';
+import { PeopleChips, SLIP_COLORS, usePeopleChoices } from '../components/GratitudePeople.js';
 
 const MOODS = ['🤩', '😀', '🙂', '😐', '😴', '😢', '😡', '🤒'];
-const SLIP_COLORS = ['#fff3bf', '#d3f9d8', '#d0ebff', '#ffdeeb', '#e5dbff', '#ffe8cc'];
 const longDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 const VIEW_KEY = 'familyhomecenter.journal.view';
 
@@ -177,16 +177,52 @@ function Jar() {
   const [text, setText] = useState('');
   const [picked, setPicked] = useState<JournalEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const choices = usePeopleChoices();
+  // 💛 who the note being written is about: names found in it, plus/minus the writer's picks
+  const [matched, setMatched] = useState<JournalPerson[]>([]);
+  const [picks, setPicks] = useState<Array<JournalPerson & { tagged: boolean }>>([]);
+  const [editing, setEditing] = useState<string | null>(null);
   const load = () => api.get<JournalEntry[]>('/journal/jar').then(setSlips).catch(console.error);
   useEffect(() => {
     load();
   }, []);
+  useEffect(() => {
+    if (!text.trim()) return setMatched([]);
+    const t = setTimeout(() => {
+      api
+        .get<JournalPerson[]>(`/journal/jar/match?text=${encodeURIComponent(text)}&writer_id=${encodeURIComponent(activeProfile?.id ?? '')}`)
+        .then(setMatched)
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [text, activeProfile?.id]);
+  const k = (p: { kind: string; id: string }) => `${p.kind}:${p.id}`;
+  const about = [...matched.filter((m) => !picks.some((p) => k(p) === k(m))), ...picks.filter((p) => p.tagged)];
+  const pick1 = (p: JournalPerson, tagged: boolean) => setPicks((x) => [...x.filter((y) => k(y) !== k(p)), { ...p, auto: false, tagged }]);
+  const canTag = (s: JournalEntry) => !!activeProfile && (activeProfile.id === s.family_member_id || activeProfile.is_parent === 1);
+  const tag = async (s: JournalEntry, p: JournalPerson, tagged: boolean) => {
+    setError(null);
+    try {
+      const upd = await api.put<JournalEntry>(`/journal/${s.id}/people`, { kind: p.kind, person_id: p.id, tagged, acting_member_id: activeProfile?.id ?? null });
+      setSlips((all) => all.map((x) => (x.id === s.id ? upd : x)));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
   const add = async () => {
     if (!activeProfile) return setError('Pick who you are (top right) first');
     setError(null);
     try {
-      await api.post('/journal', { family_member_id: activeProfile.id, kind: 'gratitude', text, acting_member_id: activeProfile.id });
+      await api.post('/journal', {
+        family_member_id: activeProfile.id,
+        kind: 'gratitude',
+        text,
+        people: picks.map((p) => ({ kind: p.kind, id: p.id, tagged: p.tagged })),
+        acting_member_id: activeProfile.id,
+      });
       setText('');
+      setPicks([]);
+      setMatched([]);
       load();
     } catch (err) {
       setError((err as Error).message);
@@ -208,6 +244,7 @@ function Jar() {
               Put it in the jar
             </button>
           </div>
+          {text.trim() && <PeopleChips people={about} choices={choices} onRemove={(p) => pick1(p, false)} onAdd={(p) => pick1(p, true)} />}
           {error && <div className="settings-login__error">{error}</div>}
           {slips.length > 0 && (
             <button type="button" className="secondary" onClick={pick}>
@@ -220,6 +257,7 @@ function Jar() {
         <div className="modal-overlay" onClick={() => setPicked(null)}>
           <div className="jar__picked" style={{ background: SLIP_COLORS[picked.id.charCodeAt(0) % SLIP_COLORS.length] }}>
             <div className="jar__picked-text">“{picked.text}”</div>
+            {picked.people && picked.people.length > 0 && <div className="hint">💛 {picked.people.map((p) => p.name).join(', ')}</div>}
             <div className="hint">
               <MemberAvatar member={by(picked.family_member_id)} size={22} /> {by(picked.family_member_id)?.name} · {longDate(picked.date)}
             </div>
@@ -230,8 +268,21 @@ function Jar() {
         {slips.map((s, i) => (
           <div key={s.id} className="jar__slip" style={{ background: SLIP_COLORS[s.id.charCodeAt(0) % SLIP_COLORS.length], rotate: `${((i * 37) % 7) - 3}deg` }}>
             <div>{s.text}</div>
+            {editing === s.id ? (
+              <PeopleChips people={s.people ?? []} choices={choices} onRemove={(p) => void tag(s, p, false)} onAdd={(p) => void tag(s, p, true)} />
+            ) : (
+              (s.people?.length ?? 0) > 0 && <div className="jar__about">💛 {s.people!.map((p) => p.name).join(', ')}</div>
+            )}
             <div className="hint">
               <MemberAvatar member={by(s.family_member_id)} size={18} /> {by(s.family_member_id)?.name ?? ''} · {new Date(`${s.date}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              {canTag(s) && (
+                <>
+                  {' · '}
+                  <button type="button" className="link-button" onClick={() => setEditing(editing === s.id ? null : s.id)}>
+                    {editing === s.id ? '✓ done' : '💛 who?'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ))}

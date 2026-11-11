@@ -106,6 +106,8 @@ On Home (and **Family ▾ → 📝 Notes**), tap **＋ Note** to leave a note, o
 
 - **📔 Journal:** each person writes (or draws) a little each day and picks how they feel. Only they and parents can see it. On the same date in later years, **📅 On this day** shows what they wrote.
 - **🫙 Gratitude jar:** anyone puts in one thing they're thankful for, on a paper slip the whole family sees. **🎲 Pull one out** picks one at random.
+  - **💛 Who it's about:** a name in the note (a family member's, or a 👪 relative's name or nickname, like "Grandma Jo") tags that person on its own. This works for old notes too, and for people added later. While typing, the tags show under the box: ✕ takes one off, **＋ someone** adds one. On a slip, **💛 who?** (the writer or a parent) changes them later. Names that are also everyday words (Will, May, Grace, Joy …) only count with a capital letter. The writer is never tagged by their own name.
+  - Each person's 👤 page, and each relative's page, has **🫙 Thankful for …** with the notes about them. A relative linked to a household profile counts as the same person.
 - **In the weekly report:** it says how many days they wrote (with their moods, but never the words) and what they were grateful for.
 - **Taking something out:** **Take out** hides an entry. It's kept, never deleted.
 

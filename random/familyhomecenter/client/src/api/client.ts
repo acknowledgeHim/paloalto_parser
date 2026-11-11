@@ -391,6 +391,14 @@ export interface JournalEntry {
   mood: string | null;
   drawing: string | null;
   created_at: string;
+  /** 🫙 gratitude notes: who it's about (names in it match on their own; auto = matched by name) */
+  people?: JournalPerson[];
+}
+export interface JournalPerson {
+  kind: 'member' | 'relative';
+  id: string;
+  name: string;
+  auto: boolean;
 }
 export interface HeightRow {
   id: string;

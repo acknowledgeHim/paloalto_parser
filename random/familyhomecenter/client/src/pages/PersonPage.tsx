@@ -13,6 +13,7 @@ import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { MyPhotoMemorySettings } from '../components/Birthdays.js';
 import { LearningProgress } from './LearningProgressPage.js';
 import { TokenWallet } from '../components/TokenWallet.js';
+import { ThankfulFor } from '../components/GratitudePeople.js';
 import { canEditHistoricalTask, canEditTask, isTaskDoneFor, sortForColumn } from '../utils/tasks.js';
 import { parseTimeOfDaySlots, timeOfDayIcon } from '../utils/timeOfDay.js';
 
@@ -209,6 +210,9 @@ export function PersonPage() {
           <LearningProgress memberId={member.id} />
         </section>
       )}
+
+      {/* 🫙 Gratitude-jar notes about them (by name, or tagged) — the jar is the whole family's. */}
+      <ThankfulFor kind="member" id={member.id} name={member.name} />
 
       {/* Their own time online (Internet page) — only for someone with a device set up there. */}
       <section className="panel" style={showInternet ? undefined : { display: 'none' }}>
