@@ -7,5 +7,7 @@ import { SM_4 } from './s4.js';
 import { SM_5 } from './s5.js';
 import { SM_6 } from './s6.js';
 import { SM_7 } from './s7.js';
+import { SM_8 } from './s8.js';
+import { SM_9 } from './s9.js';
 
-export const SCIENCE_MORE_TEXT: string[] = [SM_K, SM_1, SM_2, SM_3, SM_4, SM_5, SM_6, SM_7, '', '', '', '', ''];
+export const SCIENCE_MORE_TEXT: string[] = [SM_K, SM_1, SM_2, SM_3, SM_4, SM_5, SM_6, SM_7, SM_8, SM_9, '', '', ''];
