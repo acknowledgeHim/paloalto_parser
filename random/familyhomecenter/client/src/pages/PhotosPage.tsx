@@ -15,6 +15,7 @@ import { MemberAvatar, avatarChanged } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { PhotoPlaceInfo } from '../components/PhotoPlaceInfo.js';
 import { PhotoMap } from '../components/PhotoMap.js';
+import { PhotoYearPanel } from '../components/PhotoYearPanel.js';
 import { AddPhotos } from '../components/AddPhotos.js';
 import { PhotoInfoTags, PhotoQualityTags } from '../components/PhotoQualityOptions.js';
 
@@ -634,6 +635,7 @@ export function PhotosPage() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [albumPanel, setAlbumPanel] = useState<'viewer' | 'selection' | null>(null);
+  const [yearPanel, setYearPanel] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [albumError, setAlbumError] = useState<string | null>(null);
@@ -1018,6 +1020,9 @@ export function PhotosPage() {
             <button type="button" className="secondary" disabled={selected.size === 0} onClick={() => setAlbumPanel(albumPanel === 'selection' ? null : 'selection')}>
               📁 Albums…
             </button>
+            <button type="button" className="secondary" disabled={selected.size === 0} onClick={() => setYearPanel(!yearPanel)}>
+              📅 Set year…
+            </button>
             <button
               type="button"
               className="secondary"
@@ -1061,6 +1066,23 @@ export function PhotosPage() {
       </div>
       {selecting && albumPanel === 'selection' && selected.size > 0 && (
         <AlbumChecklist albumsApi={albumsApi} photoIds={[...selected]} onDone={() => setAlbumPanel(null)} />
+      )}
+      {selecting && yearPanel && selected.size > 0 && (
+        <PhotoYearPanel
+          photoIds={[...selected]}
+          onDone={(changed) => {
+            setYearPanel(false);
+            setDetails((m) => {
+              if (!m) return m;
+              const next = new Map(m);
+              for (const c of changed) {
+                const cur = next.get(c.id);
+                if (cur) next.set(c.id, { ...cur, taken_at: c.taken_at, year_fixed: c.year_fixed });
+              }
+              return next;
+            });
+          }}
+        />
       )}
 
       {tab === 'map' && (

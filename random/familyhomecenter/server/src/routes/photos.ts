@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import path from 'node:path';
-import { listPhotos, listVisiblePhotos, hiddenPhotoPaths, getOrCreateThumbnail, photoIdFor, findPhotoById } from '../services/photos.js';
+import { listPhotos, listVisiblePhotos, hiddenPhotoPaths, getOrCreateThumbnail, photoIdFor, findPhotoById, photoPathsById } from '../services/photos.js';
 import { db } from '../db.js';
 import { getPhotoDate } from '../services/photoDates.js';
 import { mapWithConcurrency } from '../services/movieSelection.js';
@@ -222,6 +222,38 @@ photosRouter.get(
       }
     }
     res.json(out);
+  })
+);
+
+/**
+ * PUT /dates { photo_ids, year, month?, acting_member_id } — 📅 set the year (and maybe month) on
+ * many photos at once, e.g. old scans whose date is just when they were copied. Kept in the
+ * database with the rest of the hand-set place/date (their place stays as it was); the photo files
+ * are never changed. year null = back to what each photo says.
+ */
+photosRouter.put(
+  '/dates',
+  asyncHandler(async (req, res) => {
+    const b = req.body ?? {};
+    const ids: string[] = Array.isArray(b.photo_ids) ? [...new Set(b.photo_ids.map(String))].slice(0, 5000) as string[] : [];
+    if (!ids.length) return res.status(400).json({ error: 'Pick some photos first' });
+    const year = b.year === '' || b.year == null ? null : Math.round(Number(b.year));
+    if (year !== null && !(year >= 1826 && year <= new Date().getFullYear() + 1)) return res.status(400).json({ error: "That year doesn't look right" });
+    const month = year === null || b.month === '' || b.month == null ? null : Math.round(Number(b.month));
+    if (month !== null && !(month >= 1 && month <= 12)) return res.status(400).json({ error: 'Month is 1–12' });
+    const pathOf = await photoPathsById();
+    const now = new Date().toISOString();
+    const by = typeof b.acting_member_id === 'string' ? b.acting_member_id : null;
+    const out: Array<{ id: string; taken_at: string; year_fixed: number | null }> = [];
+    for (const id of ids) {
+      const rel = pathOf.get(id);
+      if (!rel) continue;
+      const cur = placeEdit(rel);
+      // only the date changes; a place set by hand stays
+      savePlaceEdit({ path: rel, country: cur?.country ?? null, country_code: cur?.country_code ?? null, state: cur?.state ?? null, year, month, updated_at: now, updated_by: by });
+      out.push({ id, taken_at: (await getPhotoDate(path.join(config.photosDir, rel))).toISOString(), year_fixed: year });
+    }
+    res.json({ updated: out.length, photos: out });
   })
 );
 

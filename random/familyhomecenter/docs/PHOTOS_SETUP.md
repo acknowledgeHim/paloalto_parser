@@ -444,7 +444,11 @@ docs/MOVIES_LIBRARY.md). You can change it with `VIDEOS_DIR=` in `.env` or in
 
 The first of these that a photo has wins:
 
-1. **Set by hand:** ✏️ in the photo viewer (year, and optionally month).
+1. **Set by hand:** ✏️ in the photo viewer (year, and optionally month). For many at once (a box
+   of old scans, say): **☑ Select photos** → tap them (or **Select all** after filtering) →
+   **📅 Set year…** → type the year, optionally pick a month → **Save**. Only the year and month
+   change; the day and any place set by hand stay. **↺ Use each photo's own date** takes a hand-set
+   year off again.
 2. **Inside the photo:** its EXIF date taken.
 3. **Its folder:** a YEAR/Month folder it's in, such as `2025/August`, `2025/Aug`, `2019/Sept`,
    `2019/08`, or `2018-07 Beach`. A year-only folder (`2021/Christmas`) gives just the year.
