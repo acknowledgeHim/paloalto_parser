@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
@@ -18,7 +18,9 @@ import { isParentRequest, isSelfOrParent, sessionActor } from '../services/rewar
  * (Home, and a hello on each person's first visit of the day) and 📸 "photos of me from years ago"
  * for anyone who turns it on. Files are only pointed at (by path) — never copied, moved or changed.
  *
- * Parents add and edit relatives; anyone in the family can add memories and tag photos and movies.
+ * Parents add and edit relatives, and so does a kid a parent lets (Settings → Kids' access → 👪);
+ * someone linked to their own entry can edit that one. Only parents hide one or link a household
+ * profile. Anyone in the family can add memories and tag photos and movies.
  */
 export const relativesRouter = Router();
 
@@ -250,7 +252,18 @@ relativesRouter.get(
   })
 );
 
-// ---- add / edit (parents) ----
+// ---- add / edit (parents, a kid a parent lets, or someone on their own entry) ----
+/** Who may change relatives: 'parent' (everything), 'helper' (a kid with can_edit_relatives: add
+ *  and edit anyone), 'self' (their own linked entry), or null. */
+function editorOf(req: Request, r: Relative | null): 'parent' | 'helper' | 'self' | null {
+  const acting = req.body?.acting_member_id;
+  if (isParentRequest(req, acting)) return 'parent';
+  const actor = sessionActor(req, acting);
+  if (!actor) return null;
+  if (db.prepare('SELECT 1 FROM family_members WHERE id = ? AND can_edit_relatives = 1').get(actor)) return 'helper';
+  return r && r.family_member_id === actor ? 'self' : null;
+}
+
 type Fields = Partial<Record<'name' | 'nickname' | 'relation' | 'birth_date' | 'birth_place' | 'death_date' | 'death_place' | 'about' | 'person_id' | 'family_member_id', string | null>> & { hidden?: boolean };
 function clean(b: Fields, id: string | null): Record<string, string | number | null> | string {
   const out: Record<string, string | number | null> = {};
@@ -291,10 +304,13 @@ function clean(b: Fields, id: string | null): Record<string, string | number | n
   return out;
 }
 
-/** POST / { name, … } (parents) */
+/** POST / { name, … } (parents, or a kid a parent lets) */
 relativesRouter.post('/', (req, res) => {
-  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can add relatives' });
-  const v = clean({ name: '', ...req.body }, null);
+  const who = editorOf(req, null);
+  if (!who) return res.status(403).json({ error: 'Only a parent (or a kid a parent lets) can add relatives' });
+  // linking a household profile and hiding are for parents
+  const body = who === 'parent' ? req.body : { ...req.body, family_member_id: undefined, hidden: undefined };
+  const v = clean({ name: '', ...body }, null);
   if (typeof v === 'string') return res.status(400).json({ error: v });
   const id = uuidv4();
   const now = new Date().toISOString();
@@ -309,12 +325,15 @@ relativesRouter.post('/', (req, res) => {
   res.status(201).json(summary(relOf(id)!));
 });
 
-/** PUT /:id { …fields, hidden } (parents) — nothing is deleted; hidden takes them off the list. */
+/** PUT /:id { …fields, hidden } — nothing is deleted; hidden (parents only) takes them off the list. */
 relativesRouter.put('/:id', (req, res) => {
   const r = relOf(req.params.id);
   if (!r) return res.status(404).json({ error: 'not found' });
-  if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can change this' });
-  const v = clean(req.body ?? {}, r.id);
+  const who = editorOf(req, r);
+  if (!who) return res.status(403).json({ error: 'Only a parent can change this' });
+  if (who !== 'parent' && req.body?.hidden !== undefined) return res.status(403).json({ error: 'Only a parent can hide or show a relative' });
+  // linking a household profile is for parents (the form sends it along; it's just left as it is)
+  const v = clean(who === 'parent' ? req.body ?? {} : { ...req.body, family_member_id: undefined }, r.id);
   if (typeof v === 'string') return res.status(400).json({ error: v });
   const cols = Object.keys(v);
   if (cols.length)
@@ -381,14 +400,14 @@ relativesRouter.post(
   })
 );
 
-/** PUT /:id/cover { photo_id | null, acting_member_id } (parents) — their default picture, one of
+/** PUT /:id/cover { photo_id | null, acting_member_id } (whoever may edit them) — their default picture, one of
  *  the photos on their page; null goes back to the usual one. The photo itself isn't touched. */
 relativesRouter.put(
   '/:id/cover',
   asyncHandler(async (req, res) => {
     const r = relOf(req.params.id);
     if (!r) return res.status(404).json({ error: 'not found' });
-    if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can change this' });
+    if (!editorOf(req, r)) return res.status(403).json({ error: 'Only a parent can change this' });
     let cover: string | null = null;
     if (req.body?.photo_id) {
       const p = (await photoPathsById()).get(String(req.body.photo_id));

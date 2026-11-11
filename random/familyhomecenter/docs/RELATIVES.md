@@ -17,15 +17,23 @@ they're in.
   how household members get a birthday, and how "photos of me" knows which photos they're in. One
   profile per relative.
 
-Parents add and edit relatives; **🙈 Hide** takes one off the list (nothing is deleted — **Show
-hidden** brings them back).
+Who can change relatives:
+
+| | Add | Edit | Link a household profile | 🙈 Hide / show |
+|---|---|---|---|---|
+| Parents | ✅ | ✅ anyone | ✅ | ✅ |
+| A kid a parent lets (Settings → Kids' access → **👪 Can add and edit relatives**; off by default) | ✅ | ✅ anyone | — | — |
+| Anyone whose profile is linked to their own entry | — | ✅ just their own | — | — |
+
+**🙈 Hide** takes one off the list (nothing is deleted — **Show hidden** brings them back). Picking
+**⭐ their picture** goes with editing them.
 
 ## Memories, photos and home movies (anyone)
 
 - **💬 Memories** — anyone can add one; whoever wrote it (or a parent) can edit or hide it.
 - **📷 Photos** — the linked face's photos, plus **＋ Tag photos** (the usual photo picker). **✕**
   takes a photo off this relative's page only: the photo, its face names and the file are untouched.
-- **⭐ Their picture** (parents) — tap ☆ on any of their photos to make it the picture on the
+- **⭐ Their picture** (whoever can edit them) — tap ☆ on any of their photos to make it the picture on the
   Relatives list and at the top of their page. Tap ⭐ again to go back to the usual one (the newest).
   If that photo is later taken off their page, the usual one comes back.
 - **🫙 Thankful for …** — gratitude-jar notes that name them (or are tagged to them).

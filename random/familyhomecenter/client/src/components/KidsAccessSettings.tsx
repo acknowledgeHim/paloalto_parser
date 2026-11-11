@@ -104,6 +104,24 @@ export function KidsAccessSettings() {
                   🛒 Can add items to the grocery list
                 </label>
               )}
+              {row.id !== 'guest' && (
+                <label className="kids-access__place">
+                  <input
+                    type="checkbox"
+                    checked={members.find((m) => m.id === row.id)?.can_edit_relatives === 1}
+                    onChange={async (e) => {
+                      setError(null);
+                      try {
+                        await api.put(`/family-members/${row.id}/can-edit-relatives`, { allowed: e.target.checked });
+                        await refresh();
+                      } catch (err) {
+                        setError((err as Error).message);
+                      }
+                    }}
+                  />
+                  👪 Can add and edit relatives (only parents can hide one)
+                </label>
+              )}
               <div className="kids-access__sections">
                 {SECTIONS.map((sec) => (
                   <label key={sec.key}>

@@ -73,6 +73,15 @@ familyMembersRouter.put('/:id/can-add-grocery', requireAdmin, (req, res) => {
   res.json(toPublic(db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as FamilyMember));
 });
 
+/** PUT /:id/can-edit-relatives { allowed } — a parent letting a kid add and edit 👪 relatives. */
+familyMembersRouter.put('/:id/can-edit-relatives', requireAdmin, (req, res) => {
+  const { changes } = db
+    .prepare('UPDATE family_members SET can_edit_relatives = ? WHERE id = ?')
+    .run((req.body as { allowed?: unknown }).allowed ? 1 : 0, req.params.id);
+  if (!changes) return res.status(404).json({ error: 'not found' });
+  res.json(toPublic(db.prepare('SELECT * FROM family_members WHERE id = ?').get(req.params.id) as FamilyMember));
+});
+
 familyMembersRouter.post('/reorder', requireAdmin, (req, res) => {
   const { ids } = req.body as { ids?: string[] };
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });

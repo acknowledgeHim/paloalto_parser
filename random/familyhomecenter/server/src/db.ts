@@ -944,6 +944,8 @@ for (const [table, column] of [
   ['family_members', 'can_place_tasks INTEGER NOT NULL DEFAULT 0'],
   // 🛒 A kid a parent lets add to the grocery list (parents always can).
   ['family_members', 'can_add_grocery INTEGER NOT NULL DEFAULT 0'],
+  // 👪 A kid a parent lets add and edit relatives (parents always can; hiding one stays parents-only).
+  ['family_members', 'can_edit_relatives INTEGER NOT NULL DEFAULT 0'],
   // Taking turns: the people (JSON array of ids, in order) a chore rotates through, one per time
   // it comes up, counting from rotation_start (whose turn is rotation[0]). See taskQueries.ts.
   ['tasks', 'rotation TEXT'],

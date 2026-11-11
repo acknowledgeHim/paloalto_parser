@@ -65,6 +65,8 @@ export function RelativesPage() {
 function RelativesList() {
   const { activeProfile, members } = useFamilyMembers();
   const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
+  // a kid a parent lets (Settings → Kids' access) can add relatives too
+  const canAdd = isParent || activeProfile?.can_edit_relatives === 1;
   const [list, setList] = useState<Relative[] | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -96,19 +98,19 @@ function RelativesList() {
       )}
       <div className="relatives__bar">
         <input type="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search relatives" />
+        {canAdd && (
+          <button type="button" onClick={() => setAdding(true)}>
+            ＋ Add a relative
+          </button>
+        )}
         {isParent && (
-          <>
-            <button type="button" onClick={() => setAdding(true)}>
-              ＋ Add a relative
-            </button>
-            <label className="relatives__check">
-              <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show hidden
-            </label>
-          </>
+          <label className="relatives__check">
+            <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} /> Show hidden
+          </label>
         )}
       </div>
       {list === null && <p className="hint">Loading…</p>}
-      {list && list.length === 0 && <p className="hint">{isParent ? 'Nobody yet — add grandparents, aunts, uncles, cousins…' : 'Nobody yet — a parent can add relatives.'}</p>}
+      {list && list.length === 0 && <p className="hint">{canAdd ? 'Nobody yet — add grandparents, aunts, uncles, cousins…' : 'Nobody yet — a parent can add relatives.'}</p>}
       <div className="relatives__grid">
         {shown.map((r) => (
           <Link key={r.id} to={`/relatives/${r.id}`} className={`panel relatives__card${r.hidden ? ' is-hidden' : ''}`}>
@@ -143,6 +145,8 @@ function RelativesList() {
 
 function RelativeForm({ relative, onClose, onSaved }: { relative?: Relative; onClose: () => void; onSaved: (r: Relative) => void }) {
   const { activeProfile, members } = useFamilyMembers();
+  // linking a household profile is for parents (the server keeps it as it is for anyone else)
+  const isParent = activeProfile?.is_parent === 1 || members.every((m) => m.is_parent !== 1);
   const [people, setPeople] = useState<Person[]>([]);
   const [all, setAll] = useState<Relative[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -251,19 +255,21 @@ function RelativeForm({ relative, onClose, onSaved }: { relative?: Relative; onC
           </select>
           <span className="hint">Every photo with this face counts as one of theirs.</span>
         </label>
-        <label>
-          👤 Someone in the household?
-          <select value={d.family_member_id} onChange={set('family_member_id')}>
-            <option value="">— no —</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id} disabled={linkedTo.has(m.id)}>
-                {m.name}
-                {linkedTo.has(m.id) ? ` (linked to ${linkedTo.get(m.id)})` : ''}
-              </option>
-            ))}
-          </select>
-          <span className="hint">Link a parent’s or kid’s profile to their own entry here: that gives them a birthday and their “photos of me” on Home.</span>
-        </label>
+        {isParent && (
+          <label>
+            👤 Someone in the household?
+            <select value={d.family_member_id} onChange={set('family_member_id')}>
+              <option value="">— no —</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id} disabled={linkedTo.has(m.id)}>
+                  {m.name}
+                  {linkedTo.has(m.id) ? ` (linked to ${linkedTo.get(m.id)})` : ''}
+                </option>
+              ))}
+            </select>
+            <span className="hint">Link a parent’s or kid’s profile to their own entry here: that gives them a birthday and their “photos of me” on Home, and lets them edit their own entry.</span>
+          </label>
+        )}
         {error && <div className="settings-login__error">{error}</div>}
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>
@@ -316,7 +322,9 @@ function RelativeView({ id }: { id: string }) {
   if (!r) return <p className="hint">Loading…</p>;
   const photos = canSee('photos') ? r.photos : [];
   const shownMemories = r.memories.filter((m) => !m.hidden || isParent);
-  // 📷 their default picture: the one a parent picked (if it's still here), else the newest
+  // ✏️ parents, a kid a parent lets, or the person themselves (their profile is linked to this entry)
+  const canEdit = isParent || activeProfile?.can_edit_relatives === 1 || (acting !== null && r.family_member_id === acting);
+  // 📷 their default picture: the one picked (if it's still here), else the newest
   const coverId = photos.find((p) => p.id === r.cover_photo_id)?.id ?? photos[photos.length - 1]?.id;
   const setCover = (photoId: string | null) => void run(() => api.put(`/relatives/${r.id}/cover`, { photo_id: photoId, acting_member_id: acting }));
 
@@ -342,14 +350,16 @@ function RelativeView({ id }: { id: string }) {
           )}
           {r.member && <div className="hint">👤 {r.member.name}’s profile</div>}
           {r.person && <div className="hint">👥 Face in Photos: {r.person.name}</div>}
-          {isParent && (
+          {canEdit && (
             <div className="relatives__actions">
               <button type="button" className="secondary" onClick={() => setEditing(true)}>
                 ✏️ Edit
               </button>
-              <button type="button" className="link-button" onClick={() => void run(() => api.put(`/relatives/${r.id}`, { hidden: !r.hidden, acting_member_id: acting }))}>
-                {r.hidden ? '👁️ Show again' : '🙈 Hide'}
-              </button>
+              {isParent && (
+                <button type="button" className="link-button" onClick={() => void run(() => api.put(`/relatives/${r.id}`, { hidden: !r.hidden, acting_member_id: acting }))}>
+                  {r.hidden ? '👁️ Show again' : '🙈 Hide'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -426,7 +436,7 @@ function RelativeView({ id }: { id: string }) {
           <p className="hint">
             {r.person ? `Every photo with ${r.person.name}’s face (from 👥 People), plus any tagged here. ` : 'Link their face in ✏️ Edit to bring in every photo they’re in, or tag photos here. '}
             ✕ takes a photo off this page only — the photo itself isn’t touched.
-            {isParent && photos.length > 1 && ' ⭐ makes a photo their picture on the Relatives list and up top.'}
+            {canEdit && photos.length > 1 && ' ⭐ makes a photo their picture on the Relatives list and up top.'}
           </p>
           <button type="button" className="secondary" onClick={() => setPicking(true)}>
             ＋ Tag photos
@@ -438,7 +448,7 @@ function RelativeView({ id }: { id: string }) {
                   <img src={`/api/photos/${p.id}/image`} alt="" loading="lazy" />
                   <ThumbYear photoId={p.id} />
                 </button>
-                {isParent && photos.length > 1 && (
+                {canEdit && photos.length > 1 && (
                   <button
                     type="button"
                     className={`relatives__star${r.cover_photo_id === p.id ? ' is-on' : ''}`}

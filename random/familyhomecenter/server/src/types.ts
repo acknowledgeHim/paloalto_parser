@@ -16,6 +16,8 @@ export interface FamilyMember {
   can_place_tasks?: 0 | 1;
   /** A kid a parent lets add to the grocery list (parents always can). */
   can_add_grocery?: 0 | 1;
+  /** A kid a parent lets add and edit 👪 relatives (parents always can). */
+  can_edit_relatives?: 0 | 1;
   /** Sound id (client/src/utils/sounds.ts preset list) to play when this person completes a task. */
   complete_sound: string | null;
   /** Prize Bank running totals — credited on completing a reward task, spent on star-cost prizes. */
