@@ -21,10 +21,10 @@ import type { FamilyMember } from '../types.js';
  */
 export const lessonsRouter = Router();
 
-export const LESSON_SUBJECTS = ['grammar', 'math', 'history'] as const;
+export const LESSON_SUBJECTS = ['grammar', 'math', 'history', 'science'] as const;
 const SUBJECTS = LESSON_SUBJECTS;
 type Subject = (typeof SUBJECTS)[number];
-const LABEL: Record<Subject, string> = { grammar: '📝 Grammar lesson', math: '➗ Math lesson', history: '🇺🇸 US History' };
+const LABEL: Record<Subject, string> = { grammar: '📝 Grammar lesson', math: '➗ Math lesson', history: '🇺🇸 US History', science: '🔬 Science' };
 
 // ---- built-in lessons: added once, never over a parent's edits ----
 function seed(list: LessonSeed[]) {
@@ -56,7 +56,7 @@ function readSettings(): Record<Subject, LessonSettings> {
     return v !== undefined && v !== null && Number.isFinite(n) && n >= lo && n <= hi ? n : d;
   };
   return Object.fromEntries(
-    SUBJECTS.map((s) => [s, { tokens: ok(saved[s]?.tokens, 0, 1000, s === 'history' ? 2 : 1), pass_pct: ok(saved[s]?.pass_pct, 10, 100, 80) }])
+    SUBJECTS.map((s) => [s, { tokens: ok(saved[s]?.tokens, 0, 1000, s === 'history' || s === 'science' ? 2 : 1), pass_pct: ok(saved[s]?.pass_pct, 10, 100, 80) }])
   ) as Record<Subject, LessonSettings>;
 }
 

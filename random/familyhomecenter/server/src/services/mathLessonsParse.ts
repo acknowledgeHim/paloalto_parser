@@ -16,13 +16,13 @@ export function parseMathLessons(grade: number, text: string): LessonSeed[] {
   return parseLessons('math', grade, text);
 }
 
-/** Same text form for any subject; ids are <m|g|h>-<grade>-<slug>. With shuffle, each question's
+/** Same text form for any subject; ids are <m|g|h|s>-<grade>-<slug>. With shuffle, each question's
  *  choices are put in a fixed but mixed-up order (so the right one isn't always in one place —
  *  the lesson text can list it first). */
 export function parseLessons(subject: LessonSeed['subject'], grade: number, text: string, opts: { shuffle?: boolean } = {}): LessonSeed[] {
   const out: LessonSeed[] = [];
   const g = grade === 0 ? 'k' : String(grade);
-  const prefix = subject === 'math' ? 'm' : subject === 'grammar' ? 'g' : 'h';
+  const prefix = subject === 'math' ? 'm' : subject === 'grammar' ? 'g' : subject === 'science' ? 's' : 'h';
   for (const chunk of text.split(/^@ /m).slice(1)) {
     const lines = chunk.replace(/\r/g, '').split('\n');
     const [slug, topic, title] = lines[0].split(' | ').map((s) => s.trim());

@@ -16,7 +16,7 @@ export interface QuizItem {
 }
 export interface LessonSeed {
   id: string;
-  subject: 'grammar' | 'math' | 'history';
+  subject: 'grammar' | 'math' | 'history' | 'science';
   grade: number;
   topic: string;
   title: string;

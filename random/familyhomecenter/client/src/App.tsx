@@ -33,7 +33,8 @@ import { HillHopperPage } from './games/HillHopperPage.js';
 import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { TinyTownPage } from './games/TinyTownPage.js';
 import { ResourceUsagePage } from './pages/ResourceUsagePage.js';
-import { GRAMMAR_LESSONS, HISTORY_LESSONS, LessonsPage, MATH_LESSONS } from './pages/LessonsPage.js';
+import { GRAMMAR_LESSONS, HISTORY_LESSONS, LessonsPage, MATH_LESSONS, SCIENCE_LESSONS } from './pages/LessonsPage.js';
+import { ScienceLabsPage } from './pages/ScienceLabsPage.js';
 import { MathPage } from './pages/MathPage.js';
 import { SpellingPage } from './pages/SpellingPage.js';
 import { GRAMMAR_GAME, SPELLCHECK_GAME, TapMistakesPage } from './pages/TapMistakesPage.js';
@@ -169,6 +170,8 @@ export function App() {
           <Route path="/math/lessons" element={<LessonsPage key="math" config={MATH_LESSONS} />} />
           <Route path="/grammar/lessons" element={<LessonsPage key="grammar" config={GRAMMAR_LESSONS} />} />
           <Route path="/history" element={<LessonsPage key="history" config={HISTORY_LESSONS} />} />
+          <Route path="/science" element={<LessonsPage key="science" config={SCIENCE_LESSONS} />} />
+          <Route path="/science/labs" element={<ScienceLabsPage />} />
           <Route path="/grammar" element={<TapMistakesPage key="grammar" game={GRAMMAR_GAME} />} />
           <Route path="/learning/settings" element={<LearningSettingsPage />} />
           <Route path="/learning/progress" element={<LearningProgressPage />} />

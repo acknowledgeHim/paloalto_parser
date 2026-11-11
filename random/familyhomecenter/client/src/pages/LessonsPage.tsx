@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
+import { LAB_LINE, LABS } from '../labs/catalog.js';
 import { useDraft } from '../utils/autosave.js';
 import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 import { Link } from 'react-router-dom';
@@ -6,7 +7,17 @@ import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT } from '../utils/learning.js';
 
-type Subject = 'grammar' | 'math' | 'history';
+/** 🧪 the science labs load only when a lesson shows one */
+const ScienceLab = lazy(() => import('../labs/index.js'));
+export function LabSlot({ id }: { id: string }) {
+  return (
+    <Suspense fallback={<p className="hint">🧪 Loading the lab…</p>}>
+      <ScienceLab id={id} />
+    </Suspense>
+  );
+}
+
+type Subject = 'grammar' | 'math' | 'history' | 'science';
 interface ListItem {
   id: string;
   grade: number;
@@ -99,6 +110,13 @@ export const HISTORY_LESSONS: LessonsConfig = {
   intro:
     'The Declaration of Independence, the Constitution, the Revolutionary War, the Civil War, and World Wars I and II. Read the lesson first, then take the quiz to earn 💎 tokens. Higher grades go into more detail.',
 };
+export const SCIENCE_LESSONS: LessonsConfig = {
+  subject: 'science',
+  title: '🔬 Science',
+  intro:
+    '⚡ Physics, 🧪 chemistry, 🧬 biology and 🌍 earth & space. Many lessons have a 🧪 lab to try — play with it, do its 🎯 goals, then take the quiz to earn 💎 tokens.',
+  practice: { to: '/science/labs', label: '🧪 All the labs' },
+};
 
 /** **bold** inside a line */
 function inline(s: string): ReactNode {
@@ -128,6 +146,13 @@ export function LessonBody({ text }: { text: string }) {
         };
         for (const raw of lines) {
           const l = raw.trim();
+          const lab = LAB_LINE.exec(l);
+          if (lab) {
+            flushPara();
+            flush();
+            out.push(<LabSlot key={out.length} id={lab[1]} />);
+            continue;
+          }
           const bullet = /^[-•]\s+(.*)$/.exec(l);
           const step = /^\d+\.\s+(.*)$/.exec(l);
           if (l.startsWith('## ')) {
@@ -638,8 +663,18 @@ function LessonEditor({ subject, id, grades, defaultTokens, onDone }: { subject:
         </label>
         <p className="hint">
           Write it like a note: <code>## </code> starts a heading, <code>- </code> a bullet, <code>1. </code> a numbered step, <code>**words**</code> bold, ✅ / ❌ a right / wrong example.
-          A blank line starts a new paragraph.
+          A blank line starts a new paragraph. A line <code>🧪 lab: pendulum</code> puts a science lab in the lesson.
         </p>
+        <details>
+          <summary>🧪 Labs you can put in a lesson</summary>
+          <ul className="hint">
+            {LABS.map((l) => (
+              <li key={l.id}>
+                <code>🧪 lab: {l.id}</code> — {l.name} ({l.about})
+              </li>
+            ))}
+          </ul>
+        </details>
         <details>
           <summary>Preview</summary>
           <LessonBody text={d.body} />
