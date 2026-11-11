@@ -13,5 +13,7 @@ import { S_9 } from './s9.js';
 import { S_10 } from './s10.js';
 import { S_11 } from './s11.js';
 import { S_12 } from './s12.js';
+import { SCIENCE_MORE_TEXT } from './more/index.js';
 
-export const SCIENCE_TEXT: string[] = [S_K, S_1, S_2, S_3, S_4, S_5, S_6, S_7, S_8, S_9, S_10, S_11, S_12];
+const BASE = [S_K, S_1, S_2, S_3, S_4, S_5, S_6, S_7, S_8, S_9, S_10, S_11, S_12];
+export const SCIENCE_TEXT: string[] = BASE.map((t, g) => t + '\n' + (SCIENCE_MORE_TEXT[g] ?? ''));
