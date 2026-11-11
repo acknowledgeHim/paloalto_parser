@@ -4,6 +4,10 @@ The **Meals → Grocery List** tab is a running "need to buy" list anyone in the
 Every night at midnight, the server can email the current list to whichever parents have an email
 address on file — this is optional and off by default.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). You need an email account that allows app passwords (e.g. Gmail with 2-Step Verification).
+
 ## 1. Set a parent's email
 
 Open the profile switcher (or Settings → family roster) → edit a parent → **Email**. Only parents

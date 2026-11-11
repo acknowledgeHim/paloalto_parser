@@ -5,6 +5,10 @@
 Prize Bank, Internet controls, and settings all live in `server/data/` on the Pi. Data only goes
 out for outside services *you* choose to set up, listed below with exactly what each one sends.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md).
+
 ## How this was checked
 
 Every outgoing connection was audited in the code, every installed package was scanned for

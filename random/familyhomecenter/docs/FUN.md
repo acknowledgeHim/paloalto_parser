@@ -1,5 +1,9 @@
 # Fun extras
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). The 📬 weekly report and ✅ approval emails need an email account set up (docs/GROCERY_EMAIL_SETUP.md), not software.
+
 ## 💎 Tokens
 
 Tokens are the app's own currency, kept apart from the Prize Bank's ⭐ stars (stars are for prizes).

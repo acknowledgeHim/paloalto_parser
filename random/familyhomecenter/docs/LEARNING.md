@@ -3,6 +3,13 @@
 A top-level menu: **⌨️ Typing** (see [TYPING.md](TYPING.md)), **🔤 Spelling**, and (parents)
 **⚙️ Grades & tokens**. Everything here earns 💎 tokens (see [FUN.md](FUN.md#-tokens)), not Prize Bank stars.
 
+## 🧰 What to install
+
+- Nothing for the lessons, math, spelling, grammar and science.
+- **🗣️ The voice** on screens that have none (often Chromium on the Pi):
+  `sudo apt install -y libttspico-utils` (Pico, the nicer voice) or `sudo apt install -y espeak-ng`.
+  ⚙️ Grades & tokens shows whether it's installed.
+
 ## 🎒 Grades and tokens (parents: 📚 Learning → ⚙️ Grades & tokens)
 
 Each section on this page folds down to its heading — tap it to open or close.

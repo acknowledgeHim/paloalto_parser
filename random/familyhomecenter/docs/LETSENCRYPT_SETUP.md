@@ -12,6 +12,11 @@ trusts automatically.
 - **Renews automatically.** Caddy renews the certificate about 30 days before it expires, with no
   cron job needed.
 
+## 🧰 What to install
+
+- Caddy and its DuckDNS module: the setup script in §2 installs both (`sudo ./scripts/setup-letsencrypt.sh …`). It needs `curl`, already on Raspberry Pi OS.
+- A free DuckDNS account (§1).
+
 ## 1. Get a DuckDNS name
 
 1. Go to [duckdns.org](https://www.duckdns.org) and sign in (Google, GitHub, etc.).

@@ -20,6 +20,12 @@ backups and the drives' health. Each run writes a status file you can check (ste
 
 ---
 
+## 🧰 What to install
+
+- `samba`, `restic`, `smartmontools`, `rsync`, `tmux` (§1: `sudo apt install -y samba restic smartmontools rsync tmux`).
+- Two USB drives (§0).
+- For the ▶ / ⏰ buttons in the app: a sudoers line and a small script (§9f).
+
 ## 0. What to buy
 
 - **Two 10 TB desktop USB drives that come with their own power brick**, e.g. WD Elements Desktop,

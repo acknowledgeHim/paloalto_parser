@@ -5,6 +5,10 @@ from the Pi, so phones on the home Wi-Fi don't need GitHub or an app store.
 Right now that's **📱 SMB Sync** (`random/smbsync_app`). It copies or moves
 photos, videos and files from a phone to a folder on an SMB share.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). The Pi downloads the app builds from GitHub (internet needed once per update), or a parent uploads them.
+
 ## Getting the files onto the Pi
 
 The phone app is built by GitHub Actions (`.github/workflows/smbsync_app.yml`)

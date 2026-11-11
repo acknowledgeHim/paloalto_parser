@@ -15,6 +15,10 @@ switches between the two looks on either page.
 color. It starts where they're standing and goes through the rooms of their next jobs, in order,
 up to the first job on another floor. The browser remembers whether it's on or off.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md).
+
 ## Using it
 
 - **Tap a room** to see its jobs and who is on each. Each person can check off their own copy

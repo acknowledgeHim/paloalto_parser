@@ -12,6 +12,10 @@ choices show up there — no change in the app needed.
 **Newer is better.** A newer emoji font still has every older emoji, so nothing already picked
 changes (some may look slightly redrawn). Chromium on the Pi handles the standard font fine.
 
+## 🧰 What to install
+
+- The system emoji font: `sudo apt install -y fonts-noto-color-emoji` (§2). Optional but recommended.
+
 ## 1. See what the Pi has
 
 On the Pi:

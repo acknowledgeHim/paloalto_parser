@@ -13,6 +13,13 @@ The steps:
 
 ---
 
+## 🧰 What to install
+
+- **On the Pi:** Caddy, for the HTTPS address the camera needs (§2: `sudo apt install -y caddy`).
+- **For 📹 camera clips:** `ffmpeg` to turn saved pictures into small videos (`sudo apt install -y ffmpeg`), and
+  `smbclient` only if clips are copied to an SMB share (`sudo apt install -y smbclient`).
+- **On the tablet:** Fully Kiosk Browser (from Google Play; §3), or plain Chrome without the extras.
+
 ## 1. Hardware
 
 **Best: a wall-mount "PoE" Android tablet** with a built-in network (RJ45) jack, about $150–250.

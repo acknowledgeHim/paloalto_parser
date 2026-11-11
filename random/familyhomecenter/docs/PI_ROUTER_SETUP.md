@@ -18,6 +18,12 @@ ISP ─ Border router ─ Wi-Fi router ─ devices     ISP ─ Border router ─
 Nothing here touches the app's data. The Pi gets a new address, though, so a few things that use
 its address are updated at the end (step 8).
 
+## 🧰 What to install
+
+- Pi-hole first (docs/PIHOLE_SETUP.md).
+- `nftables`, for the firewall (§3) — on Raspberry Pi OS already; `sudo apt install -y nftables` if not.
+- **Hardware:** a USB 3 gigabit Ethernet adapter (see *Before you start*).
+
 ## Before you start
 
 - **Hardware:** a **USB 3 gigabit Ethernet adapter** (about $15), because the Pi 5 has one Ethernet

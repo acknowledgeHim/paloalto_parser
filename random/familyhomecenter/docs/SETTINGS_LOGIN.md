@@ -1,5 +1,9 @@
 # Logging in
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md).
+
 By default, **nothing** in this app requires a login — that's deliberate for a home kiosk kids and
 guests use freely. Anyone can optionally set their own password, self-service, from the 🔑 icon
 next to their name in the profile switcher (top of every page):

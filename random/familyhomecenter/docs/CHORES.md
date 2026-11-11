@@ -1,5 +1,9 @@
 # Chores: routines, taking turns and "when needed"
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md).
+
 ## 🔢 Routine order
 
 On Chores & Tasks (👥 By person), the **🔢** button on someone's column puts their chores and

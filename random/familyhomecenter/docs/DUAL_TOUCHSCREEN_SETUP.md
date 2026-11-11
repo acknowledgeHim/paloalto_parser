@@ -13,6 +13,12 @@ TOUCHSCREEN_SETUP.md's Path B — so two screens need two kits and two Cat6
 runs). You'll need a micro-HDMI-to-HDMI adapter/cable for each of the Pi's two
 outputs feeding into each extender's transmitter.
 
+## 🧰 What to install
+
+- Everything from docs/PI_SETUP.md (Chromium) and docs/TOUCHSCREEN_SETUP.md.
+- `xrandr` and `xinput`, to lay out the screens and match each touch panel to its screen:
+  `sudo apt install -y x11-xserver-utils xinput` (often already there).
+
 ## 1. Confirm both displays are detected
 
 With both screens connected (directly or through their extenders), open a

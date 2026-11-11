@@ -4,6 +4,12 @@ This sets up 4 independent stereo zones from one Raspberry Pi + HiFiBerry DAC8x,
 play its own local-library music or Spotify Connect independently, or be grouped to play the same
 thing in sync-ish (see the note at the bottom).
 
+## 🧰 What to install
+
+- `mpd`, `alsa-utils` and `ffmpeg`: `sudo apt install -y mpd alsa-utils ffmpeg` (§2).
+- `librespot` for Spotify Connect: a download, not apt (§2).
+- The HiFiBerry DAC8x overlay (§1).
+
 ## 1. Wire it up and enable the DAC8x
 
 1. Attach the DAC8x HAT to the Pi's GPIO header, then wire your 4 pairs of hardwired speakers to its

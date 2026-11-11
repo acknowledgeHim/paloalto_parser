@@ -9,6 +9,10 @@ from `PHOTOS_DIR` and `MUSIC_LIBRARY_DIR` — the movie is a brand new file writ
 server's own data folder (`server/data/movies`), nothing is deleted, moved, or modified at the
 source.
 
+## 🧰 What to install
+
+- `ffmpeg`: `sudo apt install -y ffmpeg` (§1). Movies can't be made without it.
+
 ## 1. Install ffmpeg
 
 This is the one real setup step — ffmpeg is a system program this app doesn't bundle or install

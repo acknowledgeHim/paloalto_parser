@@ -4,6 +4,10 @@
 uncles, cousins, great-grandparents — with their dates, memories, and the photos and home movies
 they're in.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). Photos and home movies show here once Photos (docs/PHOTOS_SETUP.md) and Movies (docs/MOVIES_LIBRARY.md) are set up.
+
 ## A relative
 
 - **Name**, what the kids call them ("Grandma Jo"), how they're related ("Mom's mom").

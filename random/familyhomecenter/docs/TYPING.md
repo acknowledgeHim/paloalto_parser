@@ -1,5 +1,10 @@
 # ⌨️ Typing practice
 
+## 🧰 What to install
+
+- Nothing for typing practice in the app.
+- **Optional desktop typing games on the Pi:** `sudo apt install -y tuxtype klavaro` (bottom of this page).
+
 ## In the app: 🎵 Fun → ⌨️ Typing
 
 It works on any device with a keyboard. On a tablet, tap the typing area to bring up the on-screen

@@ -17,6 +17,12 @@ password manager that runs on the Pi.
 > forgotten, that vault is gone and its passwords need setting up again. Have each person write
 > theirs down somewhere safe; for younger kids, a parent can keep it in a sealed envelope.
 
+## 🧰 What to install
+
+- Docker and Vaultwarden: the setup script in §1 installs both (`sudo ./scripts/setup-vaultwarden.sh`).
+- Caddy, for HTTPS (docs/INTERCOM_SETUP.md or docs/LETSENCRYPT_SETUP.md); the script adds the vault to it.
+- The free Bitwarden apps or browser extensions on each person's devices (optional).
+
 ## 1. Install it on the Pi
 
 ```bash

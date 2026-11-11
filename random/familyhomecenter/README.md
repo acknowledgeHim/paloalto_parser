@@ -196,6 +196,42 @@ Optional integrations, each with its own guide:
 - [docs/BACKUP.md](docs/BACKUP.md) (`npm run backup` in `server/` — safe to run while the server's
   up; covers automating it with cron and restoring)
 
+## 🧰 What to install, feature by feature
+
+The app itself needs **Node.js 20 LTS** (and Chromium for the kiosk; docs/PI_SETUP.md). Everything
+else is only for the feature in its row — skip what you don't use. Each doc has the same list in
+its own **🧰 What to install** section.
+
+| Feature | Install on the Pi | Guide |
+|---|---|---|
+| The app + kiosk screen | Raspberry Pi OS 64-bit, `chromium-browser unclutter git`, Node.js 20 (`npm install` gets the rest) | [PI_SETUP](docs/PI_SETUP.md) |
+| On-screen keyboard | `squeekboard` | [PI_SETUP](docs/PI_SETUP.md) |
+| Emoji that look right | `fonts-noto-color-emoji` | [EMOJI_FONT](docs/EMOJI_FONT.md) |
+| Two touchscreens | `x11-xserver-utils xinput` | [DUAL_TOUCHSCREEN_SETUP](docs/DUAL_TOUCHSCREEN_SETUP.md) |
+| 📷 Photos from a network share | `cifs-utils` | [PHOTOS_SETUP](docs/PHOTOS_SETUP.md) |
+| ✨ Living photos, 🙂 video avatars, 🎬 videos in the 📥 Inbox | `ffmpeg` | [PHOTOS_SETUP](docs/PHOTOS_SETUP.md) |
+| 👥 Face recognition, 🌄 3-D living photos | nothing (models download once) | [PHOTOS_SETUP](docs/PHOTOS_SETUP.md) |
+| 🎞️ Movie maker | `ffmpeg` | [MOVIES_SETUP](docs/MOVIES_SETUP.md) |
+| 🎬 Movies section | `cifs-utils`, `ffmpeg` | [MOVIES_LIBRARY](docs/MOVIES_LIBRARY.md) |
+| 📲 iPhone uploads | `ffmpeg` (for videos) | [IPHONE_UPLOAD](docs/IPHONE_UPLOAD.md) |
+| 📄 Documents as PDF | `libreoffice-writer-nogui` | [PHOTO_DOCUMENTS](docs/PHOTO_DOCUMENTS.md) |
+| 📕 Recipes from a PDF | `poppler-utils tesseract-ocr` | [RECIPE_PDF_IMPORT](docs/RECIPE_PDF_IMPORT.md) |
+| 🎵 Music zones, Spotify Connect | `mpd alsa-utils ffmpeg`, librespot (download) | [MUSIC_SETUP](docs/MUSIC_SETUP.md), [SPOTIFY_SETUP](docs/SPOTIFY_SETUP.md) |
+| 📢 Intercom | `ffmpeg alsa-utils`, Caddy | [INTERCOM_SETUP](docs/INTERCOM_SETUP.md) |
+| 🔒 HTTPS (camera, intercom, phones) | Caddy (or the Let's Encrypt script) | [ANDROID_TABLET_SETUP](docs/ANDROID_TABLET_SETUP.md), [LETSENCRYPT_SETUP](docs/LETSENCRYPT_SETUP.md) |
+| 📹 Tablet cameras | Caddy, `ffmpeg`; `smbclient` to copy clips to a share | [ANDROID_TABLET_SETUP](docs/ANDROID_TABLET_SETUP.md) |
+| 🔑 Passwords | Docker + Vaultwarden (the script installs them) | [PASSWORDS_SETUP](docs/PASSWORDS_SETUP.md) |
+| 🌐 Internet controls | Pi-hole v6 | [PIHOLE_SETUP](docs/PIHOLE_SETUP.md) |
+| The Pi as the router | Pi-hole, `nftables`, a USB Ethernet adapter | [PI_ROUTER_SETUP](docs/PI_ROUTER_SETUP.md) |
+| 💽 Share drive + nightly backup | `samba restic smartmontools rsync tmux` | [STORAGE_DRIVES](docs/STORAGE_DRIVES.md) |
+| 📦 Photo & movie backups from the app | `restic` (history) / `rsync` (plain copy) | [APP_BACKUPS](docs/APP_BACKUPS.md) |
+| 🗣️ Spoken words in 📚 Learning | `libttspico-utils` or `espeak-ng` | [LEARNING](docs/LEARNING.md) |
+| ⌨️ Extra typing games (optional) | `tuxtype klavaro` | [TYPING](docs/TYPING.md) |
+
+Install any of them with `sudo apt install -y <names>`. Nothing to install for: chores, floor plans,
+relatives, Fun extras, Settings logins, calendars (Google/Apple accounts), grocery and report
+emails (an email account), browser calling (a Twilio account), phone apps, or the app's own backup.
+
 ## Data & privacy
 
 Everything lives in one SQLite file (`server/data/familyhomecenter.db`) on the

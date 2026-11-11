@@ -3,6 +3,11 @@
 There are two independent, stackable levels of Spotify support here. Most families only need the
 first one.
 
+## 🧰 What to install
+
+- **Level 1 (cast from your phone):** librespot on the Pi, from docs/MUSIC_SETUP.md. Free Spotify accounts work.
+- **Level 2 (controls in the app):** nothing more to install; a free Spotify developer app and Spotify Premium.
+
 ## Level 1: Cast from your own phone (no setup, free accounts work)
 
 Once librespot is running for each zone (see `docs/MUSIC_SETUP.md`), every zone appears as a normal

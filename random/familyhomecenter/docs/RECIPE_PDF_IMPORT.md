@@ -4,6 +4,10 @@ Meals → Recipes → **📕 Import from a PDF** reads a cookbook PDF, finds the
 for you to check and fix before any are saved. It works with typed PDFs and with scanned ones,
 like a family cookbook run through a scanner.
 
+## 🧰 What to install
+
+- `poppler-utils` (reads the PDF) and `tesseract-ocr` (reads scanned pages): `sudo apt install -y poppler-utils tesseract-ocr` (below).
+
 ## One-time setup on the Pi
 
 ```bash

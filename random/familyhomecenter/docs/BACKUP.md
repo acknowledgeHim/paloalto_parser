@@ -7,6 +7,10 @@ Everything the dashboard manages lives in `server/data/` — one SQLite database
 of uploaded files — and your settings live in the `.env` file. `scripts/backup-db.js` copies all of
 it to a timestamped folder.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). The backup script runs with Node.js, which the app already needs. For the nightly copy to a backup drive, see docs/STORAGE_DRIVES.md §1 (restic, rsync).
+
 ## What's included
 
 | What | Where | Backed up |

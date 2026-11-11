@@ -3,6 +3,10 @@
 The app connects to iCloud's CalDAV server using an **app-specific password**,
 so your real Apple ID password is never stored.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). You need an Apple ID with two-factor authentication on, to make an app-specific password.
+
 ## 1. Generate an app-specific password
 
 1. Sign in at [appleid.apple.com](https://appleid.apple.com/).

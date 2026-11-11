@@ -3,6 +3,13 @@
 There are two ways to do it. Both file photos into `YEAR/Month` and videos into the movies folder
 (`/share/media/movies/takk/YYYY`, where a `.mov` becomes an `.mp4`). Neither adds a file twice.
 
+## 🧰 What to install
+
+- **On the Pi:** `ffmpeg`, so videos get their date and `.mov` becomes `.mp4`
+  (`sudo apt install -y ffmpeg`). Photos need nothing extra.
+- **On the iPhone:** the built-in Shortcuts app (option 2). It needs an HTTPS address it trusts
+  (docs/LETSENCRYPT_SETUP.md, or Caddy from docs/ANDROID_TABLET_SETUP.md).
+
 ## 1. In the app: 📤 Add photos → 📅 Only add ones taken between…
 
 1. Photos → **📤 Add photos**.

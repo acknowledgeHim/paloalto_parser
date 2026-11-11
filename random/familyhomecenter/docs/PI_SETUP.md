@@ -9,6 +9,16 @@ Don't have the touchscreen wired up yet, or need it far from the Pi? See
 that's actually touch-capable, and wiring it to the Pi directly or over
 Ethernet/Cat6.
 
+## 🧰 What to install
+
+- **Raspberry Pi OS (64-bit)**, with desktop (§1).
+- `chromium-browser`, `unclutter`, `git` and **Node.js 20 LTS** (§2).
+- `squeekboard`, the on-screen keyboard (§8; optional).
+- `npm install` (§4) downloads the rest, including ready-made builds of the photo and face tools
+  (internet needed).
+- **Each extra feature lists its own needs** in its doc's 🧰 *What to install* section; the
+  README has them all in one table.
+
 ## 1. Flash the OS
 
 Use **Raspberry Pi Imager** to flash the latest **Raspberry Pi OS (64-bit, with desktop)**

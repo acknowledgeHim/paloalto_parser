@@ -3,6 +3,11 @@
 **Photos → Documents** turns pictures into a Word document you can download, print, or keep
 editing in Word / Google Docs / Pages.
 
+## 🧰 What to install
+
+- Nothing for Word (.docx) downloads.
+- **⬇ PDF downloads:** LibreOffice — `sudo apt install -y libreoffice-writer-nogui` (below).
+
 ## Making one
 
 Tap **+** next to Documents, give it a **title**, then build it out of **sections**. Each section has:

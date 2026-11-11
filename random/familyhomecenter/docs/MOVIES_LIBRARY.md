@@ -20,6 +20,13 @@
 - **Kids' access:** the section has its own switch, **Movies (watching)**, in Settings → Kids'
   access. A kid who already has a limited list gets no access until a parent ticks it.
 
+## 🧰 What to install
+
+- `cifs-utils`, to mount the movies share (§1): `sudo apt install -y cifs-utils`.
+- `ffmpeg` (with `ffprobe`), for lengths, posters, `.mp4` copies and turning sideways videos:
+  `sudo apt install -y ffmpeg`. Without it the list and playing still work.
+- **📀 DVDs:** `python3` (already on Raspberry Pi OS) and `ffmpeg`.
+
 ## 1. Mount the share on the Pi
 
 The Pi needs the share mounted, the same way as the photos share (docs/PHOTOS_SETUP.md). For

@@ -5,6 +5,12 @@ Push-to-talk paging into one or more zones' speakers, from the touchscreen itsel
 system, so finish `docs/MUSIC_SETUP.md` first (it installs `ffmpeg` and `alsa-utils`, both required
 here too).
 
+## 🧰 What to install
+
+- `ffmpeg` and `alsa-utils` (`aplay`), from docs/MUSIC_SETUP.md §2:
+  `sudo apt install -y ffmpeg alsa-utils`.
+- Caddy, for HTTPS (phones only allow the microphone on HTTPS): §1 below.
+
 ## The hard requirement: HTTPS
 
 Browsers only allow microphone access (`getUserMedia`) on a **secure context** — HTTPS, or

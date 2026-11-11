@@ -18,6 +18,10 @@ The **Internet** page lets a parent, from the dashboard:
 Anyone can *see* the Internet page (a kid can check why they're offline and until when); only a
 parent can change anything — the same login as Settings, see [SETTINGS_LOGIN.md](SETTINGS_LOGIN.md).
 
+## 🧰 What to install
+
+- Pi-hole v6 (§2: `curl -sSL https://install.pi-hole.net | bash`).
+
 ## How it works (and its limits)
 
 Pi-hole is the house's DNS server — the "phone book" every device asks to turn `youtube.com` into

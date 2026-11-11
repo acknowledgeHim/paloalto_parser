@@ -4,6 +4,10 @@ This dashboard is built for a touchscreen (see [PI_SETUP.md](PI_SETUP.md)),
 but "HDMI touchscreen" hides a few gotchas worth getting right before you
 buy or wire anything.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). The touch screen needs a USB cable as well as HDMI (below).
+
 ## HDMI carries video only — touch needs a separate USB connection
 
 Almost every external USB-touch monitor needs **two** cables to the host:

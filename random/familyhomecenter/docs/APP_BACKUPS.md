@@ -10,6 +10,14 @@ This is separate from the Pi's own nightly backup of everything to the backup dr
 Use these for **another copy somewhere else**: another drive, the NAS, a computer at a relative's
 over sftp.
 
+## 🧰 What to install
+
+- **🕰️ With history:** restic — `sudo apt install -y restic`.
+- **📁 Plain copy:** rsync — already on Raspberry Pi OS (`sudo apt install -y rsync` if not).
+- **Backing up to or from a share:** the share mounted on the Pi (`sudo apt install -y cifs-utils`;
+  docs/PHOTOS_SETUP.md, Option B). **To sftp:** an SSH key for the `pi` user (`ssh-copy-id`).
+- Settings shows ⚠️ when restic or rsync is missing.
+
 ## Two ways
 
 | | 🕰️ With history (restic) | 📁 Plain copy (rsync) |

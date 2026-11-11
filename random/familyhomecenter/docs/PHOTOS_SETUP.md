@@ -11,6 +11,16 @@ browsing/slideshow is reading from the local cache, not re-fetching the
 original over the network every time. See "Speeding up an SMB share" below if
 that initial warm-up (or an occasional cache miss) still feels slow.
 
+## 🧰 What to install
+
+- **Photos from a folder on the Pi:** nothing extra.
+- **Photos from a network share:** `cifs-utils` (Option B: `sudo apt install -y cifs-utils`).
+- **✨ Living photos, 🙂 video avatars, and 🎬 videos in the 📥 Inbox:** `ffmpeg`
+  (`sudo apt install -y ffmpeg`).
+- **👥 Face recognition and 🌄 3-D living photos:** nothing to install — the models download
+  themselves the first time (internet needed once).
+- **Converting iPhone HEIC photos yourself:** `heif-convert` (`sudo apt install -y libheif-examples`).
+
 ## Option A: local folder
 
 Copy photos onto the Pi directly (USB drive, `scp`, Syncthing, etc.) and point

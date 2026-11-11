@@ -9,6 +9,10 @@ conversation that led here: Google Voice has no public calling API at all).
 Everything else in Contacts (Call/Text via `tel:`/`sms:` links, and email-to-SMS texting) works
 without any of this and costs nothing.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). You need a paid Twilio account (below).
+
 ## What it costs
 
 - A Twilio phone number: roughly **$1/month**.

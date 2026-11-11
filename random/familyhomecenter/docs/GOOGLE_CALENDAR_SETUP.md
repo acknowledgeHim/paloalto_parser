@@ -3,6 +3,10 @@
 The app reads every calendar on one Google account (read-only) — point it at a
 **shared family calendar** and everyone who's added to that calendar shows up here.
 
+## 🧰 What to install
+
+Nothing extra on the Pi — it's part of the Family Home Center (docs/PI_SETUP.md). You need a Google Cloud project for the sign-in keys (below).
+
 ## 1. Create an OAuth client
 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create
