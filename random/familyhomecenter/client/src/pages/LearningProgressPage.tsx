@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
+import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { GRADE_SHORT } from '../utils/learning.js';
 import { LEVELS } from '../utils/typing.js';
@@ -80,8 +81,7 @@ export function LearningProgressPage() {
         <div className="learning-grades" role="radiogroup" aria-label="Whose progress">
           {choices.map((m) => (
             <button key={m.id} type="button" role="radio" aria-checked={m.id === memberId} className={`learning-grade${m.id === memberId ? ' is-on' : ''}`} onClick={() => setWho(m.id)}>
-              {m.avatar && m.avatar !== 'image' ? `${m.avatar} ` : ''}
-              {m.name}
+              <MemberAvatar member={m} size={28} /> {m.name}
             </button>
           ))}
         </div>
