@@ -60,7 +60,7 @@ Race cars are low and wide; tightrope walkers hold long poles to help balance.
 ? Sumo wrestlers crouch to … their center of mass | *lower | raise
 
 @ angular-momentum-11 | ⚡ Physics | Spinning and angular momentum
-**Angular momentum** (L = Iω) is conserved when there's no outside twist. A skater who pulls in their arms makes their **rotational inertia** smaller, so she **spins faster**.
+**Angular momentum** (L = Iω) is conserved when there's no outside twist. A skater who pulls in their arms makes their **rotational inertia** smaller, so they **spin faster**.
 Spinning tops and bike wheels resist tipping for the same reason.
 ? A skater pulling in their arms spins … | *faster | slower
 ? Pulling mass closer to the axis makes rotational inertia … | *smaller | bigger

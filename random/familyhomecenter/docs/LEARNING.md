@@ -154,11 +154,11 @@ out. **Send now** in Settings → Weekly report shows it straight away.
 - **📖 Math lessons:** 50+ for every grade, K–12: counting and adding (K–2), times tables,
   fractions and decimals (3–5), ratios, integers and equations (6–7), algebra 2 (8), geometry (9),
   trigonometry (10), precalculus (11) and calculus (12).
-- **🔬 Science lessons:** about 20 for every grade, K–12, grouped by branch: ⚡ Physics,
+- **🔬 Science lessons:** 50+ for every grade, K–12, grouped by branch: ⚡ Physics,
   🧪 Chemistry, 🧬 Biology and 🌍 Earth & space. K–8 mix all four; 9th grade is mostly biology,
   10th chemistry, 11th physics, and 12th earth & space plus advanced topics (biotech, relativity,
   nuclear power). Many lessons have a 🧪 lab built in (see below). The set lives in
-  `server/src/services/scienceLessons/` (one file per grade).
+  `server/src/services/scienceLessons/` (one file per grade, plus a second set in `more/`).
 - Quiz choices come in a mixed-up order, so the right answer isn't always first. The big sets
   live in `server/src/services/grammarLessons/` and `mathLessonsExtra/` (one file per grade).
 - **🇺🇸 US History:** the Declaration of Independence, the Constitution, the Revolutionary War, the
