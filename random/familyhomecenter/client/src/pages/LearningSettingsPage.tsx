@@ -150,6 +150,24 @@ export function LearningSettingsPage() {
               Rounds a day that can pay tokens:{' '}
               <input type="number" min={0} max={100} value={r.per_day} onChange={(e) => upd(subject, { per_day: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
             </label>
+            {subject === 'math' && (
+              <label className="learning-settings__perday">
+                🎯 Each topic pays (per 🔁 lap):{' '}
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={r.topic_pay_times ?? 1}
+                  onChange={(e) => upd(subject, { topic_pay_times: Math.min(100, Math.max(1, Math.round(Number(e.target.value) || 1))) })}
+                />{' '}
+                time{(r.topic_pay_times ?? 1) === 1 ? '' : 's'}
+                <span className="hint">
+                  {' '}
+                  — 🎯 topic rounds (just Fractions, say) pay by the levels above, but not by the day: each topic pays this many times, then again once the kid has earned every
+                  topic at their grade (a new 🔁 lap). They don't count toward the rounds a day or the 🎁 bonus.
+                </span>
+              </label>
+            )}
           </section>
         );
       })}

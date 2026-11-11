@@ -19,6 +19,11 @@ import type { FamilyMember } from '../types.js';
  * they can practise any grade, but only rounds at their grade or higher earn 💎 tokens. A round is
  * 10 random items, checked here (not in the browser), and pays by the parent's "% right → tokens"
  * levels — the lowest level is the pass mark — up to so many paying rounds a day.
+ *
+ * 🎯 Topic practice (➗ math): a round of just one topic, like Fractions. It pays by the same levels,
+ * but not by the day: each topic at a grade pays once per 🔁 lap (a parent can make it more). Passing
+ * every topic at their own grade starts a new lap and they all pay again. Topic rounds don't count
+ * toward the mixed rounds a day or the 🎁 bonus.
  */
 export const learningRouter = Router();
 
@@ -37,10 +42,16 @@ export interface SubjectRewards {
   tiers: Tier[];
   /** rounds a day that can pay tokens (0 = no tokens) */
   per_day: number;
+  /** 🎯 times each topic pays per 🔁 lap (1 = once) */
+  topic_pay_times: number;
 }
 type Rewards = Record<Subject, SubjectRewards>;
 const SETTING = 'learning_rewards';
-const DEFAULT: SubjectRewards = { tiers: [{ pct: 80, tokens: 1 }, { pct: 100, tokens: 2 }], per_day: 3 };
+const DEFAULT: SubjectRewards = { tiers: [{ pct: 80, tokens: 1 }, { pct: 100, tokens: 2 }], per_day: 3, topic_pay_times: 1 };
+const cleanPayTimes = (v: unknown) => {
+  const x = Math.round(Number(v));
+  return Number.isFinite(x) && x >= 1 && x <= 100 ? x : null;
+};
 
 function cleanTiers(v: unknown, fallback: Tier[]): Tier[] {
   if (!Array.isArray(v)) return fallback;
@@ -63,7 +74,11 @@ function readRewards(): Rewards {
   for (const s of SUBJECTS) {
     const x = saved[s] ?? {};
     const pd = Math.round(Number(x.per_day));
-    out[s] = { tiers: cleanTiers(x.tiers, DEFAULT.tiers), per_day: Number.isFinite(pd) && pd >= 0 && pd <= 100 ? pd : DEFAULT.per_day };
+    out[s] = {
+      tiers: cleanTiers(x.tiers, DEFAULT.tiers),
+      per_day: Number.isFinite(pd) && pd >= 0 && pd <= 100 ? pd : DEFAULT.per_day,
+      topic_pay_times: cleanPayTimes(x.topic_pay_times) ?? DEFAULT.topic_pay_times,
+    };
   }
   return out;
 }
@@ -133,6 +148,8 @@ learningRouter.put('/settings', requireAdmin, (req, res) => {
     if (b[s]!.tiers !== undefined) cur[s].tiers = cleanTiers(b[s]!.tiers, cur[s].tiers);
     const pd = Math.round(Number(b[s]!.per_day));
     if (b[s]!.per_day !== undefined && Number.isFinite(pd) && pd >= 0 && pd <= 100) cur[s].per_day = pd;
+    const tp = cleanPayTimes(b[s]!.topic_pay_times);
+    if (tp !== null) cur[s].topic_pay_times = tp;
   }
   setSetting(SETTING, JSON.stringify(cur));
   res.json({ rewards: readRewards(), grades: GRADE_NAMES, bonus: readBonus() });
@@ -146,15 +163,86 @@ function localDay(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 const paidToday = (id: string, subject: Subject) =>
-  (db.prepare('SELECT COUNT(*) AS n FROM learning_results WHERE family_member_id = ? AND subject = ? AND day = ? AND tokens > 0').get(id, subject, localDay()) as { n: number }).n;
+  (db.prepare('SELECT COUNT(*) AS n FROM learning_results WHERE family_member_id = ? AND subject = ? AND day = ? AND tokens > 0 AND topic IS NULL').get(id, subject, localDay()) as { n: number }).n;
 
-/** Why a round at this grade won't pay (null = it can). */
-function noTokensWhy(m: FamilyMember, subject: Subject, grade: number): string | null {
+// ---- 🎯 topics: each pays once per 🔁 lap; passing every topic at your grade starts a new lap ----
+
+/** Subjects that split into topics, and each grade's topics. */
+export const TOPICS: Partial<Record<Subject, string[][]>> = { math: MATH_GRADE_TOPICS };
+const topicsAt = (subject: Subject, g: number) => TOPICS[subject]?.[g] ?? [];
+/** When their current lap began ('' = the first lap: everything so far). */
+const lapStart = (id: string, subject: Subject) =>
+  (db.prepare('SELECT MAX(at) AS at FROM learning_topic_laps WHERE family_member_id = ? AND subject = ?').get(id, subject) as { at: string | null }).at ?? '';
+/** How many times each topic at a grade has paid since then. */
+function topicPaid(id: string, subject: Subject, g: number, since: string): Map<string, number> {
+  const rows = db
+    .prepare('SELECT topic, COUNT(*) AS n FROM learning_results WHERE family_member_id = ? AND subject = ? AND grade = ? AND topic IS NOT NULL AND tokens > 0 AND at > ? GROUP BY topic')
+    .all(id, subject, g, since) as Array<{ topic: string; n: number }>;
+  return new Map(rows.map((x) => [x.topic, x.n]));
+}
+export interface TopicLap {
+  /** 1 = the first lap */
+  number: number;
+  started_at: string | null;
+  grade: number;
+  /** their grade's topics, and of those the ones paid this lap */
+  total: number;
+  paid: number;
+}
+/** Where a kid is in this subject's 🔁 lap (null: parents, no grade, or no topics). Starts a new lap
+ *  once every topic at their grade has paid. */
+function topicLap(m: FamilyMember, subject: Subject): TopicLap | null {
+  const g = m.is_parent === 1 ? null : gradeOf(m.id);
+  const list = g === null ? [] : topicsAt(subject, g);
+  if (g === null || !list.length) return null;
+  const status = (): TopicLap => {
+    const since = lapStart(m.id, subject);
+    const paid = topicPaid(m.id, subject, g, since);
+    return {
+      number: 1 + (db.prepare('SELECT COUNT(*) AS n FROM learning_topic_laps WHERE family_member_id = ? AND subject = ?').get(m.id, subject) as { n: number }).n,
+      started_at: since || null,
+      grade: g,
+      total: list.length,
+      paid: list.filter((t) => (paid.get(t) ?? 0) > 0).length,
+    };
+  };
+  const st = status();
+  if (st.paid < st.total) return st;
+  db.prepare('INSERT INTO learning_topic_laps (id, family_member_id, subject, grade, topics, at) VALUES (?, ?, ?, ?, ?, ?)').run(uuidv4(), m.id, subject, g, list.length, new Date().toISOString());
+  return status();
+}
+/** Each topic at a grade: rounds, best, and what it's paid this lap (for the page). */
+function topicStats(m: FamilyMember, subject: Subject, lap: TopicLap | null) {
+  const since = lap?.started_at ?? '';
+  const pay = readRewards()[subject].topic_pay_times;
+  const rows = db
+    .prepare(
+      'SELECT grade, topic, COUNT(*) AS rounds, MAX(correct) AS best, MAX(total) AS total, MAX(at) AS last_at, SUM(CASE WHEN tokens > 0 AND at > ? THEN 1 ELSE 0 END) AS paid_lap, SUM(tokens) AS tokens FROM learning_results WHERE family_member_id = ? AND subject = ? AND topic IS NOT NULL GROUP BY grade, topic'
+    )
+    .all(since, m.id, subject) as Array<{ grade: number; topic: string; rounds: number; best: number; total: number; last_at: string; paid_lap: number; tokens: number }>;
+  return rows.map((x) => ({ ...x, pay_times: pay, paid_out: x.paid_lap >= pay }));
+}
+
+/** Why a round at this grade (and topic) won't pay (null = it can). */
+function noTokensWhy(m: FamilyMember, subject: Subject, grade: number, topic?: string): string | null {
   if (m.is_parent === 1) return 'Parents practise just for fun';
   const g = gradeOf(m.id);
   if (g === null) return 'A parent needs to set your grade first (📚 Learning → ⚙️ Grades & tokens)';
   if (grade < g) return `Below your grade (${GRADE_NAMES[g]}) — practise for fun, or try your grade or higher for tokens`;
   const r = readRewards()[subject];
+  if (topic) {
+    if (!r.tiers.some((t) => t.tokens > 0)) return 'This game pays no tokens right now';
+    const lap = topicLap(m, subject);
+    const times = topicPaid(m.id, subject, grade, lap?.started_at ?? '').get(topic) ?? 0;
+    if (times < r.topic_pay_times) return null;
+    const left = lap ? lap.total - lap.paid : 0;
+    const again = left
+      ? `pass the other ${left} ${GRADE_NAMES[lap!.grade]} topic${left === 1 ? '' : 's'} and every topic pays again`
+      : grade > (lap?.grade ?? grade)
+        ? `every topic pays again once you've passed all the ${GRADE_NAMES[lap!.grade]} ones`
+        : 'a new lap starts soon';
+    return `Already earned ${r.topic_pay_times > 1 ? `its ${r.topic_pay_times} times` : 'this topic'} this lap 🔁 — ${again}. You can still practise it.`;
+  }
   if (!r.per_day || !r.tiers.some((t) => t.tokens > 0)) return 'This game pays no tokens right now';
   if (paidToday(m.id, subject) >= r.per_day) return `Tokens done for today (${r.per_day} round${r.per_day === 1 ? '' : 's'}) — come back tomorrow`;
   return null;
@@ -169,8 +257,12 @@ learningRouter.get('/people/:memberId', (req, res) => {
       s,
       {
         best: db.prepare('SELECT grade, MAX(correct) AS correct, COUNT(*) AS rounds FROM learning_results WHERE family_member_id = ? AND subject = ? GROUP BY grade').all(m.id, s),
-        recent: db.prepare('SELECT grade, at, correct, total, tokens FROM learning_results WHERE family_member_id = ? AND subject = ? ORDER BY at DESC LIMIT 15').all(m.id, s),
+        recent: db.prepare('SELECT grade, at, correct, total, tokens, topic FROM learning_results WHERE family_member_id = ? AND subject = ? ORDER BY at DESC LIMIT 15').all(m.id, s),
         paid_today: paidToday(m.id, s),
+        ...(TOPICS[s] ? (() => {
+          const lap = topicLap(m, s);
+          return { topic_lap: lap, topics: topicStats(m, s, lap) };
+        })() : {}),
       },
     ])
   );
@@ -199,6 +291,8 @@ interface Round {
   member: string;
   subject: Subject;
   grade: number;
+  /** 🎯 a round of just this topic (none = mixed) */
+  topic?: string;
   started: number;
   /** what's right for each item (spelling: the word) */
   answers: string[];
@@ -323,7 +417,7 @@ const cleanTaps = (a: unknown): number[] => (Array.isArray(a) ? a.map(Number).fi
 
 const mathResult = (p: MathProblem, given: string) => ({ q: p.q, given, ok: checkMath(p, given), right: p.show, hint: p.hint, topic: p.topic });
 
-/** POST /math/start { member_id, grade } — 10 problems at that grade (made fresh, mixed topics). */
+/** POST /math/start { member_id, grade, topic? } — 10 problems at that grade (made fresh): mixed topics, or just one 🎯. */
 learningRouter.post('/math/start', (req, res) => {
   const { member_id, grade, acting_member_id } = req.body ?? {};
   const m = memberOf(String(member_id));
@@ -331,15 +425,18 @@ learningRouter.post('/math/start', (req, res) => {
   if (!isSelfOrParent(req, m.id, acting_member_id)) return res.status(403).json({ error: "That's someone else's practice" });
   const g = Math.round(Number(grade));
   if (!(g >= 0 && g < GRADE_NAMES.length)) return res.status(400).json({ error: 'Grade: K–12' });
+  const topic = req.body?.topic ? String(req.body.topic) : undefined;
+  if (topic && !topicsAt('math', g).includes(topic)) return res.status(400).json({ error: `${GRADE_NAMES[g]} math has no topic “${topic.slice(0, 40)}”` });
   const over = tryStart(m.id, 'math');
   if (over) return res.status(429).json({ error: over, limit: true });
-  const math = mathRound(g, ROUND_SIZE);
-  const r: Round = { id: uuidv4(), member: m.id, subject: 'math', grade: g, started: Date.now(), answers: [], math };
+  const math = mathRound(g, ROUND_SIZE, Math.random, topic);
+  const r: Round = { id: uuidv4(), member: m.id, subject: 'math', grade: g, topic, started: Date.now(), answers: [], math };
   rounds.set(r.id, r);
-  const why = noTokensWhy(m, 'math', g);
+  const why = noTokensWhy(m, 'math', g, topic);
   res.json({
     round_id: r.id,
     grade: g,
+    topic: topic ?? null,
     problems: math.map((p) => ({ q: p.q, topic: p.topic, note: p.note ?? null, choices: p.choices ?? null })),
     tokens: why ? null : readRewards().math.tiers,
     no_tokens_why: why,
@@ -403,18 +500,20 @@ learningRouter.post('/round/:id/finish', (req, res) => {
   const total = r.math ? r.math.length : r.tap ? r.tap.length : r.answers.length;
   const pct = Math.round((correct / total) * 100);
   const rw = readRewards()[r.subject];
-  const why = noTokensWhy(m, r.subject, r.grade);
+  const why = noTokensWhy(m, r.subject, r.grade, r.topic);
   const tokens = why ? 0 : worth(rw.tiers, pct);
   const now = new Date();
   db.transaction(() => {
     db.prepare(
-      'INSERT INTO learning_results (id, family_member_id, subject, grade, at, day, correct, total, tokens, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(uuidv4(), m.id, r.subject, r.grade, now.toISOString(), localDay(now), correct, total, tokens, JSON.stringify(items.filter((x) => !(x as { ok: boolean }).ok)).slice(0, 4000));
-    if (tokens) addTokens(m.id, tokens, `${SUBJECT_NAMES[r.subject]}: ${correct}/${total} at ${GRADE_NAMES[r.grade]}`);
+      'INSERT INTO learning_results (id, family_member_id, subject, grade, at, day, correct, total, tokens, detail, topic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(uuidv4(), m.id, r.subject, r.grade, now.toISOString(), localDay(now), correct, total, tokens, JSON.stringify(items.filter((x) => !(x as { ok: boolean }).ok)).slice(0, 4000), r.topic ?? null);
+    if (tokens) addTokens(m.id, tokens, `${SUBJECT_NAMES[r.subject]}${r.topic ? ` 🎯 ${r.topic}` : ''}: ${correct}/${total} at ${GRADE_NAMES[r.grade]}`);
   })();
-  // 🎁 This round may have maxed out the last picked subject for today.
-  const bonus = tokens ? maybePayBonus(m) : 0;
-  res.json({ correct, total, pct, passed: pct >= passMark(rw.tiers), tokens, bonus, no_tokens_why: tokens ? null : why, items });
+  // 🎁 A mixed round may have maxed out the last picked subject for today.
+  const bonus = tokens && !r.topic ? maybePayBonus(m) : 0;
+  // 🎯 Passing the last topic left starts a new lap (checked now, so the page shows it).
+  const lap = r.topic && TOPICS[r.subject] ? topicLap(m, r.subject) : null;
+  res.json({ correct, total, pct, passed: pct >= passMark(rw.tiers), tokens, bonus, no_tokens_why: tokens ? null : why, items, topic: r.topic ?? null, topic_lap: lap });
 });
 
 // ---- 💾 auto-save: where someone is in a round, a lesson or a typing lesson ----

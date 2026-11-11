@@ -44,6 +44,9 @@ interface Progress {
   practice: Record<PracticeSubject, PracticeRow[]>;
   typing: Array<{ level: number; at: string; wpm: number; accuracy: number; passed: number; tokens: number }>;
   typing_games?: Array<{ mode: string; n: number; best_wpm: number | null; best_score: number | null; last: string; tokens: number | null }>;
+  /** 🎯 math topic practice: each topic tried, by grade; and every grade's topics */
+  math_topics?: Array<{ grade: number; topic: string; rounds: number; best: number; total: number; last: string; tokens: number; paid: number }>;
+  math_grade_topics?: string[][];
 }
 interface PracticeRow {
   grade: number;
@@ -51,6 +54,8 @@ interface PracticeRow {
   correct: number;
   total: number;
   tokens: number;
+  /** 🎯 a round of just this topic (null = mixed) */
+  topic?: string | null;
   /** 🔤 spelling: the words it got wrong */
   missed?: Array<{ right: string; given: string }>;
 }
@@ -541,6 +546,7 @@ function PracticeView({ data }: { data: Progress }) {
                   <tr>
                     <th>When</th>
                     <th>Grade</th>
+                    {s === 'math' && <th>Topic</th>}
                     <th>Score</th>
                     <th>Tokens</th>
                   </tr>
@@ -550,6 +556,7 @@ function PracticeView({ data }: { data: Progress }) {
                     <tr key={i}>
                       <td>{when(r.at)}</td>
                       <td>{data.grades[r.grade]}</td>
+                      {s === 'math' && <td>{r.topic ? `🎯 ${r.topic}` : 'mixed'}</td>}
                       <td>
                         {r.correct}/{r.total}
                       </td>
@@ -562,7 +569,56 @@ function PracticeView({ data }: { data: Progress }) {
           </div>
         );
       })}
+      <MathTopicsView data={data} />
     </section>
+  );
+}
+
+/** 🎯 Math topic practice: every topic at their grade (tried or not), then other grades they tried. */
+function MathTopicsView({ data }: { data: Progress }) {
+  const rows = data.math_topics ?? [];
+  const g = data.member.grade;
+  const mine = g !== null ? (data.math_grade_topics?.[g] ?? []) : [];
+  if (!rows.length && !mine.length) return null;
+  const at = (grade: number, topic: string) => rows.find((r) => r.grade === grade && r.topic === topic);
+  const list = [
+    ...mine.map((topic) => ({ grade: g as number, topic, r: at(g as number, topic) })),
+    ...rows.filter((r) => r.grade !== g || !mine.includes(r.topic)).map((r) => ({ grade: r.grade, topic: r.topic, r })),
+  ];
+  const tried = mine.filter((t) => at(g as number, t)).length;
+  return (
+    <>
+      <h3 className="progress-topic">🎯 Math topics</h3>
+      {g !== null && mine.length > 0 && (
+        <p className="hint">
+          {tried} of {mine.length} {data.grades[g]} topics practised on their own.
+        </p>
+      )}
+      <table className="progress-table">
+        <thead>
+          <tr>
+            <th>Topic</th>
+            <th>Grade</th>
+            <th>Rounds</th>
+            <th>Best</th>
+            <th>Tokens</th>
+            <th>Last</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(({ grade, topic, r }) => (
+            <tr key={`${grade}|${topic}`}>
+              <td>{topic}</td>
+              <td>{GRADE_SHORT[grade]}</td>
+              <td>{r?.rounds ?? '—'}</td>
+              <td>{r ? `${r.best}/${r.total}` : ''}</td>
+              <td>{r?.tokens ? `+${r.tokens} 💎` : ''}</td>
+              <td>{r ? when(r.last) : 'not yet'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }
 

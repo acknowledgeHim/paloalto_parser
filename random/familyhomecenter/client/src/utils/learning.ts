@@ -9,6 +9,30 @@ export interface Tier {
 export interface SubjectRewards {
   tiers: Tier[];
   per_day: number;
+  /** 🎯 times each topic pays per 🔁 lap (1 = once) */
+  topic_pay_times?: number;
+}
+/** 🎯 Where a kid is in their topic lap: their grade's topics, and how many have paid this lap. */
+export interface TopicLap {
+  number: number;
+  started_at: string | null;
+  grade: number;
+  total: number;
+  paid: number;
+}
+/** 🎯 One topic they've practised at one grade. */
+export interface TopicStat {
+  grade: number;
+  topic: string;
+  rounds: number;
+  best: number;
+  total: number;
+  last_at: string;
+  /** times it paid this lap, how many it can, and whether that's used up */
+  paid_lap: number;
+  pay_times: number;
+  paid_out: boolean;
+  tokens: number;
 }
 /** 🎁 Parent-set: extra tokens once a day for maxing out every picked subject's paying rounds. */
 export interface LearningBonus {
@@ -34,10 +58,14 @@ export interface LearningPerson {
     string,
     {
       best: Array<{ grade: number; correct: number; rounds: number }>;
-      recent: Array<{ grade: number; at: string; correct: number; total: number; tokens: number }>;
+      recent: Array<{ grade: number; at: string; correct: number; total: number; tokens: number; topic?: string | null }>;
       paid_today: number;
+      /** 🎯 subjects with topics (math) */
+      topic_lap?: TopicLap | null;
+      topics?: TopicStat[];
     }
-  >;  bonus?: BonusStatus;
+  >;
+  bonus?: BonusStatus;
 }
 
 export const GRADE_SHORT = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];

@@ -1589,6 +1589,27 @@ try {
   if (!(err as Error).message.includes('duplicate column')) throw err;
 }
 
+// 🎯 Topic practice (routes/learning.ts): a ➗ math round of just one topic. topic = NULL is a mixed
+// round, as every round before this was. Each topic pays once per 🔁 lap (more if a parent says so);
+// passing every topic at their grade starts a new lap — one row per time. New column/table only.
+try {
+  db.exec('ALTER TABLE learning_results ADD COLUMN topic TEXT');
+} catch (err) {
+  if (!(err as Error).message.includes('duplicate column')) throw err;
+}
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_learning_results_topic ON learning_results (family_member_id, subject, grade, topic);
+  CREATE TABLE IF NOT EXISTS learning_topic_laps (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    topics INTEGER NOT NULL,
+    at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_topic_laps_member ON learning_topic_laps (family_member_id, subject, at);
+`);
+
 // 👪 Relatives (routes/relatives.ts): family, living or not — names, dates, memories, and the photos
 // and home movies they're in. person_id links a face-recognition person (their faces count as their
 // photos); family_member_id links a household profile who is this relative (their birthday). Media

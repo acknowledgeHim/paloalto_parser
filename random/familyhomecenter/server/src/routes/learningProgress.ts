@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { GRADE_NAMES } from '../services/spellingWords.js';
+import { MATH_GRADE_TOPICS } from '../services/mathGen.js';
 import { LESSON_SUBJECTS, lessonRound } from './lessons.js';
 import { SUBJECTS as PRACTICE_SUBJECTS } from './learning.js';
 import type { FamilyMember } from '../types.js';
@@ -22,6 +23,8 @@ interface PracticeRow {
   correct: number;
   total: number;
   tokens: number;
+  /** 🎯 a round of just this topic (null = mixed) */
+  topic: string | null;
 }
 /** 🔤 The words a spelling round got wrong (its detail keeps the missed items: { right, given }). */
 function missedWords(detail: string | null): Array<{ right: string; given: string }> {
@@ -75,7 +78,7 @@ learningProgressRouter.get('/:memberId', (req, res) => {
     PRACTICE_SUBJECTS.map((s) => [
       s,
       (
-        db.prepare('SELECT grade, at, correct, total, tokens, detail FROM learning_results WHERE family_member_id = ? AND subject = ? ORDER BY at DESC LIMIT ?').all(m.id, s, MAX_ROWS) as Array<
+        db.prepare('SELECT grade, at, correct, total, tokens, topic, detail FROM learning_results WHERE family_member_id = ? AND subject = ? ORDER BY at DESC LIMIT ?').all(m.id, s, MAX_ROWS) as Array<
           PracticeRow & { detail: string | null }
         >
       ).map(({ detail, ...r }) => (s === 'spelling' ? { ...r, missed: missedWords(detail) } : r)),
@@ -91,7 +94,14 @@ learningProgressRouter.get('/:memberId', (req, res) => {
     )
     .all(m.id);
 
-  res.json({ member: { id: m.id, grade, is_parent: m.is_parent === 1 }, grades: GRADE_NAMES, lessons, practice, typing, typing_games });
+  // 🎯 topic practice (➗ math): every topic tried, at every grade — rounds, best, last, tokens
+  const topics = db
+    .prepare(
+      "SELECT grade, topic, COUNT(*) AS rounds, MAX(correct) AS best, MAX(total) AS total, MAX(at) AS last, SUM(tokens) AS tokens, SUM(CASE WHEN tokens > 0 THEN 1 ELSE 0 END) AS paid FROM learning_results WHERE family_member_id = ? AND subject = 'math' AND topic IS NOT NULL GROUP BY grade, topic ORDER BY grade, topic"
+    )
+    .all(m.id);
+
+  res.json({ member: { id: m.id, grade, is_parent: m.is_parent === 1 }, grades: GRADE_NAMES, lessons, practice, typing, typing_games, math_topics: topics, math_grade_topics: MATH_GRADE_TOPICS });
 });
 
 // ---- 📬 the weekly report email (Sunday, to parents): the lessons each kid passed that week ----
@@ -159,6 +169,13 @@ export function learningWeekLines(member: FamilyMember, start: string, end: stri
     .prepare("SELECT subject, COUNT(*) AS n, AVG(CAST(correct AS REAL) / total) AS avg FROM learning_results WHERE family_member_id = ? AND subject != 'spelling' AND at >= ? AND at < ? GROUP BY subject")
     .all(member.id, from, to) as Array<{ subject: string; n: number; avg: number }>;
   if (practice.length) lines.push(`🎯 Practice: ${practice.map((p) => `${PRACTICE_LABEL[p.subject] ?? p.subject} ${p.n}× (${Math.round(p.avg * 100)}% right)`).join(', ')}`);
+  const topicWeek = db
+    .prepare(
+      "SELECT topic, COUNT(*) AS n, MAX(correct) AS best, MAX(total) AS total, SUM(tokens) AS tokens FROM learning_results WHERE family_member_id = ? AND subject = 'math' AND topic IS NOT NULL AND at >= ? AND at < ? GROUP BY topic ORDER BY n DESC"
+    )
+    .all(member.id, from, to) as Array<{ topic: string; n: number; best: number; total: number; tokens: number }>;
+  if (topicWeek.length)
+    lines.push(`🎯 Math topics: ${topicWeek.map((x) => `${x.topic}${x.n > 1 ? ` ×${x.n}` : ''} (best ${x.best}/${x.total}${x.tokens ? `, +${x.tokens} 💎` : ''})`).join(', ')}`);
   // ⌨️ Typing: lesson tries and passes, best speed, games
   const typing = db
     .prepare("SELECT level, MAX(passed) AS passed, MAX(wpm) AS wpm, MAX(accuracy) AS acc, COUNT(*) AS n FROM typing_results WHERE family_member_id = ? AND mode = 'lesson' AND at >= ? AND at < ? GROUP BY level ORDER BY level")

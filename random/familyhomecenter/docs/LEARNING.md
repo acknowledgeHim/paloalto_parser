@@ -84,7 +84,7 @@ be there), then `||` and a tip. Write it so every other word in it is correct.
 ## ➗ Math
 
 10 problems a round, made fresh each time from problem types with random numbers. Every grade has
-thousands of different problems (more than 10,000 each when sampled).
+20–24 problem types across 12–20 topics, and thousands of different problems.
 - K–2: counting, adding/taking away, place value, money
 - 3–5: times tables, division, fractions, decimals, area/volume
 - 6: Pre-Algebra (integers, one-step equations, percents, ratios, GCF/LCM)
@@ -98,7 +98,22 @@ thousands of different problems (more than 10,000 each when sampled).
 Type a number. Fractions (3/4), mixed numbers (1 1/2) and decimals all count if they're equal.
 Answers that need rounding say so. Some problems are tap-a-choice instead (like sin 30°). Check shows
 the right answer and a tip, and that answer is then final. Problem types live in
-`server/src/services/mathGen.ts`.
+`server/src/services/mathGen.ts` and `mathMoreK5.ts` / `mathMore612.ts` (shared helpers in `mathKit.ts`).
+
+### 🎯 Practise one topic
+
+Under the grade picker, every topic at that grade is a button (Fractions of a number, Time, Slope …).
+Tapping one starts 10 problems of just that topic. Each topic button shows ✅ earned this lap,
+💎 can earn, or practice, and the best score so far.
+- **Tokens:** the same "% right → 💎" levels as mixed rounds, at the kid's grade or higher. Each topic
+  pays **once per 🔁 lap** by default. A parent can raise that ("🎯 Each topic pays … times" under
+  ➗ Math in ⚙️ Grades & tokens).
+- **🔁 Laps:** once a kid has earned every topic at their own grade, a new lap starts and every topic
+  pays again (the page says "🔁 Lap 2: 3 of 18 topics earned").
+- Topic rounds don't use up the mixed "rounds a day that pay" and don't count toward the 🎁 bonus.
+  They do count for ⏰ daily limits, like any round.
+- Every round is saved with its topic (mixed rounds have none). The 📈 progress page and the weekly
+  email show each topic practised.
 
 ## 📖 Lessons: Grammar, Math, 🔬 Science and 🇺🇸 US History
 
@@ -137,14 +152,16 @@ kid's profile page (Family Board → tap the kid) as **📚 Learning progress**.
 - **⌨️ Typing:** lessons passed of 16 and best speed, each typing lesson tried/passed with every
   try, and the typing games played (how often, best, tokens).
 - **🎯 Other practice** (misspellings, grammar, math rounds): % right in the last 30 rounds and a
-  table of every round.
+  table of every round (math shows each round's 🎯 topic, or "mixed"). Then **🎯 Math topics:** every
+  topic at their grade (tried or "not yet") and any other grade's topics they tried, with rounds,
+  best, tokens and when.
 
 ### 📬 In the weekly email
 
 The Sunday 6pm weekly report each parent gets for each kid (Settings → Weekly report) has a
 **📚 Learning** part. It lists every lesson passed that week (subject, grade, tokens, tries), the ones
 tried but not passed yet with their best score, each subject's 🔁 round, any round finished,
-🔤 spelling (rounds, words right, tokens, and the words to practise), other practice rounds, and
+🔤 spelling (rounds, words right, tokens, and the words to practise), other practice rounds, 🎯 math topics practised (rounds, best, tokens), and
 ⌨️ typing (each lesson passed or tried with speed, typing games played, lessons passed so far). A week with no learning leaves it
 out. **Send now** in Settings → Weekly report shows it straight away.
 

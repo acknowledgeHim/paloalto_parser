@@ -5,71 +5,10 @@
  * 11 Pre-Calculus · 12 Calculus. Answers are a number (whole, negative, decimal or a fraction like
  * 3/4 — any equal form counts) or a choice from buttons.
  */
-export interface MathProblem {
-  topic: string;
-  q: string;
-  /** the right answer as shown */
-  show: string;
-  /** number answers: the value, how close counts, and other values that also count */
-  value?: number;
-  tol?: number;
-  alts?: number[];
-  /** choice answers */
-  choices?: string[];
-  /** "round to …", "as a fraction" … shown under the question */
-  note?: string;
-  hint: string;
-}
-
-type Rng = () => number;
-type Gen = (r: Rng) => MathProblem;
-
-const ri = (r: Rng, a: number, b: number) => a + Math.floor(r() * (b - a + 1));
-const pk = <T>(r: Rng, a: readonly T[]): T => a[Math.floor(r() * a.length)];
-const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : Math.abs(a));
-const lcm = (a: number, b: number) => (a / gcd(a, b)) * b;
-/** −5, not -5 */
-const n = (x: number) => (x < 0 ? `−${-x}` : String(x));
-/** "+ 3" / "− 3" for after a term */
-const sg = (x: number) => (x < 0 ? `− ${-x}` : `+ ${x}`);
-function frac(num: number, den: number): string {
-  if (den < 0) [num, den] = [-num, -den];
-  const g = gcd(num, den) || 1;
-  const a = num / g;
-  const b = den / g;
-  return b === 1 ? n(a) : `${n(a)}/${b}`;
-}
-/** 3x, x, −x */
-const cx = (c: number) => (c === 1 ? '' : c === -1 ? '−' : n(c));
-/** + 3y, + y, − y */
-const sgx = (c: number) => (c < 0 ? `− ${c === -1 ? '' : -c}` : `+ ${c === 1 ? '' : c}`);
-const round = (x: number, places: number) => Math.round(x * 10 ** places) / 10 ** places;
-const fmt = (x: number, places = 2) => n(round(x, places));
-/** Tidy written-out algebra: "2x² + 0x + 3" → "2x² + 3", "7x + 0" → "7x", "1x" → "x". */
-const tidy = (q: string) =>
-  q
-    .replace(/ [+−] 0[a-z][²³⁴⁵⁶⁷⁸⁹]?(?![a-z])/g, '')
-    .replace(/(?<=[a-z²³⁴⁵⁶⁷⁸⁹]) [+−] 0(?!\d|\.\d)/g, '')
-    .replace(/(?<![\d.])1([a-z])(?![a-z])/g, '$1');
-const num = (topic: string, q: string, value: number, hint: string, extra: Partial<MathProblem> = {}): MathProblem => ({ topic, q: tidy(q), value, show: extra.show ?? fmt(value, extra.note?.includes('nearest tenth') ? 1 : 6), hint, ...extra });
-const choice = (topic: string, q: string, right: string, choices: string[], hint: string): MathProblem => ({ topic, q: tidy(q), show: right, choices: [...new Set(choices)], hint });
-const tenth = { tol: 0.051, note: 'Round to the nearest tenth.' };
-
-const NAMES = ['Sam', 'Mia', 'Leo', 'Ava', 'Max', 'Zoe', 'Ben', 'Lily', 'Omar', 'Nora', 'Eli', 'Ruby', 'Jack', 'Emma', 'Noah', 'Ivy', 'Luis', 'Maya', 'Owen', 'Grace'];
-const STUFF: Array<[string, string]> = [
-  ['🍎', 'apples'],
-  ['🍪', 'cookies'],
-  ['⭐', 'stars'],
-  ['🎈', 'balloons'],
-  ['🐟', 'fish'],
-  ['🚗', 'toy cars'],
-  ['🌸', 'flowers'],
-  ['🧁', 'cupcakes'],
-  ['🐞', 'ladybugs'],
-  ['🍓', 'strawberries'],
-  ['🏀', 'balls'],
-  ['🦆', 'ducks'],
-];
+import { ri, pk, gcd, lcm, n, sg, frac, cx, sgx, round, fmt, tidy, num, choice, tenth, NAMES, STUFF, sub, TRIPLES, SPECIAL, SPECIAL_CHOICES, rad, term, sup, poly, mulberry, type MathProblem, type Rng, type Gen } from './mathKit.js';
+export { mulberry, type MathProblem } from './mathKit.js';
+import { MORE_1, MORE_2, MORE_3, MORE_4, MORE_5, MORE_K } from './mathMoreK5.js';
+import { MORE_6, MORE_7, MORE_8, MORE_9, MORE_10, MORE_11, MORE_12 } from './mathMore612.js';
 
 // ---------------- K ----------------
 const K: Gen[] = [
@@ -660,22 +599,8 @@ const G8: Gen[] = [
     return num('Parabolas', `y = ${a === 1 ? '' : a === -1 ? '−' : n(a)}x² ${sg(b)}x ${sg(c)}. What is the x of the vertex?`, h, 'x = −b ÷ (2a).');
   },
 ];
-function sub(b: number) {
-  return String(b)
-    .split('')
-    .map((d) => '₀₁₂₃₄₅₆₇₈₉'[Number(d)])
-    .join('');
-}
 
 // ---------------- 9 · Geometry ----------------
-const TRIPLES: Array<[number, number, number]> = [
-  [3, 4, 5],
-  [5, 12, 13],
-  [8, 15, 17],
-  [7, 24, 25],
-  [20, 21, 29],
-  [9, 40, 41],
-];
 const G9: Gen[] = [
   (r) => {
     const a = ri(r, 1, 89);
@@ -750,15 +675,6 @@ const G9: Gen[] = [
 ];
 
 // ---------------- 10 · Trigonometry ----------------
-const SPECIAL: Record<number, { sin: string; cos: string; tan: string }> = {
-  0: { sin: '0', cos: '1', tan: '0' },
-  30: { sin: '1/2', cos: '√3/2', tan: '√3/3' },
-  45: { sin: '√2/2', cos: '√2/2', tan: '1' },
-  60: { sin: '√3/2', cos: '1/2', tan: '√3' },
-  90: { sin: '1', cos: '0', tan: 'undefined' },
-};
-const SPECIAL_CHOICES = ['0', '1/2', '√2/2', '√3/2', '1', '√3', '√3/3', 'undefined'];
-const rad = (d: number) => (d * Math.PI) / 180;
 const G10: Gen[] = [
   (r) => {
     const base = pk(r, [0, 30, 45, 60, 90]);
@@ -905,21 +821,6 @@ const G11: Gen[] = [
 ];
 
 // ---------------- 12 · Calculus ----------------
-const term = (c: number, p: number, first = false, v = 'x') => {
-  const s = first ? (c < 0 ? '−' : '') : c < 0 ? ' − ' : ' + ';
-  const k = Math.abs(c);
-  const body = p === 0 ? `${k}` : `${k === 1 ? '' : k}${v}${p === 1 ? '' : sup(p)}`;
-  return s + body;
-};
-const sup = (p: number) =>
-  String(p)
-    .split('')
-    .map((d) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(d)])
-    .join('');
-function poly(cs: Array<[number, number]>, v = 'x') {
-  const t = cs.filter(([c]) => c !== 0);
-  return t.length ? t.map(([c, p], i) => term(c, p, i === 0, v)).join('') : '0';
-}
 const G12: Gen[] = [
   (r) => {
     const cs: Array<[number, number]> = [
@@ -1008,38 +909,38 @@ const G12: Gen[] = [
   },
 ];
 
-export const MATH_GENS: Gen[][] = [K, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11, G12];
-/** What each grade covers (shown on the page). */
-export const MATH_GRADE_TOPICS = MATH_GENS.map((gens) => {
-  const r = mulberry(7);
-  const seen = new Set<string>();
-  for (let i = 0; i < 400; i++) seen.add(pk(r, gens)(r).topic);
-  return [...seen];
+const MORE: Gen[][] = [MORE_K, MORE_1, MORE_2, MORE_3, MORE_4, MORE_5, MORE_6, MORE_7, MORE_8, MORE_9, MORE_10, MORE_11, MORE_12];
+export const MATH_GENS: Gen[][] = [K, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11, G12].map((gens, g) => [...gens, ...MORE[g]]);
+/** Each grade's problem types, by the topic they make (worked out once). */
+const GENS_BY_TOPIC = MATH_GENS.map((gens) => {
+  const r = mulberry(5);
+  const by = new Map<string, Gen[]>();
+  for (const gen of gens) for (const t of new Set(Array.from({ length: 30 }, () => gen(r).topic))) by.set(t, [...(by.get(t) ?? []), gen]);
+  return by;
 });
+
+/** What each grade covers (shown on the page), in the order the problem types are written. */
+export const MATH_GRADE_TOPICS = GENS_BY_TOPIC.map((by) => [...by.keys()]);
 export const MATH_COURSE = ['', '', '', '', '', '', 'Pre-Algebra', 'Algebra', 'Algebra II', 'Geometry', 'Trigonometry', 'Pre-Calculus', 'Calculus'];
 
-export function mulberry(seed: number): Rng {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
-/** 10 different problems at a grade, mixing the types. */
-export function mathRound(g: number, count = 10, r: Rng = Math.random): MathProblem[] {
-  const gens = MATH_GENS[g];
+/** 10 different problems at a grade, mixing the types — or all from one topic (🎯 topic practice). */
+export function mathRound(g: number, count = 10, r: Rng = Math.random, topic?: string): MathProblem[] {
+  const gens = topic ? GENS_BY_TOPIC[g].get(topic) ?? [] : MATH_GENS[g];
   const out: MathProblem[] = [];
   const seen = new Set<string>();
   let lastTopic = '';
-  for (let k = 0; out.length < count && k < count * 30; k++) {
-    const p = pk(r, gens)(r);
-    if (seen.has(p.q) || (p.topic === lastTopic && k < count * 10)) continue;
+  let lastGen: Gen | null = null;
+  for (let k = 0; gens.length && out.length < count && k < count * 60; k++) {
+    const gen = pk(r, gens);
+    const p = gen(r);
+    if (seen.has(p.q) || (topic && p.topic !== topic)) continue;
+    // mixed: no two of a topic in a row; one topic: no two of the same kind in a row, when there are others
+    if (!topic && p.topic === lastTopic && k < count * 10) continue;
+    if (topic && gen === lastGen && gens.length > 1 && k < count * 10) continue;
     seen.add(p.q);
     lastTopic = p.topic;
+    lastGen = gen;
     out.push(p);
   }
   return out;

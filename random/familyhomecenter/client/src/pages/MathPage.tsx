@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { BonusLine } from '../components/LearningBonus.js';
-import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier } from '../utils/learning.js';
+import { GRADE_SHORT, noTokensWhy, tiersText, useLearning, type Tier, type TopicLap } from '../utils/learning.js';
 import { useDraft } from '../utils/autosave.js';
 import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 
@@ -22,6 +22,8 @@ interface Problem {
 interface Start {
   round_id: string;
   grade: number;
+  /** 🎯 a round of just this topic (null = mixed) */
+  topic?: string | null;
   problems: Problem[];
   tokens: Tier[] | null;
   no_tokens_why: string | null;
@@ -44,9 +46,11 @@ interface Finish {
   bonus?: number;
   no_tokens_why: string | null;
   items: Checked[];
+  topic?: string | null;
+  topic_lap?: TopicLap | null;
 }
 
-/** ➗ Math (📚 Learning): 10 problems at a grade, made fresh each time. K–5 arithmetic; 6 Pre-Algebra … 12 Calculus. */
+/** ➗ Math (📚 Learning): 10 problems at a grade, made fresh each time — mixed, or 🎯 just one topic. K–5 arithmetic; 6 Pre-Algebra … 12 Calculus. */
 export function MathPage() {
   const { activeProfile } = useFamilyMembers();
   const { settings, person, reload } = useLearning(activeProfile?.id);
@@ -72,12 +76,13 @@ export function MathPage() {
   const rewards = settings?.rewards.math;
   const why = settings ? noTokensWhy(person, rewards, g, settings.grades) : null;
 
-  const start = async () => {
+  const start = async (topic?: string) => {
     if (!activeProfile) return;
     setError(null);
     setResult(null);
     try {
-      const r = await api.post<Start>('/learning/math/start', { member_id: activeProfile.id, grade: g, acting_member_id: activeProfile.id });
+      const r = await api.post<Start>('/learning/math/start', { member_id: activeProfile.id, grade: g, topic, acting_member_id: activeProfile.id });
+      window.scrollTo({ top: 0 });
       saved.save({ round: r, answers: [] });
       setStartAnswers([]);
       setRound(r);
@@ -124,6 +129,15 @@ export function MathPage() {
   }
 
   const sub = person?.subjects.math;
+  const lap = sub?.topic_lap ?? null;
+  const payTimes = rewards?.topic_pay_times ?? 1;
+  const topicPays = !!rewards?.tiers.some((t) => t.tokens > 0);
+  /** 🎯 this topic at this grade: what they've done, and whether it can still pay this lap */
+  const topicInfo = (topic: string) => {
+    const st = sub?.topics?.find((x) => x.grade === g && x.topic === topic);
+    const canEarn = !!person && !person.is_parent && person.grade !== null && g >= person.grade && topicPays && !st?.paid_out;
+    return { st, canEarn };
+  };
   return (
     <div className="learning-page">
       <h1>➗ Math</h1>
@@ -134,6 +148,10 @@ export function MathPage() {
           <h2>
             {result.pct === 100 ? '🌟 Perfect!' : result.passed ? '🎉 Passed!' : '💪 Keep practising!'} {result.correct} / {result.total} right ({result.pct}%)
           </h2>
+          {result.topic && <p className="hint">🎯 {result.topic}</p>}
+          {result.topic && result.tokens > 0 && result.topic_lap && result.topic_lap.paid === 0 && result.topic_lap.number > 1 && (
+            <p className="learning-result__tokens">🔁 Every {settings?.grades[result.topic_lap.grade]} topic earned — a new lap starts, and every topic pays again!</p>
+          )}
           {result.tokens > 0 ? <p className="learning-result__tokens">+{result.tokens} 💎 tokens</p> : result.no_tokens_why ? <p className="hint">{result.no_tokens_why}</p> : null}
           {result.bonus ? <p className="learning-result__tokens">🎁 +{result.bonus} 💎 bonus — all of today's tokens earned!</p> : null}
           <ol className="tap-results">
@@ -184,7 +202,8 @@ export function MathPage() {
           {saved.draft && (
             <div className="learning-resume">
               <span>
-                💾 You have a round going: {settings.grades[saved.draft.round.grade]}, {saved.draft.answers.length} of {saved.draft.round.problems.length} problems done
+                💾 You have a round going: {settings.grades[saved.draft.round.grade]}
+                {saved.draft.round.topic ? ` · 🎯 ${saved.draft.round.topic}` : ''}, {saved.draft.answers.length} of {saved.draft.round.problems.length} problems done
               </span>
               <button type="button" className="learning-go" onClick={resume}>
                 ▶ Keep going
@@ -193,9 +212,38 @@ export function MathPage() {
           )}
           <LimitNote status={limit.status} />
           <button type="button" className={saved.draft ? 'secondary' : 'learning-go'} disabled={!!limit.status?.over} onClick={() => void start()}>
-            {saved.draft ? '↻ Start 10 new problems' : '▶ Start 10 problems'}
+            {saved.draft ? '↻ Start 10 new mixed problems' : '▶ Start 10 mixed problems'}
           </button>
           {error && <div className="settings-login__error">{error}</div>}
+        </section>
+      )}
+
+      {activeProfile && settings && topics && topics.topics[g]?.length > 0 && (
+        <section className="panel">
+          <h2>🎯 Practise one topic</h2>
+          <p className="hint">
+            10 problems of just one {settings.grades[g]} topic. Each topic pays 💎 {payTimes > 1 ? `up to ${payTimes} times` : 'once'} per 🔁 lap — pass every topic at your grade and
+            they all pay again.
+          </p>
+          {lap && (
+            <p className="learning-earn">
+              🔁 Lap {lap.number}: {lap.paid} of {lap.total} {settings.grades[lap.grade]} topics earned
+            </p>
+          )}
+          <div className="math-topics">
+            {topics.topics[g].map((t) => {
+              const { st, canEarn } = topicInfo(t);
+              return (
+                <button key={t} type="button" className={`math-topic${st?.paid_out ? ' is-done' : ''}`} disabled={!!limit.status?.over} onClick={() => void start(t)}>
+                  <span className="math-topic__name">{t}</span>
+                  <span className="math-topic__status">
+                    {st?.paid_out ? '✅ earned this lap' : canEarn ? `💎 ${st && st.paid_lap ? `${st.paid_lap} of ${payTimes} earned` : 'can earn'}` : st ? 'practice' : 'new'}
+                    {st ? ` · best ${st.best}/${st.total}` : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -205,7 +253,8 @@ export function MathPage() {
           <ul className="hint">
             {sub.recent.map((r, i) => (
               <li key={i}>
-                {new Date(r.at).toLocaleDateString()} · {settings.grades[r.grade]} · {r.correct}/{r.total}
+                {new Date(r.at).toLocaleDateString()} · {settings.grades[r.grade]}
+                {r.topic ? ` · 🎯 ${r.topic}` : ''} · {r.correct}/{r.total}
                 {r.tokens ? ` · +${r.tokens} 💎` : ''}
               </li>
             ))}
@@ -216,10 +265,11 @@ export function MathPage() {
       <section className="panel">
         <h2>How it works</h2>
         <ul className="hint">
-          <li>10 problems, mixed. Type the answer (or tap one) and Check — you'll see the right answer and a tip.</li>
+          <li>10 problems, mixed — or 🎯 pick one topic to practise just that. Type the answer (or tap one) and Check — you'll see the right answer and a tip.</li>
           <li>Fractions like 3/4 or −2/3 are fine, and so are decimals — any equal form counts.</li>
           <li>6th grade is Pre-Algebra, then Algebra, Algebra II, Geometry, Trigonometry, Pre-Calculus and Calculus in 12th.</li>
           <li>Try any grade. Tokens come from your own grade or higher (a parent sets your grade).</li>
+          <li>🎯 Each topic pays once per 🔁 lap (a parent can make it more). Earn every topic at your grade and a new lap starts. Topic rounds don't use up your mixed rounds for the day.</li>
         </ul>
         <p>
           <Link to="/math/lessons">📖 Math lessons</Link> — rules, formulas and theorems in plain words, with a quiz for 💎.
@@ -283,7 +333,8 @@ function MathRound({
       <section className="panel tap-round">
         <div className="spelling-round__top">
           <span>
-            ➗ {gradeName} · <strong>{i + 1}</strong> of {round.problems.length} · <span className="hint">{p.topic}</span>
+            ➗ {gradeName}
+            {round.topic ? ' · 🎯' : ''} · <strong>{i + 1}</strong> of {round.problems.length} · <span className="hint">{p.topic}</span>
           </span>
           <button type="button" className="link-button" onClick={onQuit}>
             ✕ Stop
