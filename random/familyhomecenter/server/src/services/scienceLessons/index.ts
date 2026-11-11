@@ -8,5 +8,7 @@ import { S_4 } from './s4.js';
 import { S_5 } from './s5.js';
 import { S_6 } from './s6.js';
 import { S_7 } from './s7.js';
+import { S_8 } from './s8.js';
+import { S_9 } from './s9.js';
 
-export const SCIENCE_TEXT: string[] = [S_K, S_1, S_2, S_3, S_4, S_5, S_6, S_7];
+export const SCIENCE_TEXT: string[] = [S_K, S_1, S_2, S_3, S_4, S_5, S_6, S_7, S_8, S_9];
