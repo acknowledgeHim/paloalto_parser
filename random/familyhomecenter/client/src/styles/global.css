@@ -3581,6 +3581,31 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .backup-status__row.is-warn { border-left-color: #f9a825; }
 .backup-status__row.is-bad { border-left-color: #c62828; }
 .backup-status__row meter { width: 100%; max-width: 16rem; display: block; margin-top: 0.2rem; }
+.backup-controls__row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.35rem; }
+.backup-controls__time { display: inline-flex; gap: 0.35rem; align-items: center; }
+.backup-controls__setup pre { white-space: pre-wrap; word-break: break-all; font-size: 0.8rem; background: rgba(127, 127, 127, 0.12); padding: 0.5rem; border-radius: 4px; }
+.backup-job.is-archived { opacity: 0.6; }
+.backup-job__head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+.backup-job code, .backup-history code { word-break: break-all; }
+.backup-job__problems { margin: 0.2rem 0; padding-left: 1.1rem; color: #b26a00; }
+.backup-job__pw { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.5rem; border-radius: 4px; background: rgba(249, 168, 37, 0.12); }
+.backup-form { max-width: 36rem; }
+/* fieldsets are min-content wide by default: long folder paths would push the form off a phone */
+.backup-form fieldset { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; border: 1px solid var(--border, #e2e6ec); border-radius: 8px; }
+.backup-form label:not(.relatives__check) { display: flex; flex-direction: column; gap: 0.25rem; }
+.backup-form .relatives__check { align-items: flex-start; }
+.backup-form .relatives__check input { margin-top: 0.2rem; flex-shrink: 0; }
+.backup-form code { word-break: break-all; }
+.backup-form__folder, .backup-form__when { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.backup-form__folder input { flex: 1; min-width: 0; }
+.backup-history { max-width: 46rem; width: 100%; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.backup-history label:not(.relatives__check) { display: flex; flex-direction: column; gap: 0.25rem; }
+.backup-history__search { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+.backup-history__search input { flex: 1; min-width: 0; }
+.backup-history__list { max-height: 50vh; overflow-y: auto; margin: 0.5rem 0; }
+.backup-history__crumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.3rem; }
+.backup-history__entry { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.2rem 0; border-bottom: 1px solid rgba(127, 127, 127, 0.15); }
+.backup-history__done { color: #2e7d32; }
 
 /* ⌨️ Typing → 💎 Tokens → 🎒 By school grade */
 .typing-grades { display: flex; flex-direction: column; gap: 0.4rem; }

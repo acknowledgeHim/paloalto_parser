@@ -17,6 +17,7 @@ import { DeviceCertificateSettings } from '../components/DeviceCertificateSettin
 import { TokenSettings } from '../components/TokenSettings.js';
 import { TypingSettings } from '../components/TypingSettings.js';
 import { BackupStatusSettings } from '../components/BackupStatusSettings.js';
+import { BackupJobsSettings } from '../components/BackupJobs.js';
 
 interface AuthStatus {
   member_id: string | null;
@@ -300,6 +301,8 @@ export function SettingsPage() {
       <CameraSettings />
 
       <BackupStatusSettings />
+
+      <BackupJobsSettings />
 
       <DeviceCertificateSettings />
 

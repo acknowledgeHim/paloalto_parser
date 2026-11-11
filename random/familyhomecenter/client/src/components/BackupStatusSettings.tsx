@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { SystemBackupControls } from './BackupJobs.js';
 
 interface RunStatus {
   result: string;
@@ -113,6 +114,7 @@ export function BackupStatusSettings() {
               In <code>server/data/backups/</code>. The nightly backup makes one each night. Without it, see <code>docs/BACKUP.md</code>.
             </span>
           </div>
+          <SystemBackupControls onChanged={() => void load()} />
           <button type="button" className="secondary" onClick={() => void load()}>
             ↻ Check again
           </button>

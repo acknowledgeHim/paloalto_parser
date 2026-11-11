@@ -555,6 +555,43 @@ sudo RESTIC_PASSWORD_FILE=/root/.restic-password restic -r /mnt/backup/restic sn
 sudo umount /mnt/backup
 ```
 
+### 9f. Buttons in the app (▶ Back up now, 🩺 Check now, ⏰ time)
+
+**⚙️ Settings → 💾 Backups → 🎛️ The Pi’s nightly backup** shows when it runs next and has
+**▶ Back up now**, **🩺 Check now** and **⏰ Every night at … → Save time**. The backup runs as
+root, so the app (which isn't root) needs permission for exactly those three commands, and
+nothing else. Once, on the Pi:
+
+```bash
+# the helper that changes the time (only accepts HH:MM)
+sudo tee /usr/local/sbin/fhc-backup-schedule >/dev/null <<'EOF'
+#!/bin/bash
+# ⏰ Set the nightly backup time: fhc-backup-schedule 02:30
+set -euo pipefail
+T="${1:-}"
+[[ "$T" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || { echo "Use a time like 02:30" >&2; exit 2; }
+mkdir -p /etc/systemd/system/fhc-backup.timer.d
+printf '[Timer]\nOnCalendar=\nOnCalendar=*-*-* %s\n' "$T" > /etc/systemd/system/fhc-backup.timer.d/time.conf
+systemctl daemon-reload
+systemctl restart fhc-backup.timer
+EOF
+sudo chmod 755 /usr/local/sbin/fhc-backup-schedule
+
+# let the app's user (pi — change it if the app runs as someone else) run just these
+sudo tee /etc/sudoers.d/fhc-backup >/dev/null <<'EOF'
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block fhc-backup.service, /usr/bin/systemctl start --no-block fhc-backup-check.service, /usr/local/sbin/fhc-backup-schedule
+EOF
+sudo chmod 440 /etc/sudoers.d/fhc-backup
+sudo visudo -c      # must say "parsed OK"
+```
+
+Until that's done the buttons say so (and show the sudoers line). The time is kept in
+`/etc/systemd/system/fhc-backup.timer.d/time.conf`; remove that file and run
+`sudo systemctl daemon-reload && sudo systemctl restart fhc-backup.timer` to go back to 02:30.
+
+**Backing up other folders, to other places, on their own schedule** (with history you can browse
+and restore from in the app): see docs/APP_BACKUPS.md.
+
 ---
 
 ## 10. Why old snapshots are never removed (and how to change it)
@@ -639,5 +676,5 @@ A fire, theft, flood or power surge can take both drives at once. For what can't
 | Scripts | `/usr/local/sbin/fhc-backup`, `/usr/local/sbin/fhc-backup-check` |
 | Schedule | `fhc-backup.timer` nightly 02:30 · `fhc-backup-check.timer` Sundays 05:00 |
 | Status | `/var/lib/fhc-backup/status.json`, `check.json`, `last.log`, `check.log` |
-| Run now | `sudo systemctl start --no-block fhc-backup` |
+| Run now | `sudo systemctl start --no-block fhc-backup`, or ▶ in Settings → 💾 Backups (§9f) |
 | App's own backup | docs/BACKUP.md (`npm run backup`, run by the nightly job) |

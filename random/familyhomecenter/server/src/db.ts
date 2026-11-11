@@ -1729,3 +1729,52 @@ db.exec(`
     PRIMARY KEY (family_member_id, key)
   );
 `);
+// 📦 Backups the app runs itself (Settings → 💾 Backups → 📦 Photo & movie backups,
+// services/backupJobs.ts): which folders go where, when, and each run's result. A job is never
+// deleted (archived = taken off the list); the backups it made are never touched by the app.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS backup_jobs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    -- JSON array of {key: 'photos' | 'videos' | 'movies' | 'folder', path?: string}
+    sources TEXT NOT NULL,
+    dest TEXT NOT NULL,
+    -- 'history' = restic snapshots (browse + restore any date); 'copy' = plain folders (rsync, older versions kept aside)
+    method TEXT NOT NULL DEFAULT 'history',
+    -- 'off' | 'daily' | 'weekly'
+    schedule TEXT NOT NULL DEFAULT 'daily',
+    at_time TEXT NOT NULL DEFAULT '03:00',
+    weekday INTEGER NOT NULL DEFAULT 0,
+    check_weekly INTEGER NOT NULL DEFAULT 1,
+    restore_dir TEXT,
+    same_disk_ok INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    schedule_set_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+  );
+  -- 🔑 The password a 'history' backup is locked with (restic). Kept in the database so the app's
+  -- own nightly backup (docs/BACKUP.md) keeps a copy; parents can see it to save it elsewhere.
+  CREATE TABLE IF NOT EXISTS backup_job_keys (
+    job_id TEXT PRIMARY KEY,
+    password TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS backup_runs (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    -- 'backup' | 'check' | 'restore'
+    kind TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    -- 'ok' | 'warning' | 'failed' | 'cancelled'; NULL while running (or the app restarted mid-run)
+    result TEXT,
+    message TEXT,
+    -- JSON: files_new, files_changed, bytes_added, snapshot_id, restore target, …
+    stats TEXT,
+    by_member_id TEXT,
+    trigger TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_backup_runs_job ON backup_runs (job_id, started_at);
+`);
