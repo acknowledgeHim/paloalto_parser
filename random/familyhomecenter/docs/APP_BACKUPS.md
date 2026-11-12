@@ -48,6 +48,56 @@ The app runs as the `pi` user (not root), so the backup folder must be writable 
 needs an SSH key the other computer accepts (`ssh-copy-id user@host`, then `ssh user@host` once
 to accept its fingerprint).
 
+## A USB drive plugged into the Pi (e.g. /mnt/exthdd_backup)
+
+Do this once on the Pi, over SSH or in a terminal. It only mounts the drive. **It never formats or
+erases it**, and whatever is already on the drive stays there.
+
+1. **Find the drive:** `lsblk -f`. Look for the new disk (usually `sda`) and its partition
+   (`sda1`), note its **FSTYPE** (ext4, exfat or ntfs), and run `sudo blkid /dev/sda1` to get its
+   **UUID**. Don't use `mmcblk0…` (the Pi's SD card) or the drive that holds `/`.
+2. **For NTFS only:** `sudo apt install -y ntfs-3g`. ext4 and exFAT need nothing.
+3. **Make the folder and add one line to `/etc/fstab`.** First copy fstab with
+   `sudo cp /etc/fstab /etc/fstab.before-exthdd`, then run `sudo mkdir -p /mnt/exthdd_backup` and
+   add the line for your FSTYPE with `sudo nano /etc/fstab`, putting your UUID in place of
+   `XXXX-XXXX`:
+
+   ```
+   # ext4
+   UUID=XXXX-XXXX  /mnt/exthdd_backup  ext4   defaults,nofail,x-systemd.device-timeout=10s  0  2
+   # exfat
+   UUID=XXXX-XXXX  /mnt/exthdd_backup  exfat  defaults,nofail,uid=pi,gid=pi,umask=022,x-systemd.device-timeout=10s  0  0
+   # ntfs
+   UUID=XXXX-XXXX  /mnt/exthdd_backup  ntfs-3g  defaults,nofail,uid=pi,gid=pi,umask=022,x-systemd.device-timeout=10s  0  0
+   ```
+
+   `nofail` means the Pi still starts normally when the drive is unplugged.
+4. **Mount it and test:** `sudo systemctl daemon-reload && sudo mount -a`. Then
+   `findmnt /mnt/exthdd_backup` should name the drive, and `df -h /mnt/exthdd_backup` should show
+   the drive's size, not the SD card's. If `mount -a` prints an error, fix the line before you
+   reboot.
+5. **Give the app a folder on it:** `sudo mkdir -p /mnt/exthdd_backup/familyhomecenter`. For ext4,
+   also run `sudo chown pi:pi /mnt/exthdd_backup/familyhomecenter`. exFAT and NTFS are already
+   owned by `pi` through `uid=pi`. Check that `pi` can write there:
+   `sudo -u pi touch /mnt/exthdd_backup/familyhomecenter/.ok && echo writable`.
+6. **Reboot once** (`sudo reboot`) and check `findmnt /mnt/exthdd_backup` again. The drive should
+   mount on its own from now on. If it was plugged in after start-up, run `sudo mount -a`.
+
+**Then in the app:** ⚙️ Settings → 📦 Photo & movie backups → **＋ New backup**:
+
+- **🕰️ With history (recommended):** tick 📷 Photos, 🎬 Home videos and 🎞️ Movie library, and
+  set **Where it goes** to `/mnt/exthdd_backup/familyhomecenter/history`. The app creates the
+  backup there the first time. Choose **Every night**, for example at 01:00, which stays clear of
+  the Pi's own backup at 02:30. Then **🔑 save the password somewhere off the Pi.**
+- **📁 Plain copy** instead, if you'd rather open the files straight from the drive on a computer:
+  set **Where it goes** to `/mnt/exthdd_backup/familyhomecenter/copy`. Each library gets its own
+  folder there.
+
+Press **▶ Back up now** for the first run, which takes a long time. If the drive is ever
+unplugged, `/mnt/exthdd_backup` becomes an ordinary folder on the SD card again. The backup then
+refuses to run (*“on the Pi’s own disk … is the backup drive plugged in and mounted?”*) instead
+of filling up the SD card. **Leave “It’s OK that it’s on the Pi’s own disk” unticked.**
+
 ## What it refuses to do, on purpose
 
 - **Back up onto the Pi's own disk by accident.** If the folder is on the same disk as the Pi
