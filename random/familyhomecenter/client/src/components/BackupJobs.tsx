@@ -32,7 +32,7 @@ interface Job {
   resolved: Array<{ label: string; path: string; name: string }>;
   dest: string;
   method: 'history' | 'copy';
-  schedule: 'off' | 'daily' | 'weekly';
+  schedule: 'off' | 'daily' | 'weekly' | 'after_pi';
   at_time: string;
   weekday: number;
   check_weekly: number;
@@ -76,6 +76,8 @@ interface State {
   jobs: Job[];
   running: Progress | null;
   queue: Array<{ run_id: string; job_id: string; kind: string }>;
+  /** the Pi's own backup is running, so these wait */
+  waiting_for_pi: boolean;
   system: SystemInfo;
 }
 
@@ -94,8 +96,16 @@ function size(n: number | null | undefined): string {
 }
 const resultIcon = (r: string | null | undefined) => (r === 'ok' ? '✅' : r === 'warning' ? '⚠️' : r === 'failed' || r === 'interrupted' ? '❌' : r === 'cancelled' ? '⏹️' : '⏳');
 const resultCls = (r: string | null | undefined) => (r === 'ok' ? 'is-ok' : r === 'warning' || r === 'cancelled' ? 'is-warn' : r === 'failed' || r === 'interrupted' ? 'is-bad' : '');
-const scheduleText = (j: Pick<Job, 'schedule' | 'at_time' | 'weekday'>) =>
-  j.schedule === 'off' ? 'Only when you press ▶' : j.schedule === 'daily' ? `Every night at ${j.at_time}` : `Every ${DAYS[j.weekday]} at ${j.at_time}`;
+const scheduleText = (j: Pick<Job, 'schedule' | 'at_time' | 'weekday'>, sys?: SystemInfo) =>
+  j.schedule === 'off'
+    ? 'Only when you press ▶'
+    : j.schedule === 'after_pi'
+      ? sys && !sys.installed
+        ? `Every night at ${j.at_time} (the Pi’s own backup isn’t set up)`
+        : 'Every night, right after the Pi’s own backup'
+      : j.schedule === 'daily'
+        ? `Every night at ${j.at_time}`
+        : `Every ${DAYS[j.weekday]} at ${j.at_time}`;
 
 /** One GET /backups shared by both parts of the card, polled while something runs. */
 function useBackups() {
@@ -256,7 +266,7 @@ export function BackupJobsSettings() {
                     <strong>
                       {j.method === 'history' ? '🕰️' : '📁'} {j.name}
                     </strong>
-                    <span className="hint">{scheduleText(j)}</span>
+                    <span className="hint">{scheduleText(j, s.system)}</span>
                     {j.archived ? <span className="badge">archived</span> : null}
                   </div>
                   <span className="hint">
@@ -274,7 +284,7 @@ export function BackupJobsSettings() {
                       </button>
                     </span>
                   ) : waiting.length ? (
-                    <span>⏳ Waiting its turn ({waiting.map((w) => w.kind).join(', ')})</span>
+                    <span>⏳ {s.waiting_for_pi ? 'Waiting for the Pi’s own backup to finish' : 'Waiting its turn'} ({waiting.map((w) => w.kind).join(', ')})</span>
                   ) : (
                     <span>
                       {lb ? (
@@ -292,6 +302,9 @@ export function BackupJobsSettings() {
                     </span>
                   )}
                   {j.next_run && !j.archived && <span className="hint">Next: {when(j.next_run)}</span>}
+                  {j.schedule === 'after_pi' && s.system.installed && s.system.next_run && !j.archived && (
+                    <span className="hint">Next: when the Pi’s backup at {when(s.system.next_run)} is done</span>
+                  )}
                   {j.problems.length > 0 && !j.archived && (
                     <ul className="backup-job__problems">
                       {j.problems.map((p) => (
@@ -368,6 +381,7 @@ export function BackupJobsSettings() {
         <JobForm
           job={editing === 'new' ? null : editing}
           presets={s.presets}
+          piInstalled={s.system.installed}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -381,7 +395,7 @@ export function BackupJobsSettings() {
   );
 }
 
-function JobForm({ job, presets, onClose, onSaved }: { job: Job | null; presets: State['presets']; onClose: () => void; onSaved: () => void }) {
+function JobForm({ job, presets, piInstalled, onClose, onSaved }: { job: Job | null; presets: State['presets']; piInstalled: boolean; onClose: () => void; onSaved: () => void }) {
   const acting = useActing();
   const [d, setD] = useState(() => ({
     name: job?.name ?? 'Photos & home videos',
@@ -389,7 +403,7 @@ function JobForm({ job, presets, onClose, onSaved }: { job: Job | null; presets:
     keys: new Set<SourceKey>(job ? job.sources.filter((x) => x.key !== 'folder').map((x) => x.key) : ['photos', 'videos']),
     folders: job ? job.sources.filter((x) => x.key === 'folder').map((x) => x.path ?? '') : [],
     dest: job?.dest ?? '',
-    schedule: job?.schedule ?? ('daily' as Job['schedule']),
+    schedule: job?.schedule ?? ((piInstalled ? 'after_pi' : 'daily') as Job['schedule']),
     at_time: job?.at_time ?? '03:00',
     weekday: job?.weekday ?? 0,
     check_weekly: job ? Boolean(job.check_weekly) : true,
@@ -504,7 +518,8 @@ function JobForm({ job, presets, onClose, onSaved }: { job: Job | null; presets:
           <legend>When</legend>
           <div className="backup-form__when">
             <select value={d.schedule} onChange={(e) => set('schedule', e.target.value as Job['schedule'])} aria-label="How often">
-              <option value="daily">Every night</option>
+              <option value="after_pi">Every night, right after the Pi’s own backup</option>
+              <option value="daily">Every night at a time</option>
               <option value="weekly">Once a week</option>
               <option value="off">Only when I press ▶</option>
             </select>
@@ -517,9 +532,15 @@ function JobForm({ job, presets, onClose, onSaved }: { job: Job | null; presets:
                 ))}
               </select>
             )}
-            {d.schedule !== 'off' && <input type="time" value={d.at_time} onChange={(e) => set('at_time', e.target.value)} aria-label="Time" required />}
+            {d.schedule !== 'off' && (d.schedule !== 'after_pi' || !piInstalled) && <input type="time" value={d.at_time} onChange={(e) => set('at_time', e.target.value)} aria-label="Time" required />}
           </div>
-          <span className="hint">If the Pi is off then, it runs as soon as it’s back on. Pick a different time from the Pi’s own nightly backup.</span>
+          <span className="hint">
+            {d.schedule === 'after_pi'
+              ? piInstalled
+                ? 'The Pi’s own backup (all of the Pi, to its backup drive) goes first; this starts as soon as it’s done, every night.'
+                : 'The Pi’s own nightly backup isn’t set up on this Pi, so this runs every night at this time instead.'
+              : 'If the Pi is off then, it runs as soon as it’s back on. If the Pi’s own backup is running at that time, this waits for it to finish.'}
+          </span>
           {d.method === 'history' && (
             <label className="relatives__check">
               <input type="checkbox" checked={d.check_weekly} onChange={(e) => set('check_weekly', e.target.checked)} /> 🩺 Check the backup can be read back every Sunday
@@ -795,7 +816,7 @@ function RunsList({ job, onClose }: { job: Job; onClose: () => void }) {
           <div key={r.id} className={`backup-status__row ${resultCls(r.result)}`}>
             <strong>
               {resultIcon(r.result)} {label[r.kind]} · {when(r.started_at)}
-              {r.trigger === 'schedule' ? ' (scheduled)' : ''}
+              {r.trigger === 'schedule' ? ' (scheduled)' : r.trigger === 'after the Pi’s backup' ? ' (after the Pi’s backup)' : ''}
             </strong>
             {r.message && <span className="hint">{r.message}</span>}
             {r.kind === 'restore' && typeof r.stats?.target === 'string' && (

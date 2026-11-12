@@ -9,6 +9,7 @@ import { config } from '../config.js';
 import { db } from '../db.js';
 import { libraryDir } from './movieLibrary.js';
 import { videosDir } from './videoFiling.js';
+import { piBackupRun, type PiBackupRun } from './systemBackup.js';
 
 /**
  * 📦 Backups the app runs itself (Settings → 💾 Backups → 📦 Photo & movie backups): the photo
@@ -27,7 +28,8 @@ import { videosDir } from './videoFiling.js';
  */
 
 export type Method = 'history' | 'copy';
-export type Schedule = 'off' | 'daily' | 'weekly';
+/** after_pi: every night, as soon as the Pi's own nightly backup (fhc-backup.service) has finished */
+export type Schedule = 'off' | 'daily' | 'weekly' | 'after_pi';
 export type SourceKey = 'photos' | 'videos' | 'movies' | 'folder';
 export interface SourceSpec {
   key: SourceKey;
@@ -341,9 +343,18 @@ export function cancel(runId: string): boolean {
   return false;
 }
 
+// The Pi's own nightly backup goes first: while it runs, 📦 backups and checks wait (restores don't).
+// Looked at every minute by tick(); readPi can be swapped in tests.
+let readPi: () => Promise<PiBackupRun> = piBackupRun;
+export const setPiReader = (f: () => Promise<PiBackupRun>) => (readPi = f);
+let piActive = false;
+export const waitingForPi = () => piActive && queue.some((t) => t.kind !== 'restore');
+
 async function pump() {
   if (running || !queue.length) return;
-  const task = queue.shift()!;
+  const at = queue.findIndex((t) => !piActive || t.kind === 'restore');
+  if (at < 0) return;
+  const task = queue.splice(at, 1)[0];
   // re-read the job: it may have been edited while waiting
   const job = (db.prepare('SELECT * FROM backup_jobs WHERE id = ?').get(task.job.id) as JobRow | undefined) ?? task.job;
   running = {
@@ -597,6 +608,7 @@ export function size(n: number): string {
 /** The most recent time this schedule was due, at or before `now` (local time); null when off. */
 export function lastDue(schedule: Schedule, atTime: string, weekday: number, now = new Date()): Date | null {
   if (schedule === 'off') return null;
+  if (schedule === 'after_pi') schedule = 'daily'; // only used when the Pi's backup isn't set up
   const [h, m] = atTime.split(':').map(Number);
   const d = new Date(now);
   d.setHours(h || 0, m || 0, 0, 0);
@@ -618,11 +630,20 @@ export function nextDue(schedule: Schedule, atTime: string, weekday: number, now
 const ranSince = (jobId: string, kind: string, since: Date) => Boolean(db.prepare('SELECT 1 FROM backup_runs WHERE job_id = ? AND kind = ? AND started_at >= ? LIMIT 1').get(jobId, kind, since.toISOString()));
 
 /** Each minute: start any backup that's due (or was missed while the Pi was off), and the weekly 🩺 check. */
-export function tick(now = new Date()) {
+export async function tick(now = new Date()) {
   const jobs = db.prepare("SELECT * FROM backup_jobs WHERE archived = 0 AND schedule != 'off'").all() as JobRow[];
+  const pi = await readPi().catch((): PiBackupRun => ({ installed: false, active: false, last_end: null }));
+  piActive = pi.active;
   for (const j of jobs) {
-    const due = lastDue(j.schedule, j.at_time, j.weekday, now);
-    if (due && due.toISOString() >= j.schedule_set_at && !ranSince(j.id, 'backup', due) && !busy(j.id, 'backup')) enqueue(j, 'backup', null, 'schedule');
+    if (j.schedule === 'after_pi' && pi.installed) {
+      // right after the Pi's backup finishes (whether it went well or not); a new schedule waits for the next one
+      const end = pi.last_end ? new Date(pi.last_end) : null;
+      if (!pi.active && end && pi.last_end! >= j.schedule_set_at && !ranSince(j.id, 'backup', end) && !busy(j.id, 'backup')) enqueue(j, 'backup', null, 'after the Pi’s backup');
+    } else {
+      // (after_pi without the Pi's backup set up: every night at its time instead)
+      const due = lastDue(j.schedule, j.at_time, j.weekday, now);
+      if (due && due.toISOString() >= j.schedule_set_at && !ranSince(j.id, 'backup', due) && !busy(j.id, 'backup')) enqueue(j, 'backup', null, 'schedule');
+    }
     if (j.method === 'history' && j.check_weekly) {
       // Sundays, an hour and a half after the backup time
       const [h, m] = j.at_time.split(':').map(Number);
@@ -631,6 +652,8 @@ export function tick(now = new Date()) {
       if (c && c.toISOString() >= j.schedule_set_at && !ranSince(j.id, 'check', c) && !busy(j.id, 'check')) enqueue(j, 'check', null, 'schedule');
     }
   }
+  // anything held while the Pi's backup ran can go now
+  void pump();
 }
 
 let started = false;
@@ -638,10 +661,6 @@ export function startBackupJobs() {
   if (started) return;
   started = true;
   cron.schedule('* * * * *', () => {
-    try {
-      tick();
-    } catch (e) {
-      console.error('[backups] schedule check failed', e);
-    }
+    tick().catch((e) => console.error('[backups] schedule check failed', e));
   });
 }

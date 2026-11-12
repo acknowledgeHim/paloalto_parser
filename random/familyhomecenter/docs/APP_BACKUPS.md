@@ -35,8 +35,13 @@ over sftp.
    **＋ Another folder** with its full path, e.g. `/mnt/family-photos`), and where it goes.
 2. **Where it goes** for 🕰️: a new or empty folder (the backup is created there the first time),
    or a folder that already has a restic backup — then put its password in 🔑.
-3. **When**: every night or once a week at a time, or only by hand. If the Pi was off at that time,
-   it runs as soon as it's back on. Pick a different time from the Pi's own backup (02:30).
+3. **When**: **every night, right after the Pi's own backup** (the default when the Pi's backup is
+   set up), every night or once a week at a time, or only by hand. If the Pi was off at that time,
+   it runs as soon as it's back on. **The Pi's own backup always goes first**: while it runs, these
+   backups and checks wait their turn, and start as soon as it's done (restores don't wait). If
+   the Pi's own backup isn't set up, "right after" runs at the time you pick instead. A first
+   backup that takes days may still be going when the next night's Pi backup starts. Both then
+   run at once, with this one at low priority.
 4. 🕰️ only: **🩺 Check … every Sunday** (on by default) checks the backup can be read back, an
    hour and a half after the backup time. **Restore into** is where restores go (default: a
    `fhc-restored` folder next to the backup).
@@ -87,8 +92,8 @@ erases it**, and whatever is already on the drive stays there.
 
 - **🕰️ With history (recommended):** tick 📷 Photos, 🎬 Home videos and 🎞️ Movie library, and
   set **Where it goes** to `/mnt/exthdd_backup/familyhomecenter/history`. The app creates the
-  backup there the first time. Choose **Every night**, for example at 01:00, which stays clear of
-  the Pi's own backup at 02:30. Then **🔑 save the password somewhere off the Pi.**
+  backup there the first time. Choose **Every night, right after the Pi's own backup**, so the Pi's
+  backup (02:30) goes first and this one follows. Then **🔑 save the password somewhere off the Pi.**
 - **📁 Plain copy** instead, if you'd rather open the files straight from the drive on a computer:
   set **Where it goes** to `/mnt/exthdd_backup/familyhomecenter/copy`. Each library gets its own
   folder there.

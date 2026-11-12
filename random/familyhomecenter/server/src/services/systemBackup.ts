@@ -72,3 +72,25 @@ export async function setSystemTime(time: string): Promise<ControlResult> {
   if (r.code === 0) return { ok: true };
   return { ok: false, setup: needsSetup(r.err) || /No such file|command not found/i.test(r.err), error: r.err.trim().slice(0, 500) || `exit ${r.code}` };
 }
+
+export interface PiBackupRun {
+  /** is fhc-backup.service there at all? */
+  installed: boolean;
+  /** running right now */
+  active: boolean;
+  /** when it last finished (ok or not) */
+  last_end: string | null;
+}
+
+/** Is the Pi's own nightly backup running, and when did it last finish? (📦 app backups wait for it.) */
+export async function piBackupRun(): Promise<PiBackupRun> {
+  const r = await run(SYSTEMCTL, ['show', UNITS.backup, '--timestamp=unix', '--property=LoadState,ActiveState,ExecMainExitTimestamp,InactiveEnterTimestamp']);
+  const p = props(r.out);
+  const installed = r.code === 0 && p.LoadState === 'loaded';
+  const ends = [unixTime(p.ExecMainExitTimestamp), unixTime(p.InactiveEnterTimestamp)].filter((x): x is string => Boolean(x)).sort();
+  return {
+    installed,
+    active: installed && (p.ActiveState === 'active' || p.ActiveState === 'activating' || p.ActiveState === 'deactivating' || p.ActiveState === 'reloading'),
+    last_end: installed ? ends[ends.length - 1] ?? null : null,
+  };
+}

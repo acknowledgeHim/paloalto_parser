@@ -22,6 +22,7 @@ import {
   presets,
   problems,
   queued,
+  waitingForPi,
   resolveSources,
   restoreTarget,
   saveKey,
@@ -55,7 +56,8 @@ function shown(r: RunRow) {
 async function view(j: JobRow) {
   const last = (kind: string) => db.prepare('SELECT * FROM backup_runs WHERE job_id = ? AND kind = ? ORDER BY started_at DESC LIMIT 1').get(j.id, kind) as RunRow | undefined;
   const lastOk = db.prepare("SELECT finished_at FROM backup_runs WHERE job_id = ? AND kind = 'backup' AND result IN ('ok', 'warning') ORDER BY started_at DESC LIMIT 1").get(j.id) as { finished_at: string } | undefined;
-  const next = nextDue(j.schedule, j.at_time, j.weekday);
+  // after_pi: shown next to the Pi backup's own next time in the card
+  const next = j.schedule === 'after_pi' ? null : nextDue(j.schedule, j.at_time, j.weekday);
   return {
     ...j,
     sources: parseSources(j.sources),
@@ -79,7 +81,7 @@ backupsRouter.get(
   asyncHandler(async (req, res) => {
     const jobs = db.prepare(`SELECT * FROM backup_jobs ${req.query.all === '1' ? '' : 'WHERE archived = 0'} ORDER BY created_at`).all() as JobRow[];
     const [t, system] = await Promise.all([tools(), systemBackupInfo()]);
-    res.json({ tools: t, presets: presets(), jobs: await Promise.all(jobs.map(view)), running: nowRunning(), queue: queued(), system });
+    res.json({ tools: t, presets: presets(), jobs: await Promise.all(jobs.map(view)), running: nowRunning(), queue: queued(), waiting_for_pi: waitingForPi(), system });
   })
 );
 
@@ -130,7 +132,7 @@ function clean(b: Body, base: Partial<JobRow>): Partial<JobRow> | string {
     out.method = b.method;
   }
   if (b.schedule !== undefined) {
-    if (!['off', 'daily', 'weekly'].includes(b.schedule)) return 'schedule: off, daily or weekly';
+    if (!['off', 'daily', 'weekly', 'after_pi'].includes(b.schedule)) return 'schedule: off, daily, weekly or after_pi';
     out.schedule = b.schedule as JobRow['schedule'];
   }
   if (b.at_time !== undefined) {
