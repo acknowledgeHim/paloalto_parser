@@ -253,6 +253,8 @@ export function HillHopperRun({
     let dark: HTMLCanvasElement | null = null;
     /** ⛏️ how dark it is underground (fades in and out as you dig in and pop out) */
     let ugDark = 0;
+    /** where the car sits across the screen (0 = left edge) */
+    let camLead = 0.32;
     let jumpReady = 0; // seconds until another jump is allowed
     let shake = 0;
     let zoom = 1;
@@ -299,6 +301,16 @@ export function HillHopperRun({
       const ws = wx ? wx.step(car, p.gas, DT, digger?.underground ?? false) : null;
       if (ws?.say) say(ws.say);
       if (ws?.fell) return finish('fell');
+      if (ws?.washed) {
+        // 🌊 swept all the way back to the start (coins and the furthest you got are kept)
+        Object.assign(car, newCar(terrain, startX));
+        airRot = 0;
+        airTime = 0;
+        gliding = false;
+        glideLeft = glideMax;
+        shake = Math.max(shake, 0.4);
+        return;
+      }
       if (ws?.noGas && input > 0) input = 0;
       if (input !== 0) started = true;
       if (started) fuel = Math.max(0, fuel - FUEL_PER_SEC * world.fuelBurn * DT);
@@ -374,6 +386,7 @@ export function HillHopperRun({
         // ❄️ deep snow holds you back
         const k = Math.exp(-ws.drag * DT);
         car.vx *= k;
+        car.w *= Math.exp(-1.5 * ws.drag * DT); // (and holds the car steady — no flipping over backwards in it)
         for (const w of car.wheels) w.vx *= k;
       }
       wx?.afterStep(car, DT);
@@ -710,7 +723,10 @@ export function HillHopperRun({
       zoom += ((near ? 0.68 : 1) - zoom) * 0.04;
       const S = Math.max(15, Math.min(W / 22, H / 11) * zoom); // pixels per metre
       camY += (car.y - camY) * 0.08;
-      const camX = car.x - (W * 0.32) / S;
+      // 🌊 with a tsunami chasing you, the view swings back so you can see it coming
+      const chased = wx?.wave && wx.wave.h > 0.3 && car.x - wx.wave.x < 70;
+      camLead += ((chased ? 0.6 : 0.32) - camLead) * 0.04;
+      const camX = car.x - (W * camLead) / S;
       const sx = (x: number) => (x - camX) * S;
       // 🦖 the ground shakes for a moment when a dinosaur lands nearby
       shake = 0;
@@ -782,6 +798,15 @@ export function HillHopperRun({
       ctx.lineWidth = Math.max(4, S * 0.22);
       ctx.lineJoin = 'round';
       ctx.stroke();
+      // ❄️ snow lying on the ground, thicker the longer it snows
+      if (wx && wx.snowCover > 0.02) {
+        const th = S * (0.06 + 0.32 * wx.snowCover);
+        ctx.beginPath();
+        for (let x = x0; x <= x1; x += 0.4) (x === x0 ? ctx.moveTo : ctx.lineTo).call(ctx, sx(x), sy(terrain.seen(x)) - th / 2);
+        ctx.strokeStyle = '#f4f8ff';
+        ctx.lineWidth = th;
+        ctx.stroke();
+      }
 
       // ⛏️ tunnels dug, and (lit by the headlight, underground) the things buried nearby
       if (digger) {
@@ -1131,6 +1156,56 @@ export function HillHopperRun({
         const now = performance.now() / 1000;
         const cx = sx(car.x);
         const cy = sy(car.y);
+        // 🌊 the tsunami: a wall of water rolling in from behind
+        const wv = wx.wave;
+        if (wv && wv.h > 0.02) {
+          const vx0 = camX - 1;
+          const vx1 = camX + W / S + 1;
+          const base = (x: number) => (terrain instanceof WeatherTerrain ? terrain.base(x) : terrain.h(x));
+          const top = (x: number) => base(x) + wv.h * Math.sqrt(Math.min(1, Math.max(0, wv.x - x) / 1.4)) + Math.sin(x * 1.3 + now * 4) * 0.12;
+          if (wv.x > vx0) {
+            const to = Math.min(wv.x, vx1);
+            ctx.beginPath();
+            ctx.moveTo(sx(vx0), H + 10);
+            for (let x = vx0; x <= to; x += 0.3) ctx.lineTo(sx(x), sy(top(x)));
+            ctx.lineTo(sx(to), sy(base(to)));
+            ctx.lineTo(sx(to), H + 10);
+            ctx.closePath();
+            const sea = ctx.createLinearGradient(0, sy(base(to) + wv.h), 0, H);
+            sea.addColorStop(0, 'rgba(41,121,255,0.9)');
+            sea.addColorStop(1, 'rgba(13,71,161,0.95)');
+            ctx.fillStyle = sea;
+            ctx.fill();
+            // white foam along the top, curling over at the front
+            ctx.beginPath();
+            for (let x = Math.max(vx0, wv.x - 14); x <= to; x += 0.3) (x === Math.max(vx0, wv.x - 14) ? ctx.moveTo : ctx.lineTo).call(ctx, sx(x), sy(top(x)));
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.lineWidth = Math.max(3, S * 0.25);
+            ctx.stroke();
+            if (wv.x < vx1) {
+              // the crest curling over the front
+              const bx = base(wv.x);
+              ctx.beginPath();
+              ctx.moveTo(sx(wv.x - 2.2), sy(bx + wv.h));
+              ctx.quadraticCurveTo(sx(wv.x + 1.4), sy(bx + wv.h * 1.12), sx(wv.x + 1.1), sy(bx + wv.h * 0.7));
+              ctx.quadraticCurveTo(sx(wv.x + 0.5), sy(bx + wv.h * 0.85), sx(wv.x - 0.2), sy(bx + wv.h * 0.75));
+              ctx.closePath();
+              ctx.fillStyle = 'rgba(41,121,255,0.95)';
+              ctx.fill();
+              ctx.stroke();
+            }
+          } else if (wv.age < 30) {
+            // off the left edge: how close it's getting
+            ctx.font = 'bold 16px system-ui, sans-serif';
+            ctx.fillStyle = 'rgba(13,71,161,0.75)';
+            ctx.fillRect(8, H * 0.5 - 18, 112, 36);
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`◀ 🌊 ${Math.round(car.x - wv.x)} m`, 64, H * 0.5);
+            ctx.textBaseline = 'alphabetic';
+          }
+        }
         if (wx.rainFall > 0.02) {
           const n = Math.round((70 + 200 * wx.downpour) * wx.rainFall);
           ctx.strokeStyle = 'rgba(190,210,255,0.55)';
