@@ -32,7 +32,8 @@ export function ScienceLabsPage() {
         <h1>🧪 Science labs</h1>
         <p className="hint">
           Try things out and see what happens! Each lab has 🎯 goals to try. The <Link to="/science">🔬 Science lessons</Link> explain the ideas and have
-          quizzes that earn 💎 tokens.
+          quizzes that earn 💎 tokens. The 💻 Tech & robots labs go with the <Link to="/hands-on">🔧 Hands-on</Link> computer, programming, networking and
+          robotics lessons.
         </p>
         {(Object.keys(BRANCH_NAMES) as Branch[]).map((b) => (
           <div key={b}>

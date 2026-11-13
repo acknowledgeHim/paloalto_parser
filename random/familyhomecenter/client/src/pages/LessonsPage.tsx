@@ -123,16 +123,25 @@ export const HANDSON_LESSONS: LessonsConfig = {
   subject: 'handson',
   title: '🔧 Hands-on',
   intro:
-    'Real skills for real trades: 🚗 car repair, 🔥 welding, 🪚 carpentry and 🏠 framing, ⚡ electrical, 🚰 plumbing and ❄️ heating & cooling — with the tools you need and how to stay safe. Each trade starts with 🎓 the industry certificate or license it prepares you for, and how to go and earn it. Start with 🦺 Safety first. Pass each quiz to earn 💎 tokens.',
+    'Real skills for real trades: 🚗 car repair, 🔥 welding, 🪚 carpentry and 🏠 framing, ⚡ electrical, 🚰 plumbing and ❄️ heating & cooling — plus 💻 computer hardware, 🧑‍💻 programming, 🌐 networking and 🤖 robotics (with 🧪 labs to try, all the way to building a robot from scratch). Learn the tools you need and how to stay safe. Each trade starts with 🎓 the industry certificate or license it prepares you for, and how to go and earn it. Start with 🦺 Safety first. Pass each quiz to earn 💎 tokens.',
   tracks: true,
 };
 
 /** **bold** inside a line */
 function inline(s: string): ReactNode {
-  const parts = s.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) => (p.startsWith('**') && p.endsWith('**') ? <strong key={i}>{p.slice(2, -2)}</strong> : <Fragment key={i}>{p}</Fragment>));
+  const parts = s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return parts.map((p, i) =>
+    p.startsWith('**') && p.endsWith('**') ? (
+      <strong key={i}>{p.slice(2, -2)}</strong>
+    ) : p.length > 2 && p.startsWith('`') && p.endsWith('`') ? (
+      <code key={i}>{p.slice(1, -1)}</code>
+    ) : (
+      <Fragment key={i}>{p}</Fragment>
+    )
+  );
 }
-/** The lesson text: "## " headings, "- " bullets, "1. " steps, ✅/❌ examples, paragraphs. */
+/** The lesson text: "## " headings, "- " bullets, "1. " steps, ✅/❌ examples, paragraphs, `code`, and
+ *  code blocks between ``` lines (kept exactly, spaces and all — no blank lines inside one). */
 export function LessonBody({ text }: { text: string }) {
   const blocks = text.replace(/\r/g, '').split(/\n\s*\n/);
   return (
@@ -153,8 +162,24 @@ export function LessonBody({ text }: { text: string }) {
           if (para.length) out.push(<p key={out.length}>{para.map((x, k) => <Fragment key={k}>{k > 0 && <br />}{inline(x)}</Fragment>)}</p>);
           para = [];
         };
+        let code: string[] | null = null;
         for (const raw of lines) {
           const l = raw.trim();
+          if (l.startsWith('```')) {
+            if (code) {
+              out.push(<pre key={out.length} className="lesson-code"><code>{code.join('\n')}</code></pre>);
+              code = null;
+            } else {
+              flushPara();
+              flush();
+              code = [];
+            }
+            continue;
+          }
+          if (code) {
+            code.push(raw.replace(/\s+$/, ''));
+            continue;
+          }
           const lab = LAB_LINE.exec(l);
           if (lab) {
             flushPara();
@@ -187,6 +212,7 @@ export function LessonBody({ text }: { text: string }) {
             para.push(l);
           }
         }
+        if (code) out.push(<pre key={out.length} className="lesson-code"><code>{(code as string[]).join('\n')}</code></pre>);
         flushPara();
         flush();
         return <Fragment key={i}>{out}</Fragment>;
@@ -695,7 +721,7 @@ function LessonEditor({ subject, id, grades, defaultTokens, onDone }: { subject:
         </label>
         <p className="hint">
           Write it like a note: <code>## </code> starts a heading, <code>- </code> a bullet, <code>1. </code> a numbered step, <code>**words**</code> bold, ✅ / ❌ a right / wrong example.
-          A blank line starts a new paragraph. A line <code>🧪 lab: pendulum</code> puts a science lab in the lesson.
+          A blank line starts a new paragraph. A line <code>🧪 lab: pendulum</code> puts a science lab in the lesson. <code>`word`</code> shows code; lines between two <code>```</code> lines are a block of code.
         </p>
         <details>
           <summary>🧪 Labs you can put in a lesson</summary>

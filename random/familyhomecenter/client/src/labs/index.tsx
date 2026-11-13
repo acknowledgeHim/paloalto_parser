@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { AtomLab, BalanceLab, DissolveLab, FlameLab, GasLab, PhLab, StatesLab } from './chemistry.js';
 import { CellLab, MothLab, PlantLab, PredatorLab, PulseLab, PunnettLab, ReactionLab } from './biology.js';
 import { MoonLab, QuakeLab, RockCycleLab, SeasonsLab, WeightLab } from './earth.js';
+import { BinaryLab, GatesLab, OhmLab, PwmLab, RobotLab, SubnetLab } from './tech.js';
 import { CircuitLab, FallLab, FloatLab, LeverLab, LightMixLab, MixLab, PendulumLab, ProjectileLab, PushLab, SoundLab, SpringLab } from './physics.js';
 
 /** 🧪 Every lab, by the id lessons use ("🧪 lab: pendulum"). Loaded only when a lab is shown. */
@@ -36,6 +37,12 @@ const LAB_COMPONENTS: Record<string, ComponentType> = {
   rocks: RockCycleLab,
   weight: WeightLab,
   quake: QuakeLab,
+  binary: BinaryLab,
+  ohm: OhmLab,
+  gates: GatesLab,
+  subnet: SubnetLab,
+  pwm: PwmLab,
+  robot: RobotLab,
 };
 
 export default function ScienceLab({ id }: { id: string }) {

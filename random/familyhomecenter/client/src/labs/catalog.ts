@@ -1,8 +1,8 @@
 /**
- * 🧪 The science labs, by id (names only — the labs themselves load when one is opened). A lesson
+ * 🧪 The science and 💻 tech labs, by id (names only — the labs themselves load when one is opened). A lesson
  * shows a lab where its text has a line like "🧪 lab: pendulum".
  */
-export type Branch = 'physics' | 'chemistry' | 'biology' | 'earth';
+export type Branch = 'physics' | 'chemistry' | 'biology' | 'earth' | 'tech';
 export interface LabInfo {
   id: string;
   name: string;
@@ -15,6 +15,7 @@ export const BRANCH_NAMES: Record<Branch, string> = {
   chemistry: '🧪 Chemistry',
   biology: '🧬 Biology',
   earth: '🌍 Earth & space',
+  tech: '💻 Tech & robots',
 };
 export const LABS: LabInfo[] = [
   { id: 'push', name: '🛒 Push a cart', branch: 'physics', about: 'forces, friction and acceleration' },
@@ -47,6 +48,12 @@ export const LABS: LabInfo[] = [
   { id: 'rocks', name: '🪨 The rock cycle', branch: 'earth', about: 'igneous, sedimentary and metamorphic rock' },
   { id: 'weight', name: '🪐 Your weight on other worlds', branch: 'earth', about: 'gravity on the planets' },
   { id: 'quake', name: '🌐 Find the earthquake', branch: 'earth', about: 'seismic waves and finding an epicenter' },
+  { id: 'binary', name: '🔢 Binary switches', branch: 'tech', about: 'bits, bytes, hex and ASCII' },
+  { id: 'ohm', name: "💡 Pick the LED's resistor", branch: 'tech', about: "Ohm's law on a breadboard" },
+  { id: 'gates', name: '🔣 Logic gates', branch: 'tech', about: 'AND, OR, NOT, XOR and truth tables' },
+  { id: 'subnet', name: '🌐 Same network?', branch: 'tech', about: 'IP addresses, subnet masks and routers' },
+  { id: 'pwm', name: '⚙️ PWM: speed and angle', branch: 'tech', about: 'motor speed and servo control' },
+  { id: 'robot', name: '🤖 Program the robot', branch: 'tech', about: 'algorithms, debugging and loops' },
 ];
 export const labInfo = (id: string) => LABS.find((l) => l.id === id);
 /** "🧪 lab: pendulum" → "pendulum" */
