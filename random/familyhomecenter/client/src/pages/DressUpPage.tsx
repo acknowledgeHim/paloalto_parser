@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, type Closet, type OutfitItem, type OutfitSlot } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
-import { useOutfitCatalog } from '../utils/outfits.js';
+import { setOutfitCatalog, useOutfitCatalog } from '../utils/outfits.js';
+import { type OutfitCatalog } from '../api/client.js';
 import { DressedAvatar } from '../components/DressedAvatar.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { TokenWallet } from '../components/TokenWallet.js';
@@ -20,7 +21,28 @@ export function DressUpPage() {
   const people = isParent ? members : members.filter((m) => m.id === activeProfile?.id);
   const memberId = id ?? (activeProfile && activeProfile.is_parent !== 1 ? activeProfile.id : kids[0]?.id ?? members[0]?.id);
   const member = members.find((m) => m.id === memberId);
-  const catalog = useOutfitCatalog();
+  const shopCatalog = useOutfitCatalog();
+  // 💎 a parent's new prices show at once
+  const [changed, setChanged] = useState<OutfitCatalog | null>(null);
+  const catalog = changed ?? shopCatalog;
+  const [prices, setPrices] = useState<Record<string, { min: number; max: number }> | null>(null);
+  const [pricesNote, setPricesNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (catalog?.prices && !prices) setPrices(catalog.prices);
+  }, [catalog, prices]);
+  const savePrices = async () => {
+    if (!prices) return;
+    setPricesNote(null);
+    try {
+      const c = await api.put<OutfitCatalog>('/outfits/prices', prices);
+      setOutfitCatalog(c);
+      setChanged(c);
+      setPrices(c.prices ?? prices);
+      setPricesNote('Saved ✓');
+    } catch (err) {
+      setPricesNote((err as Error).message || 'Could not save');
+    }
+  };
   const [closet, setCloset] = useState<Closet | null>(null);
   const [tryOn, setTryOn] = useState<OutfitItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -141,6 +163,58 @@ export function DressUpPage() {
           </section>
         );
       })}
+      {isParent && catalog && prices && (
+        <section className="panel dress-up__prices">
+          <h2>💎 Prices (parents)</h2>
+          <p className="hint">
+            How many 💎 tokens each kind of piece costs, from the cheapest to the fanciest ({catalog.price_limits?.min ?? 1}–{catalog.price_limits?.max ?? 10}). Pieces are spread over
+            the range — the fancier, the more. Pieces already bought keep what was paid (a ↶ refund gives that back).
+          </p>
+          {catalog.slots.map((sl) => {
+            const r = prices[sl.id] ?? { min: 1, max: 10 };
+            const opts = Array.from({ length: (catalog.price_limits?.max ?? 10) - (catalog.price_limits?.min ?? 1) + 1 }, (_, k) => k + (catalog.price_limits?.min ?? 1));
+            const set = (x: Partial<{ min: number; max: number }>) => {
+              const n = { ...r, ...x };
+              if (n.min > n.max) {
+                if (x.min !== undefined) n.max = n.min;
+                else n.min = n.max;
+              }
+              setPrices({ ...prices, [sl.id]: n });
+            };
+            return (
+              <div key={sl.id} className="dress-up__price-row">
+                <strong>{sl.label}</strong>
+                <label>
+                  from{' '}
+                  <select value={r.min} onChange={(e) => set({ min: Number(e.target.value) })} aria-label={`${sl.label} cheapest`}>
+                    {opts.map((n) => (
+                      <option key={n} value={n}>
+                        {n} 💎
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  to{' '}
+                  <select value={r.max} onChange={(e) => set({ max: Number(e.target.value) })} aria-label={`${sl.label} fanciest`}>
+                    {opts.map((n) => (
+                      <option key={n} value={n}>
+                        {n} 💎
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            );
+          })}
+          <div className="typing-stars__actions">
+            <button type="button" onClick={() => void savePrices()}>
+              Save prices
+            </button>
+            {pricesNote && <span className="hint">{pricesNote}</span>}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

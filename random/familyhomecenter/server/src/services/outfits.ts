@@ -1,3 +1,4 @@
+import { getSetting, setSetting } from '../db.js';
 /**
  * 👕 Dress up: outfit pieces a kid buys with their Prize Bank stars and puts on their avatar —
  * everywhere their avatar shows up (components/MemberAvatar.tsx). One piece per slot.
@@ -94,6 +95,58 @@ export const OUTFIT_ITEMS: OutfitItem[] = [
 ];
 
 export const outfitItem = (id: string) => OUTFIT_ITEMS.find((i) => i.id === id);
+
+// ---- 💎 prices: a parent sets each slot's range (1–10 tokens); pieces spread over it, cheapest to fanciest ----
+export interface PriceRange {
+  min: number;
+  max: number;
+}
+export const PRICE_MIN = 1;
+export const PRICE_MAX = 10;
+const PRICE_SETTING = 'outfit_prices';
+export function priceRanges(): Record<OutfitSlot, PriceRange> {
+  let saved: Partial<Record<OutfitSlot, Partial<PriceRange>>> = {};
+  try {
+    saved = JSON.parse(getSetting(PRICE_SETTING, '{}'));
+  } catch {
+    /* defaults */
+  }
+  const ok = (v: unknown, d: number) => {
+    const n = Math.round(Number(v));
+    return v !== undefined && v !== null && Number.isFinite(n) ? Math.max(PRICE_MIN, Math.min(PRICE_MAX, n)) : d;
+  };
+  return Object.fromEntries(
+    OUTFIT_SLOTS.map(({ id }) => {
+      const min = ok(saved[id]?.min, PRICE_MIN);
+      const max = ok(saved[id]?.max, PRICE_MAX);
+      return [id, { min: Math.min(min, max), max: Math.max(min, max) }];
+    })
+  ) as Record<OutfitSlot, PriceRange>;
+}
+export function savePriceRanges(next: Partial<Record<OutfitSlot, Partial<PriceRange>>>) {
+  const cur = priceRanges();
+  for (const { id } of OUTFIT_SLOTS) {
+    const x = next?.[id];
+    if (!x) continue;
+    if (x.min !== undefined) cur[id].min = Math.max(PRICE_MIN, Math.min(PRICE_MAX, Math.round(Number(x.min)) || PRICE_MIN));
+    if (x.max !== undefined) cur[id].max = Math.max(PRICE_MIN, Math.min(PRICE_MAX, Math.round(Number(x.max)) || PRICE_MAX));
+    if (cur[id].min > cur[id].max) [cur[id].min, cur[id].max] = [cur[id].max, cur[id].min];
+  }
+  setSetting(PRICE_SETTING, JSON.stringify(cur));
+}
+/** Every piece at today's price: placed in its slot's range by how fancy it is (its catalog value). */
+export function pricedItems(): OutfitItem[] {
+  const ranges = priceRanges();
+  return OUTFIT_ITEMS.map((it) => {
+    const same = OUTFIT_ITEMS.filter((x) => x.slot === it.slot).map((x) => x.stars);
+    const lo = Math.min(...same);
+    const hi = Math.max(...same);
+    const r = ranges[it.slot];
+    const f = hi > lo ? (it.stars - lo) / (hi - lo) : 0;
+    return { ...it, stars: Math.round(r.min + f * (r.max - r.min)) };
+  });
+}
+export const pricedItem = (id: string) => pricedItems().find((i) => i.id === id);
 
 export function parseOutfit(raw: string | null | undefined): Partial<Record<OutfitSlot, string>> {
   if (!raw) return {};

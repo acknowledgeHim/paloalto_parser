@@ -8,6 +8,11 @@ export function loadOutfitCatalog(): Promise<OutfitCatalog> {
   return catalog;
 }
 
+/** After a parent changes the prices: the next look asks the server again. */
+export function setOutfitCatalog(c: OutfitCatalog) {
+  catalog = Promise.resolve(c);
+}
+
 export function useOutfitCatalog(): OutfitCatalog | null {
   const [c, setC] = useState<OutfitCatalog | null>(null);
   useEffect(() => {

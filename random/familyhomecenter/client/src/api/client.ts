@@ -368,6 +368,9 @@ export interface OutfitItem {
 export interface OutfitCatalog {
   slots: Array<{ id: OutfitSlot; label: string }>;
   items: OutfitItem[];
+  /** 💎 each slot's price range, set by a parent */
+  prices?: Record<OutfitSlot, { min: number; max: number }>;
+  price_limits?: { min: number; max: number };
 }
 export interface Closet {
   /** what they can wear (for a parent: everything) */

@@ -3831,3 +3831,8 @@ body.game-full-lock { overflow: hidden; }
 .tech-program li { padding: 4px 8px; border-radius: 8px; background: var(--panel); border: 1px solid var(--border); margin-right: 14px; }
 .tech-program li.hint { border: none; background: none; list-style: none; }
 .tech-program li.is-now { background: var(--accent); color: #fff; }
+
+/* 👕 Dress up: 💎 prices (parents) */
+.dress-up__price-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.dress-up__price-row strong { min-width: 150px; }
+.dress-up__price-row select { min-height: 40px; }

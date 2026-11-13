@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
-import { OUTFIT_ITEMS, OUTFIT_SLOTS, outfitItem, parseOutfit } from '../services/outfits.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
+import { OUTFIT_ITEMS, OUTFIT_SLOTS, outfitItem, parseOutfit, priceRanges, pricedItem, pricedItems, savePriceRanges, PRICE_MAX, PRICE_MIN } from '../services/outfits.js';
 import type { FamilyMember } from '../types.js';
 import { addTokens, parentsDressFree } from '../services/tokens.js';
 
@@ -9,7 +10,13 @@ import { addTokens, parentsDressFree } from '../services/tokens.js';
 export const outfitsRouter = Router();
 
 outfitsRouter.get('/catalog', (_req, res) => {
-  res.json({ slots: OUTFIT_SLOTS, items: OUTFIT_ITEMS });
+  res.json({ slots: OUTFIT_SLOTS, items: pricedItems(), prices: priceRanges(), price_limits: { min: PRICE_MIN, max: PRICE_MAX } });
+});
+
+/** PUT /prices { slot: { min, max } } — parents: how many 💎 each kind of piece costs (1–10). Pieces already bought keep what was paid. */
+outfitsRouter.put('/prices', requireAdmin, (req, res) => {
+  savePriceRanges(req.body ?? {});
+  res.json({ slots: OUTFIT_SLOTS, items: pricedItems(), prices: priceRanges(), price_limits: { min: PRICE_MIN, max: PRICE_MAX } });
 });
 
 function closet(memberId: string) {
@@ -35,7 +42,7 @@ outfitsRouter.post('/:memberId/buy', (req, res) => {
   const { memberId } = req.params;
   const { item_id, acting_member_id } = req.body ?? {};
   if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
-  const item = outfitItem(String(item_id));
+  const item = pricedItem(String(item_id));
   if (!item) return res.status(400).json({ error: 'No such outfit piece' });
   const c = closet(memberId);
   if (!c) return res.status(404).json({ error: 'not found' });
