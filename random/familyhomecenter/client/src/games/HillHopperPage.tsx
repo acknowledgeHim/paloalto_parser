@@ -6,6 +6,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
+import { PrizePanel, spendPrize, type Prizes } from './prizes.js';
 import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 import { HAZARD_COINS, HAZARD_WORLDS } from './hillHazards.js';
 import { DEFAULT_CONTROLS, HillHopperRun, JUMP_TAP_LABEL, jumpKeysOf, jumpTapOf, keyName, type Controls, type JumpTap, type RunResult } from './HillHopperRun.js';
@@ -27,6 +28,8 @@ interface Save {
   bests: Record<string, number>;
   /** ⚠️ worlds with obstacles turned on (every world has its own — hillHazards.ts) */
   obstacles: string[];
+  /** 🏆 prize powers to bring on the next drive (each drive uses one of each) */
+  powers?: string[];
 }
 interface PlayInfo {
   owned: boolean;
@@ -36,6 +39,8 @@ interface PlayInfo {
   top: Array<{ member_id: string; score: number }>;
   /** 🔓 extras bought with 💎: 🦘 jump, ⚠️ obstacles (a parent sets the price; 0 = free) */
   features?: Record<string, { name: string; cost: number; owned: boolean }>;
+  /** 🏆 prize powers earned with lessons (🛞 flip-proof wheels, ⛏️ drill) */
+  prizes?: Prizes;
 }
 
 const GAME = 'hill-hopper';
@@ -80,6 +85,8 @@ export function HillHopperPage() {
   const limit = useLimit(me?.id, 'game:hill-hopper');
   useActivityClock(me?.id, 'game:hill-hopper', playing, limit.setStatus);
   const [last, setLast] = useState<{ r: RunResult; newBest: boolean } | null>(null);
+  /** 🏆 the prize powers on for the drive going now */
+  const [powersOn, setPowersOn] = useState<string[]>([]);
 
   const load = () => {
     if (!me) return;
@@ -100,6 +107,7 @@ export function HillHopperPage() {
           // Runs from before worlds existed were all on Green Hills.
           bests: { hills: i.best ?? 0, ...(i.save?.bests ?? {}) },
           obstacles: i.save?.obstacles ?? [],
+          powers: i.save?.powers ?? [],
         });
       })
       .catch((e) => setError((e as Error).message));
@@ -212,6 +220,8 @@ export function HillHopperPage() {
         obstacles={has('obstacles') && save.obstacles.includes(world.id)}
         jump={has('jump') && (save.jump ?? false)}
         glide={has('glide') && (save.glide ?? false)}
+        flipWheels={powersOn.includes('flip-wheels')}
+        drill={powersOn.includes('drill')}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -275,6 +285,19 @@ export function HillHopperPage() {
               try {
                 const left = await startPlay(GAME, me.id); // 🎟️ uses a play, if it's plays a parent gave
                 setInfo((i) => (i ? { ...i, plays_left: left } : i));
+                // 🏆 each prize power brought along uses one of its drives
+                const on: string[] = [];
+                for (const p of save.powers ?? []) {
+                  if (!info.prizes?.[p]?.ready) continue;
+                  try {
+                    const prizes = await spendPrize(GAME, me.id, p);
+                    setInfo((i) => (i ? { ...i, prizes } : i));
+                    on.push(p);
+                  } catch {
+                    /* used up: drive without it */
+                  }
+                }
+                setPowersOn(on);
                 setLast(null);
                 setPlaying(true);
               } catch (e) {
@@ -292,6 +315,13 @@ export function HillHopperPage() {
           )}
         </div>
       </section>
+
+      <PrizePanel
+        prizes={info.prizes}
+        on={save.powers ?? []}
+        toggle={(id, v) => void store({ ...save, powers: v ? [...new Set([...(save.powers ?? []), id])] : (save.powers ?? []).filter((x) => x !== id) })}
+        hint="Tick one to bring it on your next drive — each drive with it on uses one."
+      />
 
       <section className="panel">
         <h2>🌍 Worlds</h2>

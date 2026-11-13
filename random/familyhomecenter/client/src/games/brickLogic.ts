@@ -123,6 +123,10 @@ export interface Game {
   bigClears: number; // 4 rows at once
   combo: number;
   take: () => Kind;
+  /** 🏆 🔫 laser shots left (undefined: no laser this game) — one more every 10 rows */
+  lasers?: number;
+  /** the laser's last blast (for drawing the beam): the columns, the lowest row it reached, when */
+  beam?: { cols: number[]; to: number; t: number } | null;
 }
 
 export function newGame(seed: number, startLevel = 1): Game {
@@ -169,6 +173,7 @@ export function lock(g: Game, now = 0): number {
     g.combo++;
     g.score += ROW_POINTS[full.length] * g.level + (g.combo > 0 ? 50 * g.combo * g.level : 0);
     if (full.length === 4) g.bigClears++;
+    if (g.lasers !== undefined) g.lasers += Math.floor((g.rows + full.length) / 10) - Math.floor(g.rows / 10);
     g.rows += full.length;
     g.level = Math.max(g.startLevel, g.startLevel + Math.floor(g.rows / 10));
     g.flash = { rows: full, t: now };
@@ -226,4 +231,29 @@ export function hold(g: Game): boolean {
   g.held = k;
   g.canHold = false;
   return true;
+}
+
+/** Points for each brick square the laser zaps. */
+export const LASER_POINTS = 10;
+/**
+ * 🔫 Fire the laser (a 🏆 prize power): every brick square straight under the falling brick, in each
+ * column it covers, is zapped away — so it can drop further, into the gap. Returns squares zapped
+ * (and uses a shot even if there was nothing under it).
+ */
+export function fireLaser(g: Game, now = 0): number {
+  if (g.over || !g.lasers) return 0;
+  g.lasers--;
+  const p = g.piece;
+  const bottom = new Map<number, number>(); // column → lowest row of the brick in it
+  for (const [cx, cy] of cells(p.kind, p.rot)) bottom.set(p.x + cx, Math.max(bottom.get(p.x + cx) ?? -1, p.y + cy));
+  let n = 0;
+  for (const [x, yb] of bottom)
+    for (let y = yb + 1; y < ROWS + HIDDEN; y++)
+      if (g.well[y][x]) {
+        g.well[y][x] = 0;
+        n++;
+      }
+  g.score += n * LASER_POINTS * g.level;
+  g.beam = { cols: [...bottom.keys()], to: ROWS + HIDDEN, t: now };
+  return n;
 }

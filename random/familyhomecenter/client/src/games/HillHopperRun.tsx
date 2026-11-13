@@ -6,6 +6,7 @@ import {
   HEAD,
   newCar,
   placePickups,
+  rightCar,
   statsFor,
   step,
   Terrain,
@@ -112,6 +113,8 @@ export function HillHopperRun({
   obstacles = false,
   jump = false,
   glide = false,
+  flipWheels = false,
+  drill = false,
   best,
   controls,
   onEnd,
@@ -126,6 +129,10 @@ export function HillHopperRun({
   jump?: boolean;
   /** 🪂 glider: hold the jump key / button in the air to glide (sky coins and cans come with it) */
   glide?: boolean;
+  /** 🏆 🛞 wheels on the roof too: flipping over rolls you back onto your wheels */
+  flipWheels?: boolean;
+  /** 🏆 ⛏️ a drill on the front: dig into ✨ spots in the hills for treasure */
+  drill?: boolean;
   best: number | null;
   controls: Controls;
   onEnd: (r: RunResult) => void;
@@ -210,6 +217,27 @@ export function HillHopperRun({
         skyTo += 110 + skyRand() * 110;
       }
     };
+    // ⛏️ with the drill: ✨ treasure spots in the hills (dig in by driving into one)
+    const treasure: Array<{ x: number; dug: boolean }> = [];
+    if (drill) {
+      let tx = startX + 45;
+      let tseed = world.seed * 13 + 5;
+      const trand = () => {
+        tseed = (tseed * 1103515245 + 12345) & 0x7fffffff;
+        return tseed / 0x7fffffff;
+      };
+      while (tx < startX + 20000) {
+        treasure.push({ x: tx, dug: false });
+        tx += 90 + trand() * 130;
+      }
+    }
+    let digging = 0; // seconds of digging left
+    let digAt: { x: number; y: number } | null = null;
+    let digSeed = world.seed * 31 + 7;
+    const digRand = () => {
+      digSeed = (digSeed * 1103515245 + 12345) & 0x7fffffff;
+      return digSeed / 0x7fffffff;
+    };
     let jumpReady = 0; // seconds until another jump is allowed
     let shake = 0;
     let zoom = 1;
@@ -282,7 +310,53 @@ export function HillHopperRun({
         for (const w of car.wheels) w.vy = Math.max(w.vy, 0) + jumpG;
       }
       const r = step(car, terrain, stats, input, fuel > 0, DT);
-      if (r.crashed) return finish(car.tipped > 1 ? 'tipped' : 'crash');
+      if (r.crashed && flipWheels) {
+        // 🛞 wheels on the roof: roll back over and keep going
+        rightCar(car, terrain);
+        airRot = 0;
+        airTime = 0;
+        shake = Math.max(shake, 0.25);
+        say('🛞 Flip-proof wheels — back on your wheels!');
+      } else if (r.crashed) return finish(car.tipped > 1 ? 'tipped' : 'crash');
+      // ⛏️ the drill: driving into a ✨ spot digs it up (slows you for a moment), then the treasure
+      if (drill) {
+        const nose = bodyPoint(car, 1.9, 0);
+        if (!digging) {
+          for (const tr of treasure) {
+            if (tr.dug || Math.abs(tr.x - nose.x) > 0.9) continue;
+            if (nose.y - terrain.h(tr.x) > 1.2) continue; // flying over it doesn't count
+            tr.dug = true;
+            digging = 0.8;
+            digAt = { x: tr.x, y: terrain.h(tr.x) };
+            break;
+          }
+        } else {
+          digging = Math.max(0, digging - DT);
+          car.vx *= Math.exp(-2.5 * DT);
+          for (const w of car.wheels) w.vx *= Math.exp(-2.5 * DT);
+          if (digging === 0) {
+            const far = car.x - startX;
+            const roll = digRand();
+            if (roll < 0.15) {
+              fuel = stats.tank;
+              say('⛏️ Buried fuel — full tank! ⛽');
+            } else if (roll < 0.4) {
+              const v = Math.round((far > 1500 ? 600 : far > 600 ? 300 : 150) * world.coinMul);
+              coins += v;
+              say(`⛏️ A gem! 💎 +${v}`);
+            } else if (roll < 0.5) {
+              const v = Math.round((far > 1500 ? 1000 : far > 600 ? 500 : 250) * world.coinMul);
+              coins += v;
+              say(`⛏️ A treasure chest!! 🧰 +${v}`);
+            } else {
+              const v = Math.round((far > 1500 ? 200 : far > 600 ? 100 : 50) * world.coinMul);
+              coins += v;
+              say(`⛏️ Buried coins! 💰 +${v}`);
+            }
+            started = true;
+          }
+        }
+      }
       if (hz) {
         const h = hz.update(car, DT, startX);
         coins += h.coins;
@@ -743,6 +817,30 @@ export function HillHopperRun({
         if (f.taken || f.x < x0 || f.x > x1) continue;
         ctx.fillText('⛽', sx(f.x), sy(terrain.h(f.x) + 0.8));
       }
+      // ⛏️ ✨ treasure spots (with the drill), and the dirt flying while it digs
+      for (const tr of treasure) {
+        if (tr.dug || tr.x < x0 - 1 || tr.x > x1 + 1) continue;
+        const gy = terrain.h(tr.x);
+        ctx.fillStyle = '#6d4c41';
+        ctx.beginPath();
+        ctx.ellipse(sx(tr.x), sy(gy), S * 0.7, S * 0.28, 0, Math.PI, 0);
+        ctx.fill();
+        const tw = 0.85 + 0.25 * Math.sin(performance.now() / 180 + tr.x);
+        ctx.font = `${Math.round(S * 0.9 * tw)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+        ctx.fillStyle = '#000';
+        ctx.fillText('✨', sx(tr.x), sy(gy + 0.6));
+      }
+      if (digging && digAt) {
+        ctx.fillStyle = '#795548';
+        for (let k = 0; k < 10; k++) {
+          const ph = (performance.now() / 120 + k * 0.37) % 1;
+          const ang = Math.PI * (0.15 + 0.7 * ((k * 0.618) % 1));
+          ctx.beginPath();
+          ctx.arc(sx(digAt.x + Math.cos(ang) * ph * 1.6), sy(digAt.y + Math.sin(ang) * ph * 1.6), S * 0.12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.font = `${Math.round(S * 1.1)}px system-ui, sans-serif`;
       // ☁️ sky coins and cans (with the glider)
       for (const c of skyBits) {
         if (c.taken || c.x < x0 || c.x > x1) continue;
@@ -812,6 +910,48 @@ export function HillHopperRun({
       if (hz?.shielding) ctx.globalAlpha = Math.floor(performance.now() / 90) % 2 ? 0.35 : 1;
       ctx.translate(sx(car.x), sy(car.y));
       ctx.rotate(-car.a);
+      if (drill) {
+        // ⛏️ the drill: a cone on the nose, its stripes turning (faster while digging)
+        const spin = (performance.now() / (digging ? 40 : 160)) % 1;
+        ctx.fillStyle = '#9e9e9e';
+        ctx.strokeStyle = '#424242';
+        ctx.lineWidth = Math.max(1.5, S * 0.05);
+        ctx.beginPath();
+        ctx.moveTo(1.35 * S, -0.35 * S);
+        ctx.lineTo(2.15 * S, 0);
+        ctx.lineTo(1.35 * S, 0.35 * S);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        for (let k = 0; k < 3; k++) {
+          const f = (k + spin) / 3;
+          const xx = (1.35 + 0.8 * f) * S;
+          const hh = 0.35 * (1 - f) * S;
+          ctx.beginPath();
+          ctx.moveTo(xx, -hh);
+          ctx.lineTo(xx + 0.12 * S, hh);
+          ctx.stroke();
+        }
+      }
+      if (flipWheels) {
+        // 🛞 wheels on the roof too
+        for (const wx of [-1.0, 0.9]) {
+          ctx.strokeStyle = '#616161';
+          ctx.lineWidth = Math.max(2, S * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(wx * S, -0.3 * S);
+          ctx.lineTo(wx * S, -1.45 * S);
+          ctx.stroke();
+          ctx.fillStyle = '#212121';
+          ctx.beginPath();
+          ctx.arc(wx * S, -1.65 * S, WHEEL_R * S * 0.75, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffca28';
+          ctx.beginPath();
+          ctx.arc(wx * S, -1.65 * S, WHEEL_R * S * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
       if (vehicle) {
         ctx.font = `${Math.round(S * 2.6)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';

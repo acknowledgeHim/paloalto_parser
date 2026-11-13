@@ -241,6 +241,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
     const g = c.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const map = t.current.map;
+    const moon = t.current.land === 'moon';
     const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < W && y < map.length / W ? map[y * W + x] : '');
     const isRoad = (x: number, y: number) => isRoadCh(at(x, y));
     const isRail = (x: number, y: number) => at(x, y) === '%';
@@ -251,11 +252,20 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
         const ch = map[i];
         const px = rx * T, py = ry * T;
         if (ch === WATER || ch === BRIDGE) {
-          g.fillStyle = (x + y) % 2 ? '#5aa9e6' : '#55a3df';
+          // 🌙 on the Moon the water is ice in the craters
+          g.fillStyle = moon ? ((x + y) % 2 ? '#d4e6ee' : '#cbe0ea') : (x + y) % 2 ? '#5aa9e6' : '#55a3df';
           g.fillRect(px, py, T, T);
         } else {
-          g.fillStyle = (x + y) % 2 ? '#94c95a' : '#8ec454';
+          g.fillStyle = moon ? ((x + y) % 2 ? '#a5a5ab' : '#9d9da3') : (x + y) % 2 ? '#94c95a' : '#8ec454';
           g.fillRect(px, py, T, T);
+          if (moon && ((x * 7 + y * 13) % 11 === 0)) {
+            // little craters in the dust
+            g.strokeStyle = 'rgba(0,0,0,0.18)';
+            g.lineWidth = 1;
+            g.beginPath();
+            g.arc(px + T * 0.5, py + T * 0.5, T * 0.22, 0, Math.PI * 2);
+            g.stroke();
+          }
         }
         if (isRoadCh(ch)) {
           g.fillStyle = ch === BRIDGE ? '#a1785a' : '#7f7f7f';
@@ -297,7 +307,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
         }
         if (isFiller(ch)) continue; // part of a 2 × 2 building (drawn below)
         if (ch === TREE) {
-          g.drawImage(glyph('🌲', Math.round(T * 0.8)), px - T * 0.0, py - T * 0.05, T, T);
+          g.drawImage(glyph(moon ? '🪨' : '🌲', Math.round(T * 0.8)), px - T * 0.0, py - T * 0.05, T, T);
           continue;
         }
         const b = buildingOf(ch);

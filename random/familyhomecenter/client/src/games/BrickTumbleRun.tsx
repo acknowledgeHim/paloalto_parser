@@ -40,17 +40,34 @@ const MAX_RESETS = 15; // …and how many moves can restart that wait
 const REPEAT_WAIT = 0.17; // holding ◀ ▶: first repeat after this, then every…
 const REPEAT_EVERY = 0.05;
 
-type Act = 'left' | 'right' | 'down' | 'cw' | 'ccw' | 'slam' | 'hold' | 'pause';
+type Act = 'left' | 'right' | 'down' | 'cw' | 'ccw' | 'slam' | 'hold' | 'pause' | 'laser';
 const KEYS: Record<string, Act> = {
   arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right', arrowdown: 'down', s: 'down',
-  arrowup: 'cw', w: 'cw', x: 'cw', z: 'ccw', q: 'ccw', ' ': 'slam', c: 'hold', shift: 'hold', p: 'pause', escape: 'pause',
+  arrowup: 'cw', w: 'cw', x: 'cw', z: 'ccw', q: 'ccw', ' ': 'slam', c: 'hold', shift: 'hold', p: 'pause', escape: 'pause', l: 'laser', e: 'laser',
 };
+/** 🔫 laser shots a game starts with (one more every 10 rows) */
+export const LASER_SHOTS = 3;
 
 /** One game of 🧱 Brick Tumble, from the first brick to the pile reaching the top. */
-export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: Skin; startLevel: number; best: number | null; seed: number; onEnd: (r: BrickResult) => void }) {
+export function BrickTumbleRun({
+  skin,
+  startLevel,
+  best,
+  seed,
+  laser = false,
+  onEnd,
+}: {
+  skin: Skin;
+  startLevel: number;
+  best: number | null;
+  seed: number;
+  /** 🏆 🔫 the laser prize power is on for this game */
+  laser?: boolean;
+  onEnd: (r: BrickResult) => void;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const screen = useFullscreen<HTMLDivElement>();
-  const game = useRef<B.Game>(B.newGame(seed, startLevel));
+  const game = useRef<B.Game>(Object.assign(B.newGame(seed, startLevel), laser ? { lasers: LASER_SHOTS } : {}));
   const held = useRef<Set<Act>>(new Set()); // move/drop buttons or keys being held
   const repeat = useRef<Record<string, number>>({});
   const lockT = useRef({ t: 0, resets: 0 });
@@ -98,6 +115,11 @@ export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: 
       B.slam(g, now);
       newBrick();
     } else if (a === 'hold' && B.hold(g)) newBrick();
+    else if (a === 'laser' && g.lasers) {
+      B.fireLaser(g, now);
+      lockT.current.t = 0; // there may be room to fall now
+      redraw((n) => n + 1);
+    }
   };
   const press = (a: Act) => {
     if (held.current.has(a)) return;
@@ -317,6 +339,22 @@ export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: 
         }
       }
 
+      // 🔫 the laser beam, fading
+      if (g.beam && now - g.beam.t < 0.4) {
+        const a = 1 - (now - g.beam.t) / 0.4;
+        for (const x of g.beam.cols) {
+          const top = Math.max(0, g.piece.y - B.HIDDEN) * c;
+          const grad = ctx.createLinearGradient(ox + x * c, 0, ox + (x + 1) * c, 0);
+          grad.addColorStop(0, `rgba(255,23,68,0)`);
+          grad.addColorStop(0.5, `rgba(255,255,255,${0.95 * a})`);
+          grad.addColorStop(1, `rgba(255,23,68,0)`);
+          ctx.fillStyle = `rgba(255,23,68,${0.45 * a})`;
+          ctx.fillRect(ox + x * c, oy + top, c, wellH - top);
+          ctx.fillStyle = grad;
+          ctx.fillRect(ox + x * c + c * 0.25, oy + top, c * 0.5, wellH - top);
+        }
+      }
+
       // ✨ cleared rows: a white flash that fades
       if (g.flash && now - g.flash.t < 0.35) {
         const a = 1 - (now - g.flash.t) / 0.35;
@@ -370,7 +408,7 @@ export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: 
         label('NEXT', ox + wellW, ty + small, 'right', small * 0.8);
         g.next.slice(0, 2).forEach((k, i) => mini(k, ox + wellW - c * 1.4 - i * c * 2.6, ty + c * 2.1, i ? c * 0.45 : c * 0.6));
         label(`${g.score}`, ox + wellW / 2, ty + small * 1.4, 'center', Math.round(small * 1.5), 900);
-        label(`Level ${g.level} · ${g.rows} rows${best ? ` · best ${best}` : ''}`, ox + wellW / 2, ty + small * 2.8, 'center', Math.round(small * 0.75), 600);
+        label(`Level ${g.level} · ${g.rows} rows${best ? ` · best ${best}` : ''}${g.lasers !== undefined ? ` · 🔫 ${g.lasers}` : ''}`, ox + wellW / 2, ty + small * 2.8, 'center', Math.round(small * 0.75), 600);
       } else {
         const lx = ox - c * 3.5;
         label('HOLD', lx, oy + small, 'center');
@@ -384,6 +422,10 @@ export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: 
         if (best) {
           label('BEST', lx, oy + c * 15, 'center', small * 0.85);
           label(`${Math.max(best, g.score)}`, lx, oy + c * 16.2, 'center', Math.round(small * 1.1), 800);
+        }
+        if (g.lasers !== undefined) {
+          label('LASER', lx, oy + c * 18, 'center', small * 0.85);
+          label(`🔫 ${g.lasers}`, lx, oy + c * 19.2, 'center', Math.round(small * 1.1), 800);
         }
         const rx = ox + wellW + c * 3.5;
         label('NEXT', rx, oy + small, 'center');
@@ -463,6 +505,7 @@ export function BrickTumbleRun({ skin, startLevel, best, seed, onEnd }: { skin: 
         {pad('right', '▶', 'Right (→)')}
         {pad('cw', '⟳', 'Turn right (↑)')}
         {pad('slam', '⤓', 'Drop (Space)')}
+        {laser && pad('laser', `🔫${game.current.lasers ?? 0}`, 'Laser (L)')}
       </div>
     </div>
   );

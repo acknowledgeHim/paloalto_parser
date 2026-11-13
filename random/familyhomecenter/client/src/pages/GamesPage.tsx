@@ -21,6 +21,22 @@ interface ShelfGame {
   best: number | null;
   /** 💎 the game's token shop, with the usual prices */
   shop?: Array<{ id: string; name: string; cost: number; coins?: number }>;
+  /** 🏆 prize powers, earned with lessons (not bought) */
+  prizes?: Array<{ id: string; name: string; blurb: string; unit: string; subject: PrizeSubject; uses: number }>;
+}
+type PrizeSubject = 'grammar' | 'math' | 'history' | 'science' | 'any' | 'all';
+const PRIZE_SUBJECTS: Array<[PrizeSubject, string]> = [
+  ['math', '➗ Math'],
+  ['grammar', '📝 Grammar'],
+  ['history', '🇺🇸 History'],
+  ['science', '🔬 Science'],
+  ['any', 'Any one subject (each one earns it again)'],
+  ['all', 'All four subjects'],
+];
+interface PrizeRule {
+  subject: PrizeSubject;
+  uses: number;
+  parents_free: boolean;
 }
 interface Shelf {
   token_balance: number;
@@ -37,6 +53,8 @@ interface GameRule {
   features?: Record<string, number>;
   /** 💎 each token-shop item's price (🏘️ Tiny Town) */
   shop?: Record<string, number>;
+  /** 🏆 each prize power: what earns it, uses per earning (0 = unlimited), free for parents */
+  prizes?: Record<string, PrizeRule>;
 }
 /** 💎 Token-shop price levels: the usual prices times this (whole tokens, at least 1 unless the usual is 0). */
 const PRICE_LEVELS: Array<[string, number]> = [
@@ -124,6 +142,9 @@ export function GamesPage() {
                 <h2>{g.name}</h2>
                 <p className="hint">{g.blurb}</p>
                 {g.best ? <p>🏆 Your best: <strong>{g.best}</strong></p> : null}
+                {g.prizes && g.prizes.length > 0 && (
+                  <p className="hint">🎁 Prize powers to earn with 📚 lessons: {g.prizes.map((p) => p.name).join(', ')}</p>
+                )}
                 {!g.owned && g.plays_left != null && (
                   <p>🎟️ {g.plays_left ? `${g.plays_left} play${g.plays_left === 1 ? '' : 's'} left` : 'No plays left'}</p>
                 )}
@@ -242,6 +263,11 @@ export function GamesPage() {
             level, or set each one.
           </p>
           <p className="hint">
+            🏆 <strong>Prize powers</strong> can’t be bought: a kid earns one by passing every lesson at their grade in the subject you pick (📚 Learning). Each subject
+            earns it once per grade, giving the number of uses you set (♾️ = theirs for good). Changing the number only changes what’s earned from now on. Kids see
+            their progress towards each one in the game.
+          </p>
+          <p className="hint">
             ⏰ How many games — or minutes — a day for each kid: <Link to="/learning/settings">📚 Learning → ⚙️ Grades & tokens → Daily limits</Link>.
           </p>
           {mine.games.map((g) => {
@@ -274,6 +300,51 @@ export function GamesPage() {
                     <span className="hint">{cost ? '' : '(free)'}</span>
                   </label>
                 ))}
+                {(g.prizes ?? []).map((p) => {
+                  const pr = r.prizes?.[p.id] ?? { subject: p.subject, uses: p.uses, parents_free: true };
+                  const setP = (x: Partial<PrizeRule>) => setRules({ ...rules, [g.id]: { ...r, prizes: { ...r.prizes, [p.id]: { ...pr, ...x } } } });
+                  return (
+                    <div key={p.id} className="games-page__shop games-page__prize">
+                      <div>
+                        🏆 <strong>{p.name}</strong> <span className="hint">— {p.blurb}</span>
+                      </div>
+                      <label className="games-page__extra">
+                        Earned by passing every lesson at their grade in{' '}
+                        <select value={pr.subject} onChange={(e) => setP({ subject: e.target.value as PrizeSubject })} aria-label={`${p.name}: which lessons earn it`}>
+                          {PRIZE_SUBJECTS.map(([v, label]) => (
+                            <option key={v} value={v}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="games-page__extra">
+                        Each time it’s earned: {[2, 5, 10, 25].map((n) => (
+                          <button key={n} type="button" className={`secondary${pr.uses === n ? ' is-on' : ''}`} aria-pressed={pr.uses === n} onClick={() => setP({ uses: n })}>
+                            {n}×
+                          </button>
+                        ))}
+                        <button type="button" className={`secondary${pr.uses === 0 ? ' is-on' : ''}`} aria-pressed={pr.uses === 0} onClick={() => setP({ uses: 0 })}>
+                          ♾️ Unlimited
+                        </button>{' '}
+                        or{' '}
+                        <input
+                          type="number"
+                          min={0}
+                          max={1000}
+                          value={pr.uses}
+                          onChange={(e) => setP({ uses: Math.max(0, Math.min(1000, Math.round(Number(e.target.value) || 0))) })}
+                          aria-label={`${p.name}: uses each time it's earned`}
+                        />{' '}
+                        <span className="hint">{pr.uses ? `${p.unit}s (one ${p.unit} = one use)` : 'unlimited'}</span>
+                      </div>
+                      <label className="privacy-toggle games-page__extra">
+                        <input type="checkbox" checked={pr.parents_free} onChange={(e) => setP({ parents_free: e.target.checked })} />
+                        <span>👑 Free for parents — so you can show the kids what they’re working for</span>
+                      </label>
+                    </div>
+                  );
+                })}
                 {g.shop && g.shop.length > 0 && (
                   <div className="games-page__shop">
                     <div>

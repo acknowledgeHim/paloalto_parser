@@ -1702,6 +1702,26 @@ db.exec(`
     unlocked_at TEXT NOT NULL,
     PRIMARY KEY (family_member_id, game_id, feature)
   );
+  -- 🏆 Prize powers a kid earned by passing every lesson in a subject at their grade: one row per
+  -- earning (uses 0 = unlimited), and one row each time a power was used.
+  CREATE TABLE IF NOT EXISTS game_prize_grants (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    prize TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    uses INTEGER NOT NULL,
+    granted_at TEXT NOT NULL,
+    UNIQUE (family_member_id, game_id, prize, subject, grade)
+  );
+  CREATE TABLE IF NOT EXISTS game_prize_uses (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    prize TEXT NOT NULL,
+    used_at TEXT NOT NULL
+  );
   -- 💎 Things bought with tokens inside a game (🏘️ Tiny Town's coin bags and special buildings), one row each.
   CREATE TABLE IF NOT EXISTS game_purchases (
     id TEXT PRIMARY KEY,

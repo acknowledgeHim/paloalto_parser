@@ -203,6 +203,22 @@ export function lessonRound(memberId: string, subject: Subject): LessonRound | n
   return status();
 }
 
+/**
+ * 🏆 Has this kid passed every lesson in the subject at their grade (ever — not just this round)?
+ * Every lesson that has a quiz counts, paid or not; hidden ones don't. null: parents, or no grade set.
+ */
+export function subjectMastery(memberId: string, subject: Subject): { grade: number; total: number; passed: number; done: boolean } | null {
+  const m = memberOf(memberId);
+  const g = m && m.is_parent !== 1 ? gradeOf(m.id) : null;
+  if (!m || g === null) return null;
+  const set = (db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND grade = ? AND hidden = 0').all(subject, g) as Row[]).filter((r) => quizOf(r).length > 0);
+  const passedIds = new Set(
+    (db.prepare('SELECT DISTINCT d.lesson_id FROM learning_lessons_done d JOIN learning_lessons l ON l.id = d.lesson_id WHERE d.family_member_id = ? AND d.passed = 1 AND l.subject = ? AND l.grade = ?').all(m.id, subject, g) as Array<{ lesson_id: string }>).map((x) => x.lesson_id)
+  );
+  const passed = set.filter((r) => passedIds.has(r.id)).length;
+  return { grade: g, total: set.length, passed, done: set.length > 0 && passed === set.length };
+}
+
 function noTokensWhy(m: FamilyMember | undefined, r: Row): string | null {
   if (!m) return 'Pick who you are up top to earn tokens';
   if (m.is_parent === 1) return 'Parents read just for fun';

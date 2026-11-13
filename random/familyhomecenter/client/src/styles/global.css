@@ -3770,3 +3770,22 @@ body.game-full-lock { overflow: hidden; }
 .lab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .lab-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 12px; min-height: 80px; }
 .lab-card span { color: var(--text-muted); font-size: 0.9em; }
+/* 🏆 Prize powers (games): earned with lessons */
+.prize-panel { border: 2px solid rgba(255, 193, 7, 0.55); }
+.prize-power { padding: 0.6rem 0; border-top: 1px solid rgba(127, 127, 127, 0.2); display: flex; flex-direction: column; gap: 0.25rem; }
+.prize-power:first-of-type { border-top: 0; }
+.prize-power__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.prize-power.is-locked .prize-power__head strong { opacity: 0.7; }
+.prize-power__left { font-weight: 600; font-size: 0.9em; }
+.prize-power__progress { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.2rem; }
+.prize-power__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.9em; }
+.prize-power__track { flex: 1; min-width: 6rem; height: 8px; border-radius: 4px; background: rgba(127, 127, 127, 0.25); overflow: hidden; }
+.prize-power__track > span { display: block; height: 100%; background: linear-gradient(90deg, #ffca28, #66bb6a); }
+.brick-run__btn--laser { background: rgba(255, 23, 68, 0.7); font-size: 1.1em; }
+.town-slot--moon { background: linear-gradient(180deg, rgba(26, 26, 46, 0.9), rgba(90, 90, 110, 0.8)); color: #fff; }
+.town-slot--moon .hint { color: rgba(255, 255, 255, 0.8); }
+.town-slot--earth { background: linear-gradient(180deg, rgba(30, 136, 229, 0.25), rgba(102, 187, 106, 0.25)); }
+.earth-view__map { max-width: 1000px; overflow: hidden; border-radius: 12px; }
+.earth-view__map canvas { display: block; cursor: zoom-in; max-width: 100%; transition: transform 0.45s ease-in; }
+.earth-view__map.is-zooming canvas { transform: scale(2.6); }
+.earth-view__lands { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }

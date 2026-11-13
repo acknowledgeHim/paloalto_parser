@@ -4,12 +4,15 @@ import { api } from '../api/client.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { startPlay } from './plays.js';
+import { PrizePanel, spendPrize, type Prizes } from './prizes.js';
 import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 import { BrickTumbleRun, SKINS, skinOf, type BrickResult } from './BrickTumbleRun.js';
 
 interface Save {
   skin: string;
   startLevel: number;
+  /** 🏆 prize powers to bring on the next game */
+  powers?: string[];
 }
 interface PlayInfo {
   owned: boolean;
@@ -17,6 +20,8 @@ interface PlayInfo {
   save: Partial<Save> | null;
   best: number | null;
   top: Array<{ member_id: string; score: number }>;
+  /** 🏆 prize powers earned with lessons (🔫 laser) */
+  prizes?: Prizes;
 }
 
 const GAME = 'brick-tumble';
@@ -28,6 +33,7 @@ export function BrickTumblePage() {
   const [save, setSave] = useState<Save>({ skin: 'bright', startLevel: 1 });
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null); // the game's seed while playing
+  const [laserOn, setLaserOn] = useState(false);
   // ⏰ a parent's daily limit: a run going is always finished; the next one can't start
   const limit = useLimit(me?.id, 'game:brick-tumble');
   useActivityClock(me?.id, 'game:brick-tumble', playing !== null, limit.setStatus);
@@ -39,7 +45,7 @@ export function BrickTumblePage() {
       .get<PlayInfo>(`/games/${GAME}/play/${me.id}`)
       .then((i) => {
         setInfo(i);
-        setSave({ skin: i.save?.skin ?? 'bright', startLevel: i.save?.startLevel ?? 1 });
+        setSave({ skin: i.save?.skin ?? 'bright', startLevel: i.save?.startLevel ?? 1, powers: i.save?.powers ?? [] });
       })
       .catch((e) => setError((e as Error).message));
   }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -90,6 +96,7 @@ export function BrickTumblePage() {
         startLevel={save.startLevel}
         best={best || null}
         seed={playing}
+        laser={laserOn}
         onEnd={(r) => {
           setPlaying(null);
           void limit.reload();
@@ -140,6 +147,18 @@ export function BrickTumblePage() {
               try {
                 const left = await startPlay(GAME, me.id); // 🎟️ uses a play, if it's plays a parent gave
                 setInfo((i) => (i ? { ...i, plays_left: left } : i));
+                // 🏆 the laser, if it's ticked: uses one of its games
+                let laser = false;
+                if ((save.powers ?? []).includes('laser') && info.prizes?.laser?.ready) {
+                  try {
+                    const prizes = await spendPrize(GAME, me.id, 'laser');
+                    setInfo((i) => (i ? { ...i, prizes } : i));
+                    laser = true;
+                  } catch {
+                    /* used up: play without it */
+                  }
+                }
+                setLaserOn(laser);
                 setLast(null);
                 setPlaying(Math.floor(Math.random() * 1e9));
               } catch (e) {
@@ -157,6 +176,13 @@ export function BrickTumblePage() {
           )}
         </div>
       </section>
+
+      <PrizePanel
+        prizes={info.prizes}
+        on={save.powers ?? []}
+        toggle={(id, v) => void store({ ...save, powers: v ? [...new Set([...(save.powers ?? []), id])] : (save.powers ?? []).filter((x) => x !== id) })}
+        hint="Tick it to bring it on your next game — each game with it on uses one. Fire with L (or E), or the 🔫 button."
+      />
 
       <section className="panel">
         <h2>🐢 Starting speed</h2>

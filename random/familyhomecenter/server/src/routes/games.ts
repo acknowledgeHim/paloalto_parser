@@ -3,7 +3,9 @@ import { countTime, limitHit } from '../services/dailyLimits.js';
 import { v4 as uuidv4 } from 'uuid';
 import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { GAMES, gameOf } from '../services/games.js';
+import { GAMES, PRIZE_SUBJECTS, gameOf, type PrizeSubject } from '../services/games.js';
+import { subjectMastery } from './lessons.js';
+import { GRADE_NAMES } from '../services/spellingWords.js';
 import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
 import type { FamilyMember } from '../types.js';
 import { addTokens } from '../services/tokens.js';
@@ -33,6 +35,13 @@ interface GameRule {
   features: Record<string, number>;
   /** 💎 each token-shop item's price (0 = free for everyone) */
   shop: Record<string, number>;
+  /** 🏆 each prize power: which lessons earn it, uses per earning (0 = unlimited), free for parents */
+  prizes: Record<string, PrizeRule>;
+}
+interface PrizeRule {
+  subject: PrizeSubject;
+  uses: number;
+  parents_free: boolean;
 }
 const RULES_KEY = 'game_rules';
 function rules(): Record<string, GameRule> {
@@ -51,11 +60,24 @@ function rules(): Record<string, GameRule> {
         plays: n(saved[g.id]?.plays, 0),
         features: Object.fromEntries((g.features ?? []).map((f) => [f.id, n(saved[g.id]?.features?.[f.id], f.cost)])),
         shop: Object.fromEntries((g.shop ?? []).map((f) => [f.id, n(saved[g.id]?.shop?.[f.id], f.cost)])),
+        prizes: Object.fromEntries(
+          (g.prizes ?? []).map((p) => {
+            const x = saved[g.id]?.prizes?.[p.id];
+            return [
+              p.id,
+              {
+                subject: PRIZE_SUBJECTS.includes(x?.subject as PrizeSubject) ? (x!.subject as PrizeSubject) : p.subject,
+                uses: n(x?.uses, p.uses),
+                parents_free: x?.parents_free === undefined ? true : x.parents_free === true,
+              },
+            ];
+          })
+        ),
       },
     ])
   );
 }
-const ruleOf = (gameId: string): GameRule => rules()[gameId] ?? { cost: 0, plays: 0, features: {}, shop: {} };
+const ruleOf = (gameId: string): GameRule => rules()[gameId] ?? { cost: 0, plays: 0, features: {}, shop: {}, prizes: {} };
 
 /** GET /settings — each game's cost and plays per unlock. */
 gamesRouter.get('/settings', (_req, res) => res.json(rules()));
@@ -86,6 +108,20 @@ gamesRouter.put('/settings', requireAdmin, (req, res) => {
       const v = Math.round(Number(v0));
       if (!(v >= 0 && v <= 10000)) return res.status(400).json({ error: `${g.name} ${f.name}: 0–10000` });
       cur[g.id].shop[f.id] = v;
+    }
+    for (const p of g.prizes ?? []) {
+      const y = x.prizes?.[p.id];
+      if (!y) continue;
+      if (y.subject !== undefined) {
+        if (!PRIZE_SUBJECTS.includes(y.subject)) return res.status(400).json({ error: `${g.name} ${p.name}: pick a subject` });
+        cur[g.id].prizes[p.id].subject = y.subject;
+      }
+      if (y.uses !== undefined) {
+        const v = Math.round(Number(y.uses));
+        if (!(v >= 0 && v <= 1000)) return res.status(400).json({ error: `${g.name} ${p.name}: uses 0–1000 (0 = unlimited)` });
+        cur[g.id].prizes[p.id].uses = v;
+      }
+      if (y.parents_free !== undefined) cur[g.id].prizes[p.id].parents_free = y.parents_free === true;
     }
   }
   setSetting(RULES_KEY, JSON.stringify(cur));
@@ -349,6 +385,89 @@ gamesRouter.post('/:gameId/play/:memberId/feature', (req, res) => {
   res.json({ features: featuresFor(after, g.id, data), token_balance: after.token_balance });
 });
 
+// ---- 🏆 prize powers: earned by passing every lesson in a subject at your grade ----
+const SUBJECT_NAME: Record<string, string> = { math: '➗ Math', grammar: '📝 Grammar', history: '🇺🇸 History', science: '🔬 Science' };
+const LESSON_SUBJECTS = ['math', 'grammar', 'history', 'science'] as const;
+export interface PrizeStatus {
+  name: string;
+  blurb: string;
+  unit: string;
+  subject: PrizeSubject;
+  /** uses each earning gives (0 = unlimited) */
+  uses_per: number;
+  parents_free: boolean;
+  /** a parent trying it out free */
+  free: boolean;
+  earned: boolean;
+  unlimited: boolean;
+  /** uses left (null: free or unlimited) */
+  left: number | null;
+  /** can it be switched on now */
+  ready: boolean;
+  /** 📚 where they are in each subject that earns it, at their grade */
+  progress: Array<{ subject: string; label: string; grade: string; passed: number; total: number; done: boolean }>;
+  /** why a kid can't earn it yet (no grade set) */
+  note: string | null;
+}
+
+/** Their prize powers in this game — and any they've just earned get handed out (once per subject per grade). */
+function prizesFor(m: FamilyMember, gameId: string): Record<string, PrizeStatus> {
+  const g = gameOf(gameId);
+  const rs = ruleOf(gameId).prizes;
+  const out: Record<string, PrizeStatus> = {};
+  for (const p of g?.prizes ?? []) {
+    const r = rs[p.id] ?? { subject: p.subject, uses: p.uses, parents_free: true };
+    const subjects = r.subject === 'any' || r.subject === 'all' ? [...LESSON_SUBJECTS] : [r.subject];
+    const prog = free(m) ? [] : subjects.map((s) => ({ s, x: subjectMastery(m.id, s) }));
+    const progress = prog
+      .filter((y) => y.x)
+      .map(({ s, x }) => ({ subject: s, label: SUBJECT_NAME[s], grade: GRADE_NAMES[x!.grade], passed: x!.passed, total: x!.total, done: x!.done }));
+    // 🎉 hand out what they've earned (each subject, once per grade; 'all' once per grade)
+    const now = new Date().toISOString();
+    const grant = db.prepare('INSERT OR IGNORE INTO game_prize_grants (id, family_member_id, game_id, prize, subject, grade, uses, granted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    if (r.subject === 'all') {
+      if (prog.length && prog.every((y) => y.x?.done)) grant.run(uuidv4(), m.id, gameId, p.id, 'all', prog[0].x!.grade, r.uses, now);
+    } else for (const y of prog) if (y.x?.done) grant.run(uuidv4(), m.id, gameId, p.id, y.s, y.x.grade, r.uses, now);
+    const grants = db.prepare('SELECT uses FROM game_prize_grants WHERE family_member_id = ? AND game_id = ? AND prize = ?').all(m.id, gameId, p.id) as Array<{ uses: number }>;
+    const used = (db.prepare('SELECT COUNT(*) AS n FROM game_prize_uses WHERE family_member_id = ? AND game_id = ? AND prize = ?').get(m.id, gameId, p.id) as { n: number }).n;
+    const isFree = free(m) && r.parents_free;
+    const unlimited = grants.some((x) => x.uses === 0);
+    const left = isFree || unlimited ? null : Math.max(0, grants.reduce((a, x) => a + x.uses, 0) - used);
+    out[p.id] = {
+      name: p.name,
+      blurb: p.blurb,
+      unit: p.unit,
+      subject: r.subject,
+      uses_per: r.uses,
+      parents_free: r.parents_free,
+      free: isFree,
+      earned: grants.length > 0,
+      unlimited,
+      left,
+      ready: isFree || unlimited || (left ?? 0) > 0,
+      progress,
+      note: !free(m) && !progress.length ? 'A parent needs to set your grade first (📚 Learning → ⚙️ Grades & tokens)' : null,
+    };
+  }
+  return out;
+}
+
+/** POST /:gameId/play/:memberId/prize { prize, acting_member_id } — 🏆 use one go of a prize power (a drive, a game, a visit). */
+gamesRouter.post('/:gameId/play/:memberId/prize', (req, res) => {
+  const { gameId, memberId } = req.params;
+  const { prize, acting_member_id } = req.body ?? {};
+  if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can play as them' });
+  const g = gameOf(gameId);
+  const m = memberOf(memberId);
+  if (!g || !m) return res.status(404).json({ error: 'not found' });
+  if (!mayPlay(m, g.id)) return res.status(403).json({ error: 'Unlock it first' });
+  const st = prizesFor(m, g.id)[String(prize)];
+  if (!st) return res.status(404).json({ error: 'No such prize' });
+  if (!st.ready) return res.status(403).json({ error: st.earned ? `No ${st.name} left — finish another subject's lessons to earn more` : `Pass every lesson to earn ${st.name}` });
+  db.prepare('INSERT INTO game_prize_uses (id, family_member_id, game_id, prize, used_at) VALUES (?, ?, ?, ?, ?)').run(uuidv4(), m.id, g.id, String(prize), new Date().toISOString());
+  res.json({ prizes: prizesFor(m, g.id) });
+});
+
 /** GET /:gameId/play/:memberId — their saved progress, best score and the family's top runs. */
 gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
   const g = gameOf(req.params.gameId);
@@ -369,7 +488,7 @@ gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
     data = null;
   }
   const owned = free(m) || unlockedFor(m).has(g.id);
-  res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0, features: featuresFor(m, g.id, data), shop: shopFor(m, g.id), token_balance: m.token_balance });
+  res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0, features: featuresFor(m, g.id, data), shop: shopFor(m, g.id), prizes: prizesFor(m, g.id), token_balance: m.token_balance });
 });
 
 /** POST /:gameId/play/:memberId/result { score, detail, save, acting_member_id } — a finished run, and progress to keep. */
@@ -395,7 +514,7 @@ gamesRouter.post('/:gameId/play/:memberId/result', (req, res) => {
   }
   if (save && typeof save === 'object') {
     const data = JSON.stringify(save);
-    if (data.length > 20_000) return res.status(400).json({ error: 'Too much to save' });
+    if (data.length > 80_000) return res.status(400).json({ error: 'Too much to save' });
     db.prepare(
       `INSERT INTO game_saves (family_member_id, game_id, data, updated_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(family_member_id, game_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`

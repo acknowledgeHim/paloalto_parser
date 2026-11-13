@@ -15,6 +15,25 @@ export interface Game {
   features?: Array<{ id: string; name: string; cost: number }>;
   /** 💎 a token shop inside the game: bought each time (coins: in-game coins it gives) — parent-set prices */
   shop?: Array<{ id: string; name: string; cost: number; coins?: number }>;
+  /**
+   * 🏆 Prize powers: can't be bought — a kid earns one by passing every lesson in a subject at their
+   * grade (📚 Learning). A parent picks the subject and how many uses each earning gives (0 = unlimited),
+   * and whether parents can use it free (to show the kids what they're working for).
+   */
+  prizes?: Prize[];
+}
+/** 🏆 Which lessons earn a prize: one subject, any one of them (each one finished earns it again), or all four. */
+export type PrizeSubject = 'grammar' | 'math' | 'history' | 'science' | 'any' | 'all';
+export const PRIZE_SUBJECTS: PrizeSubject[] = ['math', 'grammar', 'history', 'science', 'any', 'all'];
+export interface Prize {
+  id: string;
+  name: string;
+  blurb: string;
+  /** what one use is: a drive, a game, a visit */
+  unit: string;
+  /** the usual subject and uses per earning (0 = unlimited) — a parent can change both */
+  subject: PrizeSubject;
+  uses: number;
 }
 
 export const GAMES: Game[] = [
@@ -30,6 +49,10 @@ export const GAMES: Game[] = [
       { id: 'obstacles', name: '⚠️ Obstacles', cost: 5 },
       { id: 'glide', name: '🪂 Glider', cost: 5 },
     ],
+    prizes: [
+      { id: 'flip-wheels', name: '🛞 Flip-proof wheels', blurb: 'Wheels on the roof too — land upside down and you just roll back over. You can never flip out!', unit: 'drive', subject: 'math', uses: 10 },
+      { id: 'drill', name: '⛏️ Drill', blurb: 'A drill on the front of your ride: drive into the ✨ sparkly hill spots to dig up secret treasure — big coins, gems and fuel.', unit: 'drive', subject: 'science', uses: 10 },
+    ],
   },
   {
     id: 'brick-tumble',
@@ -38,6 +61,9 @@ export const GAMES: Game[] = [
     stars: 20,
     blurb:
       'Falling bricks: move and turn them as they drop, fill a row from side to side to clear it, and don’t let the pile reach the top. It speeds up as you go — big scores unlock new brick looks.',
+    prizes: [
+      { id: 'laser', name: '🔫 Laser', blurb: 'Blast the bricks! Each game you get 3 laser shots (and one more every 10 rows) — the laser zaps every brick under the falling one.', unit: 'game', subject: 'grammar', uses: 10 },
+    ],
   },
   {
     id: 'tiny-town',
@@ -50,6 +76,11 @@ export const GAMES: Game[] = [
     features: [
       { id: 'big-map', name: '🗺️ Bigger land', cost: 5 },
       { id: 'fun', name: '🎡 Fun places', cost: 5 },
+    ],
+    prizes: [
+      { id: 'moon', name: '🌙 Moon base', blurb: 'A town on the Moon: grey dust, rocks and icy craters under the stars — with a 🚀 moon bonus of extra coins to start.', unit: 'visit', subject: 'science', uses: 0 },
+      { id: 'earth', name: '🌍 The whole Earth', blurb: 'A huge world: four big lands with oceans between them and great lakes. See the whole Earth, then zoom in to build on each land.', unit: 'visit', subject: 'any', uses: 0 },
+      { id: 'more-lands', name: '🗺️ 2 more lands', blurb: 'A 4th and 5th town to build.', unit: 'visit', subject: 'history', uses: 0 },
     ],
     // Keep the building ids in sync with `token` in client/src/games/townLogic.ts.
     shop: [

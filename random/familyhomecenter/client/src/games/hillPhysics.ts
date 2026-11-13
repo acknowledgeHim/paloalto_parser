@@ -406,3 +406,22 @@ export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolea
   const crashed = head.y - HEAD.r * 0.7 < t.h(head.x) || car.tipped > 1;
   return { crashed, grounded };
 }
+
+/**
+ * 🛞 Flip-proof wheels (a 🏆 prize power): the car rolls back onto its wheels instead of the run
+ * ending — set level with the ground, lifted clear of it, still going the same speed.
+ */
+export function rightCar(car: Car, t: Terrain) {
+  car.a = Math.atan(t.slope(car.x));
+  car.w = 0;
+  car.y = Math.max(car.y, t.h(car.x) + WHEEL_R + 0.9);
+  car.vy = Math.max(car.vy, 1.5);
+  car.tipped = 0;
+  for (const w of car.wheels) {
+    const p = rot(car, w.ax, w.ay);
+    w.x = p.x;
+    w.y = p.y;
+    w.vx = car.vx;
+    w.vy = car.vy;
+  }
+}

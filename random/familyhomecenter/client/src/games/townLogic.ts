@@ -146,6 +146,8 @@ export interface Town {
   peak: number;
   /** 🔥 fires, 🦹 crime and 🏚️ burnt buildings going on now (older saves: none) */
   events?: TownEvent[];
+  /** 🏆 a prize land: 🌙 on the Moon (craters of ice for water, rocks for trees), or 🌍 one of the Earth's lands */
+  land?: 'moon' | 'earth';
 }
 export interface TownEvent {
   /** the building's top-left tile */
@@ -214,6 +216,77 @@ export function newTown(name: string, seed: number): Town {
   return { v: 1, name: name.slice(0, 30) || 'My town', seed, map: m.join(''), pops: '0'.repeat(W * H), coins: START_COINS, day: 0, tax: DEFAULT_TAX, peak: 0 };
 }
 
+/** 🌙 Moon coins to start with (a 🏆 prize land: a moon bonus). */
+export const MOON_COINS = 2000;
+
+/** 🌙 Land on the Moon: grey dust, 🪨 rocks (drawn for trees), and round craters full of ice (water). */
+export function newMoonTown(name: string, seed: number): Town {
+  const r = rng(seed);
+  const m: string[] = new Array(W * H).fill(GRASS);
+  const set = (x: number, y: number, c: string) => {
+    if (x >= 0 && y >= 0 && x < W && y < H) m[y * W + x] = c;
+  };
+  // 🧊 craters of ice: a few big, some small
+  for (let k = 0; k < 7; k++) {
+    const cx = Math.floor(r() * W), cy = Math.floor(r() * H), rad = k < 2 ? 3 + r() * 2 : 1 + r() * 1.5;
+    for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) if (x * x + y * y <= rad * rad) set(cx + x, cy + y, WATER);
+  }
+  // 🪨 rocks, in clumps
+  for (let k = 0; k < 14; k++) {
+    const cx = Math.floor(r() * W), cy = Math.floor(r() * H);
+    for (let i = 0; i < 4 + Math.floor(r() * 7); i++) {
+      const x = cx + Math.round((r() - 0.5) * 5), y = cy + Math.round((r() - 0.5) * 5);
+      if (x >= 0 && y >= 0 && x < W && y < H && m[y * W + x] === GRASS) m[y * W + x] = TREE;
+    }
+  }
+  return { ...newTown(name, seed), map: m.join(''), coins: MOON_COINS, land: 'moon' };
+}
+
+/** 🌍 One of the Earth's lands: a big island with ocean all round, great lakes and woods. `shape` (0–3) changes how it's drawn. */
+export function newIslandTown(name: string, seed: number, shape: number): Town {
+  const r = rng(seed * 7 + shape);
+  const land = new Array(W * H).fill(false);
+  // the land: a few overlapping blobs around the middle, with a wobbly coast
+  const blobs = 3 + Math.floor(r() * 3);
+  for (let k = 0; k < blobs; k++) {
+    const cx = W * (0.3 + r() * 0.4), cy = H * (0.3 + r() * 0.4);
+    const rx = W * (0.18 + r() * 0.14) * (shape % 2 ? 1.15 : 0.95), ry = H * (0.2 + r() * 0.14) * (shape > 1 ? 1.1 : 0.95);
+    const wob = r() * 6;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const a = Math.atan2(y - cy, x - cx);
+        const k2 = 1 + 0.12 * Math.sin(a * 5 + wob) + 0.07 * Math.sin(a * 11 + wob * 2);
+        if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= k2 * k2) land[y * W + x] = true;
+      }
+  }
+  // keep a ring of ocean round the edge
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) land[y * W + x] = false;
+  const m: string[] = land.map((l) => (l ? GRASS : WATER));
+  // 🏞️ one or two great lakes, inside the land
+  for (let k = 0; k < 1 + Math.floor(r() * 2); k++) {
+    for (let tries = 0; tries < 30; tries++) {
+      const cx = 6 + Math.floor(r() * (W - 12)), cy = 6 + Math.floor(r() * (H - 12));
+      if (!land[cy * W + cx]) continue;
+      const rad = 2.5 + r() * 2.5;
+      for (let y = -6; y <= 6; y++)
+        for (let x = -6; x <= 6; x++) if (x * x * 0.7 + y * y <= rad * rad && land[(cy + y) * W + cx + x]) m[(cy + y) * W + cx + x] = WATER;
+      break;
+    }
+  }
+  // 🌲 woods
+  for (let k = 0; k < 16; k++) {
+    const cx = Math.floor(r() * W), cy = Math.floor(r() * H);
+    for (let i = 0; i < 5 + Math.floor(r() * 10); i++) {
+      const x = cx + Math.round((r() - 0.5) * 6), y = cy + Math.round((r() - 0.5) * 6);
+      if (x >= 0 && y >= 0 && x < W && y < H && m[y * W + x] === GRASS) m[y * W + x] = TREE;
+    }
+  }
+  return { ...newTown(name, seed), map: m.join(''), land: 'earth' };
+}
+/** 🌍 The Earth's four lands, with their names. */
+export const EARTH_LANDS = ['🌄 Sunrise Land', '🌴 Palm Islands', '❄️ Frost North', '🏜️ Golden Plains'];
+export const newEarth = (seed: number): Town[] => EARTH_LANDS.map((n, k) => newIslandTown(n, seed + k * 101, k));
+
 /** A saved town, checked; null if it isn't one. */
 export function cleanTown(t: unknown): Town | null {
   const x = t as Partial<Town> | null;
@@ -231,6 +304,7 @@ export function cleanTown(t: unknown): Town | null {
     day: n(x.day, 0, 0, 1e9),
     tax: n(x.tax, DEFAULT_TAX, 0, 20),
     peak: n(x.peak, 0, 0, 1e7),
+    ...(x.land === 'moon' || x.land === 'earth' ? { land: x.land } : {}),
     events: Array.isArray(x.events)
       ? x.events
           .filter((e) => e && ['fire', 'crime', 'burnt'].includes(e.kind) && Number.isInteger(e.i) && e.i >= 0 && e.i < W * H && BY_CH.has(x.map![e.i]))
