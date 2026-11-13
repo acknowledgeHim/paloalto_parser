@@ -16,6 +16,7 @@ password manager that runs on the Pi.
 > ⚠️ **A forgotten master password can't be reset.** That's what keeps the vault private. If it's
 > forgotten, that vault is gone and its passwords need setting up again. Have each person write
 > theirs down somewhere safe; for younger kids, a parent can keep it in a sealed envelope.
+> To start someone again, see [Forgotten master password](#forgotten-master-password-or-removing-an-account).
 
 ## 🧰 What to install
 
@@ -83,11 +84,28 @@ huberhome.duckdns.org:8443 {
 }
 ```
 
-Then set these, restart Vaultwarden, and restart the app:
+Then set these, rebuild Vaultwarden, and restart the app:
 
-- In `/etc/vaultwarden.env`: `DOMAIN=https://huberhome.duckdns.org:8443`. Restart Vaultwarden with
-  `sudo docker restart vaultwarden`.
+- In `/etc/vaultwarden.env`: `DOMAIN=https://huberhome.duckdns.org:8443`. Then rebuild the
+  container so it reads the file again (see [Applying a change to /etc/vaultwarden.env](#applying-a-change-to-etcvaultwardenenv)).
+  `docker restart` isn't enough, because the settings are read only when the container is created.
 - In the app's `.env`: `VAULTWARDEN_URL=https://huberhome.duckdns.org:8443`.
+
+Running the setup script again (including `--lock` / `--unlock`) writes `DOMAIN` back to
+`https://<pi-ip>:8443`. After running it, put your `DOMAIN` line back and rebuild again.
+
+### Applying a change to /etc/vaultwarden.env
+
+The vaults are in `/var/lib/vaultwarden`, not in the container, so replacing the container keeps
+them:
+
+```bash
+sudo docker rm -f vaultwarden
+sudo docker run -d --name vaultwarden --restart unless-stopped \
+  --env-file /etc/vaultwarden.env \
+  -v /var/lib/vaultwarden:/data -p 127.0.0.1:8222:80 vaultwarden/server:latest
+curl -s http://127.0.0.1:8222/alive     # should print a date
+```
 
 ## Good to know
 
@@ -96,7 +114,71 @@ Then set these, restart Vaultwarden, and restart the app:
 - **Updating:** run the script again. It pulls the latest Vaultwarden and keeps the data.
 - **Logs:** `sudo docker logs vaultwarden`
 - **The vault's admin page is off.** No admin token is set, so there's no page that can list or
-  manage accounts.
+  manage accounts. [Forgotten master password](#forgotten-master-password-or-removing-an-account)
+  shows how to turn it on for a few minutes when you need it.
+
+## Changing a master password, or removing an account
+
+**If the person knows their master password:**
+
+- **Change it:** 🔑 Passwords → the vault → **Settings → Security → Master password**. Type the old
+  one, then the new one twice. Everything in the vault stays. Other devices need to log in again.
+- **Delete the account:** **Settings → My account → Delete account**, confirmed with the master
+  password.
+
+### Forgotten master password, or removing an account
+
+Nobody can reset a forgotten master password, not even the admin page, because the vault is
+encrypted with it. What you can do is **delete that one account** so the person can start again
+with the same email. **That vault's passwords are gone for good**, so back up first.
+
+1. **Back up all the vaults.** Nothing is deleted by this step:
+
+   ```bash
+   sudo tar czf ~/vaultwarden-$(date +%F).tar.gz -C /var/lib vaultwarden
+   ```
+
+2. **Make a one-time admin token** and keep it on screen:
+
+   ```bash
+   TOKEN=$(openssl rand -base64 33); echo "$TOKEN"
+   ```
+
+3. **Start Vaultwarden with the admin page on.** The vaults stay in `/var/lib/vaultwarden`:
+
+   ```bash
+   sudo docker rm -f vaultwarden
+   sudo docker run -d --name vaultwarden --restart unless-stopped \
+     --env-file /etc/vaultwarden.env -e ADMIN_TOKEN="$TOKEN" \
+     -v /var/lib/vaultwarden:/data -p 127.0.0.1:8222:80 vaultwarden/server:latest
+   ```
+
+   The logs warn that the token is plain text. That's fine, because it's only on for a few minutes.
+
+4. **Delete the account.** Open `https://<pi-ip>:8443/admin` and paste the token. Go to **Users**,
+   find the person's email and press **Delete User**. Delete only that one user.
+   - **Don't press Save** on the admin page's settings tabs. Saving writes
+     `/var/lib/vaultwarden/config.json`, which would keep the admin page on.
+   - The same page has **Remove 2FA** (for a lost second step, where the password is still known)
+     and **Deauthorize sessions** (to log out a lost phone).
+
+5. **Turn the admin page off again** by rebuilding without the token
+   ([Applying a change to /etc/vaultwarden.env](#applying-a-change-to-etcvaultwardenenv)). Then
+   `https://<pi-ip>:8443/admin` should say the admin panel is disabled.
+
+6. **Let them make a new account:** run `sudo ./scripts/setup-vaultwarden.sh --unlock`, have them
+   **Create account** in 🔑 Passwords, then run `--lock`. If you use your own `DOMAIN`, put it back
+   afterwards (see [Certificate](#certificate)).
+
+If an account was deleted by mistake, the backup from step 1 brings back **all** the vaults as they
+were then. Anything saved since is lost, so do it straight away:
+
+```bash
+sudo docker stop vaultwarden
+sudo mv /var/lib/vaultwarden /var/lib/vaultwarden.after-$(date +%F-%H%M)   # kept, not deleted
+sudo tar xzf ~/vaultwarden-YYYY-MM-DD.tar.gz -C /var/lib
+sudo docker start vaultwarden
+```
 
 ## Troubleshooting: the vault tab says "This page cannot be displayed"
 
