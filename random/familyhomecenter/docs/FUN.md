@@ -360,6 +360,23 @@ games (a parent sets the price, or gives 🎟️ plays); parents play free.
 - **🚏 Getting around:** buses drive from bus stop to bus stop (2 or more) and stop at each. Metro
   trains run underground between 🚇 stations (2 or more; the line shows dashed). Both make nearby
   homes happier.
+  🚋 **Tram lines** (200 people) are rails laid along your roads (drag along them). Trams run up and
+  down them, and homes within 2 tiles are happier. Clearing a tram line takes up just the rails;
+  the road stays.
+- **🏙️ Big buildings (2 × 2 squares; tap where the top-left goes):** 🏬 shopping mall (200 people,
+  40 jobs), 🏥 hospital (250; health for homes within 14 tiles, and 🚑 ambulances), 🎓 university (500;
+  counts as a school within 12 tiles) and ✈️ airport (800; 60 jobs and town pride, but noisy close
+  by). Clearing any square of one clears the whole building and gives all its 🪙 back.
+- **🔥 Fires** start now and then once a town has had 30 people, much less often near a 🚒 fire
+  station. A burning building doesn't work and its people go out. 🚒 A fire engine (and a 🚑
+  ambulance, if there's a clinic or hospital) drives over with lights flashing and waits until the
+  fire is out: 2–3 days with a fire station close enough, longer from far away. With none close
+  enough, after 8 days the building is 🏚️ **burnt**. It stays put (nothing is removed) but doesn't
+  work until you 🔍 tap it and press **🔨 Repair** (half what it cost).
+- **🦹 Crime** shows up near homes once a town has had 80 people, much less often near 🚓 police. It
+  takes 10 🪙 and makes homes within 3 tiles less happy until it's over: a day or two with police
+  close by, about a week without. A police car drives over with lights flashing. The 💡 line says
+  what's going on and what would help.
 - **🚶🚗 People and traffic:** people walk from homes to work, shops, parks, playgrounds and the
   beach, keeping to the road's edge or cutting across grass and parks. Cars, 🚚 trucks from farms
   and factories, and buses drive on the right. 🚓 Police, 🚒 fire engines and 🚑 ambulances drive out

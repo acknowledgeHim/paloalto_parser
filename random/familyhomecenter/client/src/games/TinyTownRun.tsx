@@ -7,8 +7,13 @@ import {
   TREE,
   W,
   WATER,
+  anchorOf,
   build,
   buildingOf,
+  isFiller,
+  isRoadCh,
+  repair,
+  repairCost,
   canBuild,
   hasRoad,
   homeLook,
@@ -21,13 +26,13 @@ import {
   type Tool,
   type Town,
 } from './townLogic.js';
-import { makeTraffic, metroLine, placeAgent, type Agent } from './townTraffic.js';
+import { callKey, makeTraffic, metroLine, placeAgent, type Agent } from './townTraffic.js';
 import { drawArt } from './townArt.js';
 import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
 
 /** Days a second, by speed: ⏸ / ▶ / ⏩. */
 const SPEEDS = [0, 1500, 500];
-const PAINT = new Set(['=', 'p']); // tools that draw as you drag (🚜 clearing doesn't: only the square you tap)
+const PAINT = new Set(['=', 'p', '%']); // tools that draw as you drag (🚜 clearing doesn't: only the square you tap)
 
 const PAD: Record<Cat, string> = {
   road: '#9e9e9e',
@@ -89,7 +94,7 @@ function drawAgent(g: CanvasRenderingContext2D, a: Agent, sx: number, sy: number
     g.restore();
     return [sx - sz / 2 - 2, sy - sz * 0.62 - 2, sz + 4, sz + 4];
   }
-  const LEN: Record<string, number> = { bus: 0.72, truck: 0.56, fire: 0.62, ambulance: 0.5, train: 1.5, car: 0.42, police: 0.44 };
+  const LEN: Record<string, number> = { tram: 0.9, bus: 0.72, truck: 0.56, fire: 0.62, ambulance: 0.5, train: 1.5, car: 0.42, police: 0.44 };
   const len = T * (LEN[a.kind] ?? 0.42);
   const wid = Math.max(4, T * (a.kind === 'car' || a.kind === 'police' ? 0.24 : a.kind === 'train' ? 0.3 : 0.27));
   g.save();
@@ -113,7 +118,7 @@ function drawAgent(g: CanvasRenderingContext2D, a: Agent, sx: number, sy: number
   } else body(-len / 2, len, a.look);
   g.shadowBlur = 0;
   const glass = 'rgba(30,40,60,0.75)';
-  if (a.kind === 'bus') {
+  if (a.kind === 'bus' || a.kind === 'tram') {
     g.fillStyle = glass;
     for (let k = 0; k < 4; k++) g.fillRect(-len / 2 + len * (0.12 + k * 0.2), -wid / 2 + 1, len * 0.12, wid - 2);
   } else if (a.kind === 'train') {
@@ -237,7 +242,9 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const map = t.current.map;
     const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < W && y < map.length / W ? map[y * W + x] : '');
-    const isRoad = (x: number, y: number) => at(x, y) === '=' || at(x, y) === BRIDGE;
+    const isRoad = (x: number, y: number) => isRoadCh(at(x, y));
+    const isRail = (x: number, y: number) => at(x, y) === '%';
+    const bigOnes: number[] = [];
     for (let ry = 0; ry < region.h; ry++)
       for (let rx = 0; rx < region.w; rx++) {
         const x = region.x0 + rx, y = region.y0 + ry, i = y * W + x;
@@ -250,7 +257,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
           g.fillStyle = (x + y) % 2 ? '#94c95a' : '#8ec454';
           g.fillRect(px, py, T, T);
         }
-        if (ch === '=' || ch === BRIDGE) {
+        if (isRoadCh(ch)) {
           g.fillStyle = ch === BRIDGE ? '#a1785a' : '#7f7f7f';
           const m = T * 0.2;
           g.fillRect(px + m, py + m, T - 2 * m, T - 2 * m);
@@ -264,14 +271,41 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
             if (isRoad(x - 1, y) || isRoad(x + 1, y)) g.fillRect(px + T * 0.3, py + T / 2 - d / 2, T * 0.4, d);
             if (isRoad(x, y - 1) || isRoad(x, y + 1)) g.fillRect(px + T / 2 - d / 2, py + T * 0.3, d, T * 0.4);
           }
+          if (ch === '%') {
+            // 🚋 two rails along the line, with sleepers
+            g.fillStyle = '#4e342e';
+            const w = Math.max(1, T / 16);
+            const across = isRail(x - 1, y) || isRail(x + 1, y) || !(isRail(x, y - 1) || isRail(x, y + 1));
+            const down = isRail(x, y - 1) || isRail(x, y + 1);
+            if (across) {
+              const x0 = isRail(x - 1, y) ? px : px + T * 0.3, x1 = isRail(x + 1, y) ? px + T : px + T * 0.7;
+              for (let k = 0; k < 3; k++) g.fillRect(px + T * (0.15 + k * 0.3), py + T * 0.3, w * 1.5, T * 0.4);
+              g.fillStyle = '#b0bec5';
+              g.fillRect(x0, py + T * 0.36, x1 - x0, w);
+              g.fillRect(x0, py + T * 0.62, x1 - x0, w);
+            }
+            if (down) {
+              g.fillStyle = '#4e342e';
+              const y0 = isRail(x, y - 1) ? py : py + T * 0.3, y1 = isRail(x, y + 1) ? py + T : py + T * 0.7;
+              for (let k = 0; k < 3; k++) g.fillRect(px + T * 0.3, py + T * (0.15 + k * 0.3), T * 0.4, w * 1.5);
+              g.fillStyle = '#b0bec5';
+              g.fillRect(px + T * 0.36, y0, w, y1 - y0);
+              g.fillRect(px + T * 0.62, y0, w, y1 - y0);
+            }
+          }
           continue;
         }
+        if (isFiller(ch)) continue; // part of a 2 × 2 building (drawn below)
         if (ch === TREE) {
           g.drawImage(glyph('🌲', Math.round(T * 0.8)), px - T * 0.0, py - T * 0.05, T, T);
           continue;
         }
         const b = buildingOf(ch);
         if (!b) continue;
+        if (b.size === 2) {
+          bigOnes.push(i);
+          continue;
+        }
         if (drawArt(g, ch, i, px, py, T, t.current.day)) {
           if (mood && b.homes) {
             g.fillStyle = `hsla(${Math.round((rep.homeHappy.get(i) ?? 50) * 1.2)}, 85%, 50%, 0.45)`;
@@ -306,6 +340,40 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
         }
         if (b.needsRoad && !hasRoad(map, i) && T >= 14) g.drawImage(glyph('🚧', Math.round(T * 0.42)), px + T * 0.5, py - T * 0.05, T * 0.55, T * 0.55);
       }
+    // 🏬 2 × 2 buildings, on top of the ground around them
+    for (const i of bigOnes) {
+      const b = buildingOf(map[i])!;
+      const px = ((i % W) - region.x0) * T, py = (Math.floor(i / W) - region.y0) * T;
+      if (b.id === 'airport') {
+        g.fillStyle = '#cfd8dc';
+        g.fillRect(px + 1, py + 1, 2 * T - 2, 2 * T - 2);
+        g.fillStyle = '#546e7a'; // the runway
+        g.fillRect(px + T * 0.15, py + T * 1.2, T * 1.7, T * 0.45);
+        g.fillStyle = '#fff';
+        for (let k = 0; k < 5; k++) g.fillRect(px + T * (0.3 + k * 0.32), py + T * 1.41, T * 0.16, Math.max(1, T * 0.04));
+        g.fillStyle = '#90a4ae'; // the terminal
+        g.fillRect(px + T * 0.2, py + T * 0.2, T * 0.9, T * 0.55);
+        g.drawImage(glyph('✈️', Math.round(T * 0.9)), px + T * 0.95, py + T * 0.05, T * 1.05, T * 1.05);
+      } else {
+        g.fillStyle = PAD[b.cat] || '#e0e0e0';
+        g.fillRect(px + 2, py + 2, 2 * T - 4, 2 * T - 4);
+        g.strokeStyle = 'rgba(0,0,0,0.15)';
+        g.lineWidth = 1;
+        g.strokeRect(px + 2.5, py + 2.5, 2 * T - 5, 2 * T - 5);
+        g.drawImage(glyph(b.emoji, Math.round(T * 1.5)), px + T * 0.05, py + T * 0.05, T * 1.9, T * 1.9);
+      }
+      if (b.needsRoad && !hasRoad(map, i) && T >= 14) g.drawImage(glyph('🚧', Math.round(T * 0.5)), px + T * 1.3, py, T * 0.65, T * 0.65);
+    }
+    // 🏚️ burnt buildings: dark, with a 🔨 sign (🔥 and 🦹 move, so they're on the layer above)
+    for (const e of t.current.events ?? []) {
+      if (e.kind !== 'burnt') continue;
+      const big = buildingOf(map[e.i])?.size === 2 ? 2 : 1;
+      const px = ((e.i % W) - region.x0) * T, py = (Math.floor(e.i / W) - region.y0) * T;
+      g.fillStyle = 'rgba(40,30,25,0.72)';
+      g.fillRect(px + 1, py + 1, big * T - 2, big * T - 2);
+      g.drawImage(glyph('🏚️', Math.round(T * 0.6 * big)), px + T * 0.12 * big, py + T * 0.05 * big, T * 0.75 * big, T * 0.75 * big);
+      g.drawImage(glyph('🔨', Math.round(T * 0.4)), px + big * T - T * 0.5, py + big * T - T * 0.5, T * 0.5, T * 0.5);
+    }
     // 🚇 The metro line, underground: a dashed line from station to station.
     const metro = metroLine(map);
     if (metro.length >= 2) {
@@ -328,20 +396,28 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
     if (show !== null) {
       const rx = (show % W) - region.x0, ry = Math.floor(show / W) - region.y0;
       if (rx >= 0 && ry >= 0 && rx < region.w && ry < region.h) {
-        const px = rx * T, py = ry * T;
+        let px = rx * T, py = ry * T;
         let colour = '#ffffff';
+        // how big an outline: a 2 × 2 building being placed, or the whole of one being cleared / looked at
+        let sz = tool.kind === 'build' && buildingOf(tool.ch)?.size === 2 && hover !== null ? 2 : 1;
+        if (!(tool.kind === 'build') && buildingOf(map[anchorOf(map, show)])?.size === 2) {
+          const a = anchorOf(map, show);
+          px = ((a % W) - region.x0) * T;
+          py = (Math.floor(a / W) - region.y0) * T;
+          sz = 2;
+        }
         if (hover !== null && (tool.kind === 'build' || tool.kind === 'bulldoze')) {
           const can = canBuild(t.current, show, tool, region, owned);
           colour = can.ok ? '#00e676' : '#ff5252';
           if (tool.kind === 'build' && can.ok) {
             g.globalAlpha = 0.6;
-            g.drawImage(glyph(buildingOf(tool.ch)!.emoji, Math.round(T * 0.78)), px, py, T, T);
+            g.drawImage(glyph(buildingOf(tool.ch)!.emoji, Math.round(T * 0.78 * sz)), px, py, T * sz, T * sz);
             g.globalAlpha = 1;
           }
         }
         g.strokeStyle = colour;
         g.lineWidth = 2;
-        g.strokeRect(px + 1, py + 1, T - 2, T - 2);
+        g.strokeRect(px + 1, py + 1, T * sz - 2, T * sz - 2);
       }
     }
   }, [tile, region, hover, picked, tool, mood, rep, owned]);
@@ -365,7 +441,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
       /* fine: just not remembered */
     }
   };
-  useEffect(() => traffic.current.update(t.current.map, t.current.pops, rep.pop), [rep]);
+  useEffect(() => traffic.current.update(t.current.map, t.current.pops, rep.pop, t.current.events ?? []), [rep]);
   const speedNow = useRef(speed);
   speedNow.current = speed;
   useEffect(() => {
@@ -393,6 +469,32 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
       for (const [x, y, w, h] of dirty) g.clearRect(x, y, w, h);
       dirty = [];
       const map = t.current.map;
+      for (const e of t.current.events ?? []) {
+        if (e.kind === 'burnt') continue;
+        const big = buildingOf(map[e.i])?.size === 2 ? 2 : 1;
+        const cx = ((e.i % W) - region.x0 + big / 2) * T, cy = (Math.floor(e.i / W) - region.y0 + big / 2) * T;
+        const r = (T * big) / 2 + T * 0.5;
+        dirty.push([cx - r, cy - r - T * 0.6, r * 2, r * 2 + T * 0.6]);
+        if (e.kind === 'fire') {
+          // 🔥 flickering flames and grey smoke rising
+          for (let k = 0; k < 3; k++) {
+            const rise = ((now / 1200 + k / 3) % 1) * T * 0.9;
+            g.fillStyle = `rgba(90,90,90,${0.45 * (1 - rise / (T * 0.9))})`;
+            g.beginPath();
+            g.arc(cx + Math.sin(now / 400 + k) * T * 0.12, cy - T * 0.25 * big - rise, T * (0.12 + rise / T / 4), 0, Math.PI * 2);
+            g.fill();
+          }
+          const f = 1 + Math.sin(now / 90) * 0.08;
+          const sz = T * 0.7 * big * f;
+          g.drawImage(glyph('🔥', Math.round(T * 0.6 * big)), cx - sz / 2 - T * 0.12, cy - sz / 2 + T * 0.05, sz, sz);
+          g.drawImage(glyph('🔥', Math.round(T * 0.5 * big)), cx - sz * 0.3 + T * 0.18, cy - sz * 0.3 - T * 0.1, sz * 0.6, sz * 0.6);
+        } else {
+          // 🦹 sneaking about
+          const sz = T * 0.6;
+          const dx = Math.sin(now / 500) * T * 0.15;
+          g.drawImage(glyph('🦹', Math.round(sz)), cx - sz / 2 + dx, cy - sz * 0.9, sz, sz);
+        }
+      }
       for (const a of traffic.current.agents) {
         const p = placeAgent(a, map);
         const sx = (p.x - region.x0) * T, sy = (p.y - region.y0) * T;
@@ -414,15 +516,15 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
   };
   const buying = useRef(false);
   const act = (i: number) => {
-    if (tool.kind === 'look') return setPicked(i);
+    if (tool.kind === 'look') return setPicked(anchorOf(t.current.map, i));
     if (tool.kind !== 'build' && tool.kind !== 'bulldoze') return;
     const can = canBuild(t.current, i, tool, region, owned);
     if (!can.ok) {
       if (can.why) setMsg(can.why);
       return;
     }
-    if (tool.kind === 'bulldoze' && buildingOf(t.current.map[i])?.token) {
-      const b = buildingOf(t.current.map[i])!;
+    if (tool.kind === 'bulldoze' && buildingOf(t.current.map[anchorOf(t.current.map, i)])?.token) {
+      const b = buildingOf(t.current.map[anchorOf(t.current.map, i)])!;
       if (!window.confirm(`Clear the ${b.emoji} ${b.name}? It was bought with 💎, and clearing it doesn't give the tokens back.`)) return;
     }
     // 💎 Bought with tokens: the server takes them first, then it's built.
@@ -602,6 +704,31 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
                 {lookB.emoji} {lookB.name}
               </h3>
               <p className="hint">{lookB.tip}</p>
+              {(town_.events ?? [])
+                .filter((e) => e.i === picked)
+                .map((e) => (
+                  <p key={callKey(e)} className="is-bad">
+                    {e.kind === 'fire' && '🔥 On fire! It isn’t working until the fire’s out.'}
+                    {e.kind === 'crime' && '🦹 Crime here — homes nearby aren’t happy about it.'}
+                    {e.kind === 'burnt' && (
+                      <>
+                        🏚️ Burnt down — it isn’t working.{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (repair(t.current, picked)) {
+                              setMsg(`🔨 The ${lookB.emoji} ${lookB.name} is as good as new!`);
+                              onSave({ ...t.current });
+                              redraw();
+                            } else setMsg(`🔨 Repairing needs ${repairCost(t.current, picked)} 🪙`);
+                          }}
+                        >
+                          🔨 Repair ({repairCost(t.current, picked)} 🪙)
+                        </button>
+                      </>
+                    )}
+                  </p>
+                ))}
               {lookB.needsRoad && !hasRoad(town_.map, picked) && <p className="is-bad">🚧 Not next to a road, so it isn't working.</p>}
               {lookB.homes &&
                 (() => {

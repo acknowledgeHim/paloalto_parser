@@ -9,9 +9,9 @@
  * towns) drive on the right of the road, over bridges too. How many there are follows how many
  * people live in town.
  */
-import { BRIDGE, GRASS, W, buildingOf } from './townLogic.js';
+import { GRASS, TRAM, W, anchorOf, buildingOf, isRoadCh, type TownEvent } from './townLogic.js';
 
-export type AgentKind = 'walker' | 'car' | 'truck' | 'bus' | 'police' | 'fire' | 'ambulance' | 'train';
+export type AgentKind = 'walker' | 'car' | 'truck' | 'bus' | 'police' | 'fire' | 'ambulance' | 'train' | 'tram';
 export interface Agent {
   kind: AgentKind;
   /** tiles, start to finish */
@@ -33,9 +33,13 @@ export interface Agent {
   wait?: number;
   /** 🚨 lights on */
   lights?: boolean;
+  /** off to a 🔥 / 🦹 (its key): stays parked there until it's over */
+  call?: string;
 }
+/** what a 🔥 / 🦹 is called, so the one sent to it can wait there till it's over */
+export const callKey = (e: Pick<TownEvent, 'kind' | 'i'>) => `${e.kind}:${e.i}`;
 
-const isRoad = (c: string) => c === '=' || c === BRIDGE;
+const isRoad = isRoadCh;
 /** parks and the like that people walk through (no road needed, nothing inside) */
 const walkThrough = (c: string) => {
   const b = buildingOf(c);
@@ -46,6 +50,7 @@ const passable = (c: string) => isRoad(c) || c === GRASS || walkThrough(c);
 type Place = 'home' | 'work' | 'shop' | 'fun' | 'nature' | 'service';
 function placeOf(c: string): Place | null {
   const b = buildingOf(c);
+  if (b?.ch === TRAM) return null;
   if (!b) return null;
   if (b.homes) return 'home';
   if (b.id === 'shop' || b.id === 'cafe') return 'shop';
@@ -117,9 +122,51 @@ function walkFrom(map: string, from: number, rnd: () => number, maxCost = 50): n
 }
 
 /** A drive along the roads from beside `from` to beside a building it could be going to. */
+function roadsBy(map: string, at: number): number[] {
+  // the road tiles next to a building (any of its tiles, for a 2 × 2 one)
+  const a = anchorOf(map, at);
+  const big = buildingOf(map[a])?.size === 2;
+  const tiles = big ? [a, a + 1, a + W, a + W + 1] : [a];
+  const out = new Set<number>();
+  for (const k of tiles) for (const j of nbrs(k, map.length)) if (isRoad(map[j])) out.add(j);
+  return [...out];
+}
+/** 🚨 From a station to beside the building where something's happening. */
+function driveTo(map: string, from: number, to: number): number[] | null {
+  const starts = roadsBy(map, from);
+  const ends = new Set(roadsBy(map, to));
+  if (!starts.length || !ends.size) return null;
+  for (const s of starts) {
+    if (ends.has(s)) return [s, s];
+    const p = roadPath(map, s, ends);
+    if (p) return p;
+  }
+  return null;
+}
+
+/** 🚋 Up or down a tram line, from one end of it (or anywhere on it) to the far end. */
+function tramRun(map: string, rails: number[], rnd: () => number): number[] | null {
+  if (rails.length < 3) return null;
+  const s = rails[Math.floor(rnd() * rails.length)];
+  const n = map.length;
+  const prev = new Int32Array(n).fill(-1);
+  const seen = new Uint8Array(n);
+  const order = [s];
+  seen[s] = 1;
+  for (let k = 0; k < order.length; k++)
+    for (const j of nbrs(order[k], n))
+      if (!seen[j] && map[j] === TRAM) {
+        seen[j] = 1;
+        prev[j] = order[k];
+        order.push(j);
+      }
+  const p = pathTo(prev, order[order.length - 1]);
+  return p.length >= 3 ? p : null;
+}
+
 function driveFrom(map: string, from: number, rnd: () => number, want?: (p: Place, ch: string) => number): number[] | null {
   const n = map.length;
-  const starts = nbrs(from, n).filter((j) => isRoad(map[j]));
+  const starts = roadsBy(map, from);
   if (!starts.length) return null;
   const s = starts[Math.floor(rnd() * starts.length)];
   const prev = new Int32Array(n).fill(-1);
@@ -137,10 +184,11 @@ function driveFrom(map: string, from: number, rnd: () => number, want?: (p: Plac
   const goals: Array<[number, number]> = [];
   for (const r of order) {
     for (const j of nbrs(r, n)) {
-      if (j === from) continue;
-      const pl = placeOf(map[j]);
+      if (j === from || anchorOf(map, j) === anchorOf(map, from)) continue;
+      const a = anchorOf(map, j);
+      const pl = placeOf(map[a]);
       if (!pl) continue;
-      const w = want ? want(pl, map[j]) : WEIGHT[pl];
+      const w = want ? want(pl, map[a]) : WEIGHT[pl];
       if (w > 0) goals.push([r, w]);
     }
   }
@@ -236,8 +284,8 @@ function busRoute(map: string, roads: number[], rnd: () => number): number[] | n
 
 export interface Traffic {
   agents: Agent[];
-  /** call when the map or the people change */
-  update: (map: string, pops: string, pop: number) => void;
+  /** call when the map, the people or the 🔥 / 🦹 change */
+  update: (map: string, pops: string, pop: number, events?: TownEvent[]) => void;
   /** move everyone on `dt` seconds (already × the game speed) */
   advance: (dt: number) => void;
 }
@@ -249,16 +297,20 @@ export function makeTraffic(rnd: () => number = Math.random): Traffic {
   let busStops: number[] = [];
   let line: number[] = [];
   const stations: Record<'police' | 'fire' | 'ambulance', number[]> = { police: [], fire: [], ambulance: [] };
+  let rails: number[] = [];
+  let calls = new Map<string, TownEvent>();
   let roads: number[] = [];
-  let want: Record<AgentKind, number> = { walker: 0, car: 0, truck: 0, bus: 0, police: 0, fire: 0, ambulance: 0, train: 0 };
+  let want: Record<AgentKind, number> = { walker: 0, car: 0, truck: 0, bus: 0, police: 0, fire: 0, ambulance: 0, train: 0, tram: 0 };
   let spawnIn = 0;
   const agents: Agent[] = [];
-  const count = (k: AgentKind) => agents.filter((a) => a.kind === k).length;
+  const count = (k: AgentKind) => agents.filter((a) => a.kind === k && !a.call).length;
   const stillOk = (a: Agent) => {
     for (let k = a.seg; k < a.path.length; k++) {
       const c = map[a.path[k]];
       if (a.kind === 'train') {
         if (c !== 'U') return false;
+      } else if (a.kind === 'tram') {
+        if (c !== TRAM) return false;
       } else if (k === a.path.length - 1 && a.kind === 'walker') {
         if (c !== a.goal) return false;
       } else if (a.kind === 'walker' ? !(passable(c) || (k === 0 && placeOf(c))) : !isRoad(c)) return false;
@@ -277,6 +329,7 @@ export function makeTraffic(rnd: () => number = Math.random): Traffic {
     else if (kind === 'car') path = driveFrom(map, any(homes), rnd);
     else if (kind === 'truck') path = driveFrom(map, any(makers), rnd, (p) => (p === 'shop' ? 5 : p === 'work' ? 2 : 0));
     else if (kind === 'police' || kind === 'fire' || kind === 'ambulance') path = driveFrom(map, any(stations[kind]), rnd, (p) => (p === 'home' ? 3 : 1));
+    else if (kind === 'tram') path = tramRun(map, rails, rnd);
     else if (kind === 'bus') {
       const r = busStops.length >= 2 ? busStopsRoute(map, busStops, rnd) : null;
       if (r) ({ path, stops } = r);
@@ -290,8 +343,8 @@ export function makeTraffic(rnd: () => number = Math.random): Traffic {
     const look =
       kind === 'walker'
         ? WALKERS[Math.floor(rnd() * WALKERS.length)]
-        : ({ bus: '#fbc02d', truck: rnd() < 0.5 ? '#f5f5f5' : '#8d6e63', police: '#f5f5f5', fire: '#d32f2f', ambulance: '#fafafa', train: '#cfd8dc' } as Record<string, string>)[kind] ?? CAR_COLOURS[Math.floor(rnd() * CAR_COLOURS.length)];
-    const speed = kind === 'walker' ? 0.7 + rnd() * 0.5 : kind === 'car' ? 2.2 + rnd() * 1.0 : kind === 'train' ? 4 : kind === 'truck' ? 1.7 : kind === 'bus' ? 1.5 : 2.6;
+        : ({ tram: '#26a69a', bus: '#fbc02d', truck: rnd() < 0.5 ? '#f5f5f5' : '#8d6e63', police: '#f5f5f5', fire: '#d32f2f', ambulance: '#fafafa', train: '#cfd8dc' } as Record<string, string>)[kind] ?? CAR_COLOURS[Math.floor(rnd() * CAR_COLOURS.length)];
+    const speed = kind === 'walker' ? 0.7 + rnd() * 0.5 : kind === 'car' ? 2.2 + rnd() * 1.0 : kind === 'train' ? 4 : kind === 'truck' ? 1.7 : kind === 'bus' || kind === 'tram' ? 1.5 : 2.6;
     // 🚨 now and then they're off to help someone, lights flashing
     const lights = (kind === 'police' || kind === 'fire' || kind === 'ambulance') && rnd() < 0.4;
     agents.push({ kind, path, seg: 0, t: 0, speed: lights ? speed * 1.4 : speed, look, side: rnd() < 0.5 ? -1 : 1, goal: map[path[path.length - 1]], stops, wait: stops?.includes(0) ? 1.5 : 0, lights });
@@ -299,13 +352,14 @@ export function makeTraffic(rnd: () => number = Math.random): Traffic {
 
   return {
     agents,
-    update(m, pops, pop) {
+    update(m, pops, pop, events = []) {
       const changed = m !== map;
       map = m;
       homes = [];
       makers = [];
       roads = [];
       busStops = [];
+      rails = [];
       stations.police = [];
       stations.fire = [];
       stations.ambulance = [];
@@ -318,7 +372,8 @@ export function makeTraffic(rnd: () => number = Math.random): Traffic {
         if (c === 'B') busStops.push(i);
         if (c === 'z') stations.police.push(i);
         if (c === 'x') stations.fire.push(i);
-        if (c === 'c') stations.ambulance.push(i);
+        if (c === 'c' || c === 'E') stations.ambulance.push(i);
+        if (c === TRAM) rails.push(i);
       }
       line = metroLine(m);
       const hasRoads = roads.length >= 3;
@@ -332,8 +387,27 @@ export function makeTraffic(rnd: () => number = Math.random): Traffic {
         fire: on ? Math.min(2, stations.fire.length) : 0,
         ambulance: on ? Math.min(2, stations.ambulance.length) : 0,
         train: line.length >= 2 ? Math.min(3, line.length - 1) : 0,
+        tram: rails.length >= 3 ? Math.min(4, Math.ceil(rails.length / 10)) : 0,
       };
       if (changed) for (let k = agents.length - 1; k >= 0; k--) if (!stillOk(agents[k])) agents.splice(k, 1);
+      // 🚨 send someone to each new 🔥 / 🦹 from the nearest station; when it's over they drive off (gone)
+      calls = new Map(events.filter((e) => e.kind !== 'burnt').map((e) => [callKey(e), e]));
+      for (let k = agents.length - 1; k >= 0; k--) if (agents[k].call && !calls.has(agents[k].call!)) agents.splice(k, 1);
+      for (const [key, e] of calls) {
+        if (agents.some((a) => a.call === key)) continue;
+        const kind = e.kind === 'fire' ? 'fire' : 'police';
+        const from = [...stations[kind]].sort((a, b) => manhattan(a, e.i) - manhattan(b, e.i))[0];
+        if (from === undefined) continue; // no station: nobody comes
+        const path = driveTo(m, from, e.i);
+        if (!path) continue;
+        agents.push({ kind, path, seg: 0, t: 0, speed: 3.4, look: kind === 'fire' ? '#d32f2f' : '#f5f5f5', side: 1, goal: m[path[path.length - 1]], wait: 0, lights: true, call: key });
+        // 🚑 and an ambulance too, for a fire
+        if (kind === 'fire' && stations.ambulance.length) {
+          const amb = [...stations.ambulance].sort((a, b) => manhattan(a, e.i) - manhattan(b, e.i))[0];
+          const p2 = driveTo(m, amb, e.i);
+          if (p2) agents.push({ kind: 'ambulance', path: p2, seg: 0, t: 0, speed: 3.2, look: '#fafafa', side: 1, goal: m[p2[p2.length - 1]], wait: 0, lights: true, call: key });
+        }
+      }
       // fewer people now: the extra ones just finish their trip
     },
     advance(dt) {
@@ -359,7 +433,12 @@ export function makeTraffic(rnd: () => number = Math.random): Traffic {
           }
           a.t = over / len();
         }
-        if (a.seg >= a.path.length - 1) agents.splice(k, 1); // there: gone inside / parked
+        if (a.seg >= a.path.length - 1) {
+          if (a.call && calls.has(a.call)) {
+            a.seg = a.path.length - 1; // there: parked, lights going, till it's over
+            a.t = 0;
+          } else agents.splice(k, 1); // there: gone inside / parked
+        }
       }
       spawnIn -= dt;
       if (spawnIn <= 0) {

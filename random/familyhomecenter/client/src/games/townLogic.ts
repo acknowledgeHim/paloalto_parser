@@ -50,6 +50,8 @@ export interface Building {
   byWater?: boolean;
   /** can't be built by hand (homes grow into these) */
   grown?: boolean;
+  /** 2 → takes 2 × 2 tiles (this one top-left, filler tiles for the rest) */
+  size?: 2;
   tip: string;
 }
 export type Service = 'school' | 'health' | 'fire' | 'police' | 'library';
@@ -75,6 +77,7 @@ export const BUILDINGS: Building[] = [
   B({ ch: 'g', id: 'power', emoji: '⚡', name: 'Power station', cat: 'utility', cost: 300, upkeep: 4, needPop: 40, power: 70, noise: [2, 10], uses: 0, tip: 'Power for 70 buildings, a little noisy.' }),
   B({ ch: 'w', id: 'tower', emoji: '💧', name: 'Water tower', cat: 'utility', cost: 100, upkeep: 1, needPop: 0, water: 30, uses: 0, tip: 'Water for 30 buildings.' }),
   B({ ch: 'q', id: 'pump', emoji: '🚰', name: 'Water pump', cat: 'utility', cost: 60, upkeep: 1, needPop: 0, water: 25, uses: 0, byWater: true, tip: 'Water for 25 buildings. Build it next to the water.' }),
+  B({ ch: '%', id: 'tram', emoji: '🚋', name: 'Tram line', cat: 'transit', cost: 15, upkeep: 0, needPop: 200, needsRoad: false, uses: 0, tip: 'Tram rails along a road (drag along your roads). Trams run up and down the line; homes within 2 tiles are happier.' }),
   B({ ch: 'B', id: 'busstop', emoji: '🚏', name: 'Bus stop', cat: 'transit', cost: 40, upkeep: 0, needPop: 50, happy: [3, 4], uses: 0, tip: 'Buses drive from stop to stop (build 2 or more). Homes within 3 tiles are a bit happier.' }),
   B({ ch: 'U', id: 'metro', emoji: '🚇', name: 'Metro station', cat: 'transit', cost: 1500, upkeep: 6, needPop: 400, jobs: 4, happy: [7, 8], uses: 2, tip: 'Trains run underground between metro stations (build 2 or more). Homes within 7 tiles are happier.' }),
   B({ ch: 'x', id: 'fire', emoji: '🚒', name: 'Fire station', cat: 'service', cost: 150, upkeep: 3, needPop: 15, jobs: 3, cover: ['fire', 7], tip: 'Homes within 7 tiles feel safe. Towns over 60 people want one.' }),
@@ -82,6 +85,11 @@ export const BUILDINGS: Building[] = [
   B({ ch: 'c', id: 'clinic', emoji: '🏥', name: 'Clinic', cat: 'service', cost: 250, upkeep: 5, needPop: 80, jobs: 5, cover: ['health', 7], tip: 'Homes within 7 tiles are happier. Towns over 120 people want one.' }),
   B({ ch: 'z', id: 'police', emoji: '🚓', name: 'Police', cat: 'service', cost: 150, upkeep: 3, needPop: 80, jobs: 3, cover: ['police', 7], tip: 'Homes within 7 tiles feel safe. Towns over 150 people want one.' }),
   B({ ch: 'l', id: 'library', emoji: '📚', name: 'Library', cat: 'service', cost: 200, upkeep: 2, needPop: 150, jobs: 2, cover: ['library', 6], tip: 'Homes within 6 tiles are happier.' }),
+  // 🏙️ Big buildings: 2 × 2 tiles.
+  B({ ch: 'A', id: 'mall', emoji: '🏬', name: 'Shopping mall', cat: 'work', cost: 1200, upkeep: 3, needPop: 200, jobs: 40, uses: 4, happy: [5, 6], size: 2, tip: '2 × 2. 40 jobs, and homes within 5 tiles like having it close.' }),
+  B({ ch: 'E', id: 'hospital', emoji: '🏥', name: 'Hospital', cat: 'service', cost: 1500, upkeep: 8, needPop: 250, jobs: 30, uses: 4, cover: ['health', 14], size: 2, tip: '2 × 2. Homes within 14 tiles have a hospital close by. 🚑 Ambulances go out from here.' }),
+  B({ ch: 'Y', id: 'university', emoji: '🎓', name: 'University', cat: 'service', cost: 2000, upkeep: 8, needPop: 500, jobs: 30, uses: 4, cover: ['school', 12], townHappy: 4, size: 2, tip: '2 × 2. Counts as a school for homes within 12 tiles, and the whole town is proud of it.' }),
+  B({ ch: 'P', id: 'airport', emoji: '✈️', name: 'Airport', cat: 'service', cost: 4000, upkeep: 12, needPop: 800, jobs: 60, uses: 6, townHappy: 6, noise: [4, 15], size: 2, tip: '2 × 2. 60 jobs, and the whole town is happier — but noisy for homes within 4 tiles.' }),
   B({ ch: 'S', id: 'stadium', emoji: '🏟️', name: 'Stadium', cat: 'service', cost: 1200, upkeep: 8, needPop: 250, jobs: 10, townHappy: 5, tip: 'The whole town is happier.' }),
   B({ ch: 'M', id: 'museum', emoji: '🏛️', name: 'Museum', cat: 'service', cost: 900, upkeep: 5, needPop: 400, jobs: 6, townHappy: 4, tip: 'The whole town is happier.' }),
   B({ ch: 'R', id: 'rocket', emoji: '🚀', name: 'Rocket base', cat: 'service', cost: 3000, upkeep: 10, needPop: 1000, jobs: 25, townHappy: 8, tip: 'The biggest thing a town can build. Everyone is proud of it.' }),
@@ -99,6 +107,19 @@ export const BUILDINGS: Building[] = [
 ];
 const BY_CH = new Map(BUILDINGS.map((b) => [b.ch, b]));
 export const buildingOf = (ch: string) => BY_CH.get(ch);
+/** The other 3 tiles of a 2 × 2 building: where its top-left tile is from here. */
+export const FILLER: Record<string, number> = { '1': 1, '2': W, '3': W + 1 };
+export const isFiller = (c: string) => c in FILLER;
+/** The top-left tile of the building this tile is part of (itself, for most tiles). */
+export const anchorOf = (map: string, i: number) => (isFiller(map[i]) ? i - FILLER[map[i]] : i);
+/** All the tiles a building at `i` covers. */
+export const tilesOf = (map: string, i: number) => {
+  const a = anchorOf(map, i);
+  return BY_CH.get(map[a])?.size === 2 ? [a, a + 1, a + W, a + W + 1] : [a];
+};
+export const TRAM = '%';
+/** roads, bridges and roads with tram rails */
+export const isRoadCh = (c: string) => c === '=' || c === BRIDGE || c === TRAM;
 export const BRIDGE = '#';
 export const GRASS = '.';
 export const WATER = '~';
@@ -123,6 +144,17 @@ export interface Town {
   tax: number;
   /** the most people it's ever had — opens buildings, and is the score */
   peak: number;
+  /** 🔥 fires, 🦹 crime and 🏚️ burnt buildings going on now (older saves: none) */
+  events?: TownEvent[];
+}
+export interface TownEvent {
+  /** the building's top-left tile */
+  i: number;
+  kind: 'fire' | 'crime' | 'burnt';
+  /** days it's been going */
+  days: number;
+  /** days until it's over (fire: until it's put out, or burns the building out) */
+  left: number;
 }
 
 // ---- 🗺️ new land ----
@@ -186,7 +218,7 @@ export function newTown(name: string, seed: number): Town {
 export function cleanTown(t: unknown): Town | null {
   const x = t as Partial<Town> | null;
   if (!x || typeof x.map !== 'string' || x.map.length !== W * H || typeof x.pops !== 'string' || x.pops.length !== W * H) return null;
-  const ok = (c: string) => c === GRASS || c === WATER || c === TREE || c === BRIDGE || BY_CH.has(c);
+  const ok = (c: string) => c === GRASS || c === WATER || c === TREE || c === BRIDGE || isFiller(c) || BY_CH.has(c);
   if (![...x.map].every(ok) || ![...x.pops].every((c) => c >= '0' && c <= 'l')) return null; // '0' + up to 60 people
   const n = (v: unknown, d: number, lo: number, hi: number) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Math.round(Number(v)))) : d);
   return {
@@ -199,6 +231,12 @@ export function cleanTown(t: unknown): Town | null {
     day: n(x.day, 0, 0, 1e9),
     tax: n(x.tax, DEFAULT_TAX, 0, 20),
     peak: n(x.peak, 0, 0, 1e7),
+    events: Array.isArray(x.events)
+      ? x.events
+          .filter((e) => e && ['fire', 'crime', 'burnt'].includes(e.kind) && Number.isInteger(e.i) && e.i >= 0 && e.i < W * H && BY_CH.has(x.map![e.i]))
+          .slice(0, 20)
+          .map((e) => ({ i: e.i, kind: e.kind, days: n(e.days, 0, 0, 1e6), left: n(e.left, 0, 0, 1e3) }))
+      : [],
   };
 }
 
@@ -228,9 +266,11 @@ const dist = (a: number, b: number) => Math.abs((a % W) - (b % W)) + Math.abs(Ma
 const popAt = (t: Town, i: number) => t.pops.charCodeAt(i) - 48;
 
 export function hasRoad(map: string, i: number): boolean {
-  const x = i % W, y = Math.floor(i / W);
-  const r = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < W && yy < H && (map[yy * W + xx] === '=' || map[yy * W + xx] === BRIDGE);
-  return r(x - 1, y) || r(x + 1, y) || r(x, y - 1) || r(x, y + 1);
+  return tilesOf(map, i).some((k) => {
+    const x = k % W, y = Math.floor(k / W);
+    const r = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < W && yy < H && isRoadCh(map[yy * W + xx]);
+    return r(x - 1, y) || r(x + 1, y) || r(x, y - 1) || r(x, y + 1);
+  });
 }
 export function byWater(map: string, i: number): boolean {
   const x = i % W, y = Math.floor(i / W);
@@ -239,9 +279,14 @@ export function byWater(map: string, i: number): boolean {
 }
 /** Is this building working — next to a road if it needs one (and water, if it needs that)? */
 const works = (map: string, i: number, b: Building) => (!b.needsRoad || hasRoad(map, i)) && (!b.byWater || byWater(map, i));
+/** 🔥 on fire or 🏚️ burnt: it doesn't work until the fire's out / it's repaired */
+const broken = (t: Town) => new Set((t.events ?? []).filter((e) => e.kind !== 'crime').map((e) => e.i));
 
 interface Ctx {
   map: string;
+  events: TownEvent[];
+  /** tram rail tiles */
+  trams: number[];
   happySrc: Array<[number, number, number, string]>; // index, radius, amount, label
   noiseSrc: Array<[number, number, number, string]>;
   cover: Record<Service, number[]>;
@@ -258,6 +303,8 @@ function context(t: Town): Omit<Report, 'homeHappy' | 'happy'> & { ctx: Ctx } {
   const map = t.map;
   const ctx: Ctx = {
     map,
+    events: t.events ?? [],
+    trams: [],
     happySrc: [],
     noiseSrc: [],
     cover: { school: [], health: [], fire: [], police: [], library: [] },
@@ -270,10 +317,12 @@ function context(t: Town): Omit<Report, 'homeHappy' | 'happy'> & { ctx: Ctx } {
     tax: t.tax,
   };
   let power = 0, powerUse = 0, water = 0, waterUse = 0, jobs = 0, pop = 0, upkeep = 0, roads = 0, homes = 0, homesFull = 0, noRoad = 0;
+  const down = broken(t);
   for (let i = 0; i < map.length; i++) {
     const c = map[i];
-    if (c === '=' || c === BRIDGE) {
+    if (isRoadCh(c)) {
       roads++;
+      if (c === TRAM) ctx.trams.push(i);
       continue;
     }
     const b = BY_CH.get(c);
@@ -287,7 +336,7 @@ function context(t: Town): Omit<Report, 'homeHappy' | 'happy'> & { ctx: Ctx } {
       pop += p;
       if (p >= b.homes) homesFull++;
     }
-    if (!ok) continue;
+    if (!ok || down.has(i)) continue;
     powerUse += b.uses;
     waterUse += b.uses;
     if (b.power) power += b.power;
@@ -345,6 +394,12 @@ export function homeLook(ctx: Ctx, i: number): HomeLook {
   if (!ctx.powerOk) parts.push(['⚡ Not enough power', -20]);
   if (!ctx.waterOk) parts.push(['💧 Not enough water', -20]);
   if (!hasRoad(ctx.map, i)) parts.push(['🚧 No road', -30]);
+  if (ctx.trams.some((j) => dist(i, j) <= 2)) parts.push(['🚋 Tram nearby', 4]);
+  for (const e of ctx.events) {
+    if (e.i === i && e.kind === 'fire') parts.push(['🔥 On fire!', -40]);
+    if (e.i === i && e.kind === 'burnt') parts.push(['🏚️ Burnt — 🔍 tap it and 🔨 repair it', -40]);
+  }
+  if (ctx.events.some((e) => e.kind === 'crime' && dist(i, e.i) <= 3)) parts.push(['🦹 Crime nearby', -10]);
   const happy = Math.max(0, Math.min(100, parts.reduce((s, [, v]) => s + v, 0)));
   return { happy, parts };
 }
@@ -372,10 +427,16 @@ export function step(t: Town, random: () => number = Math.random): Report {
   const pops = t.pops.split('');
   const room = rep.jobs + 6 > rep.pop; // jobs for newcomers (a few can come without)
   let moved = 0;
+  const down = broken(t);
   for (const [i, h] of rep.homeHappy) {
     const b = BY_CH.get(map[i])!;
     let p = popAt(t, i);
     const cap = b.homes!;
+    if (down.has(i)) {
+      // 🔥 everyone's out (they come back once it's fixed)
+      pops[i] = '0';
+      continue;
+    }
     if (hasRoad(t.map, i) && h >= 45 && room && rep.ctx.powerOk && rep.ctx.waterOk && p < cap && moved < 40) {
       p += h >= 75 ? 2 : 1;
       moved++;
@@ -397,10 +458,82 @@ export function step(t: Town, random: () => number = Math.random): Report {
   t.pops = pops.join('');
   // 🪙 Never below 0 (upkeep just goes unpaid), and a small town that's run out gets a little help.
   t.coins = Math.max(0, t.coins + rep.income - rep.upkeep + (t.coins < 40 && rep.pop < 20 ? HELP : 0));
+  happenings(t, rep, random);
   t.day++;
   const after = report(t);
   t.peak = Math.max(t.peak, after.pop);
   return after;
+}
+
+// ---- 🔥 fires and 🦹 crime ----
+
+/** Fire stations / police that cover tile i (by distance, like homes' services). */
+const covered = (ctx: Ctx, s: Service, i: number) => ctx.cover[s].some((j) => dist(i, j) <= ctx.coverR[s] + 1);
+export const FIRE_FROM = 30; // fires start once a town has had this many people
+export const CRIME_FROM = 80;
+
+/**
+ * Each day: now and then a 🔥 fire starts in a building (much less often near a 🚒 fire station),
+ * and 🦹 crime near homes (much less often near 🚓 police). A fire station close enough puts a fire
+ * out in 2–3 days; one further off takes longer; with none, after 8 days the building is 🏚️ burnt
+ * and stops working until it's repaired (or cleared). Crime goes away in a day or two with police
+ * close, otherwise after about a week, and nearby homes are less happy while it lasts.
+ */
+function happenings(t: Town, rep: Report & { ctx: Ctx }, random: () => number) {
+  const ev = (t.events ??= []);
+  const ctx = rep.ctx;
+  const hasFire = ctx.cover.fire.length > 0, hasPolice = ctx.cover.police.length > 0;
+  for (const e of ev) e.days++;
+  // over?
+  for (let k = ev.length - 1; k >= 0; k--) {
+    const e = ev[k];
+    if (!BY_CH.has(t.map[e.i])) {
+      ev.splice(k, 1); // cleared away
+      continue;
+    }
+    if (e.kind === 'burnt') continue;
+    e.left--;
+    if (e.left > 0) continue;
+    // a fire nobody put out burns the building out; one a fire station got to is just out
+    if (e.kind === 'fire' && e.days >= 8 && !covered(ctx, 'fire', e.i)) ev[k] = { i: e.i, kind: 'burnt', days: 0, left: 0 };
+    else ev.splice(k, 1);
+  }
+  const busy = new Set(ev.map((e) => e.i));
+  const fires = ev.filter((e) => e.kind === 'fire').length, crimes = ev.filter((e) => e.kind === 'crime').length;
+  if (t.peak >= FIRE_FROM && fires < 2) {
+    // pick one building at random; it might catch fire
+    const i = Math.floor(random() * t.map.length);
+    const b = BY_CH.get(t.map[i]);
+    if (b && b.cat !== 'nature' && b.cat !== 'road' && b.ch !== TRAM && b.cat !== 'transit' && !b.token && !busy.has(i)) {
+      const near = covered(ctx, 'fire', i);
+      if (random() < (near ? 0.03 : 0.12)) ev.push({ i, kind: 'fire', days: 0, left: near ? 2 + Math.floor(random() * 2) : hasFire ? 6 : 8 });
+    }
+  }
+  if (t.peak >= CRIME_FROM && crimes < 2) {
+    const i = Math.floor(random() * t.map.length);
+    const b = BY_CH.get(t.map[i]);
+    if (b?.homes && !busy.has(i)) {
+      const near = covered(ctx, 'police', i);
+      if (random() < (near ? 0.03 : 0.2)) {
+        ev.push({ i, kind: 'crime', days: 0, left: near ? 1 + Math.floor(random() * 2) : hasPolice ? 4 : 7 });
+        t.coins = Math.max(0, t.coins - 10); // 🦹 something was taken
+      }
+    }
+  }
+}
+
+/** 🔨 What repairing a 🏚️ burnt building costs (half what it cost, or a house's half for a grown home). */
+export const repairCost = (t: Town, i: number) => {
+  const b = BY_CH.get(t.map[i]);
+  return b ? Math.max(5, Math.ceil((b.grown ? 30 : b.cost) / 2)) : 0;
+};
+export function repair(t: Town, i: number): boolean {
+  const k = (t.events ?? []).findIndex((e) => e.i === i && e.kind === 'burnt');
+  const cost = repairCost(t, i);
+  if (k < 0 || t.coins < cost) return false;
+  t.events!.splice(k, 1);
+  t.coins -= cost;
+  return true;
 }
 
 // ---- 🔨 building ----
@@ -414,6 +547,7 @@ export function canBuild(t: Town, i: number, tool: Tool, region: Region, owned: 
   const here = t.map[i];
   if (tool.kind === 'bulldoze') {
     if (here === GRASS || here === WATER) return { ok: false, cost: 0, why: 'Nothing to clear' };
+    if (isFiller(here)) return { ok: true, cost: 0 };
     if (here === TREE) return { ok: t.coins >= 2, cost: 2, why: t.coins < 2 ? 'Not enough 🪙' : undefined };
     return { ok: true, cost: 0 };
   }
@@ -423,6 +557,27 @@ export function canBuild(t: Town, i: number, tool: Tool, region: Region, owned: 
   if (b.feature === 'fun' && !owned.fun) return { ok: false, cost: b.cost, why: '🔒 Unlock 🎡 Fun places first' };
   if (t.peak < b.needPop) return { ok: false, cost: b.cost, why: `🔒 Opens at ${b.needPop} people` };
   let cost = b.cost;
+  if (b.size === 2) {
+    // all 4 tiles: on your land, and open (trees get cleared)
+    if (x + 1 >= region.x0 + region.w || y + 1 >= region.y0 + region.h) return { ok: false, cost, why: 'Outside your land' };
+    for (const k of [i, i + 1, i + W, i + W + 1]) {
+      if (t.map[k] === TREE) cost += 2;
+      else if (t.map[k] !== GRASS) return { ok: false, cost, why: 'It needs 2 × 2 open squares (this one is the top-left)' };
+    }
+    if (t.coins < cost) return { ok: false, cost, why: `Needs ${cost} 🪙` };
+    return { ok: true, cost };
+  }
+  if (b.ch === TRAM) {
+    // rails go on a road (or lay road and rails together on open land)
+    if (here === TRAM) return { ok: false, cost, why: 'There are tram rails here already' };
+    if (here === WATER || here === BRIDGE) return { ok: false, cost, why: 'Trams can’t cross water' };
+    if (here === '=') cost = b.cost;
+    else if (here === GRASS) cost = b.cost + 5;
+    else if (here === TREE) cost = b.cost + 7;
+    else return { ok: false, cost, why: 'Tram rails go along a road' };
+    if (t.coins < cost) return { ok: false, cost, why: `Needs ${cost} 🪙` };
+    return { ok: true, cost };
+  }
   if (here === WATER) {
     if (b.ch !== '=') return { ok: false, cost, why: 'That can’t go on water (roads can: a bridge)' };
     cost = 25;
@@ -440,8 +595,20 @@ export function build(t: Town, i: number, tool: Tool, region: Region, owned: { f
   const map = t.map.split('');
   const pops = t.pops.split('');
   if (tool.kind === 'bulldoze') {
+    i = anchorOf(t.map, i);
     const here = map[i];
-    if (here === BRIDGE) {
+    const big = BY_CH.get(here)?.size === 2;
+    if (here === TRAM) {
+      // just the rails come up; the road stays
+      map[i] = '=';
+      t.coins += BY_CH.get(TRAM)!.cost;
+    } else if (big) {
+      for (const k of [i, i + 1, i + W, i + W + 1]) {
+        map[k] = GRASS;
+        pops[k] = '0';
+      }
+      t.coins += BY_CH.get(here)!.cost;
+    } else if (here === BRIDGE) {
       map[i] = WATER;
       t.coins += 25;
     } else if (here === TREE) {
@@ -454,7 +621,12 @@ export function build(t: Town, i: number, tool: Tool, region: Region, owned: { f
     }
     pops[i] = '0';
   } else if (tool.kind === 'build') {
-    map[i] = map[i] === WATER ? BRIDGE : tool.ch;
+    if (BY_CH.get(tool.ch)?.size === 2) {
+      map[i] = tool.ch;
+      map[i + 1] = '1';
+      map[i + W] = '2';
+      map[i + W + 1] = '3';
+    } else map[i] = map[i] === WATER ? BRIDGE : tool.ch;
     pops[i] = '0';
     t.coins -= c.cost;
   }
@@ -464,9 +636,21 @@ export function build(t: Town, i: number, tool: Tool, region: Region, owned: { f
 }
 
 /** The most pressing thing to do next, for the 💡 line. */
-export function tips(t: Town, r: Report): string[] {
+export function tips(t: Town, r: Report & { ctx: Ctx }): string[] {
   const out: string[] = [];
   if (!r.homes) out.push('🛣️ Draw a road, then put 🏠 houses next to it.');
+  for (const e of t.events ?? []) {
+    const b = BY_CH.get(t.map[e.i]);
+    if (!b) continue;
+    if (e.kind === 'fire')
+      out.push(
+        covered(r.ctx, 'fire', e.i)
+          ? `🔥 The ${b.emoji} ${b.name} is on fire — 🚒 the fire engine is on its way!`
+          : `🔥 The ${b.emoji} ${b.name} is on fire, and no 🚒 fire station is close enough! Build one nearby.`
+      );
+    if (e.kind === 'burnt') out.push(`🏚️ The ${b.emoji} ${b.name} burnt down — 🔍 tap it and 🔨 repair it (${repairCost(t, e.i)} 🪙).`);
+  }
+  if ((t.events ?? []).some((e) => e.kind === 'crime')) out.push('🦹 Crime! 🚓 Police stations close to homes stop most of it.');
   if (r.noRoad) out.push(`🚧 ${r.noRoad} building${r.noRoad === 1 ? ' isn’t' : 's aren’t'} next to a road, so ${r.noRoad === 1 ? 'it doesn’t' : 'they don’t'} work.`);
   if (r.power[1] > r.power[0]) out.push(`⚡ Not enough power (${r.power[0]} for ${r.power[1]}) — build ☀️ solar panels${t.peak >= 40 ? ' or a ⚡ power station' : ''}.`);
   if (r.water[1] > r.water[0]) out.push(`💧 Not enough water (${r.water[0]} for ${r.water[1]}) — build a 💧 water tower, or a 🚰 pump next to the water.`);
