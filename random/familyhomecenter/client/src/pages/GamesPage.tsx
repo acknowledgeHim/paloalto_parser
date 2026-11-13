@@ -20,6 +20,8 @@ interface ShelfGame {
   /** 0 = unlocking is for good; N = unlocking buys N plays (a parent sets it per game) */
   plays_per_unlock: number;
   best: number | null;
+  /** 🙈 a parent hid it from kids (only sent to parents — kids don't get hidden games at all) */
+  hidden?: boolean;
   /** 💎 the game's token shop, with the usual prices */
   shop?: Array<{ id: string; name: string; cost: number; coins?: number }>;
   /** 🏆 prize powers, earned with lessons (not bought) */
@@ -59,6 +61,8 @@ interface GameRule {
   shop?: Record<string, number>;
   /** 🏆 each prize power: what earns it, uses per earning (0 = unlimited), free for parents */
   prizes?: Record<string, PrizeRule>;
+  /** 🙈 hidden from kids */
+  hidden?: boolean;
 }
 /** 💎 Token-shop price levels: the usual prices times this (whole tokens, at least 1 unless the usual is 0). */
 const PRICE_LEVELS: Array<[string, number]> = [
@@ -148,6 +152,7 @@ export function GamesPage() {
               <div key={g.id} className={`panel games-card${g.unlocked ? '' : ' games-card--locked'}`}>
                 <div className="games-card__emoji">{g.unlocked ? g.emoji : '🔒'}</div>
                 <h2>{g.name}</h2>
+                {g.hidden && <p className="hint">🙈 Hidden from the kids</p>}
                 <p className="hint">{g.blurb}</p>
                 {g.best ? <p>🏆 Your best: <strong>{g.best}</strong></p> : null}
                 {g.prize_status && Object.keys(g.prize_status).length > 0 && (
@@ -279,6 +284,33 @@ export function GamesPage() {
       )}
       {isParent && rules && mine && (
         <div>
+          <section className="panel games-shown">
+            <h2>👁️ Which games the kids can see</h2>
+            <p className="hint">
+              Untick a game to hide it: it’s gone from the kids’ Games page, so they can’t unlock, play or save up for it. Anything they already
+              unlocked, their plays, scores and progress are all kept for when you show it again. Parents still see every game.
+            </p>
+            <div className="games-shown__list">
+              {mine.games.map((g) => {
+                const r = rules[g.id];
+                if (!r) return null;
+                return (
+                  <label key={g.id} className="privacy-toggle">
+                    <input type="checkbox" checked={!r.hidden} onChange={(e) => setRules({ ...rules, [g.id]: { ...r, hidden: !e.target.checked } })} />
+                    <span>
+                      {g.emoji} {g.name} {r.hidden && <span className="hint">— 🙈 hidden</span>}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="typing-stars__actions">
+              <button type="button" onClick={() => void saveRules()}>
+                Save which games show
+              </button>
+              {rulesNote && <span className="hint">{rulesNote}</span>}
+            </div>
+          </section>
           <section className="panel prize-setup">
             <h2>🏆 Prize powers — what earns them</h2>
             <p className="hint">

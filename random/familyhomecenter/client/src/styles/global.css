@@ -3838,3 +3838,11 @@ body.game-full-lock { overflow: hidden; }
 .dress-up__price-row select { min-height: 40px; }
 /* 🌦️ Hill Hopper weather picks */
 .hill-weather__picks { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+/* 👁️ Games: which games the kids can see */
+.games-shown__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 8px 0;
+}

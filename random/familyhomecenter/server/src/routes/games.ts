@@ -38,6 +38,8 @@ interface GameRule {
   shop: Record<string, number>;
   /** 🏆 each prize power: which lessons earn it, uses per earning (0 = unlimited), free for parents */
   prizes: Record<string, PrizeRule>;
+  /** 🙈 hidden from kids: not on their Games page, can't be unlocked or played (what they already have is kept for if it's shown again) */
+  hidden: boolean;
 }
 interface PrizeRule {
   subject: PrizeSubject;
@@ -59,6 +61,7 @@ function rules(): Record<string, GameRule> {
       {
         cost: n(saved[g.id]?.cost, g.stars),
         plays: n(saved[g.id]?.plays, 0),
+        hidden: saved[g.id]?.hidden === true,
         features: Object.fromEntries((g.features ?? []).map((f) => [f.id, n(saved[g.id]?.features?.[f.id], f.cost)])),
         shop: Object.fromEntries((g.shop ?? []).map((f) => [f.id, n(saved[g.id]?.shop?.[f.id], f.cost)])),
         prizes: Object.fromEntries(
@@ -78,7 +81,10 @@ function rules(): Record<string, GameRule> {
     ])
   );
 }
-const ruleOf = (gameId: string): GameRule => rules()[gameId] ?? { cost: 0, plays: 0, features: {}, shop: {}, prizes: {} };
+const ruleOf = (gameId: string): GameRule => rules()[gameId] ?? { cost: 0, plays: 0, features: {}, shop: {}, prizes: {}, hidden: false };
+/** 🙈 a game a parent hid from kids (parents still see and play everything) */
+const hiddenFor = (m: FamilyMember, gameId: string) => !free(m) && ruleOf(gameId).hidden;
+const HIDDEN_MSG = 'A parent has turned that game off for now';
 
 /** GET /settings — each game's cost and plays per unlock. */
 gamesRouter.get('/settings', (_req, res) => res.json(rules()));
@@ -90,6 +96,7 @@ gamesRouter.put('/settings', requireAdmin, (req, res) => {
   for (const g of GAMES) {
     const x = b[g.id];
     if (!x) continue;
+    if (x.hidden !== undefined) cur[g.id].hidden = x.hidden === true;
     for (const k of ['cost', 'plays'] as const) {
       if (x[k] === undefined) continue;
       const v = Math.round(Number(x[k]));
@@ -132,15 +139,17 @@ gamesRouter.put('/settings', requireAdmin, (req, res) => {
 function shelf(m: FamilyMember) {
   const mine = unlockedFor(m);
   const passes = passesFor(m.id);
+  const all = rules();
   return {
     token_balance: m.token_balance,
     plays_free: free(m),
-    games: GAMES.map((g) => {
+    // 🙈 games a parent hid aren't shown to kids at all
+    games: GAMES.filter((g) => free(m) || !all[g.id]?.hidden).map((g) => {
       const owned = free(m) || mine.has(g.id);
       const plays = passes.get(g.id) ?? null;
       const r = ruleOf(g.id);
       // 🏆 prize powers: earned or not, uses left, lesson progress (shown on the game's card)
-      return { ...g, stars: r.cost, plays_per_unlock: r.plays, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id), prize_status: prizesFor(m, g.id) };
+      return { ...g, stars: r.cost, plays_per_unlock: r.plays, hidden: r.hidden, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id), prize_status: prizesFor(m, g.id) };
     }),
   };
 }
@@ -163,6 +172,7 @@ gamesRouter.post('/:memberId/unlock', (req, res) => {
   const g = gameOf(String(game_id));
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
+  if (hiddenFor(m, g.id)) return res.status(403).json({ error: HIDDEN_MSG });
   if (free(m) || unlockedFor(m).has(g.id)) return res.json(shelf(m));
   const r = ruleOf(g.id);
   if (m.token_balance < r.cost) return res.status(400).json({ error: `Needs ${r.cost} 💎 — ${r.cost - m.token_balance} more to go` });
@@ -280,6 +290,7 @@ gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
   const g = gameOf(gameId);
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
+  if (hiddenFor(m, g.id)) return res.status(403).json({ error: HIDDEN_MSG });
   // ⏰ a parent's daily limit for this game (checked first, so a play isn't used up for nothing)
   const over = limitHit(m.id, `game:${g.id}`);
   if (over) return res.status(429).json({ error: over, limit: true });
