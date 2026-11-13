@@ -17,7 +17,7 @@ import {
   type World,
 } from './hillPhysics.js';
 import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
-import { Digger, buriedLook, lightRangeFor } from './hillDig.js';
+import { Digger, buriedLook, lightRangeFor, nightReachFor } from './hillDig.js';
 import { WEATHER_INFO, Weather, WeatherTerrain, weatherBonus, type WeatherChoice } from './hillWeather.js';
 import { CROUCH, DINO, EGG_LIMIT, HAZARD_WORLDS, Hazards, hazardCoins, sharkAt } from './hillHazards.js';
 
@@ -251,6 +251,8 @@ export function HillHopperRun({
     // 🌦️ weather (pays extra coins)
     const wx = weather ? new Weather(world, terrain, startX, weather, jump || glide, stats.maxSpeed) : null;
     let dark: HTMLCanvasElement | null = null;
+    /** ⛏️ how dark it is underground (fades in and out as you dig in and pop out) */
+    let ugDark = 0;
     let jumpReady = 0; // seconds until another jump is allowed
     let shake = 0;
     let zoom = 1;
@@ -1171,46 +1173,6 @@ export function HillHopperRun({
           ctx.fillStyle = '#000';
           ctx.fillText('💨', cx + Math.sin(now * 6) * S * 0.3, cy - S * (1.6 + ((now * 1.5) % 1)));
         }
-        if (wx.darkness > 0.02) {
-          // 🌙 dark, but for the 🔦 headlights shining ahead and a little glow round the car
-          if (!dark || dark.width !== cv.width || dark.height !== cv.height) {
-            dark = document.createElement('canvas');
-            dark.width = cv.width;
-            dark.height = cv.height;
-          }
-          const dc = dark.getContext('2d')!;
-          const k = cv.width / W;
-          dc.setTransform(k, 0, 0, k, 0, 0);
-          dc.globalCompositeOperation = 'source-over';
-          dc.clearRect(0, 0, W, H);
-          dc.fillStyle = `rgba(4,8,26,${0.9 * wx.darkness})`;
-          dc.fillRect(0, 0, W, H);
-          dc.globalCompositeOperation = 'destination-out';
-          const reach = (5 + 2.5 * lights) * S;
-          const nose = bodyPoint(car, 1.4, 0.1);
-          const nx = sx(nose.x);
-          const ny = sy(nose.y);
-          const a = -car.a;
-          const beam = dc.createRadialGradient(nx, ny, 0, nx, ny, reach);
-          beam.addColorStop(0, 'rgba(0,0,0,1)');
-          beam.addColorStop(0.7, 'rgba(0,0,0,0.85)');
-          beam.addColorStop(1, 'rgba(0,0,0,0)');
-          dc.fillStyle = beam;
-          dc.beginPath();
-          dc.moveTo(nx, ny);
-          dc.arc(nx, ny, reach, a - 0.42, a + 0.42);
-          dc.closePath();
-          dc.fill();
-          const glow = dc.createRadialGradient(cx, cy, 0, cx, cy, S * 2.6);
-          glow.addColorStop(0, 'rgba(0,0,0,0.9)');
-          glow.addColorStop(1, 'rgba(0,0,0,0)');
-          dc.fillStyle = glow;
-          dc.fillRect(0, 0, W, H);
-          ctx.save();
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.drawImage(dark, 0, 0);
-          ctx.restore();
-        }
       }
 
       // 🌊 The sea, see-through, over everything below sea level.
@@ -1230,6 +1192,51 @@ export function HillHopperRun({
           }
           ctx.stroke();
         }
+      }
+
+      // 🌙 at night, and ⛏️ underground, it's dark but for the 🔦 headlights (hardly any without the upgrade)
+      ugDark += ((digger?.underground ? 1 : 0) - ugDark) * 0.12;
+      const gloom = Math.max(wx?.darkness ?? 0, ugDark);
+      if (gloom > 0.02) {
+        const cx = sx(car.x);
+        const cy = sy(car.y);
+        if (!dark || dark.width !== cv.width || dark.height !== cv.height) {
+          dark = document.createElement('canvas');
+          dark.width = cv.width;
+          dark.height = cv.height;
+        }
+        const dc = dark.getContext('2d')!;
+        const k = cv.width / W;
+        dc.setTransform(k, 0, 0, k, 0, 0);
+        dc.globalCompositeOperation = 'source-over';
+        dc.clearRect(0, 0, W, H);
+        dc.fillStyle = ugDark > (wx?.darkness ?? 0) ? `rgba(12,7,3,${0.97 * gloom})` : `rgba(4,8,26,${0.97 * gloom})`;
+        dc.fillRect(0, 0, W, H);
+        dc.globalCompositeOperation = 'destination-out';
+        const reach = (digger?.underground ? lightRangeFor(lights) : nightReachFor(lights)) * S;
+        const nose = bodyPoint(car, 1.4, 0.1);
+        const nx = sx(nose.x);
+        const ny = sy(nose.y);
+        const a = -car.a;
+        const beam = dc.createRadialGradient(nx, ny, 0, nx, ny, reach);
+        beam.addColorStop(0, 'rgba(0,0,0,1)');
+        beam.addColorStop(0.7, 'rgba(0,0,0,0.85)');
+        beam.addColorStop(1, 'rgba(0,0,0,0)');
+        dc.fillStyle = beam;
+        dc.beginPath();
+        dc.moveTo(nx, ny);
+        dc.arc(nx, ny, reach, a - 0.42, a + 0.42);
+        dc.closePath();
+        dc.fill();
+        const glow = dc.createRadialGradient(cx, cy, 0, cx, cy, S * (lights > 0 ? 2.6 : 1.4));
+        glow.addColorStop(0, 'rgba(0,0,0,0.9)');
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        dc.fillStyle = glow;
+        dc.fillRect(0, 0, W, H);
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(dark, 0, 0);
+        ctx.restore();
       }
 
       // HUD: fuel, coins, distance.

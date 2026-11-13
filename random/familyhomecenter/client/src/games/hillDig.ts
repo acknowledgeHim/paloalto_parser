@@ -20,8 +20,10 @@ export const MIN_DEPTH = 1.2;
 export const MAX_DEPTH = 7.5;
 /** how fast DIG / BRAKE change the depth (m/s) */
 const STEER = 2.2;
-/** 🔦 how far you can see underground, with no upgrade / per Headlights level (m) */
-export const lightRangeFor = (level: number) => 3.5 + 1.5 * Math.max(0, level);
+/** 🔦 how far you can see underground (m): hardly anything without the Headlights upgrade */
+export const lightRangeFor = (level: number) => (level > 0 ? 2 + 1.5 * level : 0.9);
+/** 🔦 how far the headlights reach at night (m): hardly anything without the upgrade */
+export const nightReachFor = (level: number) => (level > 0 ? 2 + 2.5 * level : 1.2);
 /** wait after popping out before digging again (s) */
 const COOLDOWN = 1;
 
