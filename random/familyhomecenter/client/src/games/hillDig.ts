@@ -2,9 +2,11 @@ import { WHEEL_R, bodyPoint, rightCar, type Car, type Terrain, type World } from
 
 /**
  * ⛏️ Hill Hopper's drill (a 🏆 prize power): press the dig key on the ground and the car tunnels into
- * the hill, drives along under the surface for a few seconds (longer with the 🔧 Drill time upgrade),
- * then drills straight back up and pops out. Secret things are buried in the hills — only seen when
- * your headlight reaches them underground (a ✨ on the surface hints at something rare below).
+ * the hill and drives along under the surface for a few seconds (longer with the 🔧 Drill time
+ * upgrade): hold DIG to go deeper, BRAKE to come up — then it drills straight back up and pops out.
+ * Secret things are buried at different depths — you only get one by drilling right into it on the
+ * way along (not on the way back up), so you can miss it. They're seen only when your headlights
+ * reach them underground (🔦 Headlights upgrade); a ✨ on the surface hints at something rare below.
  * No drawing here (see HillHopperRun), so it can be tested on its own.
  */
 
@@ -12,8 +14,14 @@ import { WHEEL_R, bodyPoint, rightCar, type Car, type Terrain, type World } from
 export const DIG_TIME = 3;
 export const DIG_PER_LEVEL = 1;
 export const digTimeFor = (level: number) => DIG_TIME + DIG_PER_LEVEL * Math.max(0, level);
-/** how deep the tunnel runs below the surface (m) */
-const DEPTH = 3.6;
+/** how deep the tunnel starts, and how shallow / deep you can steer it (m below the surface) */
+const DEPTH = 2;
+export const MIN_DEPTH = 1.2;
+export const MAX_DEPTH = 7.5;
+/** how fast DIG / BRAKE change the depth (m/s) */
+const STEER = 2.2;
+/** 🔦 how far you can see underground, with no upgrade / per Headlights level (m) */
+export const lightRangeFor = (level: number) => 3.5 + 1.5 * Math.max(0, level);
 /** wait after popping out before digging again (s) */
 const COOLDOWN = 1;
 
@@ -70,6 +78,8 @@ export interface Dig {
   /** seconds of tunnelling left */
   left: number;
   total: number;
+  /** how far under the surface the tunnel runs right now (m) */
+  depth: number;
 }
 
 export class Digger {
@@ -97,31 +107,33 @@ export class Digger {
     if (this.dig || this.cool > 0) return false;
     if (!car.wheels.some((w) => w.ground)) return false;
     if (this.world.water != null && this.t.h(car.x) < this.world.water) return false;
-    this.dig = { phase: 'down', left: this.time, total: this.time };
+    this.dig = { phase: 'down', left: this.time, total: this.time, depth: DEPTH };
     this.tunnels.push([{ x: car.x, y: this.t.h(car.x) }]);
     if (this.tunnels.length > 12) this.tunnels.shift();
     return true;
   }
   /**
-   * One step underground: moves the car itself (no physics). pedal 1 = faster, -1 = slower.
-   * Returns what was found this step and whether the car just popped out.
+   * One step underground: moves the car itself (no physics). gas = faster; deeper (DIG held) /
+   * up (BRAKE held) steer the depth. Returns what was found this step and whether it popped out.
    */
-  step(car: Car, pedal: number, dt: number): { found: Buried[]; out: boolean } {
+  step(car: Car, ctl: { gas: boolean; deeper: boolean; up: boolean }, dt: number): { found: Buried[]; out: boolean } {
     if (car.x + 200 > this.placedTo) this.placedTo = placeBuried(this.t, this.world, this.placedTo, this.placedTo + 300, this.buried, this.seed);
     if (this.buried.length > 600) this.buried.splice(0, this.buried.findIndex((b) => b.x > car.x - 40));
     this.cool = Math.max(0, this.cool - dt);
     const d = this.dig;
     if (!d) return { found: [], out: false };
-    const speed = pedal > 0 ? 6 : pedal < 0 ? 1.5 : 3.5;
+    const speed = ctl.gas ? 5.5 : 3.2;
     const surface = this.t.h(car.x);
     let vx = speed;
     let vy = 0;
     if (d.phase === 'down') {
       vy = -4.5;
-      if (car.y <= surface - DEPTH) d.phase = 'tunnel';
+      if (car.y <= surface - d.depth) d.phase = 'tunnel';
     } else if (d.phase === 'tunnel') {
-      // follow the hill's shape, DEPTH below it
-      vy = (surface - DEPTH - car.y) * 3;
+      if (ctl.deeper && !ctl.up) d.depth = Math.min(MAX_DEPTH, d.depth + STEER * dt);
+      if (ctl.up && !ctl.deeper) d.depth = Math.max(MIN_DEPTH, d.depth - STEER * dt);
+      // follow the hill's shape, `depth` below it
+      vy = Math.max(-STEER * 1.6, Math.min(STEER * 1.6, (surface - d.depth - car.y) * 4));
     } else {
       vx = 0;
       vy = 7;
@@ -150,16 +162,17 @@ export class Digger {
     const path = this.tunnels[this.tunnels.length - 1];
     const lastPt = path[path.length - 1];
     if (Math.hypot(car.x - lastPt.x, car.y - lastPt.y) > 0.3) path.push({ x: car.x, y: car.y });
-    // 🔦 bump into buried things with the drill (or the car)
+    // ⛏️ drill right into buried things (at their depth) on the way along — not on the way back up
     const nose = bodyPoint(car, 1.9, 0);
     const found: Buried[] = [];
-    for (const b of this.buried) {
-      if (b.taken || Math.abs(b.x - car.x) > 4) continue;
-      if (Math.hypot(b.x - nose.x, b.y - nose.y) < 1.3 || Math.hypot(b.x - car.x, b.y - car.y) < 1.2) {
-        b.taken = true;
-        found.push(b);
+    if (d.phase !== 'up')
+      for (const b of this.buried) {
+        if (b.taken || Math.abs(b.x - car.x) > 4) continue;
+        if (Math.abs(b.x - nose.x) < 0.9 && Math.abs(b.y - nose.y) < 0.75) {
+          b.taken = true;
+          found.push(b);
+        }
       }
-    }
     // ⬆️ out of the ground: back on the wheels, with a little hop
     if (d.phase === 'up' && car.y >= this.t.h(car.x) + WHEEL_R + 0.7) {
       this.dig = null;

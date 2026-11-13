@@ -17,7 +17,7 @@ import {
   type World,
 } from './hillPhysics.js';
 import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
-import { Digger, buriedLook } from './hillDig.js';
+import { Digger, buriedLook, lightRangeFor } from './hillDig.js';
 import { CROUCH, DINO, EGG_LIMIT, HAZARD_COINS, HAZARD_WORLDS, Hazards, sharkAt } from './hillHazards.js';
 
 export interface Driver {
@@ -120,6 +120,7 @@ export function HillHopperRun({
   flipWheels = false,
   drill = false,
   digTime = 3,
+  lights = 0,
   best,
   controls,
   onEnd,
@@ -140,6 +141,8 @@ export function HillHopperRun({
   drill?: boolean;
   /** ⛏️ seconds each dig lasts (🔧 Drill time upgrade) */
   digTime?: number;
+  /** 🔦 Headlights upgrade level: see farther underground (and in the dark) */
+  lights?: number;
   best: number | null;
   controls: Controls;
   onEnd: (r: RunResult) => void;
@@ -155,6 +158,8 @@ export function HillHopperRun({
   const usesJumpKey = jump || glide;
   /** ⛏️ a dig asked for (the dig key or the DIG button) */
   const digAsk = useRef(false);
+  /** ⛏️ the dig key / DIG button is held (underground: go deeper) */
+  const digHeld = useRef(false);
   const quit = useRef(false);
   const [, setPressed] = useState(0);
 
@@ -163,6 +168,7 @@ export function HillHopperRun({
       const k = e.key.toLowerCase();
       if (drill && digKeysOf(controls).includes(k)) {
         if (down && !e.repeat) digAsk.current = true;
+        digHeld.current = down;
         e.preventDefault();
         return;
       }
@@ -187,6 +193,7 @@ export function HillHopperRun({
       pedal.current.gas = false;
       pedal.current.brake = false;
       jumpHeld.current = false;
+      digHeld.current = false;
     };
     window.addEventListener('blur', blur);
     return () => {
@@ -288,7 +295,7 @@ export function HillHopperRun({
           }
         }
         if (digger.underground) {
-          const g = digger.step(car, input, DT);
+          const g = digger.step(car, { gas: p.gas && !p.brake, deeper: digHeld.current, up: p.brake }, DT);
           const far = car.x - startX;
           const tier = far > 1500 ? 2 : far > 600 ? 1 : 0;
           for (const b of g.found) {
@@ -310,7 +317,7 @@ export function HillHopperRun({
           maxX = Math.max(maxX, car.x);
           return;
         }
-        digger.step(car, 0, DT); // (cool-down, and burying more ahead)
+        digger.step(car, { gas: false, deeper: false, up: false }, DT); // (cool-down, and burying more ahead)
       }
       // 🦘 Jump: only from the ground (a press up to 0.2 s early still counts).
       jumpReady = Math.max(0, jumpReady - DT);
@@ -765,8 +772,9 @@ export function HillHopperRun({
           for (const b of digger.buried) {
             if (b.taken || b.x < x0 - 1 || b.x > x1 + 1) continue;
             const d = Math.hypot(b.x - car.x, b.y - car.y);
-            if (d > 9) continue;
-            ctx.globalAlpha = Math.min(1, (9 - d) / 3);
+            const see = lightRangeFor(lights);
+            if (d > see) continue;
+            ctx.globalAlpha = Math.min(1, (see - d) / 1.5);
             ctx.font = `${Math.round(S * 1.1)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
             ctx.fillStyle = '#000';
             ctx.fillText(buriedLook(b.kind, world).emoji, sx(b.x), sy(b.y));
@@ -1097,6 +1105,11 @@ export function HillHopperRun({
         ctx.font = 'bold 18px system-ui, sans-serif';
         ctx.fillStyle = '#fff';
         ctx.fillText('⛏️', x0d + 8, y0 + 3);
+        if (dg) {
+          ctx.font = 'bold 13px system-ui, sans-serif';
+          ctx.fillStyle = '#3e2723';
+          ctx.fillText(`↓ ${dg.depth.toFixed(1)} m`, x0d + 44, y0 + 6);
+        }
         if (!dg && digger.cool <= 0) {
           ctx.font = 'bold 13px system-ui, sans-serif';
           ctx.fillStyle = '#3e2723';
@@ -1268,7 +1281,11 @@ export function HillHopperRun({
           onPointerDown={(e) => {
             e.preventDefault();
             digAsk.current = true;
+            digHeld.current = true;
+            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
           }}
+          onPointerUp={() => (digHeld.current = false)}
+          onPointerCancel={() => (digHeld.current = false)}
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Dig"
         >

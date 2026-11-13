@@ -54,6 +54,7 @@ const UPGRADE_LABEL: Record<keyof Upgrades, string> = {
   jump: '🦘 Jump — hop higher',
   glide: '🪂 Glider — glide farther',
   drill: '⛏️ Drill time — dig longer underground (+1 s a level)',
+  lights: '🔦 Headlights — see farther underground and in the dark',
 };
 const WHY: Record<RunResult['why'], string> = {
   crash: '💥 Bonk! Your head hit the ground.',
@@ -234,6 +235,7 @@ export function HillHopperPage() {
         flipWheels={powersOn.includes('flip-wheels')}
         drill={powersOn.includes('drill')}
         digTime={digTimeFor(save.upgrades.drill ?? 0)}
+        lights={save.upgrades.lights ?? 0}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -478,7 +480,7 @@ export function HillHopperPage() {
 
       <section className="panel">
         <h2>🔧 Upgrades</h2>
-        {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : []), ...(drillKnown ? (['drill'] as const) : [])].map((k) => {
+        {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : []), ...(drillKnown ? (['drill', 'lights'] as const) : [])].map((k) => {
           const lvl = save.upgrades[k] ?? 0;
           const cost = UPGRADE_COST[lvl];
           return (
@@ -535,7 +537,7 @@ export function HillHopperPage() {
           <li>The car is bouncy: gas lifts the nose, and too much on a hill flips you over backwards. Ease off, or tap the brake to bring the nose down. Landing on your head — or on your back — ends the run.</li>
           <li>In the air, gas tips you back and brake tips you forward: land on your wheels, or do a flip for coins.</li>
           <li>Grab ⛽ cans before the tank runs dry. They get further apart the further you go.</li>
-          <li>⛏️ With the 🏆 Drill on: on the ground, press the dig key (↓ / S unless you changed it) or the ⛏️ DIG button to tunnel into the hill. Gas digs faster, brake slower. After a few seconds (more with 🔧 Drill time) it drills straight back up by itself. Secret things are buried in the hills — 💰 💎 🦴 🛢️ fuel, and deep down 🏺 🧰 👑. A ✨ on the hill means something rare is below.</li>
+          <li>⛏️ With the 🏆 Drill on: on the ground, press the dig key (↓ / S unless you changed it) or the ⛏️ DIG button to tunnel into the hill. Underground, keep holding DIG to go deeper and hold BRAKE to come up; gas digs faster. Things are buried at different depths — steer the drill right into one to get it (you can miss!). After a few seconds (more with ⛏️ Drill time) it drills straight back up by itself — nothing is found on the way up. Things show up when your 🔦 headlights reach them: 💰 💎 🦴 🛢️ fuel, and deep down 🏺 🧰 👑. A ✨ on the hill means something rare is below.</li>
           <li>🦘 With Jump on (🎮 Controls): press the jump key (Space unless you changed it) or your jump button — the middle of the screen, an on-screen JUMP button or the mouse wheel click — to hop.</li>
         </ul>
       </section>
