@@ -3789,3 +3789,15 @@ body.game-full-lock { overflow: hidden; }
 .earth-view__map canvas { display: block; cursor: zoom-in; max-width: 100%; transition: transform 0.45s ease-in; }
 .earth-view__map.is-zooming canvas { transform: scale(2.6); }
 .earth-view__lands { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+/* 🐝 Letter Maze */
+.maze-run__clue { padding: 6px 10px; background: rgba(0, 0, 0, 0.35); color: #fff; display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; }
+.maze-run__stats { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-weight: 700; font-size: 0.95em; }
+.maze-run__word { display: flex; gap: 6px; font-size: 1.8em; font-weight: 900; letter-spacing: 0.04em; }
+.maze-run__word span { min-width: 1.1em; border-bottom: 3px solid rgba(255, 255, 255, 0.35); }
+.maze-run__word span.is-got { color: #a5d6a7; border-color: #66bb6a; }
+.maze-run__word span.is-next { border-color: #ffeb3b; }
+.maze-run__word--clue { font-size: 1.15em; font-weight: 700; }
+.maze-run__hint { font-size: 0.9em; opacity: 0.92; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; }
+.maze-run__pad { display: grid; grid-template-columns: repeat(3, 64px); gap: 6px; justify-content: center; padding: 8px; background: rgba(0, 0, 0, 0.25); }
+.maze-run__btn { min-height: 52px; font-size: 1.5em; font-weight: 800; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 12px; touch-action: none; }
+.maze-run__btn:active { background: rgba(255, 255, 255, 0.35); }

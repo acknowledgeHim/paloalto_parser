@@ -94,6 +94,17 @@ export const GAMES: Game[] = [
       { id: 'spacepad', name: '🛸 Space pad', cost: 6 },
     ],
   },
+  {
+    id: 'letter-maze',
+    emoji: '🐝',
+    name: 'Letter Maze',
+    stars: 20,
+    blurb:
+      'Munch your way round the maze and spell! Little kids eat the letters of the word in order; big kids eat the word that’s spelled right. Dodge the bees — or grab a 🍯 honey pot and catch them while they nap.',
+    prizes: [
+      { id: 'shield', name: '🛡️ Bee shield', blurb: 'A bubble round you: the first bee that bumps you in each maze just bounces off.', unit: 'game', subject: 'any', uses: 10 },
+    ],
+  },
 ];
 
 export const gameOf = (id: string) => GAMES.find((g) => g.id === id);

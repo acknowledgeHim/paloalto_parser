@@ -5,7 +5,8 @@ import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { GAMES, PRIZE_SUBJECTS, gameOf, type PrizeSubject } from '../services/games.js';
 import { subjectMastery } from './lessons.js';
-import { GRADE_NAMES } from '../services/spellingWords.js';
+import { GRADE_NAMES, WORDS } from '../services/spellingWords.js';
+import { misspell } from '../services/spellcheckGen.js';
 import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
 import type { FamilyMember } from '../types.js';
 import { addTokens } from '../services/tokens.js';
@@ -466,6 +467,31 @@ gamesRouter.post('/:gameId/play/:memberId/prize', (req, res) => {
   if (!st.ready) return res.status(403).json({ error: st.earned ? `No ${st.name} left — finish another subject's lessons to earn more` : `Pass every lesson to earn ${st.name}` });
   db.prepare('INSERT INTO game_prize_uses (id, family_member_id, game_id, prize, used_at) VALUES (?, ?, ?, ?, ?)').run(uuidv4(), m.id, g.id, String(prize), new Date().toISOString());
   res.json({ prizes: prizesFor(m, g.id) });
+});
+
+/**
+ * GET /letter-maze/words/:memberId?grade=N — 🐝 Letter Maze: spelling words for a game, from the
+ * kid's grade (a parent's grade is picked with ?grade, or 3rd grade). Grades 6–12 also get
+ * misspelled look-alikes to dodge. Their 🔤 spelling words — the same lists as 📚 Learning.
+ */
+gamesRouter.get('/letter-maze/words/:memberId', (req, res) => {
+  const m = memberOf(req.params.memberId);
+  if (!m) return res.status(404).json({ error: 'not found' });
+  const own = (db.prepare('SELECT grade FROM learning_grades WHERE family_member_id = ?').get(m.id) as { grade: number } | undefined)?.grade ?? null;
+  const asked = Number(req.query.grade);
+  // kids play their own grade (or lower, for practice); parents any
+  const want = Number.isInteger(asked) && asked >= 0 && asked < WORDS.length ? asked : (own ?? 3);
+  const grade = free(m) || own === null ? want : Math.min(want, own);
+  const list = [...WORDS[grade]].sort(() => Math.random() - 0.5).slice(0, 40);
+  const words = list.map((w) => {
+    const wrong = new Set<string>();
+    if (grade >= 6) for (let k = 0; k < 12 && wrong.size < 4; k++) {
+      const x = misspell(w.word, Math.random);
+      if (x && x.toLowerCase() !== w.word.toLowerCase()) wrong.add(x.toLowerCase());
+    }
+    return { word: w.word.toLowerCase(), meaning: w.meaning, sentence: w.sentence, wrong: [...wrong] };
+  });
+  res.json({ grade, grade_name: GRADE_NAMES[grade], own_grade: own, mode: grade >= 6 ? 'words' : 'letters', words });
 });
 
 /** GET /:gameId/play/:memberId — their saved progress, best score and the family's top runs. */

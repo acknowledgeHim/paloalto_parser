@@ -32,6 +32,7 @@ import { GamesPage } from './pages/GamesPage.js';
 import { HillHopperPage } from './games/HillHopperPage.js';
 import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { TinyTownPage } from './games/TinyTownPage.js';
+import { LetterMazePage } from './games/LetterMazePage.js';
 import { ResourceUsagePage } from './pages/ResourceUsagePage.js';
 import { GRAMMAR_LESSONS, HISTORY_LESSONS, LessonsPage, MATH_LESSONS, SCIENCE_LESSONS } from './pages/LessonsPage.js';
 import { ScienceLabsPage } from './pages/ScienceLabsPage.js';
@@ -157,6 +158,7 @@ export function App() {
           <Route path="/resources" element={<ResourceUsagePage />} />
           <Route path="/games/brick-tumble" element={<SectionGate section="games"><BrickTumblePage /></SectionGate>} />
           <Route path="/games/tiny-town" element={<SectionGate section="games"><TinyTownPage /></SectionGate>} />
+          <Route path="/games/letter-maze" element={<SectionGate section="games"><LetterMazePage /></SectionGate>} />
           <Route path="/photos" element={<SectionGate section="photos"><PhotosPage /></SectionGate>} />
           <Route path="/photos/people" element={<SectionGate section="photos"><PeoplePage /></SectionGate>} />
           <Route path="/intercom" element={<SectionGate section="intercom"><IntercomPage /></SectionGate>} />

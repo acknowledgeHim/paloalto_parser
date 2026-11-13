@@ -45,7 +45,7 @@ const SWAPS: Array<[RegExp, string]> = [
 ];
 
 /** One believable misspelling, or null. */
-function misspell(word: string, r: Rng): string | null {
+export function misspell(word: string, r: Rng): string | null {
   const w = word.toLowerCase();
   const tries: Array<() => string | null> = [
     // a doubled letter made single, or a single consonant doubled
