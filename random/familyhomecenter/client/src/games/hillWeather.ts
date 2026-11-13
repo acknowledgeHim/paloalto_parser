@@ -150,7 +150,7 @@ export interface Wave {
 }
 export const WAVE_H = 4.5;
 /** how long a wave chases you before it runs out (s) */
-const WAVE_LIFE = 16;
+const WAVE_LIFE = 8;
 export interface WeatherStep {
   /** multiply the tires' grip by this, this step */
   gripMul: number;

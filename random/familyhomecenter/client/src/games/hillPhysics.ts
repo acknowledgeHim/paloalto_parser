@@ -11,6 +11,8 @@ export interface Upgrades {
   tires: number;
   springs: number;
   tank: number;
+  /** ⚡ reach top speed quicker — at max, instantly */
+  accel?: number;
   /** 🦘 higher jumps (with Jump on) */
   jump?: number;
   /** 🪂 longer glides (with the Glider) */
@@ -20,10 +22,17 @@ export interface Upgrades {
   /** 🔦 see farther underground and in the dark */
   lights?: number;
 }
-export const UPGRADE_KEYS: Array<keyof Upgrades> = ['engine', 'tires', 'springs', 'tank'];
+export const UPGRADE_KEYS: Array<keyof Upgrades> = ['engine', 'accel', 'tires', 'springs', 'tank'];
+/** 🔧 the engine goes further than the rest — many small steps up to twice the speed. */
+export const ENGINE_MAX = 10;
 export const MAX_LEVEL = 5;
-/** Coins for the next level (index = current level). */
-export const UPGRADE_COST = [100, 250, 500, 1000, 2000];
+/** How many levels each upgrade can reach (engine the most). */
+export const maxLevelOf = (k: keyof Upgrades): number => (k === 'engine' ? ENGINE_MAX : MAX_LEVEL);
+/** Coins for the next level (index = current level). Engine keeps climbing past level 5. */
+export const UPGRADE_COST = [100, 250, 500, 1000, 2000, 3500, 5500, 8000, 11000, 15000];
+export const upgradeCost = (level: number): number => UPGRADE_COST[Math.min(level, UPGRADE_COST.length - 1)];
+/** ⚡ acceleration upgrade: how many levels, and at the top it's instant. */
+export const ACCEL_MAX = 5;
 
 // ---------- the hills ----------
 
@@ -233,6 +242,8 @@ export function newCar(t: Terrain, x = 6): Car {
 export interface Stats {
   torque: number;
   maxSpeed: number;
+  /** ⚡ how fast it snaps to top speed (per second; very large = instant) */
+  launch: number;
   grip: number;
   k: number;
   c: number;
@@ -244,8 +255,14 @@ export interface Stats {
 
 export function statsFor(u: Upgrades, world: World = WORLDS[0]): Stats {
   return {
-    torque: 1.7 * (1 + 0.22 * u.engine) * Math.max(1, world.gravity / 9.8), // enough pull for heavy gravity
-    maxSpeed: 13 + 2.6 * u.engine,
+    torque: 1.7 * (1 + (u.engine / ENGINE_MAX)) * Math.max(1, world.gravity / 9.8), // enough pull for heavy gravity
+    // 🔧 engine size = top speed: from the base up to twice as fast at the biggest engine
+    maxSpeed: 13 * (1 + (u.engine ?? 0) / ENGINE_MAX),
+    // ⚡ acceleration: higher = snaps to top speed faster; at the max level it's instant
+    launch: (() => {
+      const a = u.accel ?? 0;
+      return a <= 0 ? 0 : a >= ACCEL_MAX ? 1000 : 0.22 * a * a;
+    })(),
     grip: (0.95 + 0.14 * u.tires) * world.grip,
     g: world.gravity,
     bounce: TUNE.bounce * world.bounce,
@@ -332,6 +349,16 @@ export function step(car: Car, t: Terrain, s: Stats, pedal: number, fuel: boolea
       else if (wh.spin > -maxSpin * 0.35) wh.spin -= ((s.torque * 0.6) / IW) * dt; // reverse, slower
     } else {
       wh.spin *= Math.exp(-0.25 * dt); // rolling slowly to a stop
+    }
+  }
+  // ⚡ launch: with the acceleration upgrade, flooring it on the ground pulls you toward top speed
+  // quickly (at the highest level, instantly). It never pushes past the engine's top speed.
+  if (drive > 0 && s.launch > 0 && car.vx < s.maxSpeed && car.wheels.some((w) => w.ground)) {
+    const pull = Math.min(1, s.launch * dt);
+    car.vx += (s.maxSpeed - car.vx) * pull;
+    for (const wh of car.wheels) {
+      wh.vx += (s.maxSpeed - wh.vx) * pull;
+      wh.spin = Math.max(wh.spin, Math.min(maxSpin, s.maxSpeed / WHEEL_R));
     }
   }
   if (!fuel && pedal < 0) for (const wh of car.wheels) wh.spin *= Math.exp(-6 * dt); // brakes work without fuel

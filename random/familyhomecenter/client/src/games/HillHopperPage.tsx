@@ -6,7 +6,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { digTimeFor } from './hillDig.js';
 import { DEFAULT_WEATHER, WEATHER_IDS, WEATHER_INFO, weatherBonus, type WeatherChoice } from './hillWeather.js';
-import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
+import { UPGRADE_KEYS, WORLDS, maxLevelOf, upgradeCost, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
 import { PrizePanel, spendPrize, type Prizes } from './prizes.js';
 import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
@@ -50,9 +50,10 @@ interface PlayInfo {
 }
 
 const GAME = 'hill-hopper';
-const NO_UPGRADES: Upgrades = { engine: 0, tires: 0, springs: 0, tank: 0, jump: 0, glide: 0 };
+const NO_UPGRADES: Upgrades = { engine: 0, accel: 0, tires: 0, springs: 0, tank: 0, jump: 0, glide: 0 };
 const UPGRADE_LABEL: Record<keyof Upgrades, string> = {
-  engine: '🔧 Engine — faster, more pull up hills',
+  engine: '🔧 Engine — top speed (biggest is twice as fast) and pull up hills',
+  accel: '⚡ Acceleration — reach top speed quicker (at the top level, instantly)',
   tires: '🛞 Tires — more grip, less spinning',
   springs: '🪀 Springs — smoother over bumps',
   tank: '⛽ Fuel tank — drive longer between cans',
@@ -261,15 +262,15 @@ export function HillHopperPage() {
 
   const buy = (k: keyof Upgrades) => {
     const lvl = save.upgrades[k] ?? 0;
-    const cost = UPGRADE_COST[lvl];
-    if (lvl >= MAX_LEVEL || save.coins < cost) return;
+    const cost = upgradeCost(lvl);
+    if (lvl >= maxLevelOf(k) || save.coins < cost) return;
     void store({ ...save, coins: save.coins - cost, upgrades: { ...save.upgrades, [k]: lvl + 1 } });
   };
   /** Take a level off (the coins it cost come back), e.g. if the car's too fast or bouncy. */
   const remove = (k: keyof Upgrades) => {
     const lvl = save.upgrades[k] ?? 0;
     if (lvl <= 0) return;
-    void store({ ...save, coins: save.coins + UPGRADE_COST[lvl - 1], upgrades: { ...save.upgrades, [k]: lvl - 1 } });
+    void store({ ...save, coins: save.coins + upgradeCost(lvl - 1), upgrades: { ...save.upgrades, [k]: lvl - 1 } });
   };
   const byId = new Map(members.map((m) => [m.id, m]));
 
@@ -547,24 +548,25 @@ export function HillHopperPage() {
         <h2>🔧 Upgrades</h2>
         {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : []), ...(drillKnown ? (['drill'] as const) : []), ...(drillKnown || weatherKnown || (save.upgrades.lights ?? 0) > 0 ? (['lights'] as const) : [])].map((k) => {
           const lvl = save.upgrades[k] ?? 0;
-          const cost = UPGRADE_COST[lvl];
+          const max = maxLevelOf(k);
+          const cost = upgradeCost(lvl);
           return (
             <div key={k} className="hill-garage__upgrade">
               <div>
                 <div>{UPGRADE_LABEL[k]}</div>
-                <div className="hill-garage__pips" aria-label={`Level ${lvl} of ${MAX_LEVEL}`}>
-                  {Array.from({ length: MAX_LEVEL }, (_, i) => (
+                <div className="hill-garage__pips" aria-label={`Level ${lvl} of ${max}`}>
+                  {Array.from({ length: max }, (_, i) => (
                     <span key={i} className={i < lvl ? 'is-on' : ''} />
                   ))}
                 </div>
               </div>
               <div className="hill-garage__upgrade-btns">
                 {lvl > 0 && (
-                  <button type="button" className="secondary" onClick={() => remove(k)} title={`Take one level off — get 🪙 ${UPGRADE_COST[lvl - 1]} back`}>
-                    − <span className="hint">+🪙 {UPGRADE_COST[lvl - 1]}</span>
+                  <button type="button" className="secondary" onClick={() => remove(k)} title={`Take one level off — get 🪙 ${upgradeCost(lvl - 1)} back`}>
+                    − <span className="hint">+🪙 {upgradeCost(lvl - 1)}</span>
                   </button>
                 )}
-                {lvl >= MAX_LEVEL ? (
+                {lvl >= max ? (
                   <span className="hint">Max!</span>
                 ) : (
                   <button type="button" className="secondary" disabled={save.coins < cost} onClick={() => buy(k)}>
