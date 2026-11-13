@@ -6,6 +6,7 @@ import { MovieSettings } from '../components/MovieSettings.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { KidsAccessSettings } from '../components/KidsAccessSettings.js';
+import { AppVersion } from '../components/AppVersion.js';
 import { PrivacySettings } from '../components/PrivacySettings.js';
 import { api, type FamilyMember } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
@@ -354,6 +355,7 @@ export function SettingsPage() {
           login here. See docs/SETTINGS_LOGIN.md.
         </p>
       )}
+      <AppVersion />
     </div>
   );
 }

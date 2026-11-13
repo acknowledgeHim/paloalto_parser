@@ -131,7 +131,11 @@ export function GamesPage() {
   return (
     <div className="games-page" ref={setPageEl}>
       <h1>🎮 Games</h1>
-      {!activeProfile && <p className="hint">Pick who's playing (your name, up top) to play.</p>}
+      {!activeProfile && (
+        <p className="hint">
+          Pick who's playing (your name, up top) to play. Picking yourself also shows the 🏆 prize powers — and, for parents, where to set them up.
+        </p>
+      )}
 
       {activeProfile && mine && (
         <>
@@ -274,53 +278,22 @@ export function GamesPage() {
         </section>
       )}
       {isParent && rules && mine && (
-        <section className="panel">
-          <h2>⚙️ What each game costs · 🏆 prize powers</h2>
-          <p className="hint">
-            For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
-            uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs until you
-            change that in Kids' games above: 🎟️ Switch to plays, 🔒 Lock again (no tokens back) or ↶ Refund. 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump, 🪂 Glider and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
-            already had one switched on keeps it. 💎 Token shop items (🏘️ Tiny Town's coin bags and special buildings) are bought each time: pick a price
-            level, or set each one.
-          </p>
-          <p className="hint">
-            🏆 <strong>Prize powers</strong> can’t be bought: a kid earns one by passing every lesson at their grade in the subject you pick (📚 Learning). Each subject
-            earns it once per grade, giving the number of uses you set (♾️ = theirs for good). Changing the number only changes what’s earned from now on. Kids see
-            their progress towards each one in the game.
-          </p>
-          <p className="hint">
-            ⏰ How many games — or minutes — a day for each kid: <Link to="/learning/settings">📚 Learning → ⚙️ Grades & tokens → Daily limits</Link>.
-          </p>
-          {mine.games.map((g) => {
-            const r = rules[g.id];
-            if (!r) return null;
-            const set = (k: 'cost' | 'plays', v: string) => setRules({ ...rules, [g.id]: { ...r, [k]: Math.max(0, Math.round(Number(v) || 0)) } });
-            return (
-              <div key={g.id} className="games-page__rule">
-                <strong>
-                  {g.emoji} {g.name}
-                </strong>
-                <label>
-                  💎 <input type="number" min={0} max={10000} value={r.cost} onChange={(e) => set('cost', e.target.value)} aria-label={`${g.name} cost in tokens`} />
-                </label>
-                <label>
-                  for <input type="number" min={0} max={10000} value={r.plays} onChange={(e) => set('plays', e.target.value)} aria-label={`${g.name} plays per unlock`} /> plays
-                </label>
-                <span className="hint">{r.plays ? `= ${playsText(r.plays)} for ${r.cost} 💎` : `= for good, ${r.cost} 💎`}</span>
-                {Object.entries(r.features ?? {}).map(([f, cost]) => (
-                  <label key={f} className="games-page__extra">
-                    🔓 {FEATURE_NAMES[f] ?? f} extra: 💎{' '}
-                    <input
-                      type="number"
-                      min={0}
-                      max={10000}
-                      value={cost}
-                      onChange={(e) => setRules({ ...rules, [g.id]: { ...r, features: { ...r.features, [f]: Math.max(0, Math.round(Number(e.target.value) || 0)) } } })}
-                      aria-label={`${g.name} ${FEATURE_NAMES[f] ?? f} cost in tokens`}
-                    />{' '}
-                    <span className="hint">{cost ? '' : '(free)'}</span>
-                  </label>
-                ))}
+        <div>
+          <section className="panel prize-setup">
+            <h2>🏆 Prize powers — what earns them</h2>
+            <p className="hint">
+              Prize powers can’t be bought: a kid earns one by passing <strong>every lesson at their grade</strong> in the subject you pick here (📚 Learning).
+              Each subject earns it once per grade, giving the number of uses you set (♾️ = theirs for good). Kids see their progress on each game card above,
+              and switch earned powers on inside the game, in its 🏆 Prize powers panel (under ▶ Play). With 👑 on, parents can use them free to show the kids.
+            </p>
+            {mine.games.map((g) => {
+              const r = rules[g.id];
+              if (!r || !(g.prizes ?? []).length) return null;
+              return (
+                <div key={g.id} className="games-page__rule">
+                  <strong>
+                    {g.emoji} {g.name}
+                  </strong>
                 {(g.prizes ?? []).map((p) => {
                   const pr = r.prizes?.[p.id] ?? { subject: p.subject, uses: p.uses, parents_free: true };
                   const setP = (x: Partial<PrizeRule>) => setRules({ ...rules, [g.id]: { ...r, prizes: { ...r.prizes, [p.id]: { ...pr, ...x } } } });
@@ -366,6 +339,61 @@ export function GamesPage() {
                     </div>
                   );
                 })}
+                </div>
+              );
+            })}
+            <div className="typing-stars__actions">
+              <button type="button" onClick={() => void saveRules()}>
+                Save prize powers
+              </button>
+              {rulesNote && <span className="hint">{rulesNote}</span>}
+            </div>
+          </section>
+        </div>
+      )}
+      {isParent && rules && mine && (
+        <section className="panel">
+          <h2>⚙️ What each game costs</h2>
+          <p className="hint">
+            For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
+            uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs until you
+            change that in Kids' games above: 🎟️ Switch to plays, 🔒 Lock again (no tokens back) or ↶ Refund. 🔓 Extras inside a game (⛰️ Hill Hopper's 🦘 Jump, 🪂 Glider and ⚠️ Obstacles) are bought once each; 0 makes one free. Anyone who
+            already had one switched on keeps it. 💎 Token shop items (🏘️ Tiny Town's coin bags and special buildings) are bought each time: pick a price
+            level, or set each one.
+          </p>
+          <p className="hint">
+            ⏰ How many games — or minutes — a day for each kid: <Link to="/learning/settings">📚 Learning → ⚙️ Grades & tokens → Daily limits</Link>.
+          </p>
+          {mine.games.map((g) => {
+            const r = rules[g.id];
+            if (!r) return null;
+            const set = (k: 'cost' | 'plays', v: string) => setRules({ ...rules, [g.id]: { ...r, [k]: Math.max(0, Math.round(Number(v) || 0)) } });
+            return (
+              <div key={g.id} className="games-page__rule">
+                <strong>
+                  {g.emoji} {g.name}
+                </strong>
+                <label>
+                  💎 <input type="number" min={0} max={10000} value={r.cost} onChange={(e) => set('cost', e.target.value)} aria-label={`${g.name} cost in tokens`} />
+                </label>
+                <label>
+                  for <input type="number" min={0} max={10000} value={r.plays} onChange={(e) => set('plays', e.target.value)} aria-label={`${g.name} plays per unlock`} /> plays
+                </label>
+                <span className="hint">{r.plays ? `= ${playsText(r.plays)} for ${r.cost} 💎` : `= for good, ${r.cost} 💎`}</span>
+                {Object.entries(r.features ?? {}).map(([f, cost]) => (
+                  <label key={f} className="games-page__extra">
+                    🔓 {FEATURE_NAMES[f] ?? f} extra: 💎{' '}
+                    <input
+                      type="number"
+                      min={0}
+                      max={10000}
+                      value={cost}
+                      onChange={(e) => setRules({ ...rules, [g.id]: { ...r, features: { ...r.features, [f]: Math.max(0, Math.round(Number(e.target.value) || 0)) } } })}
+                      aria-label={`${g.name} ${FEATURE_NAMES[f] ?? f} cost in tokens`}
+                    />{' '}
+                    <span className="hint">{cost ? '' : '(free)'}</span>
+                  </label>
+                ))}
                 {g.shop && g.shop.length > 0 && (
                   <div className="games-page__shop">
                     <div>

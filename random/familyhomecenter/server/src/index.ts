@@ -1,3 +1,6 @@
+import { execSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import './threadpool.js'; // first: more file-reading threads (see threadpool.ts)
 import http from 'node:http';
 import express from 'express';
@@ -130,6 +133,16 @@ app.use('/api/kb-media', kbMediaGate, express.static(config.kbMediaDir));
 app.use('/api/movies-media', express.static(config.moviesDir));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+// Which commit the running server is (read once at start): Settings → App version compares it with the screen's build.
+const SERVER_BUILD = (() => {
+  try {
+    return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8', cwd: path.dirname(fileURLToPath(import.meta.url)) }).trim();
+  } catch {
+    return 'unknown';
+  }
+})();
+const SERVER_STARTED = new Date().toISOString();
+app.get('/api/version', (_req, res) => res.json({ server: SERVER_BUILD, started: SERVER_STARTED }));
 
 // Serve the built React app (npm run build in client/) so one process/port runs everything on the Pi.
 app.use(express.static(config.clientDistDir));
