@@ -2,7 +2,7 @@ import { Terrain, bodyPoint, type Car, type World } from './hillPhysics.js';
 
 /**
  * 🌦️ Hill Hopper weather — one 🏆 prize power that makes a drive harder (and pays more coins):
- * 🌪️ tornadoes that pick the car up and toss it, 🌧️ rain with downpours you can hardly see through,
+ * 🌪️ tornadoes that pick the car up and toss it, 🌧️ rain with downpours you can hardly see through and 💦 puddles that hydroplane you,
  * ❄️ snow with black-ice patches and deep snow drifts (jump them or ⛏️ drill under), 🔥 a heat wave
  * that overheats a car driven too fast for too long, 🌋 earthquakes that crack the ground open ahead
  * (big cracks only with 🦘 Jump or 🪂 Glider on), 🌙 night with only your 🔦 headlights, and 🌊 tsunamis
@@ -14,7 +14,7 @@ export type WeatherId = 'tornado' | 'rain' | 'snow' | 'heat' | 'quake' | 'night'
 export const WEATHER_IDS: WeatherId[] = ['tornado', 'rain', 'snow', 'heat', 'quake', 'night', 'tsunami'];
 export const WEATHER_INFO: Record<WeatherId, { emoji: string; name: string; blurb: string }> = {
   tornado: { emoji: '🌪️', name: 'Tornadoes', blurb: 'get close and one picks your car up, spins it and tosses it' },
-  rain: { emoji: '🌧️', name: 'Rain', blurb: 'now and then a downpour so heavy you can hardly see ahead' },
+  rain: { emoji: '🌧️', name: 'Rain', blurb: 'downpours you can hardly see through, and 💦 puddles that spin you out if you race through them — slow down or jump them' },
   snow: { emoji: '❄️', name: 'Snow', blurb: 'it piles up into drifts that slow you down or stop you — go fast, jump them or drill under; black ice too' },
   heat: { emoji: '🔥', name: 'Heat wave', blurb: 'drive too fast too long and the engine overheats' },
   quake: { emoji: '🌋', name: 'Earthquakes', blurb: 'cracks open ahead — speed over small ones, jump the big ones' },
@@ -133,6 +133,13 @@ export interface IcePatch {
   x: number;
   w: number;
 }
+/** 💦 a rain puddle: hit it too fast and you hydroplane — spin out and stop */
+export interface Puddle {
+  x: number;
+  w: number;
+}
+/** go slower than this (m/s) through a puddle, or jump it, or you spin out */
+export const PUDDLE_SAFE = 6;
 /** 🌊 a tsunami wave chasing the car from behind */
 export interface Wave {
   /** the front of the wave (m) */
@@ -154,6 +161,8 @@ export interface WeatherStep {
   fell: boolean;
   /** 🌊 caught by the tsunami: back to the start */
   washed: boolean;
+  /** 💦 spin the car this much (rad/s, added after the physics step) — hydroplaning */
+  spin: number;
   say: string | null;
 }
 
@@ -171,6 +180,7 @@ export class Weather {
   carry = 0;
   private carrier: Tornado | null = null;
   ice: IcePatch[] = [];
+  puddles: Puddle[] = [];
   heat = 0;
   hot = 0;
   shake = 0;
@@ -186,7 +196,10 @@ export class Weather {
   private nextWave = 0;
   private nextChange = 0;
   /** where the next of each thing goes (each kind on its own, so turning one on brings it soon) */
-  private next: Record<'ice' | 'drift' | 'tornado' | 'crack', number>;
+  private next: Record<'ice' | 'drift' | 'tornado' | 'crack' | 'puddle', number>;
+  /** 💦 how long the current hydroplane spin-out lasts, and which way it spins */
+  private splashT = 0;
+  private splashDir = 1;
   private stuckT = 0;
   private rand: () => number;
   private luck: () => number;
@@ -210,7 +223,7 @@ export class Weather {
       this.nextChange = 6;
       this.active = new Set();
     } else this.active = new Set(this.can);
-    this.next = { ice: startX + 40, drift: startX + 30, tornado: startX + 60, crack: startX + 45 };
+    this.next = { ice: startX + 40, drift: startX + 30, tornado: startX + 60, crack: startX + 45, puddle: startX + 35 };
     this.nextWave = 8;
     if (this.active.has('night')) this.darkness = 1;
     if (this.active.has('snow')) this.snowCover = 0.3;
@@ -234,6 +247,7 @@ export class Weather {
     if (w === 'snow') this.next.ice = Math.min(this.next.ice, carX + 45);
     if (w === 'tornado') this.next.tornado = Math.min(this.next.tornado, carX + 50 + this.rand() * 20);
     if (w === 'quake') this.next.crack = Math.min(this.next.crack, carX + 40 + this.rand() * 15);
+    if (w === 'rain') this.next.puddle = Math.min(this.next.puddle, carX + 25 + this.rand() * 12);
     if (w === 'tsunami') this.nextWave = Math.min(this.nextWave, this.time + 4);
   }
   private place(carX: number) {
@@ -242,7 +256,7 @@ export class Weather {
     const wt = this.t instanceof WeatherTerrain ? this.t : null;
     const n = this.next;
     // (what's off just moves along with you, so it starts close by when it comes on)
-    for (const [k, w] of [['ice', 'snow'], ['drift', 'snow'], ['tornado', 'tornado'], ['crack', 'quake']] as const) if (!this.is(w)) n[k] = Math.max(n[k], upTo);
+    for (const [k, w] of [['ice', 'snow'], ['drift', 'snow'], ['puddle', 'rain'], ['tornado', 'tornado'], ['crack', 'quake']] as const) if (!this.is(w)) n[k] = Math.max(n[k], upTo);
     while (this.is('snow') && n.ice < upTo) {
       this.ice.push({ x: n.ice, w: 5 + r() * 7 });
       n.ice += 45 + r() * 45;
@@ -253,6 +267,12 @@ export class Weather {
       if (wt.inCrack(x) || wt.inCrack(x + 10)) continue;
       const big = r() < 0.3;
       wt.drifts.push({ x, w: big ? 10 + r() * 3 : 5 + r() * 2, h: big ? 2.2 + r() * 0.6 : 0.9 + r() * 0.5, grow: 0.1 });
+    }
+    while (this.is('rain') && n.puddle < upTo) {
+      const x = n.puddle;
+      n.puddle += 30 + r() * 40;
+      if (this.world.water != null && this.t instanceof WeatherTerrain && this.t.base(x) < this.world.water + 0.3) continue;
+      this.puddles.push({ x, w: 3.5 + r() * 3.5 });
     }
     while (this.is('tornado') && n.tornado < upTo) {
       this.tornados.push({ x: n.tornado, used: false, gone: 0, phase: r() * 6 });
@@ -267,6 +287,7 @@ export class Weather {
       wt.cracks.push({ x, w: big ? 5.5 + r() * 2.5 : 1.6 + r() * 1, big, open: 0 });
     }
     if (this.ice.length > 60) this.ice.splice(0, 20);
+    if (this.puddles.length > 60) this.puddles.splice(0, 20);
     if (this.tornados.length > 30) this.tornados.splice(0, 10);
     if (wt && wt.cracks.length > 30) wt.cracks.splice(0, 10);
     if (wt && wt.drifts.length > 40) wt.drifts.splice(0, 10);
@@ -275,7 +296,7 @@ export class Weather {
   /** One step. `gas` = the gas pedal is down; `underground` = safe in a ⛏️ tunnel. */
   step(car: Car, gas: boolean, dt: number, underground: boolean): WeatherStep {
     this.time += dt;
-    const out: WeatherStep = { gripMul: 1, drag: 0, noGas: false, fell: false, washed: false, say: null };
+    const out: WeatherStep = { gripMul: 1, drag: 0, noGas: false, fell: false, washed: false, spin: 0, say: null };
     const was = this.active;
     // 🔀 mixed: every 15–30 s it changes — from clear skies up to everything at once
     if (this.choice.mode === 'mixed' && this.time >= this.nextChange) {
@@ -297,6 +318,21 @@ export class Weather {
     out.gripMul *= 1 - 0.12 * this.downpour;
     // ❄️ black ice (stays slippery after the snow stops), and deep snow in a drift
     for (const p of this.ice) if (car.wheels.some((w) => w.ground && w.x > p.x && w.x < p.x + p.w)) out.gripMul *= 0.2;
+    // 💦 rain puddles: race through one and you hydroplane — grip goes, you spin out and stop. Slow or jump = fine.
+    if (!underground && this.is('rain') && this.puddles.some((p) => car.wheels.some((w) => w.ground && w.x > p.x && w.x < p.x + p.w))) {
+      if (Math.abs(car.vx) > PUDDLE_SAFE && this.splashT <= 0) {
+        this.splashT = 1.1;
+        this.splashDir = car.vx >= 0 ? 1 : -1;
+        out.say = '💦 Hydroplaned! Take puddles slow or jump them';
+      } else if (this.splashT <= 0) out.gripMul *= 0.6; // slow enough: just a little slippery
+    }
+    // spinning out: no grip and dragged to a near-stop for a moment, while the body slews round
+    if (this.splashT > 0) {
+      this.splashT -= dt;
+      out.gripMul *= 0.04;
+      out.drag = Math.max(out.drag, 2.6);
+      out.spin = this.splashDir * 3.2;
+    }
     const wt = this.t instanceof WeatherTerrain ? this.t : null;
     // ❄️ while it snows, the snow piles up: on the ground, and into the drifts near you
     this.snowCover = Math.max(0, Math.min(1, this.snowCover + (this.is('snow') ? dt / 25 : -dt / 90)));

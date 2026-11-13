@@ -253,6 +253,8 @@ export function HillHopperRun({
     let dark: HTMLCanvasElement | null = null;
     /** ⛏️ how dark it is underground (fades in and out as you dig in and pop out) */
     let ugDark = 0;
+    /** 💦 seconds since a puddle spin-out — while >0 a crash just recovers, never ends the run */
+    let hydroT = 0;
     /** where the car sits across the screen (0 = left edge) */
     let camLead = 0.32;
     let jumpReady = 0; // seconds until another jump is allowed
@@ -390,7 +392,19 @@ export function HillHopperRun({
         for (const w of car.wheels) w.vx *= k;
       }
       wx?.afterStep(car, DT);
-      if (r.crashed && flipWheels) {
+      if (ws?.spin) {
+        // 💦 hydroplaning: the car slides and spins out (kept from flipping right over)
+        car.w = Math.max(-5, Math.min(5, car.w + ws.spin * DT));
+        for (const w of car.wheels) w.spin += (ws.spin - car.w) * DT;
+        hydroT = 0.8;
+      } else hydroT = Math.max(0, hydroT - DT);
+      if (r.crashed && hydroT > 0) {
+        // 💦 a puddle only spins you out and stops you — it never ends the run
+        rightCar(car, terrain);
+        airRot = 0;
+        airTime = 0;
+        shake = Math.max(shake, 0.2);
+      } else if (r.crashed && flipWheels) {
         // 🛞 wheels on the roof: roll back over and keep going
         rightCar(car, terrain);
         airRot = 0;
@@ -975,6 +989,26 @@ export function HillHopperRun({
           if (pch.x + pch.w < x0 || pch.x > x1) continue;
           ctx.beginPath();
           for (let x = pch.x; x <= pch.x + pch.w; x += 0.3) (x === pch.x ? ctx.moveTo : ctx.lineTo).call(ctx, sx(x), sy(terrain.h(x)) - S * 0.05);
+          ctx.stroke();
+        }
+        // 💦 rain puddles — shiny water lying on the road
+        for (const pd of wx.puddles) {
+          if (pd.x + pd.w < x0 || pd.x > x1) continue;
+          ctx.beginPath();
+          ctx.moveTo(sx(pd.x), sy(terrain.seen(pd.x)));
+          for (let x = pd.x; x <= pd.x + pd.w; x += 0.25) ctx.lineTo(sx(x), sy(terrain.seen(x)) + S * 0.04);
+          for (let x = pd.x + pd.w; x >= pd.x; x -= 0.5) ctx.lineTo(sx(x), sy(terrain.seen(x)));
+          ctx.closePath();
+          const pg = ctx.createLinearGradient(0, sy(terrain.seen(pd.x)) - S * 0.2, 0, sy(terrain.seen(pd.x)) + S * 0.2);
+          pg.addColorStop(0, 'rgba(120,180,230,0.85)');
+          pg.addColorStop(1, 'rgba(40,90,150,0.8)');
+          ctx.fillStyle = pg;
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+          ctx.lineWidth = Math.max(1.5, S * 0.05);
+          ctx.beginPath();
+          ctx.moveTo(sx(pd.x + pd.w * 0.2), sy(terrain.seen(pd.x + pd.w * 0.2)) - S * 0.04);
+          ctx.lineTo(sx(pd.x + pd.w * 0.55), sy(terrain.seen(pd.x + pd.w * 0.55)) - S * 0.04);
           ctx.stroke();
         }
         ctx.textAlign = 'center';
