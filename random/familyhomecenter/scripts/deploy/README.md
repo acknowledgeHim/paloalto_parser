@@ -25,10 +25,29 @@ CPU. That's the only thing built on the Pi.
 
 The workflow that produces all this is `.github/workflows/fhc-deploy.yml` at the repo root.
 
-## One-time setup on the Pi
+## Install on a new device
 
-> Do this once. It is **additive**: your database, photos, movies, camera clips and `.env` are never
-> moved or deleted — they are *symlinked* into the new folder from where they already live.
+Because the `fhc-deploy` branch is a complete, built-only distribution, a brand-new device needs
+**only that branch** — never the source or history. Prerequisites: `git`, Node.js (same major version
+as the Pi), and a toolchain for the native modules (`build-essential`/`gcc`, `make`, `python3`).
+
+```bash
+# pulls ONLY the built output, sets up a fresh data folder + .env, installs + starts
+curl -fsSL https://raw.githubusercontent.com/acknowledgeHim/paloalto_parser/fhc-deploy/setup.sh -o /tmp/fhc-setup.sh
+less /tmp/fhc-setup.sh          # read it
+FHC_FRESH=1 bash /tmp/fhc-setup.sh
+# then edit the new /home/pi/fhc/.env and restart:
+sudo systemctl restart familyhomecenter
+```
+
+The script auto-detects a new device (no existing install), so `FHC_FRESH=1` is optional but explicit.
+If the device isn't a Pi with user `pi` at `/home/pi`, set `FHC_USER`, `FHC_DEPLOY_DIR`, and
+`FHC_NODE` first — the systemd units are rewritten to match. Nothing on the device is deleted.
+
+## Switching an existing Pi over (one time)
+
+> It is **additive**: your database, photos, movies, camera clips and `.env` are never moved or
+> deleted — they are *symlinked* into the new folder from where they already live.
 
 1. Make sure the Action has run at least once (push any change, or run the workflow by hand from the
    GitHub **Actions** tab), so the `fhc-deploy` branch exists.

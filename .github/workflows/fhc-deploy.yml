@@ -71,6 +71,7 @@ jobs:
 
           # deploy helpers + licence
           cp "$APP/LICENSE"                                 "$STAGE/LICENSE"
+          cp "$APP/.env.example"                            "$STAGE/.env.example"
           cp "$APP/scripts/deploy/familyhomecenter.service" "$STAGE/familyhomecenter.service"
           cp "$APP/scripts/deploy/fhc-update.service"       "$STAGE/fhc-update.service"
           cp "$APP/scripts/deploy/fhc-update.timer"         "$STAGE/fhc-update.timer"
