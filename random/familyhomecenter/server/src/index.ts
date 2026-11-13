@@ -1,3 +1,8 @@
+/*
+ * Family Home Center — Copyright (c) 2026 the Family Home Center authors.
+ * All rights reserved. Proprietary and confidential; see the LICENSE file.
+ * Not to be copied, distributed, or hosted for others.
+ */
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,11 +75,11 @@ import { localizeExistingRecipeImages } from './services/recipeImages.js';
 const app = express();
 app.use(cors());
 // Default 100kb is too small for a family member's avatar photo, a custom completion-sound MP3,
-// or a Knowledge Base how-to video (all sent as base64 data URLs) — the avatar is downsized
+// or a Knowledge Base how-to video (all sent as base64 data URLs) â the avatar is downsized
 // client-side first, but an uploaded MP3/video isn't, so leave real headroom (base64 inflates
 // ~33% over the raw file size; 80mb comfortably covers a short (~1 min) phone-recorded clip).
 app.use(express.json({ limit: '80mb' }));
-// Twilio's TwiML webhook (routes/calling.ts's POST /voice) posts form-encoded, not JSON — express.json
+// Twilio's TwiML webhook (routes/calling.ts's POST /voice) posts form-encoded, not JSON â express.json
 // above simply ignores a non-JSON content-type, so this doesn't conflict with it.
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -127,16 +132,16 @@ app.use('/api/heights', heightsRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/presence', presenceRouter);
 app.use('/api/cameras', camerasRouter);
-// Uploaded KB pictures/videos, and rendered movies — express.static (not a custom route) so it
+// Uploaded KB pictures/videos, and rendered movies â express.static (not a custom route) so it
 // handles HTTP Range requests, which video playback/seeking needs.
 app.use('/api/kb-media', kbMediaGate, express.static(config.kbMediaDir));
 app.use('/api/movies-media', express.static(config.moviesDir));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-// Which commit the running server is (read once at start): Settings → App version compares it with the screen's build.
+// Which commit the running server is (read once at start): Settings â App version compares it with the screen's build.
 const SERVER_BUILD = (() => {
   try {
-    return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: path.dirname(fileURLToPath(import.meta.url)) }).trim();
+    return execSync('git log -1 --format="%h Â· %cs"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: path.dirname(fileURLToPath(import.meta.url)) }).trim();
   } catch {
     return 'unknown';
   }
@@ -162,7 +167,7 @@ server.listen(config.port, config.host, () => {
   console.log(`Family Home Center server listening on http://${config.host}:${config.port}`);
   startCalendarSyncSchedule();
   startThumbnailWarmSchedule();
-  // Face suggestions take a few seconds to work out for a big library — do it now, not on first visit.
+  // Face suggestions take a few seconds to work out for a big library â do it now, not on first visit.
   if (facesEnabled()) allFaces().catch((e) => console.warn('[faces] warm-up failed', e));
   startGroceryEmailSchedule();
   startCookChoreSync();

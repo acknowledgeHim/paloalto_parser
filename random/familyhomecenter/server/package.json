@@ -2,6 +2,8 @@
   "name": "familyhomecenter-server",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
+  "author": "the Family Home Center authors",
   "description": "API + sync server for the Family Home Center dashboard",
   "type": "module",
   "scripts": {
