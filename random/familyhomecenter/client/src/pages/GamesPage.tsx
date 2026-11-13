@@ -5,6 +5,7 @@ import { MemberAvatar } from '../components/MemberAvatar.js';
 import { TokenWallet } from '../components/TokenWallet.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
+import { earnText, prizeLeftText, type Prizes } from '../games/prizes.js';
 
 interface ShelfGame {
   id: string;
@@ -23,13 +24,16 @@ interface ShelfGame {
   shop?: Array<{ id: string; name: string; cost: number; coins?: number }>;
   /** 🏆 prize powers, earned with lessons (not bought) */
   prizes?: Array<{ id: string; name: string; blurb: string; unit: string; subject: PrizeSubject; uses: number }>;
+  /** 🏆 this person's prize powers: earned, uses left, lesson progress */
+  prize_status?: Prizes;
 }
-type PrizeSubject = 'grammar' | 'math' | 'history' | 'science' | 'any' | 'all';
+type PrizeSubject = 'grammar' | 'math' | 'history' | 'science' | 'handson' | 'any' | 'all';
 const PRIZE_SUBJECTS: Array<[PrizeSubject, string]> = [
   ['math', '➗ Math'],
   ['grammar', '📝 Grammar'],
   ['history', '🇺🇸 History'],
   ['science', '🔬 Science'],
+  ['handson', '🔧 Hands-on (every trade lesson)'],
   ['any', 'Any one subject (each one earns it again)'],
   ['all', 'All four subjects'],
 ];
@@ -142,8 +146,25 @@ export function GamesPage() {
                 <h2>{g.name}</h2>
                 <p className="hint">{g.blurb}</p>
                 {g.best ? <p>🏆 Your best: <strong>{g.best}</strong></p> : null}
-                {g.prizes && g.prizes.length > 0 && (
-                  <p className="hint">🎁 Prize powers to earn with 📚 lessons: {g.prizes.map((p) => p.name).join(', ')}</p>
+                {g.prize_status && Object.keys(g.prize_status).length > 0 && (
+                  <div className="games-card__prizes">
+                    <strong>🏆 Prize powers</strong>
+                    {Object.entries(g.prize_status).map(([id, p]) => {
+                      const prog = p.progress.filter((x) => !x.done);
+                      return (
+                        <div key={id} className={`games-card__prize${p.ready ? ' is-ready' : ''}`}>
+                          <span>
+                            {p.ready ? '✅' : '🔒'} {p.name}: {prizeLeftText(p)}
+                          </span>
+                          {!p.ready && !p.free && <span className="hint">🎯 {earnText(p)}</span>}
+                          {!p.ready && prog.length > 0 && (
+                            <span className="hint">📖 {prog.map((x) => `${x.label} ${x.passed} of ${x.total}`).join(' · ')}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {g.unlocked && Object.values(g.prize_status).some((p) => p.ready) && <span className="hint">Switch them on inside the game (🏆 Prize powers).</span>}
+                  </div>
                 )}
                 {!g.owned && g.plays_left != null && (
                   <p>🎟️ {g.plays_left ? `${g.plays_left} play${g.plays_left === 1 ? '' : 's'} left` : 'No plays left'}</p>
@@ -254,7 +275,7 @@ export function GamesPage() {
       )}
       {isParent && rules && mine && (
         <section className="panel">
-          <h2>⚙️ What each game costs</h2>
+          <h2>⚙️ What each game costs · 🏆 prize powers</h2>
           <p className="hint">
             For each game: how many 💎 tokens unlocking it costs, and how many plays that's good for. <strong>0 plays = for good.</strong> With a number, each go
             uses one play and when they're used up the kid earns tokens and unlocks it again. Games a kid already unlocked for good stay theirs until you

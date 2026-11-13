@@ -3801,3 +3801,8 @@ body.game-full-lock { overflow: hidden; }
 .maze-run__pad { display: grid; grid-template-columns: repeat(3, 64px); gap: 6px; justify-content: center; padding: 8px; background: rgba(0, 0, 0, 0.25); }
 .maze-run__btn { min-height: 52px; font-size: 1.5em; font-weight: 800; color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 12px; touch-action: none; }
 .maze-run__btn:active { background: rgba(255, 255, 255, 0.35); }
+.learning-grade--track { width: auto; padding: 0 0.7rem; }
+.games-card__prizes { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.4rem 0; padding: 0.5rem 0.6rem; border-radius: 8px; background: rgba(255, 193, 7, 0.12); text-align: left; font-size: 0.9em; }
+.games-card__prize { display: flex; flex-direction: column; }
+.games-card__prize.is-ready > span:first-child { font-weight: 700; }
+.games-page__prize { border-left: 3px solid rgba(255, 193, 7, 0.7); padding-left: 0.6rem; }

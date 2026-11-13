@@ -225,8 +225,8 @@ export function LearningSettingsPage() {
   );
 }
 
-type LessonSubject = 'grammar' | 'math' | 'history' | 'science';
-const LESSON_LABELS: Record<LessonSubject, string> = { grammar: '📖 Grammar lessons', math: '📖 Math lessons', history: '🇺🇸 US History', science: '🔬 Science' };
+type LessonSubject = 'grammar' | 'math' | 'history' | 'science' | 'handson';
+const LESSON_LABELS: Record<LessonSubject, string> = { grammar: '📖 Grammar lessons', math: '📖 Math lessons', history: '🇺🇸 US History', science: '🔬 Science', handson: '🔧 Hands-on' };
 interface LessonRow {
   id: string;
   grade: number;

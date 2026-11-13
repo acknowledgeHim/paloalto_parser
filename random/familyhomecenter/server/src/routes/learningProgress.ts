@@ -106,7 +106,7 @@ learningProgressRouter.get('/:memberId', (req, res) => {
 
 // ---- 📬 the weekly report email (Sunday, to parents): the lessons each kid passed that week ----
 
-const SUBJECT_LABEL: Record<string, string> = { grammar: '📝 Grammar', math: '➗ Math', history: '🇺🇸 History', science: '🔬 Science' };
+const SUBJECT_LABEL: Record<string, string> = { grammar: '📝 Grammar', math: '➗ Math', history: '🇺🇸 History', science: '🔬 Science', handson: '🔧 Hands-on' };
 const PRACTICE_LABEL: Record<string, string> = { spelling: '🔤 Spelling', spellcheck: '🔍 Misspellings', grammar: '📝 Grammar', math: '➗ Math' };
 const MAX_LINES = 30;
 /** ⌨️ Typing lesson names — keep in sync with LEVELS in client/src/utils/typing.ts. */

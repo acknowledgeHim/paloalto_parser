@@ -17,7 +17,7 @@ export function LabSlot({ id }: { id: string }) {
   );
 }
 
-type Subject = 'grammar' | 'math' | 'history' | 'science';
+type Subject = 'grammar' | 'math' | 'history' | 'science' | 'handson';
 interface ListItem {
   id: string;
   grade: number;
@@ -91,6 +91,8 @@ export interface LessonsConfig {
   intro: string;
   /** a link to the practice game, if any */
   practice?: { to: string; label: string };
+  /** 🔧 grouped by trade (the topic) instead of by school grade; every lesson counts for every kid */
+  tracks?: boolean;
 }
 export const GRAMMAR_LESSONS: LessonsConfig = {
   subject: 'grammar',
@@ -116,6 +118,13 @@ export const SCIENCE_LESSONS: LessonsConfig = {
   intro:
     '⚡ Physics, 🧪 chemistry, 🧬 biology and 🌍 earth & space. Many lessons have a 🧪 lab to try — play with it, do its 🎯 goals, then take the quiz to earn 💎 tokens.',
   practice: { to: '/science/labs', label: '🧪 All the labs' },
+};
+export const HANDSON_LESSONS: LessonsConfig = {
+  subject: 'handson',
+  title: '🔧 Hands-on',
+  intro:
+    'Real skills for real trades: 🚗 car repair, 🔥 welding, 🪚 carpentry and 🏠 framing, ⚡ electrical, 🚰 plumbing and ❄️ heating & cooling — with the tools you need and how to stay safe. Each trade starts with 🎓 the industry certificate or license it prepares you for, and how to go and earn it. Start with 🦺 Safety first. Pass each quiz to earn 💎 tokens.',
+  tracks: true,
 };
 
 /** **bold** inside a line */
@@ -199,6 +208,8 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
   const { activeProfile } = useFamilyMembers();
   const [list, setList] = useState<List | null>(null);
   const [grade, setGrade] = useState<number | 'all' | null>(null);
+  /** 🔧 the trade picked (tracks pages) */
+  const [track, setTrack] = useState<string>('all');
   const [showHidden, setShowHidden] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
@@ -278,8 +289,11 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
     );
 
   const grades = [...new Set(list?.lessons.map((l) => l.grade) ?? [])].sort((a, b) => a - b);
-  const shown = (list?.lessons ?? []).filter((l) => grade === 'all' || grade === null || l.grade === grade);
+  const tracks = config.tracks ? [...new Set(list?.lessons.map((l) => l.topic) ?? [])] : [];
+  const shown = (list?.lessons ?? []).filter((l) => (config.tracks ? track === 'all' || l.topic === track : grade === 'all' || grade === null || l.grade === grade));
   const topics = [...new Set(shown.map((l) => l.topic))];
+  /** does passing it pay (this round)? tracks: every lesson; grades: at their grade or higher */
+  const forMe = (l: ListItem) => config.tracks || (list?.round ? l.grade >= list.round.grade : true);
   return (
     <div className="learning-page">
       <h1>{config.title}</h1>
@@ -293,6 +307,18 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
       {!error && <LimitNote status={limit.status} />}
       {list && (
         <section className="panel">
+          {config.tracks ? (
+            <div className="learning-grades" role="radiogroup" aria-label="Trade">
+              <button type="button" role="radio" aria-checked={track === 'all'} className={`learning-grade${track === 'all' ? ' is-on' : ''}`} onClick={() => setTrack('all')}>
+                All
+              </button>
+              {tracks.map((t) => (
+                <button key={t} type="button" role="radio" aria-checked={track === t} className={`learning-grade learning-grade--track${track === t ? ' is-on' : ''}`} onClick={() => setTrack(t)}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          ) : (
           <div className="learning-grades" role="radiogroup" aria-label="Grade">
             <button type="button" role="radio" aria-checked={grade === 'all'} className={`learning-grade${grade === 'all' ? ' is-on' : ''}`} onClick={() => setGrade('all')}>
               All
@@ -311,13 +337,19 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
               </button>
             ))}
           </div>
-          {list.member?.grade != null && !list.member.is_parent && (
+          )}
+          {config.tracks && list.member?.grade != null && !list.member.is_parent && (
+            <p className="hint">
+              Every lesson here earns 💎 for passing the quiz with {list.settings.pass_pct}% right — once each round. Pass them all and a new round starts: they all pay again.
+            </p>
+          )}
+          {!config.tracks && list.member?.grade != null && !list.member.is_parent && (
             <p className="hint">
               Your grade: {list.grades[list.member.grade]}. Lessons at your grade or higher earn 💎 for passing the quiz with {list.settings.pass_pct}% right — once each round. Pass every{' '}
               {list.grades[list.member.grade]} lesson and a new round starts: they all pay again.
             </p>
           )}
-          {list.round && list.round.total > 0 && <RoundBar round={list.round} grades={list.grades} />}
+          {list.round && list.round.total > 0 && <RoundBar round={list.round} grades={list.grades} what={config.tracks ? 'hands-on' : undefined} />}
           {isParent && (
             <div className="lesson-parent-bar">
               <button type="button" onClick={() => setEditing('new')}>
@@ -344,15 +376,15 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
                   className={`lesson-card${l.hidden ? ' is-hidden' : ''}${l.done?.passed ? ' is-done' : ''}${l.paid_this_round ? ' is-paid' : ''}`}
                   onClick={() => void openLesson(l.id)}
                 >
-                  <span className="lesson-card__grade">{list?.grades[l.grade]}</span>
+                  {!config.tracks && <span className="lesson-card__grade">{list?.grades[l.grade]}</span>}
                   <strong>{l.title}</strong>
                   <span className="lesson-card__meta">
                     {l.passed_today ? '✅ Passed today' : l.done?.passed ? '✅ Passed' : l.done ? `Tried · best ${l.done.best}/${l.done.total}` : `${l.questions} question${l.questions === 1 ? '' : 's'}`}
                     {list?.round && l.paid_this_round
                       ? ` · 💎 earned this round${(l.pay_times ?? 1) > 1 ? ` (${l.pay_times}×)` : ''}`
-                      : list?.round && (l.pay_times ?? 1) > 1 && l.tokens > 0 && l.grade >= list.round.grade
+                      : list?.round && (l.pay_times ?? 1) > 1 && l.tokens > 0 && forMe(l)
                         ? ` · 💎 ${l.tokens} · 🔁 ${l.times_paid ?? 0} of ${l.pay_times} times this round`
-                      : l.tokens > 0 && (list?.round ? l.grade >= list.round.grade : !l.done?.paid)
+                      : l.tokens > 0 && (list?.round ? forMe(l) : !l.done?.paid)
                         ? ` · 💎 ${l.tokens}`
                         : ''}
                     {!list?.round && l.done?.paid ? ` · +${l.done.paid} 💎 earned` : ''}
@@ -369,14 +401,14 @@ export function LessonsPage({ config }: { config: LessonsConfig }) {
 }
 
 /** 🔁 How far along this round is: X of Y lessons at their grade passed for tokens. */
-export function RoundBar({ round, grades }: { round: RoundInfo; grades: string[] }) {
+export function RoundBar({ round, grades, what }: { round: RoundInfo; grades: string[]; what?: string }) {
   const pct = round.total ? Math.round((round.paid / round.total) * 100) : 0;
   const left = round.total - round.paid;
   return (
     <div className="lesson-round">
       <div className="lesson-round__label">
         <strong>
-          🔁 Round {round.number}: {round.paid} of {round.total} {grades[round.grade]} lessons passed
+          🔁 Round {round.number}: {round.paid} of {round.total} {what ?? grades[round.grade]} lessons passed
         </strong>
         <span className="hint">
           {left === 0 ? 'all done!' : `${left} to go — then every lesson pays again`}
@@ -491,7 +523,7 @@ function LessonView({
       </div>
       <section className="panel">
         <p className="hint">
-          {lesson.topic} · {grades[lesson.grade]}
+          {lesson.topic}{config.tracks ? '' : ` · ${grades[lesson.grade]}`}
           {lesson.tokens > 0 ? ` · 💎 ${lesson.tokens} for passing${(lesson.pay_times ?? 1) > 1 ? ` · 🔁 up to ${lesson.pay_times}× a round` : ''}` : ''}
           {lesson.hidden ? ' · 🙈 hidden from kids' : ''}
         </p>
@@ -541,7 +573,7 @@ function LessonView({
           </h2>
           {result.tokens > 0 ? <p className="learning-result__tokens">+{result.tokens} 💎 tokens</p> : result.no_tokens_why ? <p className="hint">{result.no_tokens_why}</p> : null}
           {result.round?.new_round ? (
-            <p className="learning-bonus is-done">🎉 You passed every lesson at your grade! Round {result.round.number} starts — every lesson pays 💎 again.</p>
+            <p className="learning-bonus is-done">🎉 You passed every lesson{config.tracks ? '' : ' at your grade'}! Round {result.round.number} starts — every lesson pays 💎 again.</p>
           ) : result.round && result.round.total > 0 ? (
             <p className="hint">
               🔁 Round {result.round.number}: {result.round.paid} of {result.round.total} lessons at your grade done.

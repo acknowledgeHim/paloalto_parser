@@ -118,6 +118,7 @@ function navGroups(pendingRequests: number, pendingApprovals: number, openVotes:
         { label: '🇺🇸 US History', path: '/history' },
         { label: '🔬 Science', path: '/science' },
         { label: '🧪 Science labs', path: '/science/labs' },
+        { label: '🔧 Hands-on', path: '/hands-on' },
         { label: '📈 Progress', path: '/learning/progress' },
         { label: '⚙️ Grades & tokens', path: '/learning/settings', parent: true },
       ],

@@ -11,7 +11,7 @@ export interface PrizeStatus {
   blurb: string;
   /** one use is one of these: drive, game, visit */
   unit: string;
-  subject: 'grammar' | 'math' | 'history' | 'science' | 'any' | 'all';
+  subject: 'grammar' | 'math' | 'history' | 'science' | 'handson' | 'any' | 'all';
   uses_per: number;
   parents_free: boolean;
   free: boolean;
@@ -29,6 +29,7 @@ export const SUBJECT_TEXT: Record<PrizeStatus['subject'], string> = {
   grammar: '📝 Grammar',
   history: '🇺🇸 History',
   science: '🔬 Science',
+  handson: '🔧 Hands-on',
   any: 'any one subject',
   all: 'all four subjects',
 };
@@ -39,6 +40,7 @@ export function earnText(p: PrizeStatus): string {
   const per = p.uses_per ? plural(p.uses_per, p.unit) : 'unlimited';
   if (p.subject === 'any') return `Pass every lesson at your grade in any subject (each subject earns it again) — ${per}`;
   if (p.subject === 'all') return `Pass every lesson at your grade in all four subjects — ${per}`;
+  if (p.subject === 'handson') return `Pass every 🔧 Hands-on lesson — ${per}`;
   return `Pass every ${SUBJECT_TEXT[p.subject]} lesson at your grade — ${per}`;
 }
 

@@ -6,6 +6,7 @@ import { GRAMMAR_LESSONS, MATH_LESSONS, type LessonSeed, type QuizItem } from '.
 import { HISTORY_LESSONS } from '../services/historyContent.js';
 import { MORE_MATH_LESSONS } from '../services/mathLessonsMore.js';
 import { EXTRA_LESSONS } from '../services/lessonsExtra.js';
+import { HANDSON_LESSONS } from '../services/handsOn/index.js';
 import { isSelfOrParent, sessionActor } from '../services/rewards.js';
 import { GRADE_NAMES } from '../services/spellingWords.js';
 import { addTokens } from '../services/tokens.js';
@@ -21,10 +22,12 @@ import type { FamilyMember } from '../types.js';
  */
 export const lessonsRouter = Router();
 
-export const LESSON_SUBJECTS = ['grammar', 'math', 'history', 'science'] as const;
+export const LESSON_SUBJECTS = ['grammar', 'math', 'history', 'science', 'handson'] as const;
+/** 🔧 Hands-on is by trade, not by school grade: every hands-on lesson counts for every kid. */
+const ANY_GRADE = new Set<string>(['handson']);
 const SUBJECTS = LESSON_SUBJECTS;
 type Subject = (typeof SUBJECTS)[number];
-const LABEL: Record<Subject, string> = { grammar: '📝 Grammar lesson', math: '➗ Math lesson', history: '🇺🇸 US History', science: '🔬 Science' };
+const LABEL: Record<Subject, string> = { grammar: '📝 Grammar lesson', math: '➗ Math lesson', history: '🇺🇸 US History', science: '🔬 Science', handson: '🔧 Hands-on' };
 
 // ---- built-in lessons: added once, never over a parent's edits ----
 function seed(list: LessonSeed[]) {
@@ -36,7 +39,7 @@ function seed(list: LessonSeed[]) {
   db.transaction(() => list.forEach((l, i) => ins.run(l.id, l.subject, l.grade, l.topic, l.title, l.body, JSON.stringify(l.quiz), i, now, now)))();
 }
 // (new lists go on the end, so the lessons already added keep their order)
-seed([...GRAMMAR_LESSONS, ...MATH_LESSONS, ...HISTORY_LESSONS, ...MORE_MATH_LESSONS, ...EXTRA_LESSONS]);
+seed([...GRAMMAR_LESSONS, ...MATH_LESSONS, ...HISTORY_LESSONS, ...MORE_MATH_LESSONS, ...EXTRA_LESSONS, ...HANDSON_LESSONS]);
 
 // ---- built-in lessons replaced by newer ones (2026-11-11: climate-change topics → how energy
 // is made from sun, wind, water, heat and hydrogen). Each old one is hidden ONCE, and only if no
@@ -86,7 +89,7 @@ function readSettings(): Record<Subject, LessonSettings> {
     return v !== undefined && v !== null && Number.isFinite(n) && n >= lo && n <= hi ? n : d;
   };
   return Object.fromEntries(
-    SUBJECTS.map((s) => [s, { tokens: ok(saved[s]?.tokens, 0, 1000, s === 'history' || s === 'science' ? 2 : 1), pass_pct: ok(saved[s]?.pass_pct, 10, 100, 80) }])
+    SUBJECTS.map((s) => [s, { tokens: ok(saved[s]?.tokens, 0, 1000, s === 'history' || s === 'science' || s === 'handson' ? 2 : 1), pass_pct: ok(saved[s]?.pass_pct, 10, 100, 80) }])
   ) as Record<Subject, LessonSettings>;
 }
 
@@ -169,9 +172,11 @@ export function lessonRound(memberId: string, subject: Subject): LessonRound | n
   const m = memberOf(memberId);
   const g = m && m.is_parent !== 1 ? gradeOf(m.id) : null;
   if (!m || g === null) return null;
-  const set = (db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND grade = ? AND hidden = 0 ORDER BY sort, created_at').all(subject, g) as Row[]).filter(
-    (r) => quizOf(r).length > 0 && worth(r) > 0
-  );
+  const set = (
+    (ANY_GRADE.has(subject)
+      ? db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND hidden = 0 ORDER BY sort, created_at').all(subject)
+      : db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND grade = ? AND hidden = 0 ORDER BY sort, created_at').all(subject, g)) as Row[]
+  ).filter((r) => quizOf(r).length > 0 && worth(r) > 0);
   const status = (): LessonRound => {
     const since = roundStart(m.id, subject);
     return {
@@ -211,9 +216,10 @@ export function subjectMastery(memberId: string, subject: Subject): { grade: num
   const m = memberOf(memberId);
   const g = m && m.is_parent !== 1 ? gradeOf(m.id) : null;
   if (!m || g === null) return null;
-  const set = (db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND grade = ? AND hidden = 0').all(subject, g) as Row[]).filter((r) => quizOf(r).length > 0);
+  const anyGrade = ANY_GRADE.has(subject);
+  const set = ((anyGrade ? db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND hidden = 0').all(subject) : db.prepare('SELECT * FROM learning_lessons WHERE subject = ? AND grade = ? AND hidden = 0').all(subject, g)) as Row[]).filter((r) => quizOf(r).length > 0);
   const passedIds = new Set(
-    (db.prepare('SELECT DISTINCT d.lesson_id FROM learning_lessons_done d JOIN learning_lessons l ON l.id = d.lesson_id WHERE d.family_member_id = ? AND d.passed = 1 AND l.subject = ? AND l.grade = ?').all(m.id, subject, g) as Array<{ lesson_id: string }>).map((x) => x.lesson_id)
+    (db.prepare('SELECT DISTINCT d.lesson_id FROM learning_lessons_done d JOIN learning_lessons l ON l.id = d.lesson_id WHERE d.family_member_id = ? AND d.passed = 1 AND l.subject = ? AND (l.grade = ? OR ?)').all(m.id, subject, g, anyGrade ? 1 : 0) as Array<{ lesson_id: string }>).map((x) => x.lesson_id)
   );
   const passed = set.filter((r) => passedIds.has(r.id)).length;
   return { grade: g, total: set.length, passed, done: set.length > 0 && passed === set.length };
@@ -224,13 +230,13 @@ function noTokensWhy(m: FamilyMember | undefined, r: Row): string | null {
   if (m.is_parent === 1) return 'Parents read just for fun';
   const g = gradeOf(m.id);
   if (g === null) return 'A parent needs to set your grade first (📚 Learning → ⚙️ Grades & tokens)';
-  if (r.grade < g) return `Below your grade (${GRADE_NAMES[g]}) — for practice, no tokens`;
+  if (r.grade < g && !ANY_GRADE.has(r.subject)) return `Below your grade (${GRADE_NAMES[g]}) — for practice, no tokens`;
   if (!worth(r)) return 'This lesson pays no tokens';
   const round = lessonRound(m.id, r.subject);
   if (round && paidCount(m.id, r.id, round.started_at ?? '') >= payTimes(r)) {
     const left = round.lesson_ids.length - round.paid_ids.length;
     if (payTimes(r) > 1) return `Already earned its ${payTimes(r)} times this round 🔁 — ${left ? `pass the other ${left} ${GRADE_NAMES[g]} lesson${left === 1 ? '' : 's'} and every lesson pays again` : 'a new round starts soon'}. You can still practise it.`;
-    return `Already earned this round 🔁 — pass the other ${left} ${GRADE_NAMES[g]} lesson${left === 1 ? '' : 's'} and every lesson pays again. You can still practise it.`;
+    return `Already earned this round 🔁 — pass the other ${left} ${ANY_GRADE.has(r.subject) ? '' : `${GRADE_NAMES[g]} `}lesson${left === 1 ? '' : 's'} and every lesson pays again. You can still practise it.`;
   }
   return null;
 }

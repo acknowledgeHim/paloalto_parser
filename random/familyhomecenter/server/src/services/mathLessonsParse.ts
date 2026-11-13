@@ -22,7 +22,7 @@ export function parseMathLessons(grade: number, text: string): LessonSeed[] {
 export function parseLessons(subject: LessonSeed['subject'], grade: number, text: string, opts: { shuffle?: boolean } = {}): LessonSeed[] {
   const out: LessonSeed[] = [];
   const g = grade === 0 ? 'k' : String(grade);
-  const prefix = subject === 'math' ? 'm' : subject === 'grammar' ? 'g' : subject === 'science' ? 's' : 'h';
+  const prefix = subject === 'math' ? 'm' : subject === 'grammar' ? 'g' : subject === 'science' ? 's' : subject === 'handson' ? 'ho' : 'h';
   for (const chunk of text.split(/^@ /m).slice(1)) {
     const lines = chunk.replace(/\r/g, '').split('\n');
     const [slug, topic, title] = lines[0].split(' | ').map((s) => s.trim());

@@ -12,7 +12,7 @@ import { RoundBar, type RoundInfo } from './LessonsPage.js';
  * — when, the score, passed or not, tokens. Plus practice rounds and typing lessons.
  */
 
-type LessonSubject = 'grammar' | 'math' | 'history' | 'science';
+type LessonSubject = 'grammar' | 'math' | 'history' | 'science' | 'handson';
 type PracticeSubject = 'spelling' | 'spellcheck' | 'grammar' | 'math';
 interface Try {
   at: string;
@@ -61,7 +61,7 @@ interface PracticeRow {
 }
 const TYPING_GAMES: Record<string, string> = { balloon: '🎈 Balloons', race: '🏎️ Race', whack: '🔨 Whack', meteor: '☄️ Meteors', tower: '🗼 Tower', snake: '🐍 Snake', story: '📖 Story', daily: '📅 Daily challenge', shop: '🛒 Shop' };
 
-const LESSON_NAMES: Record<LessonSubject, string> = { grammar: '📖 Grammar lessons', math: '📖 Math lessons', history: '🇺🇸 US History', science: '🔬 Science' };
+const LESSON_NAMES: Record<LessonSubject, string> = { grammar: '📖 Grammar lessons', math: '📖 Math lessons', history: '🇺🇸 US History', science: '🔬 Science', handson: '🔧 Hands-on' };
 const PRACTICE_NAMES: Record<PracticeSubject, string> = { spelling: '🔤 Spelling', spellcheck: '🔍 Spot the misspellings', grammar: '📝 Grammar', math: '➗ Math' };
 type Tab = LessonSubject | 'spelling' | 'practice' | 'typing';
 
@@ -118,7 +118,7 @@ export function LearningProgress({ memberId }: { memberId: string }) {
       {data.member.grade === null && !data.member.is_parent && <p className="hint">No school grade set yet — a parent sets it in 📚 Learning → ⚙️ Grades & tokens.</p>}
       <Summary data={data} onPick={setTab} />
       <div className="learning-grades progress-tabs" role="tablist" aria-label="Subject">
-        {(['math', 'grammar', 'science', 'history', 'spelling', 'typing', 'practice'] as Tab[]).map((t) => (
+        {(['math', 'grammar', 'science', 'history', 'handson', 'spelling', 'typing', 'practice'] as Tab[]).map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} className={`learning-grade${tab === t ? ' is-on' : ''}`} onClick={() => setTab(t)}>
             {t === 'practice' ? '🎯 Other practice' : t === 'typing' ? '⌨️ Typing' : t === 'spelling' ? '🔤 Spelling' : LESSON_NAMES[t]}
           </button>
@@ -142,7 +142,7 @@ function Summary({ data, onPick }: { data: Progress; onPick: (t: Tab) => void })
   const g = data.member.grade;
   return (
     <section className="panel progress-summary">
-      {(['math', 'grammar', 'science', 'history'] as LessonSubject[]).map((s) => {
+      {(['math', 'grammar', 'science', 'history', 'handson'] as LessonSubject[]).map((s) => {
         const sub = data.lessons[s];
         const atGrade = g === null ? [] : sub.lessons.filter((l) => l.grade === g && !l.hidden);
         const ever = atGrade.filter((l) => l.tries.some((t) => t.passed)).length;

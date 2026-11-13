@@ -23,8 +23,9 @@ export interface Game {
   prizes?: Prize[];
 }
 /** 🏆 Which lessons earn a prize: one subject, any one of them (each one finished earns it again), or all four. */
-export type PrizeSubject = 'grammar' | 'math' | 'history' | 'science' | 'any' | 'all';
-export const PRIZE_SUBJECTS: PrizeSubject[] = ['math', 'grammar', 'history', 'science', 'any', 'all'];
+export type PrizeSubject = 'grammar' | 'math' | 'history' | 'science' | 'handson' | 'any' | 'all';
+/** ('any' and 'all' are the four school subjects; 🔧 hands-on is picked on its own) */
+export const PRIZE_SUBJECTS: PrizeSubject[] = ['math', 'grammar', 'history', 'science', 'handson', 'any', 'all'];
 export interface Prize {
   id: string;
   name: string;
@@ -80,7 +81,7 @@ export const GAMES: Game[] = [
     prizes: [
       { id: 'moon', name: '🌙 Moon base', blurb: 'A town on the Moon: grey dust, rocks and icy craters under the stars — with a 🚀 moon bonus of extra coins to start.', unit: 'visit', subject: 'science', uses: 0 },
       { id: 'earth', name: '🌍 The whole Earth', blurb: 'A huge world: four big lands with oceans between them and great lakes. See the whole Earth, then zoom in to build on each land.', unit: 'visit', subject: 'any', uses: 0 },
-      { id: 'more-lands', name: '🗺️ 2 more lands', blurb: 'A 4th and 5th town to build.', unit: 'visit', subject: 'history', uses: 0 },
+      { id: 'more-lands', name: '🗺️ 2 more lands', blurb: 'A 4th and 5th town to build.', unit: 'visit', subject: 'math', uses: 0 },
     ],
     // Keep the building ids in sync with `token` in client/src/games/townLogic.ts.
     shop: [

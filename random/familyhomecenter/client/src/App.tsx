@@ -34,7 +34,7 @@ import { BrickTumblePage } from './games/BrickTumblePage.js';
 import { TinyTownPage } from './games/TinyTownPage.js';
 import { LetterMazePage } from './games/LetterMazePage.js';
 import { ResourceUsagePage } from './pages/ResourceUsagePage.js';
-import { GRAMMAR_LESSONS, HISTORY_LESSONS, LessonsPage, MATH_LESSONS, SCIENCE_LESSONS } from './pages/LessonsPage.js';
+import { GRAMMAR_LESSONS, HISTORY_LESSONS, LessonsPage, MATH_LESSONS, SCIENCE_LESSONS, HANDSON_LESSONS } from './pages/LessonsPage.js';
 import { ScienceLabsPage } from './pages/ScienceLabsPage.js';
 import { MathPage } from './pages/MathPage.js';
 import { SpellingPage } from './pages/SpellingPage.js';
@@ -173,6 +173,7 @@ export function App() {
           <Route path="/grammar/lessons" element={<LessonsPage key="grammar" config={GRAMMAR_LESSONS} />} />
           <Route path="/history" element={<LessonsPage key="history" config={HISTORY_LESSONS} />} />
           <Route path="/science" element={<LessonsPage key="science" config={SCIENCE_LESSONS} />} />
+          <Route path="/hands-on" element={<LessonsPage key="handson" config={HANDSON_LESSONS} />} />
           <Route path="/science/labs" element={<ScienceLabsPage />} />
           <Route path="/grammar" element={<TapMistakesPage key="grammar" game={GRAMMAR_GAME} />} />
           <Route path="/learning/settings" element={<LearningSettingsPage />} />

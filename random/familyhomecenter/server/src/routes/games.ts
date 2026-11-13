@@ -139,7 +139,8 @@ function shelf(m: FamilyMember) {
       const owned = free(m) || mine.has(g.id);
       const plays = passes.get(g.id) ?? null;
       const r = ruleOf(g.id);
-      return { ...g, stars: r.cost, plays_per_unlock: r.plays, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id) };
+      // 🏆 prize powers: earned or not, uses left, lesson progress (shown on the game's card)
+      return { ...g, stars: r.cost, plays_per_unlock: r.plays, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id), prize_status: prizesFor(m, g.id) };
     }),
   };
 }
@@ -387,7 +388,7 @@ gamesRouter.post('/:gameId/play/:memberId/feature', (req, res) => {
 });
 
 // ---- 🏆 prize powers: earned by passing every lesson in a subject at your grade ----
-const SUBJECT_NAME: Record<string, string> = { math: '➗ Math', grammar: '📝 Grammar', history: '🇺🇸 History', science: '🔬 Science' };
+const SUBJECT_NAME: Record<string, string> = { math: '➗ Math', grammar: '📝 Grammar', history: '🇺🇸 History', science: '🔬 Science', handson: '🔧 Hands-on' };
 const LESSON_SUBJECTS = ['math', 'grammar', 'history', 'science'] as const;
 export interface PrizeStatus {
   name: string;
@@ -419,7 +420,8 @@ function prizesFor(m: FamilyMember, gameId: string): Record<string, PrizeStatus>
   for (const p of g?.prizes ?? []) {
     const r = rs[p.id] ?? { subject: p.subject, uses: p.uses, parents_free: true };
     const subjects = r.subject === 'any' || r.subject === 'all' ? [...LESSON_SUBJECTS] : [r.subject];
-    const prog = free(m) ? [] : subjects.map((s) => ({ s, x: subjectMastery(m.id, s) }));
+    // (for 'any' and 'all', a subject with no lessons at their grade — like US History in some grades — doesn't count)
+    const prog = free(m) ? [] : subjects.map((s) => ({ s, x: subjectMastery(m.id, s) })).filter((y) => subjects.length === 1 || !y.x || y.x.total > 0);
     const progress = prog
       .filter((y) => y.x)
       .map(({ s, x }) => ({ subject: s, label: SUBJECT_NAME[s], grade: GRADE_NAMES[x!.grade], passed: x!.passed, total: x!.total, done: x!.done }));

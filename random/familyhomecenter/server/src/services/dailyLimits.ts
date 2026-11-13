@@ -29,6 +29,7 @@ export function activities(): Activity[] {
     { id: 'lessons-math', name: '📖 Math lessons', unit: 'lesson' },
     { id: 'lessons-history', name: '🇺🇸 US History', unit: 'lesson' },
     { id: 'lessons-science', name: '🔬 Science', unit: 'lesson' },
+    { id: 'lessons-handson', name: '🔧 Hands-on', unit: 'lesson' },
     { id: 'typing', name: '⌨️ Typing', unit: 'round' },
     ...GAMES.map((g) => ({ id: `game:${g.id}`, name: `${g.emoji} ${g.name}`, unit: 'game', ...(g.minutesOnly ? { minutes_only: true } : {}) })),
   ];
