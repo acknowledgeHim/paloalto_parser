@@ -4,6 +4,7 @@
  * Not to be copied, distributed, or hosted for others.
  */
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './threadpool.js'; // first: more file-reading threads (see threadpool.ts)
@@ -140,8 +141,17 @@ app.use('/api/movies-media', express.static(config.moviesDir));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 // Which commit the running server is (read once at start): Settings â App version compares it with the screen's build.
 const SERVER_BUILD = (() => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  // An auto-deployed build ships a BUILD_ID file (the source commit it was built from), so Settings →
+  // App version matches the screen even though the Pi only has the built output, not the git source.
   try {
-    return execSync('git log -1 --format="%h Â· %cs"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: path.dirname(fileURLToPath(import.meta.url)) }).trim();
+    const id = readFileSync(path.join(here, 'BUILD_ID'), 'utf8').trim();
+    if (id) return id;
+  } catch {
+    /* no BUILD_ID (a source checkout) — fall back to git */
+  }
+  try {
+    return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: here }).trim();
   } catch {
     return 'unknown';
   }

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a new Family Home Center build every couple of minutes
+
+[Timer]
+# first check shortly after boot, then every 2 minutes
+OnBootSec=90s
+OnUnitActiveSec=2min
+Unit=fhc-update.service
+
+[Install]
+WantedBy=timers.target

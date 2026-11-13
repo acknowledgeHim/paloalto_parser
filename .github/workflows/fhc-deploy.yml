@@ -1,0 +1,99 @@
+name: Deploy Family Home Center
+
+# Builds Family Home Center on every push and publishes ONLY the built output (no TypeScript source,
+# no git history) to the `fhc-deploy` branch. The Raspberry Pi tracks that branch, so its disk never
+# carries the source — and a timer on the Pi pulls + restarts automatically, so the running app stays
+# up to date with every code/feature change. See random/familyhomecenter/scripts/deploy/README.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'random/familyhomecenter/**'
+      - '.github/workflows/fhc-deploy.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: fhc-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build server (tsc)
+        working-directory: random/familyhomecenter/server
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build client (vite, minified)
+        working-directory: random/familyhomecenter/client
+        run: |
+          npm ci
+          npm run build
+
+      - name: Assemble built-only payload
+        env:
+          APP: random/familyhomecenter
+        run: |
+          set -euo pipefail
+          BUILD_ID="$(git log -1 --format='%h · %cs')"
+          STAGE="$RUNNER_TEMP/fhc-deploy"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/server" "$STAGE/client"
+
+          # server: compiled JS + the manifests the Pi installs prod deps from + the runtime data file
+          # it reads (geo/places.json). NO src, NO node_modules (native deps build on the Pi).
+          cp -r "$APP/server/dist"              "$STAGE/server/dist"
+          cp -r "$APP/server/geo"               "$STAGE/server/geo"
+          cp    "$APP/server/package.json"      "$STAGE/server/package.json"
+          cp    "$APP/server/package-lock.json" "$STAGE/server/package-lock.json"
+          # the source commit this was built from, so Settings → App version matches the screen
+          printf '%s\n' "$BUILD_ID" > "$STAGE/server/dist/BUILD_ID"
+
+          # client: the minified bundle Vite produced
+          cp -r "$APP/client/dist" "$STAGE/client/dist"
+
+          # deploy helpers + licence
+          cp "$APP/LICENSE"                                 "$STAGE/LICENSE"
+          cp "$APP/scripts/deploy/familyhomecenter.service" "$STAGE/familyhomecenter.service"
+          cp "$APP/scripts/deploy/fhc-update.service"       "$STAGE/fhc-update.service"
+          cp "$APP/scripts/deploy/fhc-update.timer"         "$STAGE/fhc-update.timer"
+          cp "$APP/scripts/deploy/fhc-update.sh"            "$STAGE/update.sh"
+          cp "$APP/scripts/deploy/fhc-pi-setup.sh"          "$STAGE/setup.sh"
+          cp "$APP/scripts/deploy/README.md"                "$STAGE/README.md"
+          chmod +x "$STAGE/update.sh" "$STAGE/setup.sh"
+
+          # things the Pi creates locally — kept out of git so `git reset --hard` never touches them
+          printf '%s\n' 'server/node_modules/' 'server/data' 'server/.deployed-lock' '.env' > "$STAGE/.gitignore"
+
+          echo "BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
+          echo "STAGE=$STAGE" >> "$GITHUB_ENV"
+
+      - name: Publish to fhc-deploy branch
+        run: |
+          set -euo pipefail
+          cd "$STAGE"
+          git init -q
+          git checkout -q -b fhc-deploy
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "deploy: ${BUILD_ID}"
+          # force-push: the deploy branch is a rolling snapshot of the latest build (single commit)
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" fhc-deploy
