@@ -21,17 +21,20 @@ import {
   type Tool,
   type Town,
 } from './townLogic.js';
+import { makeTraffic, metroLine, placeAgent, type Agent } from './townTraffic.js';
+import { drawArt } from './townArt.js';
 import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
 
 /** Days a second, by speed: ⏸ / ▶ / ⏩. */
 const SPEEDS = [0, 1500, 500];
-const PAINT = new Set(['=', 'p']); // tools that draw as you drag (and 🚜 clearing)
+const PAINT = new Set(['=', 'p']); // tools that draw as you drag (🚜 clearing doesn't: only the square you tap)
 
 const PAD: Record<Cat, string> = {
   road: '#9e9e9e',
   home: '#ffe7c2',
   work: '#cfe3fb',
   service: '#f9d3e1',
+  transit: '#d6e4f0',
   nature: '',
   utility: '#e6d6f2',
   fun: '#fff3a6',
@@ -43,6 +46,7 @@ const GROUPS: Array<{ title: string; cats: Cat[] }> = [
   { title: '⚡ Power & water', cats: ['utility'] },
   { title: '🌳 Nice places', cats: ['nature'] },
   { title: '🏫 Town services', cats: ['service'] },
+  { title: '🚏 Getting around', cats: ['transit'] },
   { title: '🎡 Fun places', cats: ['fun'] },
 ];
 
@@ -70,6 +74,95 @@ function glyph(e: string, px: number): HTMLCanvasElement {
     glyphs.set(key, c);
   }
   return c;
+}
+
+/** One person or vehicle at (sx, sy) on screen; gives back the patch to clear next time. */
+function drawAgent(g: CanvasRenderingContext2D, a: Agent, sx: number, sy: number, dx: number, dy: number, T: number): [number, number, number, number] {
+  if (a.kind === 'walker') {
+    const s = Math.max(9, Math.round(T * 0.5));
+    const img = glyph(a.look, s);
+    const sz = s * 1.25;
+    g.save();
+    g.translate(sx, sy);
+    if (dx > 0) g.scale(-1, 1); // the emoji walk to the left; turn them round going right
+    g.drawImage(img, -sz / 2, -sz * 0.62, sz, sz);
+    g.restore();
+    return [sx - sz / 2 - 2, sy - sz * 0.62 - 2, sz + 4, sz + 4];
+  }
+  const LEN: Record<string, number> = { bus: 0.72, truck: 0.56, fire: 0.62, ambulance: 0.5, train: 1.5, car: 0.42, police: 0.44 };
+  const len = T * (LEN[a.kind] ?? 0.42);
+  const wid = Math.max(4, T * (a.kind === 'car' || a.kind === 'police' ? 0.24 : a.kind === 'train' ? 0.3 : 0.27));
+  g.save();
+  g.translate(sx, sy);
+  g.rotate(Math.atan2(dy, dx));
+  const body = (x: number, w: number, colour: string) => {
+    g.fillStyle = colour;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x, -wid / 2, w, wid, Math.min(3, wid / 3));
+    else g.rect(x, -wid / 2, w, wid);
+    g.fill();
+  };
+  g.shadowColor = 'rgba(0,0,0,0.35)';
+  g.shadowBlur = 2;
+  if (a.kind === 'truck') {
+    body(-len / 2, len * 0.68, a.look); // the load
+    body(len / 2 - len * 0.28, len * 0.28, '#1565c0'); // the cab
+  } else if (a.kind === 'train') {
+    // 3 carriages
+    for (let k = 0; k < 3; k++) body(-len / 2 + (k * len) / 3, len / 3 - 1.5, a.look);
+  } else body(-len / 2, len, a.look);
+  g.shadowBlur = 0;
+  const glass = 'rgba(30,40,60,0.75)';
+  if (a.kind === 'bus') {
+    g.fillStyle = glass;
+    for (let k = 0; k < 4; k++) g.fillRect(-len / 2 + len * (0.12 + k * 0.2), -wid / 2 + 1, len * 0.12, wid - 2);
+  } else if (a.kind === 'train') {
+    g.fillStyle = '#c62828'; // a red stripe down the side
+    g.fillRect(-len / 2, -1, len, 2);
+    g.fillStyle = glass;
+    g.fillRect(len / 2 - len * 0.06, -wid / 2 + 1, len * 0.04, wid - 2);
+  } else {
+    g.fillStyle = glass;
+    g.fillRect(len / 2 - len * (a.kind === 'truck' ? 0.16 : 0.32), -wid / 2 + 1, len * 0.12, wid - 2);
+  }
+  if (a.kind === 'police') {
+    g.fillStyle = '#1a237e'; // dark doors
+    g.fillRect(-len * 0.2, -wid / 2, len * 0.3, wid);
+  }
+  if (a.kind === 'fire') {
+    g.strokeStyle = '#eeeeee'; // the ladder on top
+    g.lineWidth = 1;
+    g.strokeRect(-len * 0.4, -wid * 0.22, len * 0.6, wid * 0.44);
+    for (let k = 1; k < 5; k++) line(g, -len * 0.4 + (len * 0.6 * k) / 5, -wid * 0.22, -len * 0.4 + (len * 0.6 * k) / 5, wid * 0.22);
+  }
+  if (a.kind === 'ambulance') {
+    g.fillStyle = '#e53935'; // a red cross on the roof
+    g.fillRect(-len * 0.2, -wid * 0.08, len * 0.3, wid * 0.16);
+    g.fillRect(-len * 0.05 - wid * 0.08, -wid * 0.3, wid * 0.16, wid * 0.6);
+  }
+  if (a.kind === 'police' || a.kind === 'fire' || a.kind === 'ambulance') {
+    // the light bar: flashing red / blue when they're on a call
+    const on = a.lights && Math.floor(performance.now() / 220) % 2 === 0;
+    g.fillStyle = a.lights ? (on ? '#ff1744' : '#2979ff') : '#90a4ae';
+    g.fillRect(len * 0.02, -wid / 2 + 1, len * 0.08, (wid - 2) / 2);
+    g.fillStyle = a.lights ? (on ? '#2979ff' : '#ff1744') : '#90a4ae';
+    g.fillRect(len * 0.02, 0, len * 0.08, (wid - 2) / 2);
+    if (a.lights) {
+      g.fillStyle = on ? 'rgba(255,23,68,0.25)' : 'rgba(41,121,255,0.25)';
+      g.beginPath();
+      g.arc(len * 0.06, 0, wid * 1.1, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  g.restore();
+  const r = len / 2 + wid + 4;
+  return [sx - r, sy - r, r * 2, r * 2];
+}
+function line(g: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number) {
+  g.beginPath();
+  g.moveTo(x1, y1);
+  g.lineTo(x2, y2);
+  g.stroke();
 }
 
 export interface RunProps {
@@ -179,6 +272,21 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
         }
         const b = buildingOf(ch);
         if (!b) continue;
+        if (drawArt(g, ch, i, px, py, T, t.current.day)) {
+          if (mood && b.homes) {
+            g.fillStyle = `hsla(${Math.round((rep.homeHappy.get(i) ?? 50) * 1.2)}, 85%, 50%, 0.45)`;
+            g.fillRect(px + 1, py + 1, T - 2, T - 2);
+          }
+          if (b.homes) {
+            const p = t.current.pops.charCodeAt(i) - 48;
+            g.fillStyle = 'rgba(0,0,0,0.25)';
+            g.fillRect(px + 2, py + T - 4, T - 4, 3);
+            g.fillStyle = '#2e7d32';
+            g.fillRect(px + 2, py + T - 4, ((T - 4) * p) / b.homes, 3);
+          }
+          if (b.needsRoad && !hasRoad(map, i) && T >= 14) g.drawImage(glyph('🚧', Math.round(T * 0.42)), px + T * 0.5, py - T * 0.05, T * 0.55, T * 0.55);
+          continue;
+        }
         if (PAD[b.cat]) {
           g.fillStyle = PAD[b.cat];
           g.fillRect(px + 1, py + 1, T - 2, T - 2);
@@ -198,6 +306,23 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
         }
         if (b.needsRoad && !hasRoad(map, i) && T >= 14) g.drawImage(glyph('🚧', Math.round(T * 0.42)), px + T * 0.5, py - T * 0.05, T * 0.55, T * 0.55);
       }
+    // 🚇 The metro line, underground: a dashed line from station to station.
+    const metro = metroLine(map);
+    if (metro.length >= 2) {
+      g.save();
+      g.strokeStyle = 'rgba(106, 27, 154, 0.55)';
+      g.lineWidth = Math.max(2, T * 0.14);
+      g.setLineDash([T * 0.35, T * 0.25]);
+      g.lineCap = 'round';
+      g.beginPath();
+      metro.forEach((s, k) => {
+        const sx = ((s % W) - region.x0 + 0.5) * T, sy = (Math.floor(s / W) - region.y0 + 0.5) * T;
+        if (k) g.lineTo(sx, sy);
+        else g.moveTo(sx, sy);
+      });
+      g.stroke();
+      g.restore();
+    }
     // The tile under the pointer: what would happen there.
     const show = hover ?? picked;
     if (show !== null) {
@@ -221,6 +346,63 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
     }
   }, [tile, region, hover, picked, tool, mood, rep, owned]);
   useEffect(draw);
+
+  // ---- 🚶🚗 people and cars going about (just for looks; townTraffic.ts) ----
+  const moving = useRef<HTMLCanvasElement>(null);
+  const traffic = useRef(makeTraffic());
+  const [showTraffic, setShowTrafficState] = useState(() => {
+    try {
+      return localStorage.getItem('fhc.town.traffic') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setShowTraffic = (on: boolean) => {
+    setShowTrafficState(on);
+    try {
+      localStorage.setItem('fhc.town.traffic', on ? '1' : '0');
+    } catch {
+      /* fine: just not remembered */
+    }
+  };
+  useEffect(() => traffic.current.update(t.current.map, t.current.pops, rep.pop), [rep]);
+  const speedNow = useRef(speed);
+  speedNow.current = speed;
+  useEffect(() => {
+    const c = moving.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    const T = tile;
+    c.width = region.w * T * dpr; // (this clears it too)
+    c.height = region.h * T * dpr;
+    c.style.width = `${region.w * T}px`;
+    c.style.height = `${region.h * T}px`;
+    if (!showTraffic) return;
+    const g = c.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    let dirty: Array<[number, number, number, number]> = [];
+    let last = performance.now(), drawn = 0, raf = 0;
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const mult = [0, 1, 2.2][speedNow.current] ?? 1;
+      // ~30 a second while moving, a few a second when paused (so changes still show)
+      if (now - drawn < (mult ? 33 : 250)) return;
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = drawn = now;
+      traffic.current.advance(dt * mult);
+      for (const [x, y, w, h] of dirty) g.clearRect(x, y, w, h);
+      dirty = [];
+      const map = t.current.map;
+      for (const a of traffic.current.agents) {
+        const p = placeAgent(a, map);
+        const sx = (p.x - region.x0) * T, sy = (p.y - region.y0) * T;
+        if (sx < -T || sy < -T || sx > region.w * T + T || sy > region.h * T + T) continue;
+        dirty.push(drawAgent(g, a, sx, sy, p.dx, p.dy, T));
+      }
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [tile, region, showTraffic]);
 
   // ---- 👆 tapping and dragging ----
   const down = useRef<{ last: number | null; pan?: { x: number; y: number; sl: number; st: number } } | null>(null);
@@ -300,7 +482,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
     if (e.pointerType === 'mouse') setHover(i);
     if (!d || i === null || i === d.last) return;
     d.last = i;
-    if (tool.kind === 'bulldoze' || (tool.kind === 'build' && PAINT.has(tool.ch))) act(i);
+    if (tool.kind === 'build' && PAINT.has(tool.ch)) act(i);
   };
   const onUp = () => {
     down.current = null;
@@ -377,6 +559,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
       <p className="town__tip">💡 {msg ?? tipList[0]}</p>
 
       <div className="town__map" ref={wrap}>
+        <div className="town__layers">
         <canvas
           ref={canvas}
           className={`town__canvas town__canvas--${tool.kind}`}
@@ -387,11 +570,16 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
           onPointerLeave={() => setHover(null)}
           onContextMenu={(e) => e.preventDefault()}
         />
+        <canvas ref={moving} className="town__traffic" aria-hidden="true" />
+        </div>
       </div>
 
       <div className="town__view">
         <button type="button" className={`secondary${mood ? ' is-on' : ''}`} onClick={() => setMood(!mood)}>
           😊 {mood ? 'Hide' : 'Show'} happiness
+        </button>
+        <button type="button" className={`secondary${showTraffic ? ' is-on' : ''}`} onClick={() => setShowTraffic(!showTraffic)}>
+          🚶 {showTraffic ? 'Hide' : 'Show'} people &amp; cars
         </button>
         <button type="button" className="secondary" onClick={() => setTile((x) => Math.max(10, x - 4))} aria-label="Zoom out">
           ➖
@@ -456,7 +644,7 @@ export function TinyTownRun({ town, region, owned, shop, timeUp, onSave, onExit 
               <button key={name} type="button" className={`town-tool${isOn(x) ? ' is-on' : ''}`} onClick={() => choose(x)}>
                 <span className="town-tool__emoji">{e}</span>
                 <span className="town-tool__name">{name}</span>
-                <span className="town-tool__cost">{x.kind === 'bulldoze' ? '½ back' : ' '}</span>
+                <span className="town-tool__cost">{x.kind === 'bulldoze' ? 'all 🪙 back' : ' '}</span>
               </button>
             ))}
           </div>

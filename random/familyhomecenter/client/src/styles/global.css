@@ -3627,6 +3627,8 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .town__tip { margin: 0; font-weight: 600; }
 .town__map { overflow: auto; max-height: 64vh; border-radius: 8px; border: 2px solid rgba(127, 127, 127, 0.35); background: #8ec454; overscroll-behavior: contain; }
 .town__canvas { display: block; touch-action: none; cursor: crosshair; }
+.town__layers { position: relative; width: max-content; }
+.town__traffic { position: absolute; left: 0; top: 0; pointer-events: none; }
 .town__canvas--pan { cursor: grab; }
 .town__canvas--look { cursor: help; }
 .town__view { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }

@@ -342,7 +342,8 @@ games (a parent sets the price, or gives 🎟️ plays); parents play free.
 
 - **How it grows:** everything except parks and nature needs a road right next to it. People move
   into 🏠 houses when they're happy (45+), there's enough ⚡ power and 💧 water, and there are 💼
-  jobs. Full, happy houses grow into 🏡 big houses (10 people) and 🏘️ townhouses (24).
+  jobs. Full, happy houses grow into 🏡 big houses (10 people) and 🏘️ townhouses (24). In a city of
+  400+, very happy townhouses grow into 🏢 apartment towers (60).
 - **Happiness** comes from 🌳 parks, 🎠 playgrounds, ⛲ fountains and ☕ cafés nearby, from schools,
   clinics, fire stations, police and libraries close enough, and from town sights (🏟️ 🏛️ 🚀). It
   drops near noisy 🏭 factories and ⚡ power stations, with too few jobs, short power or water, high
@@ -350,10 +351,25 @@ games (a parent sets the price, or gives 🎟️ plays); parents play free.
   😊 colours the whole town.
 - **🪙 Money:** people who work pay taxes each day (0–20%, 10% to start). Services cost a little a
   day to run. Coins never go below 0, and a small town that's run out gets a little help each day.
-  🚜 Clear gives half the price back.
+  🚜 Clear gives all the 🪙 back (roads, bridges and buildings). It clears only the square you tap,
+  so dragging across the map can't wipe out a row by accident.
 - **Bigger towns open new buildings:** factory and fire station at 15 people, playground 20, café
-  30, school and power station 40, clinic, police and offices 80, library and fountain 150, stadium
-  250, museum 400, rocket base 1,000.
+  30, school and power station 40, 🚏 bus stop 50, clinic, police and offices 80, library and
+  fountain 150, stadium 250, 🏙️ skyscraper (45 jobs) 300, museum and 🚇 metro station 400, rocket
+  base 1,000.
+- **🚏 Getting around:** buses drive from bus stop to bus stop (2 or more) and stop at each. Metro
+  trains run underground between 🚇 stations (2 or more; the line shows dashed). Both make nearby
+  homes happier.
+- **🚶🚗 People and traffic:** people walk from homes to work, shops, parks, playgrounds and the
+  beach, keeping to the road's edge or cutting across grass and parks. Cars, 🚚 trucks from farms
+  and factories, and buses drive on the right. 🚓 Police, 🚒 fire engines and 🚑 ambulances drive out
+  from their stations, sometimes with lights flashing. How many there are follows the population.
+  They're just for looks, and they pause with ⏸. **🚶 Hide people & cars** turns them off on a slow
+  screen (remembered on that screen).
+- **Drawn, not just emoji:** 🌳 parks have trees, paths, ponds, benches and swings. 🎠 Playgrounds
+  have swings, slides, see-saws and roundabouts. 🚜 Farms are fields of corn, wheat, sunflowers or
+  pumpkins, some with a barn. The fields are planted, grow, ripen and get harvested in a 60-day year.
+  🏙️ Skyscrapers and 🏢 apartment towers are drawn as tall buildings.
 - **🔓 Extras (💎, 5 each by default, parent-set):** 🗺️ *Bigger land* (48 × 36 instead of 30 × 22,
   for all their towns) and 🎡 *Fun places* (fun park, zoo, aquarium by the water, castle).
 - **💎 Token shop:** the tokens kids earn (📚 Learning, ⌨️ Typing, chores) can be spent inside their

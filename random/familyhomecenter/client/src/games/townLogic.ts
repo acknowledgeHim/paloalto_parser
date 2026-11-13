@@ -14,7 +14,7 @@ export const SMALL = { x0: 9, y0: 7, w: 30, h: 22 };
 export const FULL = { x0: 0, y0: 0, w: W, h: H };
 export type Region = typeof SMALL;
 
-export type Cat = 'road' | 'home' | 'work' | 'service' | 'nature' | 'utility' | 'fun' | 'special';
+export type Cat = 'road' | 'home' | 'work' | 'service' | 'transit' | 'nature' | 'utility' | 'fun' | 'special';
 
 export interface Building {
   ch: string;
@@ -61,11 +61,13 @@ export const BUILDINGS: Building[] = [
   B({ ch: 'h', id: 'house', emoji: '🏠', name: 'House', cat: 'home', cost: 30, upkeep: 0, needPop: 0, homes: 4, tip: 'Homes for 4. Happy, full houses grow into bigger homes.' }),
   B({ ch: 'H', id: 'house2', emoji: '🏡', name: 'Big house', cat: 'home', cost: 30, upkeep: 0, needPop: 0, homes: 10, grown: true, tip: 'A house that grew: homes for 10.' }),
   B({ ch: 'T', id: 'house3', emoji: '🏘️', name: 'Townhouses', cat: 'home', cost: 30, upkeep: 0, needPop: 0, homes: 24, uses: 2, grown: true, tip: 'Grew from a big house: homes for 24.' }),
+  B({ ch: 'K', id: 'apartments', emoji: '🏢', name: 'Apartment towers', cat: 'home', cost: 30, upkeep: 0, needPop: 0, homes: 60, uses: 4, grown: true, tip: 'Grew from townhouses in a big, happy city: homes for 60.' }),
   B({ ch: 's', id: 'shop', emoji: '🏪', name: 'Shop', cat: 'work', cost: 50, upkeep: 0, needPop: 0, jobs: 5, tip: '5 jobs.' }),
   B({ ch: 'm', id: 'farm', emoji: '🚜', name: 'Farm', cat: 'work', cost: 40, upkeep: 0, needPop: 0, jobs: 4, tip: '4 jobs, and quiet.' }),
   B({ ch: 'k', id: 'cafe', emoji: '☕', name: 'Café', cat: 'work', cost: 70, upkeep: 0, needPop: 30, jobs: 3, happy: [2, 6], tip: '3 jobs, and nearby homes like it.' }),
   B({ ch: 'f', id: 'factory', emoji: '🏭', name: 'Factory', cat: 'work', cost: 90, upkeep: 0, needPop: 15, jobs: 10, noise: [3, 15], tip: '10 jobs, but noisy: homes within 3 tiles are less happy.' }),
   B({ ch: 'o', id: 'office', emoji: '🏢', name: 'Offices', cat: 'work', cost: 300, upkeep: 1, needPop: 80, jobs: 16, tip: '16 jobs, and quiet.' }),
+  B({ ch: 'O', id: 'skyscraper', emoji: '🏙️', name: 'Skyscraper', cat: 'work', cost: 1500, upkeep: 4, needPop: 300, jobs: 45, uses: 4, tip: '45 jobs in one tall glass tower.' }),
   B({ ch: 'p', id: 'park', emoji: '🌳', name: 'Park', cat: 'nature', cost: 25, upkeep: 0, needPop: 0, happy: [3, 10], needsRoad: false, uses: 0, tip: 'Homes within 3 tiles are happier. Drag to plant lots.' }),
   B({ ch: 'y', id: 'playground', emoji: '🎠', name: 'Playground', cat: 'nature', cost: 60, upkeep: 0, needPop: 20, happy: [3, 15], needsRoad: false, uses: 0, tip: 'Homes within 3 tiles are a lot happier.' }),
   B({ ch: 'n', id: 'fountain', emoji: '⛲', name: 'Fountain', cat: 'nature', cost: 120, upkeep: 0, needPop: 150, happy: [4, 12], needsRoad: false, uses: 0, tip: 'Homes within 4 tiles are happier.' }),
@@ -73,6 +75,8 @@ export const BUILDINGS: Building[] = [
   B({ ch: 'g', id: 'power', emoji: '⚡', name: 'Power station', cat: 'utility', cost: 300, upkeep: 4, needPop: 40, power: 70, noise: [2, 10], uses: 0, tip: 'Power for 70 buildings, a little noisy.' }),
   B({ ch: 'w', id: 'tower', emoji: '💧', name: 'Water tower', cat: 'utility', cost: 100, upkeep: 1, needPop: 0, water: 30, uses: 0, tip: 'Water for 30 buildings.' }),
   B({ ch: 'q', id: 'pump', emoji: '🚰', name: 'Water pump', cat: 'utility', cost: 60, upkeep: 1, needPop: 0, water: 25, uses: 0, byWater: true, tip: 'Water for 25 buildings. Build it next to the water.' }),
+  B({ ch: 'B', id: 'busstop', emoji: '🚏', name: 'Bus stop', cat: 'transit', cost: 40, upkeep: 0, needPop: 50, happy: [3, 4], uses: 0, tip: 'Buses drive from stop to stop (build 2 or more). Homes within 3 tiles are a bit happier.' }),
+  B({ ch: 'U', id: 'metro', emoji: '🚇', name: 'Metro station', cat: 'transit', cost: 1500, upkeep: 6, needPop: 400, jobs: 4, happy: [7, 8], uses: 2, tip: 'Trains run underground between metro stations (build 2 or more). Homes within 7 tiles are happier.' }),
   B({ ch: 'x', id: 'fire', emoji: '🚒', name: 'Fire station', cat: 'service', cost: 150, upkeep: 3, needPop: 15, jobs: 3, cover: ['fire', 7], tip: 'Homes within 7 tiles feel safe. Towns over 60 people want one.' }),
   B({ ch: 'e', id: 'school', emoji: '🏫', name: 'School', cat: 'service', cost: 200, upkeep: 4, needPop: 40, jobs: 4, cover: ['school', 6], tip: 'Homes within 6 tiles are happier. Towns over 60 people want one.' }),
   B({ ch: 'c', id: 'clinic', emoji: '🏥', name: 'Clinic', cat: 'service', cost: 250, upkeep: 5, needPop: 80, jobs: 5, cover: ['health', 7], tip: 'Homes within 7 tiles are happier. Towns over 120 people want one.' }),
@@ -99,7 +103,7 @@ export const BRIDGE = '#';
 export const GRASS = '.';
 export const WATER = '~';
 export const TREE = 't';
-const HOME_UP: Record<string, string> = { h: 'H', H: 'T' };
+const HOME_UP: Record<string, string> = { h: 'H', H: 'T', T: 'K' };
 
 export const START_COINS = 800;
 export const DEFAULT_TAX = 10;
@@ -183,7 +187,7 @@ export function cleanTown(t: unknown): Town | null {
   const x = t as Partial<Town> | null;
   if (!x || typeof x.map !== 'string' || x.map.length !== W * H || typeof x.pops !== 'string' || x.pops.length !== W * H) return null;
   const ok = (c: string) => c === GRASS || c === WATER || c === TREE || c === BRIDGE || BY_CH.has(c);
-  if (![...x.map].every(ok) || ![...x.pops].every((c) => c >= '0' && c <= 'H')) return null;
+  if (![...x.map].every(ok) || ![...x.pops].every((c) => c >= '0' && c <= 'l')) return null; // '0' + up to 60 people
   const n = (v: unknown, d: number, lo: number, hi: number) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Math.round(Number(v)))) : d);
   return {
     v: 1,
@@ -379,7 +383,14 @@ export function step(t: Town, random: () => number = Math.random): Report {
     p = Math.min(p, cap);
     // 🏡 A full, happy home grows into a bigger one, now and then.
     const up = HOME_UP[map[i]];
-    if (up && p >= cap && ((map[i] === 'h' && h >= 65 && rep.pop >= 30 && random() < 0.05) || (map[i] === 'H' && h >= 75 && rep.pop >= 150 && random() < 0.03))) map[i] = up;
+    if (
+      up &&
+      p >= cap &&
+      ((map[i] === 'h' && h >= 65 && rep.pop >= 30 && random() < 0.05) ||
+        (map[i] === 'H' && h >= 75 && rep.pop >= 150 && random() < 0.03) ||
+        (map[i] === 'T' && h >= 80 && rep.pop >= 400 && random() < 0.02))
+    )
+      map[i] = up;
     pops[i] = String.fromCharCode(48 + Math.max(0, p));
   }
   t.map = map.join('');
@@ -422,7 +433,7 @@ export function canBuild(t: Town, i: number, tool: Tool, region: Region, owned: 
   return { ok: true, cost };
 }
 
-/** Do it (after canBuild said yes). Clearing a building gives half its price back. */
+/** Do it (after canBuild said yes). Clearing a road, bridge or building gives all its 🪙 price back. */
 export function build(t: Town, i: number, tool: Tool, region: Region, owned: { fun: boolean }): boolean {
   const c = canBuild(t, i, tool, region, owned);
   if (!c.ok) return false;
@@ -430,14 +441,15 @@ export function build(t: Town, i: number, tool: Tool, region: Region, owned: { f
   const pops = t.pops.split('');
   if (tool.kind === 'bulldoze') {
     const here = map[i];
-    if (here === BRIDGE) map[i] = WATER;
-    else if (here === TREE) {
+    if (here === BRIDGE) {
+      map[i] = WATER;
+      t.coins += 25;
+    } else if (here === TREE) {
       map[i] = GRASS;
       t.coins -= 2;
     } else {
       const b = BY_CH.get(here);
-      if (b && !b.grown) t.coins += Math.floor(b.cost / 2);
-      else if (b?.grown) t.coins += 15;
+      if (b) t.coins += b.cost; // a grown home: what the 🏠 house cost
       map[i] = GRASS;
     }
     pops[i] = '0';
