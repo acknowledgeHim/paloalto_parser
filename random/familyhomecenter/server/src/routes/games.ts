@@ -1,9 +1,12 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import { countTime, limitHit } from '../services/dailyLimits.js';
 import { v4 as uuidv4 } from 'uuid';
 import { db, getSetting, setSetting } from '../db.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { GAMES, PRIZE_SUBJECTS, gameOf, type PrizeSubject } from '../services/games.js';
+import { GAMES, PRIZE_SUBJECTS, gameOf as gameOfStatic, type PrizeSubject } from '../services/games.js';
+import { romGames, romGame, romById, romFilePath, addRom, updateRom, listRoms, detectSystem, romToGame, SYSTEM_CORE } from '../services/roms.js';
 import { subjectMastery } from './lessons.js';
 import { GRADE_NAMES, WORDS } from '../services/spellingWords.js';
 import { misspell } from '../services/spellcheckGen.js';
@@ -13,6 +16,14 @@ import { addTokens } from '../services/tokens.js';
 
 /** 🎮 Games: unlock with 💎 tokens (parents play free), play, keep best runs and progress. */
 export const gamesRouter = Router();
+
+// 🎮 Classic games (uploaded ROMs) are dynamic games with id `rom:<id>`, so they ride the same
+// token economy as the built-in ones. These merge the static list with the current ROMs.
+const listGames = () => [...GAMES, ...romGames()];
+const findGame = (id: string) => (id.startsWith('rom:') ? romGame(id) : gameOfStatic(id));
+// 🙈 a parent can hide the whole Classic games section from kids (separate from per-game show/hide).
+const CLASSIC_HIDDEN_KEY = 'classic_games_hidden';
+const classicHidden = (): boolean => getSetting(CLASSIC_HIDDEN_KEY, '0') === '1';
 
 const memberOf = (id: string) => db.prepare('SELECT * FROM family_members WHERE id = ?').get(id) as FamilyMember | undefined;
 /** An unlock a parent 🔒 locked again (game_unlock_ends) doesn't count any more. */
@@ -56,7 +67,7 @@ function rules(): Record<string, GameRule> {
   }
   const n = (v: unknown, d: number) => (v !== undefined && v !== null && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 10000 ? Math.round(Number(v)) : d);
   return Object.fromEntries(
-    GAMES.map((g) => [
+    listGames().map((g) => [
       g.id,
       {
         cost: n(saved[g.id]?.cost, g.stars),
@@ -93,7 +104,7 @@ gamesRouter.put('/settings', requireAdmin, (req, res) => {
   if (!isParentRequest(req, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only a parent can set what games cost' });
   const cur = rules();
   const b = (req.body ?? {}) as Record<string, Partial<GameRule>>;
-  for (const g of GAMES) {
+  for (const g of listGames()) {
     const x = b[g.id];
     if (!x) continue;
     if (x.hidden !== undefined) cur[g.id].hidden = x.hidden === true;
@@ -144,7 +155,12 @@ function shelf(m: FamilyMember) {
     token_balance: m.token_balance,
     plays_free: free(m),
     // 🙈 games a parent hid aren't shown to kids at all
-    games: GAMES.filter((g) => free(m) || !all[g.id]?.hidden).map((g) => {
+    games: listGames()
+      .filter((g) => {
+        if (g.id.startsWith('rom:') && !free(m) && classicHidden()) return false; // whole classic section hidden
+        return free(m) || !all[g.id]?.hidden; // per-game show/hide
+      })
+      .map((g) => {
       const owned = free(m) || mine.has(g.id);
       const plays = passes.get(g.id) ?? null;
       const r = ruleOf(g.id);
@@ -157,7 +173,7 @@ function shelf(m: FamilyMember) {
 /** GET /?member=ID — the games, which ones they can play, their best scores. */
 gamesRouter.get('/', (req, res) => {
   const m = memberOf(String(req.query.member ?? ''));
-  if (!m) return res.json({ token_balance: 0, plays_free: false, games: GAMES.map((g) => ({ ...g, unlocked: false, best: null })) });
+  if (!m) return res.json({ token_balance: 0, plays_free: false, games: listGames().map((g) => ({ ...g, unlocked: false, best: null })) });
   res.json(shelf(m));
 });
 
@@ -169,7 +185,7 @@ gamesRouter.post('/:memberId/unlock', (req, res) => {
   const { memberId } = req.params;
   const { game_id, acting_member_id } = req.body ?? {};
   if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
-  const g = gameOf(String(game_id));
+  const g = findGame(String(game_id));
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (hiddenFor(m, g.id)) return res.status(403).json({ error: HIDDEN_MSG });
@@ -208,7 +224,7 @@ gamesRouter.post('/:memberId/refund', (req, res) => {
   if (!row) return res.status(404).json({ error: 'not found' });
   db.transaction(() => {
     db.prepare('DELETE FROM game_unlocks WHERE family_member_id = ? AND game_id = ?').run(memberId, game_id);
-    const g = gameOf(String(game_id));
+    const g = findGame(String(game_id));
     if (row.currency === 'tokens') addTokens(memberId, row.stars, `🎮 Refund: ${g ? `${g.emoji} ${g.name}` : game_id}`, typeof acting_member_id === 'string' ? acting_member_id : null);
     else db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(row.stars, memberId);
   })();
@@ -224,7 +240,7 @@ gamesRouter.post('/:memberId/relock', (req, res) => {
   const { memberId } = req.params;
   const { game_id, plays, acting_member_id } = req.body ?? {};
   if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
-  const g = gameOf(String(game_id));
+  const g = findGame(String(game_id));
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   const row = db.prepare(`SELECT unlocked_at FROM game_unlocks u WHERE family_member_id = ? AND game_id = ? AND ${NOT_ENDED}`).get(m.id, g.id) as { unlocked_at: string } | undefined;
@@ -262,7 +278,7 @@ gamesRouter.post('/:memberId/passes', (req, res) => {
   const { memberId } = req.params;
   const { game_id, plays, mode, acting_member_id } = req.body ?? {};
   if (!isParentRequest(req, acting_member_id)) return res.status(403).json({ error: 'Only a parent can do that' });
-  const g = gameOf(String(game_id));
+  const g = findGame(String(game_id));
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   const n = Math.round(Number(plays));
@@ -287,7 +303,7 @@ gamesRouter.post('/:memberId/passes', (req, res) => {
 gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
   const { gameId, memberId } = req.params;
   if (!isSelfOrParent(req, memberId, req.body?.acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can play as them' });
-  const g = gameOf(gameId);
+  const g = findGame(gameId);
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (hiddenFor(m, g.id)) return res.status(403).json({ error: HIDDEN_MSG });
@@ -311,7 +327,7 @@ gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
  * already switched on in their saved game from before extras had a price (that stays theirs).
  */
 function featuresFor(m: FamilyMember, gameId: string, save: unknown) {
-  const g = gameOf(gameId);
+  const g = findGame(gameId);
   const bought = new Set(
     (db.prepare('SELECT feature FROM game_features WHERE family_member_id = ? AND game_id = ?').all(m.id, gameId) as Array<{ feature: string }>).map((x) => x.feature)
   );
@@ -337,7 +353,7 @@ function featuresFor(m: FamilyMember, gameId: string, save: unknown) {
 /** 💎 The token shop: each item's price for them (parents: free) and the coins it gives. */
 function shopFor(m: FamilyMember, gameId: string) {
   const prices = ruleOf(gameId).shop;
-  return Object.fromEntries((gameOf(gameId)?.shop ?? []).map((f) => [f.id, { name: f.name, cost: free(m) ? 0 : (prices[f.id] ?? f.cost), coins: f.coins ?? 0 }]));
+  return Object.fromEntries((findGame(gameId)?.shop ?? []).map((f) => [f.id, { name: f.name, cost: free(m) ? 0 : (prices[f.id] ?? f.cost), coins: f.coins ?? 0 }]));
 }
 
 /**
@@ -348,7 +364,7 @@ gamesRouter.post('/:gameId/play/:memberId/buy', (req, res) => {
   const { gameId, memberId } = req.params;
   const { item, acting_member_id } = req.body ?? {};
   if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
-  const g = gameOf(gameId);
+  const g = findGame(gameId);
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (!mayPlay(m, g.id)) return res.status(403).json({ error: 'Unlock it first' });
@@ -374,7 +390,7 @@ gamesRouter.post('/:gameId/play/:memberId/feature', (req, res) => {
   const { gameId, memberId } = req.params;
   const { feature, acting_member_id } = req.body ?? {};
   if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
-  const g = gameOf(gameId);
+  const g = findGame(gameId);
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   const f = g.features?.find((x) => x.id === feature);
@@ -425,7 +441,7 @@ export interface PrizeStatus {
 
 /** Their prize powers in this game — and any they've just earned get handed out (once per subject per grade). */
 function prizesFor(m: FamilyMember, gameId: string): Record<string, PrizeStatus> {
-  const g = gameOf(gameId);
+  const g = findGame(gameId);
   const rs = ruleOf(gameId).prizes;
   const out: Record<string, PrizeStatus> = {};
   for (const p of g?.prizes ?? []) {
@@ -471,7 +487,7 @@ gamesRouter.post('/:gameId/play/:memberId/prize', (req, res) => {
   const { gameId, memberId } = req.params;
   const { prize, acting_member_id } = req.body ?? {};
   if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can play as them' });
-  const g = gameOf(gameId);
+  const g = findGame(gameId);
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (!mayPlay(m, g.id)) return res.status(403).json({ error: 'Unlock it first' });
@@ -509,7 +525,7 @@ gamesRouter.get('/letter-maze/words/:memberId', (req, res) => {
 
 /** GET /:gameId/play/:memberId — their saved progress, best score and the family's top runs. */
 gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
-  const g = gameOf(req.params.gameId);
+  const g = findGame(req.params.gameId);
   const m = memberOf(req.params.memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (!mayPlay(m, g.id)) return res.status(403).json({ error: `Unlock ${g.name} first (${ruleOf(g.id).cost} 💎), or ask a parent for some plays` });
@@ -535,7 +551,7 @@ gamesRouter.post('/:gameId/play/:memberId/result', (req, res) => {
   const { gameId, memberId } = req.params;
   const { score, detail, save, acting_member_id } = req.body ?? {};
   if (!isSelfOrParent(req, memberId, acting_member_id)) return res.status(403).json({ error: 'Only they or a parent can play as them' });
-  const g = gameOf(gameId);
+  const g = findGame(gameId);
   const m = memberOf(memberId);
   if (!g || !m) return res.status(404).json({ error: 'not found' });
   if (!mayPlay(m, g.id)) return res.status(403).json({ error: 'Unlock it first' });
@@ -560,4 +576,88 @@ gamesRouter.post('/:gameId/play/:memberId/result', (req, res) => {
     ).run(m.id, g.id, data, now);
   }
   res.json({ best: best(m.id, g.id) });
+});
+
+// ========================= 🎮 Classic games (uploaded ROMs) =========================
+// A parent uploads .nes / .sfc / .smc files; each becomes a game with id `rom:<id>` (above), so the
+// normal 💎 price, show/hide and unlock/plays all apply. Files are kept forever (remove = archive).
+
+/** POST /roms — a parent uploads one ROM (the file is the raw body; name in the X-Filename header). */
+gamesRouter.post('/roms', requireAdmin, express.raw({ type: '*/*', limit: '16mb' }), (req, res) => {
+  const name = path.basename(decodeURIComponent(String(req.get('x-filename') ?? ''))).replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 200);
+  if (!name) return res.status(400).json({ error: 'Missing X-Filename' });
+  const buf = req.body;
+  if (!Buffer.isBuffer(buf) || buf.length < 16) return res.status(400).json({ error: 'Send the ROM file as the request body (empty or too small)' });
+  const system = detectSystem(name, buf);
+  if (!system) return res.status(400).json({ error: `${name}: not a supported ROM. Use .nes (NES) or .sfc / .smc (SNES).` });
+  const rom = addRom(buf, name, system);
+  res.json(romToGame(rom));
+});
+
+/** GET /roms — a parent's full list (including archived), for managing them. */
+gamesRouter.get('/roms', requireAdmin, (_req, res) => {
+  res.json(listRoms(true).map((r) => ({ id: r.id, title: r.title, system: r.system, size: r.size, archived: r.hidden === 1, sort: r.sort, created_at: r.created_at })));
+});
+
+/** PUT /roms/:id — a parent renames, archives/unarchives, or reorders a classic game. */
+gamesRouter.put('/roms/:id', requireAdmin, (req, res) => {
+  const b = (req.body ?? {}) as { title?: string; archived?: boolean; sort?: number };
+  const r = updateRom(req.params.id, { title: b.title, hidden: b.archived, sort: b.sort });
+  if (!r) return res.status(404).json({ error: 'not found' });
+  res.json({ id: r.id, title: r.title, system: r.system, size: r.size, archived: r.hidden === 1, sort: r.sort });
+});
+
+/** GET /roms/:id/meta — what the player needs to boot (no ROM bytes, so no token check). */
+gamesRouter.get('/roms/:id/meta', (req, res) => {
+  const r = romById(req.params.id);
+  if (!r || r.hidden) return res.status(404).json({ error: 'not found' });
+  res.json({ id: r.id, title: r.title, system: r.system, core: SYSTEM_CORE[r.system] });
+});
+
+/**
+ * GET /roms/:id/rom?member=ID — the ROM bytes for the emulator. Gated exactly like starting any game:
+ * a parent plays free; a kid must own it or spend one 🎟️ play (and it counts toward the daily limit).
+ */
+gamesRouter.get('/roms/:id/rom', (req, res) => {
+  const rom = romById(req.params.id);
+  if (!rom || rom.hidden) return res.status(404).json({ error: 'not found' });
+  const m = memberOf(String(req.query.member ?? ''));
+  if (!m) return res.status(403).json({ error: 'Pick who is playing first' });
+  const gid = `rom:${rom.id}`;
+  const over = limitHit(m.id, `game:${gid}`);
+  if (over) return res.status(429).json({ error: over, limit: true });
+  if (!(free(m) || unlockedFor(m).has(gid))) {
+    const r = db.prepare('UPDATE game_passes SET plays_left = plays_left - 1, updated_at = ? WHERE family_member_id = ? AND game_id = ? AND plays_left > 0').run(new Date().toISOString(), m.id, gid);
+    if (r.changes === 0) return res.status(403).json({ error: `Unlock ${rom.title} to play — no plays left`, locked: true });
+  }
+  countTime(m.id, `game:${gid}`);
+  const file = romFilePath(rom);
+  if (!fs.existsSync(file)) return res.status(410).json({ error: 'The ROM file is missing on the server' });
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Cache-Control', 'no-store');
+  fs.createReadStream(file).pipe(res);
+});
+
+/** GET /roms/:id/can-play?member=ID — may they play (owned, or a play left)? Does NOT spend a play. */
+gamesRouter.get('/roms/:id/can-play', (req, res) => {
+  const rom = romById(req.params.id);
+  if (!rom || rom.hidden) return res.status(404).json({ error: 'not found' });
+  const m = memberOf(String(req.query.member ?? ''));
+  if (!m) return res.json({ ok: false, reason: 'Pick who is playing first' });
+  const gid = `rom:${rom.id}`;
+  const over = limitHit(m.id, `game:${gid}`);
+  if (over) return res.json({ ok: false, reason: over, limit: true });
+  const owned = free(m) || unlockedFor(m).has(gid);
+  const ok = owned || (passesFor(m.id).get(gid) ?? 0) > 0;
+  res.json({ ok, owned });
+});
+
+/** GET /classic-section — is the whole Classic games section hidden from kids? (parents still see it) */
+gamesRouter.get('/classic-section', (_req, res) => res.json({ hidden: getSetting('classic_games_hidden', '0') === '1' }));
+
+/** PUT /classic-section { hidden } — a parent hides/shows the whole Classic games section. */
+gamesRouter.put('/classic-section', requireAdmin, (req, res) => {
+  const hidden = (req.body as { hidden?: boolean })?.hidden === true;
+  setSetting('classic_games_hidden', hidden ? '1' : '0');
+  res.json({ hidden });
 });

@@ -1708,6 +1708,16 @@ db.exec(`
     granted_at TEXT NOT NULL,
     UNIQUE (family_member_id, game_id, prize, subject, grade)
   );
+  CREATE TABLE IF NOT EXISTS game_roms (
+    id TEXT PRIMARY KEY,
+    file TEXT NOT NULL,
+    title TEXT NOT NULL,
+    system TEXT NOT NULL DEFAULT 'nes',
+    size INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS game_prize_uses (
     id TEXT PRIMARY KEY,
     family_member_id TEXT NOT NULL,

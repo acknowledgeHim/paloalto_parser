@@ -3105,6 +3105,26 @@ kbd { padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2p
 .games-page__kid { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border, rgba(0,0,0,0.1)); }
 .games-page__kid-name { display: inline-flex; align-items: center; gap: 8px; min-width: 12em; }
 
+/* 🎮 Classic games (NES/SNES) — parent manager + the in-browser player */
+.classic-admin__section { margin: 8px 0 12px; }
+.classic-admin__upload { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 12px; }
+.classic-admin__list { display: flex; flex-direction: column; }
+.classic-admin__row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border, rgba(0,0,0,0.1)); }
+.classic-admin__sys { min-width: 5.5em; font-weight: 600; }
+.classic-admin__title { flex: 1 1 10em; min-width: 8em; }
+input.classic-admin__title { min-height: var(--tap-min); padding: 0 10px; border-radius: 10px; border: 1px solid var(--border, rgba(0,0,0,0.2)); background: var(--surface, #fff); color: inherit; }
+.classic-admin__moves { display: inline-flex; gap: 6px; }
+.classic-admin__moves button { font-size: 1.2em; }
+.classic-admin__archived { margin-top: 10px; }
+.classic-admin__archived summary { cursor: pointer; color: var(--muted, #667); }
+
+.classic-game { display: flex; flex-direction: column; gap: 10px; }
+.classic-game__bar { display: flex; align-items: center; gap: 12px; }
+.classic-game__bar strong { font-size: 1.2em; }
+.classic-game__frame { width: 100%; height: min(80vh, 820px); min-height: 360px; border: 0; border-radius: 12px; background: #000; display: block; }
+.classic-game__msg { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.classic-game__hint { margin: 0; }
+
 /* ⛰️ Hill Hopper (games/) — the garage and the run */
 .hill-garage__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .hill-garage__driver { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }

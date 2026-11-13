@@ -6,6 +6,7 @@ import { TokenWallet } from '../components/TokenWallet.js';
 import { useCollapsibleSections } from '../hooks/useCollapsibleSections.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { earnText, prizeLeftText, type Prizes } from '../games/prizes.js';
+import { ClassicGamesAdmin } from '../games/ClassicGamesAdmin.js';
 
 interface ShelfGame {
   id: string;
@@ -179,7 +180,7 @@ export function GamesPage() {
                   <p>🎟️ {g.plays_left ? `${g.plays_left} play${g.plays_left === 1 ? '' : 's'} left` : 'No plays left'}</p>
                 )}
                 {g.unlocked && (
-                  <Link className="button" to={`/games/${g.id}`}>
+                  <Link className="button" to={g.id.startsWith('rom:') ? `/games/classic/${g.id.slice(4)}` : `/games/${g.id}`}>
                     ▶ Play
                   </Link>
                 )}
@@ -466,6 +467,14 @@ export function GamesPage() {
             {rulesNote && <span className="hint">{rulesNote}</span>}
           </div>
         </section>
+      )}
+      {isParent && (
+        <ClassicGamesAdmin
+          onChange={() => {
+            void load();
+            api.get<Record<string, GameRule>>('/games/settings').then(setRules).catch(() => {});
+          }}
+        />
       )}
       {error && <div className="settings-login__error">{error}</div>}
     </div>
