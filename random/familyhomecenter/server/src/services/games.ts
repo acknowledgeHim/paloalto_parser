@@ -51,8 +51,9 @@ export const GAMES: Game[] = [
       { id: 'glide', name: '🪂 Glider', cost: 5 },
     ],
     prizes: [
-      { id: 'flip-wheels', name: '🛞 Flip-proof wheels', blurb: 'Wheels on the roof too — land upside down and you just roll back over. You can never flip out!', unit: 'drive', subject: 'math', uses: 10 },
-      { id: 'drill', name: '⛏️ Drill', blurb: 'A drill on the front of your ride: press the dig key (↓ / S) or ⛏️ DIG to tunnel into the hill for a few seconds — secret treasure is buried inside (💎 🦴 🧰 👑 and fuel). Upgrade ⛏️ Drill time to dig longer.', unit: 'drive', subject: 'science', uses: 10 },
+      { id: 'flip-wheels', name: '🛞 Flip-proof wheels', blurb: 'Wheels on the roof too — land upside down and you just roll back over. You can never flip out!', unit: 'drive', subject: 'any', uses: 10 },
+      { id: 'drill', name: '⛏️ Drill', blurb: 'A drill on the front of your ride: press the dig key (↓ / S) or ⛏️ DIG to tunnel into the hill for a few seconds — secret treasure is buried inside (💎 🦴 🧰 👑 and fuel). Upgrade ⛏️ Drill time to dig longer.', unit: 'drive', subject: 'any', uses: 10 },
+      { id: 'weather', name: '🌦️ Weather', blurb: 'Drive in wild weather for more coins: 🌪️ tornadoes that toss your car, 🌧️ downpours, ❄️ black ice and snow drifts, 🔥 overheating, 🌋 earthquake cracks and 🌙 night. Pick the ones you want, 🎲 random, or 🔀 mixed (it changes as you drive).', unit: 'drive', subject: 'any', uses: 10 },
     ],
   },
   {
@@ -63,7 +64,7 @@ export const GAMES: Game[] = [
     blurb:
       'Falling bricks: move and turn them as they drop, fill a row from side to side to clear it, and don’t let the pile reach the top. It speeds up as you go — big scores unlock new brick looks.',
     prizes: [
-      { id: 'laser', name: '🔫 Laser', blurb: 'Blast the bricks! Each game you get 3 laser shots (and one more every 10 rows) — the laser zaps every brick under the falling one.', unit: 'game', subject: 'grammar', uses: 10 },
+      { id: 'laser', name: '🔫 Laser', blurb: 'Blast the bricks! Each game you get 3 laser shots (and one more every 10 rows) — the laser zaps every brick under the falling one.', unit: 'game', subject: 'any', uses: 10 },
     ],
   },
   {
@@ -79,9 +80,9 @@ export const GAMES: Game[] = [
       { id: 'fun', name: '🎡 Fun places', cost: 5 },
     ],
     prizes: [
-      { id: 'moon', name: '🌙 Moon base', blurb: 'A town on the Moon: grey dust, rocks and icy craters under the stars — with a 🚀 moon bonus of extra coins to start.', unit: 'visit', subject: 'science', uses: 0 },
+      { id: 'moon', name: '🌙 Moon base', blurb: 'A town on the Moon: grey dust, rocks and icy craters under the stars — with a 🚀 moon bonus of extra coins to start.', unit: 'visit', subject: 'any', uses: 0 },
       { id: 'earth', name: '🌍 The whole Earth', blurb: 'A huge world: four big lands with oceans between them and great lakes. See the whole Earth, then zoom in to build on each land.', unit: 'visit', subject: 'any', uses: 0 },
-      { id: 'more-lands', name: '🗺️ 2 more lands', blurb: 'A 4th and 5th town to build.', unit: 'visit', subject: 'math', uses: 0 },
+      { id: 'more-lands', name: '🗺️ 2 more lands', blurb: 'A 4th and 5th town to build.', unit: 'visit', subject: 'any', uses: 0 },
     ],
     // Keep the building ids in sync with `token` in client/src/games/townLogic.ts.
     shop: [

@@ -18,7 +18,8 @@ import {
 } from './hillPhysics.js';
 import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
 import { Digger, buriedLook, lightRangeFor } from './hillDig.js';
-import { CROUCH, DINO, EGG_LIMIT, HAZARD_COINS, HAZARD_WORLDS, Hazards, sharkAt } from './hillHazards.js';
+import { WEATHER_INFO, Weather, WeatherTerrain, weatherBonus, type WeatherChoice } from './hillWeather.js';
+import { CROUCH, DINO, EGG_LIMIT, HAZARD_WORLDS, Hazards, hazardCoins, sharkAt } from './hillHazards.js';
 
 export interface Driver {
   id: string;
@@ -75,7 +76,7 @@ export interface RunResult {
   distance: number;
   coins: number;
   flips: number;
-  why: 'crash' | 'tipped' | 'fuel' | 'quit' | 'squashed' | 'zapped' | 'bumped';
+  why: 'crash' | 'tipped' | 'fuel' | 'quit' | 'squashed' | 'zapped' | 'bumped' | 'fell';
 }
 
 /** Vehicle pictures that already face right (most vehicle emoji face left, so they're mirrored). */
@@ -121,6 +122,8 @@ export function HillHopperRun({
   drill = false,
   digTime = 3,
   lights = 0,
+  weather = null,
+  obstacleCount = 1,
   best,
   controls,
   onEnd,
@@ -143,6 +146,10 @@ export function HillHopperRun({
   digTime?: number;
   /** 🔦 Headlights upgrade level: see farther underground (and in the dark) */
   lights?: number;
+  /** 🌦️ the weather prize power, if it's on for this drive */
+  weather?: WeatherChoice | null;
+  /** ⚠️ ×N obstacles (1–10) */
+  obstacleCount?: number;
   best: number | null;
   controls: Controls;
   onEnd: (r: RunResult) => void;
@@ -206,13 +213,14 @@ export function HillHopperRun({
   useEffect(() => {
     const cv = canvas.current!;
     const ctx = cv.getContext('2d')!;
-    const terrain = new Terrain(world);
+    // 🌋 with earthquakes the ground can crack open (the physics and the drawing see the cracks)
+    const terrain = weather ? new WeatherTerrain(world) : new Terrain(world);
     const stats = statsFor(upgrades, world);
     const look = LOOKS[world.id] ?? LOOKS.hills;
     const starField = Array.from({ length: 70 }, (_, i) => [((i * 7919) % 1000) / 1000, ((i * 104729) % 1000) / 1000, (i % 3) + 1]);
     const car: Car = newCar(terrain);
     const startX = car.x;
-    const hz = obstacles && HAZARD_WORLDS[world.id] ? new Hazards(world, terrain, startX, jump && world.id === 'dino') : null;
+    const hz = obstacles && HAZARD_WORLDS[world.id] ? new Hazards(world, terrain, startX, jump && world.id === 'dino', obstacleCount) : null;
     const jumpG = Math.sqrt(2 * world.gravity * JUMP_HEIGHT * (1 + JUMP_PER_LEVEL * (upgrades.jump ?? 0)));
     // 🪂 glide time per trip into the air
     const glideMax = GLIDE_TIME + GLIDE_PER_LEVEL * (upgrades.glide ?? 0);
@@ -239,7 +247,10 @@ export function HillHopperRun({
       }
     };
     // ⛏️ with the drill: tunnels, and secret things buried in the hills
-    const digger = drill ? new Digger(terrain, world, startX, digTime) : null;
+    const digger = drill ? new Digger(terrain instanceof WeatherTerrain ? new Terrain(world) : terrain, world, startX, digTime) : null;
+    // 🌦️ weather (pays extra coins)
+    const wx = weather ? new Weather(world, terrain, startX, weather, jump || glide, stats.maxSpeed) : null;
+    let dark: HTMLCanvasElement | null = null;
     let jumpReady = 0; // seconds until another jump is allowed
     let shake = 0;
     let zoom = 1;
@@ -273,14 +284,20 @@ export function HillHopperRun({
     const finish = (why: RunResult['why']) => {
       if (ended) return;
       ended = true;
-      onEnd({ distance: Math.max(0, Math.floor(maxX - startX)), coins: hz ? Math.round(coins * HAZARD_COINS) : coins, flips, why });
+      const mul = (hz ? hazardCoins(obstacleCount) : 1) * (weather ? weatherBonus(weather) : 1);
+      onEnd({ distance: Math.max(0, Math.floor(maxX - startX)), coins: Math.round(coins * mul), flips, why });
     };
 
     const say = (text: string) => (toast = { text, until: performance.now() + 1600 });
 
     const sim = () => {
       const p = pedal.current;
-      const input = p.gas && !p.brake ? 1 : p.brake && !p.gas ? -1 : 0;
+      let input = p.gas && !p.brake ? 1 : p.brake && !p.gas ? -1 : 0;
+      // 🌦️ weather: slippery spots, overheating, cracks opening, tornadoes
+      const ws = wx ? wx.step(car, p.gas, DT, digger?.underground ?? false) : null;
+      if (ws?.say) say(ws.say);
+      if (ws?.fell) return finish('fell');
+      if (ws?.noGas && input > 0) input = 0;
       if (input !== 0) started = true;
       if (started) fuel = Math.max(0, fuel - FUEL_PER_SEC * world.fuelBurn * DT);
       // ⛏️ dig: underground the drill moves the car (no bumps, no flips); it pops back out by itself
@@ -347,7 +364,17 @@ export function HillHopperRun({
         car.vy = Math.max(car.vy, 0) + jumpG;
         for (const w of car.wheels) w.vy = Math.max(w.vy, 0) + jumpG;
       }
+      const grip0 = stats.grip;
+      stats.grip = grip0 * (ws?.gripMul ?? 1);
       const r = step(car, terrain, stats, input, fuel > 0, DT);
+      stats.grip = grip0;
+      if (ws?.drag) {
+        // ❄️ deep snow holds you back
+        const k = Math.exp(-ws.drag * DT);
+        car.vx *= k;
+        for (const w of car.wheels) w.vx *= k;
+      }
+      wx?.afterStep(car, DT);
       if (r.crashed && flipWheels) {
         // 🛞 wheels on the roof: roll back over and keep going
         rightCar(car, terrain);
@@ -355,7 +382,7 @@ export function HillHopperRun({
         airTime = 0;
         shake = Math.max(shake, 0.25);
         say('🛞 Flip-proof wheels — back on your wheels!');
-      } else if (r.crashed) return finish(car.tipped > 1 ? 'tipped' : 'crash');
+      } else if (r.crashed) return finish(terrain instanceof WeatherTerrain && terrain.falling(car.x) ? 'fell' : car.tipped > 1 ? 'tipped' : 'crash');
       if (hz) {
         const h = hz.update(car, DT, startX);
         coins += h.coins;
@@ -686,6 +713,7 @@ export function HillHopperRun({
       // 🦖 the ground shakes for a moment when a dinosaur lands nearby
       shake = 0;
       if (hz) for (const d of hz.dinos) if (Math.abs(d.x - car.x) < 25) shake = Math.max(shake, Math.max(0, 0.35 - (hz.time - d.landed)) * 0.6);
+      if (wx?.shake) shake = Math.max(shake, Math.min(0.35, wx.shake * 0.3));
       const shakeY = shake ? Math.sin(performance.now() / 18) * shake * S : 0;
       const sy = (y: number) => H * (0.58 + (1 - zoom) * 0.4) - (y - camY) * S + shakeY;
 
@@ -738,7 +766,7 @@ export function HillHopperRun({
       const x1 = camX + W / S + 1;
       ctx.beginPath();
       ctx.moveTo(sx(x0), H + 10);
-      for (let x = x0; x <= x1; x += 0.4) ctx.lineTo(sx(x), sy(terrain.h(x)));
+      for (let x = x0; x <= x1; x += 0.4) ctx.lineTo(sx(x), sy(terrain.seen(x)));
       ctx.lineTo(sx(x1), H + 10);
       ctx.closePath();
       const dirt = ctx.createLinearGradient(0, sy(car.y), 0, H + sy(car.y));
@@ -747,7 +775,7 @@ export function HillHopperRun({
       ctx.fillStyle = dirt;
       ctx.fill();
       ctx.beginPath();
-      for (let x = x0; x <= x1; x += 0.4) (x === x0 ? ctx.moveTo : ctx.lineTo).call(ctx, sx(x), sy(terrain.h(x)));
+      for (let x = x0; x <= x1; x += 0.4) (x === x0 ? ctx.moveTo : ctx.lineTo).call(ctx, sx(x), sy(terrain.seen(x)));
       ctx.strokeStyle = look.edge;
       ctx.lineWidth = Math.max(4, S * 0.22);
       ctx.lineJoin = 'round';
@@ -899,6 +927,57 @@ export function HillHopperRun({
         ctx.fillText('🪂', sx(car.x), sy(car.y + 2.6));
       }
 
+      // 🌦️ weather on the ground: snow drifts, black ice (hard to see!), tornadoes
+      if (wx && terrain instanceof WeatherTerrain) {
+        for (const d of terrain.drifts) {
+          if (d.x + d.w < x0 || d.x > x1) continue;
+          ctx.beginPath();
+          ctx.moveTo(sx(d.x), sy(terrain.base(d.x)));
+          for (let x = d.x; x <= d.x + d.w; x += 0.25) ctx.lineTo(sx(x), sy(terrain.h(x)));
+          for (let x = d.x + d.w; x >= d.x; x -= 0.5) ctx.lineTo(sx(x), sy(terrain.base(x)));
+          ctx.closePath();
+          ctx.fillStyle = '#f4f8ff';
+          ctx.fill();
+          ctx.strokeStyle = '#c5d7ee';
+          ctx.lineWidth = Math.max(2, S * 0.08);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(210,235,255,0.3)';
+        ctx.lineWidth = Math.max(3, S * 0.2);
+        for (const pch of wx.ice) {
+          if (pch.x + pch.w < x0 || pch.x > x1) continue;
+          ctx.beginPath();
+          for (let x = pch.x; x <= pch.x + pch.w; x += 0.3) (x === pch.x ? ctx.moveTo : ctx.lineTo).call(ctx, sx(x), sy(terrain.h(x)) - S * 0.05);
+          ctx.stroke();
+        }
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        for (const tor of wx.tornados) {
+          if (tor.gone > 1.5 || tor.x < x0 - 4) continue;
+          if (tor.x > x1 + 3) {
+            const ahead = tor.x - car.x;
+            if (ahead < 70 && !tor.used) {
+              ctx.font = 'bold 16px system-ui, sans-serif';
+              ctx.fillStyle = 'rgba(0,0,0,0.45)';
+              ctx.fillRect(W - 112, H * 0.5 - 18, 104, 36);
+              ctx.fillStyle = '#fff';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(`🌪️ ${Math.round(ahead)} m ▶`, W - 60, H * 0.5);
+              ctx.textBaseline = 'bottom';
+            }
+            continue;
+          }
+          const wob = Math.sin(performance.now() / 160 + tor.phase) * 0.35;
+          ctx.save();
+          ctx.globalAlpha = tor.gone ? Math.max(0, 1 - tor.gone / 1.5) : 0.9;
+          ctx.font = `${Math.round(S * 4.4)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+          ctx.fillStyle = '#000';
+          ctx.fillText('🌪️', sx(tor.x + wob), sy(terrain.h(tor.x)) + S * 0.3);
+          ctx.restore();
+        }
+        ctx.textBaseline = 'alphabetic';
+      }
+
       // The car: springs, wheels, body, driver.
       for (const w of car.wheels) {
         const a = bodyPoint(car, w.ax, w.ay + 0.25);
@@ -1045,6 +1124,94 @@ export function HillHopperRun({
       ctx.restore();
 
       if (hz) drawHazards(x0, x1, sx, sy, S, W, H);
+      // 🌦️ weather in the air: rain, snow, heat haze, the dark
+      if (wx) {
+        const now = performance.now() / 1000;
+        const cx = sx(car.x);
+        const cy = sy(car.y);
+        if (wx.rainFall > 0.02) {
+          const n = Math.round((70 + 200 * wx.downpour) * wx.rainFall);
+          ctx.strokeStyle = 'rgba(190,210,255,0.55)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let k = 0; k < n; k++) {
+            const fx = ((k * 0.618 + now * 0.9 * (1 + (k % 3) * 0.2)) % 1) * (W + 60) - 30;
+            const fy = (((k * 0.3819 + now * 1.6) % 1) * (H + 40)) - 20;
+            ctx.moveTo(fx, fy);
+            ctx.lineTo(fx - 6, fy + 16);
+          }
+          ctx.stroke();
+          if (wx.downpour > 0.01) {
+            // 🌫️ so heavy you can only see close by
+            const fog = ctx.createRadialGradient(cx, cy, S * 3, cx, cy, S * 9);
+            fog.addColorStop(0, 'rgba(130,140,155,0)');
+            fog.addColorStop(1, `rgba(130,140,155,${0.82 * wx.downpour})`);
+            ctx.fillStyle = fog;
+            ctx.fillRect(0, 0, W, H);
+          }
+        }
+        if (wx.snowFall > 0.02) {
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          const n = Math.round(110 * wx.snowFall);
+          for (let k = 0; k < n; k++) {
+            const fx = ((k * 0.618 + Math.sin(now * 0.8 + k) * 0.01 + now * 0.05) % 1) * W;
+            const fy = ((k * 0.3819 + now * 0.18 * (1 + (k % 4) * 0.25)) % 1) * H;
+            ctx.beginPath();
+            ctx.arc(fx, fy, 1.5 + (k % 3), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        if (wx.is('heat') || wx.hot > 0) {
+          ctx.fillStyle = 'rgba(255,120,0,0.08)';
+          ctx.fillRect(0, 0, W, H);
+        }
+        if (wx.hot > 0) {
+          ctx.font = `${Math.round(S * 1.4)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#000';
+          ctx.fillText('💨', cx + Math.sin(now * 6) * S * 0.3, cy - S * (1.6 + ((now * 1.5) % 1)));
+        }
+        if (wx.darkness > 0.02) {
+          // 🌙 dark, but for the 🔦 headlights shining ahead and a little glow round the car
+          if (!dark || dark.width !== cv.width || dark.height !== cv.height) {
+            dark = document.createElement('canvas');
+            dark.width = cv.width;
+            dark.height = cv.height;
+          }
+          const dc = dark.getContext('2d')!;
+          const k = cv.width / W;
+          dc.setTransform(k, 0, 0, k, 0, 0);
+          dc.globalCompositeOperation = 'source-over';
+          dc.clearRect(0, 0, W, H);
+          dc.fillStyle = `rgba(4,8,26,${0.9 * wx.darkness})`;
+          dc.fillRect(0, 0, W, H);
+          dc.globalCompositeOperation = 'destination-out';
+          const reach = (5 + 2.5 * lights) * S;
+          const nose = bodyPoint(car, 1.4, 0.1);
+          const nx = sx(nose.x);
+          const ny = sy(nose.y);
+          const a = -car.a;
+          const beam = dc.createRadialGradient(nx, ny, 0, nx, ny, reach);
+          beam.addColorStop(0, 'rgba(0,0,0,1)');
+          beam.addColorStop(0.7, 'rgba(0,0,0,0.85)');
+          beam.addColorStop(1, 'rgba(0,0,0,0)');
+          dc.fillStyle = beam;
+          dc.beginPath();
+          dc.moveTo(nx, ny);
+          dc.arc(nx, ny, reach, a - 0.42, a + 0.42);
+          dc.closePath();
+          dc.fill();
+          const glow = dc.createRadialGradient(cx, cy, 0, cx, cy, S * 2.6);
+          glow.addColorStop(0, 'rgba(0,0,0,0.9)');
+          glow.addColorStop(1, 'rgba(0,0,0,0)');
+          dc.fillStyle = glow;
+          dc.fillRect(0, 0, W, H);
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.drawImage(dark, 0, 0);
+          ctx.restore();
+        }
+      }
 
       // 🌊 The sea, see-through, over everything below sea level.
       if (world.water != null) {
@@ -1081,7 +1248,7 @@ export function HillHopperRun({
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect(pad, pad + 32, 150, 26);
       ctx.fillStyle = '#fff';
-      ctx.fillText(`🪙 ${coins}${hz ? ` ×${HAZARD_COINS}` : ''}`, pad + 8, pad + 35);
+      ctx.fillText(`🪙 ${coins}${hz ? ` ×${hazardCoins(obstacleCount)}` : ''}`, pad + 8, pad + 35);
       if (glide) {
         // 🪂 glide left on this trip into the air
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -1116,6 +1283,25 @@ export function HillHopperRun({
           ctx.fillText(`DIG: ${digKeysOf(controls).map(keyName).join(' / ') || 'button'}`, x0d + 44, y0 + 6);
         }
         ctx.font = 'bold 18px system-ui, sans-serif';
+      }
+      if (wx) {
+        // 🌦️ the weather now, and the engine's 🌡️ temperature
+        const y0 = pad + (digger ? 66 : 36);
+        const x0w = W - pad - 170;
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(x0w, y0, 170, 26);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(wx.label(), x0w + 8, y0 + 3);
+        if (wx.is('heat') || wx.heat > 0.01 || wx.hot > 0) {
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          ctx.fillRect(x0w, y0 + 30, 170, 26);
+          ctx.fillStyle = wx.hot > 0 ? (Math.floor(performance.now() / 250) % 2 ? '#ff1744' : '#ff8a80') : wx.heat > 0.75 ? '#ff7043' : '#ffb74d';
+          ctx.fillRect(x0w + 38, y0 + 35, 126 * (wx.hot > 0 ? 1 : wx.heat), 16);
+          ctx.fillStyle = '#fff';
+          ctx.fillText('🌡️', x0w + 8, y0 + 33);
+        }
       }
       const dist = Math.max(0, Math.floor(maxX - startX));
       ctx.textAlign = 'right';

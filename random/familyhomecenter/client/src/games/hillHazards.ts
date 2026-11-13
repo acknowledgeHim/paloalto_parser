@@ -82,6 +82,9 @@ export function sharkAt(c: Critter, kind: CritterKind, sea: number) {
 }
 /** More coins for driving with obstacles on. */
 export const HAZARD_COINS = 1.5;
+/** ⚠️ ×N obstacles (1–10, picked in the garage): N times as many — and more coins for it */
+export const MAX_MANY = 10;
+export const hazardCoins = (many = 1) => Math.round((HAZARD_COINS + 0.15 * (Math.max(1, many) - 1)) * 100) / 100;
 
 export const DINO = { halfW: 1.7, h: 3.2 };
 const DINO_G = 8;
@@ -171,7 +174,9 @@ export class Hazards {
     private terrain: Terrain,
     startX: number,
     /** 🥚 eggs on the road (Dino Land with 🦘 Jump on) */
-    readonly withEggs = false
+    readonly withEggs = false,
+    /** ⚠️ ×N as many obstacles (gaps ÷ N, never too close together) */
+    readonly many = 1
   ) {
     this.rand = rng(world.seed * 31 + 5);
     this.placedTo = startX + 70;
@@ -200,7 +205,7 @@ export class Hazards {
     let coins = 0;
     let say: string | undefined;
     while (this.placedTo < car.x + 120) {
-      this.placedTo += this.between(k.gap);
+      this.placedTo += Math.max(12, this.between(k.gap) / this.many);
       if (k.move === 'leap') {
         // 🦈 only out at sea: somewhere the water's deep enough on both sides of the leap
         let tries = 0;
@@ -286,7 +291,7 @@ export class Hazards {
       if (m.charge <= 0 && m.aim) {
         m.nuts.push({ x: m.aim.x, y: this.terrain.h(m.aim.x) + NUT_HEIGHT - 0.5, vy: 0, done: false });
         m.aim = null;
-        m.next = 2.2 + this.rand() * 1.8;
+        m.next = Math.max(0.7, (2.2 + this.rand() * 1.8) / Math.sqrt(this.many));
       }
     } else if (car.x > 40) {
       m.next -= dt;
@@ -338,7 +343,7 @@ export class Hazards {
       // More dinosaurs further along the road (110–190 m apart).
       while (this.placedTo < car.x + 120) {
         const prev = this.placedTo;
-        this.placedTo += 110 + this.rand() * 80;
+        this.placedTo += Math.max(30, (110 + this.rand() * 80) / this.many);
         // Somewhere flat-ish, so you can get going again after waiting for it to jump.
         for (let tries = 0; tries < 80 && !this.flat(this.placedTo); tries++) this.placedTo += 1.5;
         this.dinos.push({ x: this.placedTo, y: 0, vy: 0, wait: 0.6 + this.rand() * 1.6, awake: false, passed: false, landed: -9, chase: 0 });
@@ -443,7 +448,7 @@ export class Hazards {
           const d = Math.hypot(u.aim.x - u.x, u.aim.y - u.y) || 1;
           u.bolts.push({ x: u.x, y: u.y - 0.6, vx: ((u.aim.x - u.x) / d) * BOLT_SPEED, vy: ((u.aim.y - u.y) / d) * BOLT_SPEED, age: 0 });
           u.aim = null;
-          u.next = 2.0 + this.rand() * 1.6;
+          u.next = Math.max(0.7, (2.0 + this.rand() * 1.6) / Math.sqrt(this.many));
         }
       } else {
         u.next -= dt;

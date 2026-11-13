@@ -3836,3 +3836,5 @@ body.game-full-lock { overflow: hidden; }
 .dress-up__price-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .dress-up__price-row strong { min-width: 150px; }
 .dress-up__price-row select { min-height: 40px; }
+/* 🌦️ Hill Hopper weather picks */
+.hill-weather__picks { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }

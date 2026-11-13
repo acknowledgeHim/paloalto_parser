@@ -138,6 +138,10 @@ export class Terrain {
   slope(x: number): number {
     return (this.h(x + 0.05) - this.h(x - 0.05)) / 0.1;
   }
+  /** The ground as drawn (the same as h, unless something like an open 🌋 crack is only for show). */
+  seen(x: number): number {
+    return this.h(x);
+  }
 }
 
 // ---------- things to pick up ----------

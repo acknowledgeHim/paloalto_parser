@@ -5,11 +5,12 @@ import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
 import { digTimeFor } from './hillDig.js';
+import { DEFAULT_WEATHER, WEATHER_IDS, WEATHER_INFO, weatherBonus, type WeatherChoice } from './hillWeather.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
 import { PrizePanel, spendPrize, type Prizes } from './prizes.js';
 import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
-import { HAZARD_COINS, HAZARD_WORLDS } from './hillHazards.js';
+import { HAZARD_WORLDS, MAX_MANY, hazardCoins } from './hillHazards.js';
 import { DEFAULT_CONTROLS, HillHopperRun, JUMP_TAP_LABEL, digKeysOf, jumpKeysOf, jumpTapOf, keyName, type Controls, type JumpTap, type RunResult } from './HillHopperRun.js';
 
 interface Save {
@@ -29,8 +30,12 @@ interface Save {
   bests: Record<string, number>;
   /** ⚠️ worlds with obstacles turned on (every world has its own — hillHazards.ts) */
   obstacles: string[];
+  /** ⚠️ how many obstacles: ×1 (the usual) up to ×10 */
+  obstacle_x?: number;
   /** 🏆 prize powers to bring on the next drive (each drive uses one of each) */
   powers?: string[];
+  /** 🌦️ with the weather power: which weather (picked, 🎲 random, or 🔀 mixed) */
+  weather?: WeatherChoice;
 }
 interface PlayInfo {
   owned: boolean;
@@ -64,6 +69,7 @@ const WHY: Record<RunResult['why'], string> = {
   squashed: '🦖 Squashed by a dinosaur! Wait for it to jump, then zoom underneath.',
   zapped: '👽 Zapped by the aliens! When the saucer glows, speed up or slow down.',
   bumped: '🛡️ Out of shields! Watch for the warning — then wait, or zoom past.',
+  fell: '🌋 Fell into an earthquake crack! Speed over the small ones — jump (or glide) the big ones.',
 };
 const MOUSE_LABEL: Record<Controls['mouse'], string> = {
   pedals: 'Click / tap the on-screen pedals',
@@ -198,7 +204,9 @@ export function HillHopperPage() {
   /** 🔓 has this extra (old saves without prices: yes) */
   const has = (f: string) => info?.features?.[f]?.owned ?? true;
   /** ⛏️ the drill prize has been earned (or is free for a parent): show its key and upgrade */
-  const drillKnown = Boolean(info?.prizes?.drill && (info.prizes.drill.earned || info.prizes.drill.free || info.prizes.drill.ready)) || (save?.upgrades?.drill ?? 0) > 0;
+  const known = (id: string) => Boolean(info?.prizes?.[id] && (info.prizes[id].earned || info.prizes[id].free || info.prizes[id].ready));
+  const drillKnown = known('drill') || (save?.upgrades?.drill ?? 0) > 0;
+  const weatherKnown = known('weather');
   const buyFeature = async (f: string) => {
     if (!me) return;
     const x = info?.features?.[f];
@@ -230,12 +238,14 @@ export function HillHopperPage() {
         upgrades={save.upgrades}
         world={world}
         obstacles={has('obstacles') && save.obstacles.includes(world.id)}
+        obstacleCount={save.obstacle_x ?? 1}
         jump={has('jump') && (save.jump ?? false)}
         glide={has('glide') && (save.glide ?? false)}
         flipWheels={powersOn.includes('flip-wheels')}
         drill={powersOn.includes('drill')}
         digTime={digTimeFor(save.upgrades.drill ?? 0)}
         lights={save.upgrades.lights ?? 0}
+        weather={powersOn.includes('weather') ? (save.weather ?? DEFAULT_WEATHER) : null}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -337,6 +347,49 @@ export function HillHopperPage() {
         hint="Tick one to bring it on your next drive — each drive with it on uses one."
       />
 
+      {weatherKnown && (() => {
+        const wc = save.weather ?? DEFAULT_WEATHER;
+        const setW = (x: Partial<WeatherChoice>) => void store({ ...save, weather: { ...wc, ...x } });
+        return (
+          <section className="panel hill-weather">
+            <h2>🌦️ Weather</h2>
+            <p className="hint">With 🌦️ Weather ticked above, the drive gets harder — and pays more coins (now ×{weatherBonus(wc).toFixed(1)}).</p>
+            <div className="hill-garage__mouse" role="radiogroup" aria-label="Weather">
+              {(
+                [
+                  ['pick', '✅ The ones I pick (each one +20% coins)'],
+                  ['random', '🎲 Random — one of them, a new one each drive (+20%)'],
+                  ['mixed', '🔀 Mixed — it keeps changing as you drive, from clear skies to all of them at once (+50%)'],
+                ] as const
+              ).map(([m, label]) => (
+                <label key={m} className="privacy-toggle">
+                  <input type="radio" name="hill-weather-mode" checked={wc.mode === m} onChange={() => setW({ mode: m })} />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+            {wc.mode !== 'mixed' && (
+              <div className="hill-weather__picks">
+                {wc.mode === 'random' && <p className="hint">Random picks from the ones ticked (none ticked = from all of them).</p>}
+                {WEATHER_IDS.map((w) => (
+                  <label key={w} className="privacy-toggle">
+                    <input
+                      type="checkbox"
+                      checked={wc.picks.includes(w)}
+                      onChange={(e) => setW({ picks: e.target.checked ? [...new Set([...wc.picks, w])] : wc.picks.filter((x) => x !== w) })}
+                    />
+                    <span>
+                      {WEATHER_INFO[w].emoji} <strong>{WEATHER_INFO[w].name}</strong> <span className="hint">— {WEATHER_INFO[w].blurb}</span>
+                    </span>
+                  </label>
+                ))}
+                {wc.mode === 'pick' && wc.picks.length === 0 && <p className="hint">Tick at least one (none ticked = all of them).</p>}
+              </div>
+            )}
+          </section>
+        );
+      })()}
+
       <section className="panel">
         <h2>🌍 Worlds</h2>
         <div className="hill-garage__worlds">
@@ -353,7 +406,7 @@ export function HillHopperPage() {
                 {have && HAZARD_WORLDS[w.id] && !has('obstacles') && (
                   <div className="hill-garage__obstacles">
                     <span className="hint">
-                      {HAZARD_WORLDS[w.id].emoji} Obstacles — {HAZARD_WORLDS[w.id].text} 🪙 ×{HAZARD_COINS}
+                      {HAZARD_WORLDS[w.id].emoji} Obstacles — {HAZARD_WORLDS[w.id].text} 🪙 ×{hazardCoins(1)}
                     </span>
                     {unlockButton('obstacles')}
                     <span className="hint">(once, for every world)</span>
@@ -369,8 +422,20 @@ export function HillHopperPage() {
                       }
                     />
                     <span>
-                      {HAZARD_WORLDS[w.id].emoji} Add obstacles <span className="hint">— {HAZARD_WORLDS[w.id].text} 🪙 ×{HAZARD_COINS}</span>
+                      {HAZARD_WORLDS[w.id].emoji} Add obstacles <span className="hint">— {HAZARD_WORLDS[w.id].text} 🪙 ×{hazardCoins(save.obstacle_x ?? 1)}</span>
                     </span>
+                  </label>
+                )}
+                {have && HAZARD_WORLDS[w.id] && has('obstacles') && save.obstacles.includes(w.id) && (
+                  <label className="hill-garage__obstacles hill-garage__many">
+                    How many:{' '}
+                    <select value={save.obstacle_x ?? 1} onChange={(e) => void store({ ...save, obstacle_x: Number(e.target.value) })} aria-label="How many obstacles">
+                      {Array.from({ length: MAX_MANY }, (_, i) => i + 1).map((n) => (
+                        <option key={n} value={n}>
+                          {n === 1 ? '×1 (usual)' : `×${n}`}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 )}
                 {on ? (
@@ -480,7 +545,7 @@ export function HillHopperPage() {
 
       <section className="panel">
         <h2>🔧 Upgrades</h2>
-        {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : []), ...(drillKnown ? (['drill', 'lights'] as const) : [])].map((k) => {
+        {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : []), ...(drillKnown ? (['drill'] as const) : []), ...(drillKnown || weatherKnown || (save.upgrades.lights ?? 0) > 0 ? (['lights'] as const) : [])].map((k) => {
           const lvl = save.upgrades[k] ?? 0;
           const cost = UPGRADE_COST[lvl];
           return (
@@ -538,6 +603,7 @@ export function HillHopperPage() {
           <li>In the air, gas tips you back and brake tips you forward: land on your wheels, or do a flip for coins.</li>
           <li>Grab ⛽ cans before the tank runs dry. They get further apart the further you go.</li>
           <li>⛏️ With the 🏆 Drill on: on the ground, press the dig key (↓ / S unless you changed it) or the ⛏️ DIG button to tunnel into the hill. Underground, keep holding DIG to go deeper and hold BRAKE to come up; gas digs faster. Things are buried at different depths — steer the drill right into one to get it (you can miss!). After a few seconds (more with ⛏️ Drill time) it drills straight back up by itself — nothing is found on the way up. Things show up when your 🔦 headlights reach them: 💰 💎 🦴 🛢️ fuel, and deep down 🏺 🧰 👑. A ✨ on the hill means something rare is below.</li>
+          <li>🌦️ With the 🏆 Weather power: 🌪️ keep away from tornadoes (or get tossed!), 🌧️ slow down in a downpour, ❄️ watch for shiny black ice and jump or ⛏️ drill under deep snow drifts, 🔥 ease off before the 🌡️ fills up, 🌋 speed over small cracks and jump the big ones, 🌙 upgrade 🔦 Headlights to see farther at night.</li>
           <li>🦘 With Jump on (🎮 Controls): press the jump key (Space unless you changed it) or your jump button — the middle of the screen, an on-screen JUMP button or the mouse wheel click — to hop.</li>
         </ul>
       </section>
