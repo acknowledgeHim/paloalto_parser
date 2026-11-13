@@ -4,12 +4,13 @@ import { api, type Closet } from '../api/client.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { outfitOf, useOutfitCatalog } from '../utils/outfits.js';
+import { digTimeFor } from './hillDig.js';
 import { MAX_LEVEL, UPGRADE_COST, UPGRADE_KEYS, WORLDS, worldOf, type Upgrades } from './hillPhysics.js';
 import { startPlay } from './plays.js';
 import { PrizePanel, spendPrize, type Prizes } from './prizes.js';
 import { LimitNote, useActivityClock, useLimit } from '../utils/limits.js';
 import { HAZARD_COINS, HAZARD_WORLDS } from './hillHazards.js';
-import { DEFAULT_CONTROLS, HillHopperRun, JUMP_TAP_LABEL, jumpKeysOf, jumpTapOf, keyName, type Controls, type JumpTap, type RunResult } from './HillHopperRun.js';
+import { DEFAULT_CONTROLS, HillHopperRun, JUMP_TAP_LABEL, digKeysOf, jumpKeysOf, jumpTapOf, keyName, type Controls, type JumpTap, type RunResult } from './HillHopperRun.js';
 
 interface Save {
   coins: number;
@@ -52,6 +53,7 @@ const UPGRADE_LABEL: Record<keyof Upgrades, string> = {
   tank: '⛽ Fuel tank — drive longer between cans',
   jump: '🦘 Jump — hop higher',
   glide: '🪂 Glider — glide farther',
+  drill: '⛏️ Drill time — dig longer underground (+1 s a level)',
 };
 const WHY: Record<RunResult['why'], string> = {
   crash: '💥 Bonk! Your head hit the ground.',
@@ -75,7 +77,7 @@ export function HillHopperPage() {
   const catalog = useOutfitCatalog();
   const [info, setInfo] = useState<PlayInfo | null>(null);
   const [save, setSave] = useState<Save>({ coins: 0, upgrades: NO_UPGRADES, vehicle: null, controls: DEFAULT_CONTROLS, worlds: ['hills'], world: 'hills', bests: {}, obstacles: [] });
-  const [listening, setListening] = useState<'gas' | 'brake' | 'jump' | null>(null);
+  const [listening, setListening] = useState<'gas' | 'brake' | 'jump' | 'dig' | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
   /** What the avatar has on in 👕 Dress up (fresh from the server, not the profile loaded earlier). */
   const [worn, setWorn] = useState<Partial<Record<string, string>> | null>(null);
@@ -155,10 +157,17 @@ export function HillHopperPage() {
       const k = e.key.toLowerCase();
       setListening(null);
       if (k === 'escape') return;
-      const c = { ...save.controls, jumpKeys: jumpKeysOf(save.controls) };
-      const mine = listening === 'gas' ? 'gasKeys' : listening === 'brake' ? 'brakeKeys' : 'jumpKeys';
+      const c = { ...save.controls, jumpKeys: jumpKeysOf(save.controls), digKeys: digKeysOf(save.controls) };
+      const mine = listening === 'gas' ? 'gasKeys' : listening === 'brake' ? 'brakeKeys' : listening === 'dig' ? 'digKeys' : 'jumpKeys';
       // A key does one thing: take it off the other pedals.
-      const next = { ...c, gasKeys: c.gasKeys.filter((x) => x !== k), brakeKeys: c.brakeKeys.filter((x) => x !== k), jumpKeys: c.jumpKeys.filter((x) => x !== k), [mine]: [k] };
+      const next = {
+        ...c,
+        gasKeys: c.gasKeys.filter((x) => x !== k),
+        brakeKeys: c.brakeKeys.filter((x) => x !== k),
+        jumpKeys: c.jumpKeys.filter((x) => x !== k),
+        digKeys: c.digKeys.filter((x) => x !== k),
+        [mine]: [k],
+      };
       void store({ ...save, controls: next });
     };
     window.addEventListener('keydown', pick);
@@ -187,6 +196,8 @@ export function HillHopperPage() {
 
   /** 🔓 has this extra (old saves without prices: yes) */
   const has = (f: string) => info?.features?.[f]?.owned ?? true;
+  /** ⛏️ the drill prize has been earned (or is free for a parent): show its key and upgrade */
+  const drillKnown = Boolean(info?.prizes?.drill && (info.prizes.drill.earned || info.prizes.drill.free || info.prizes.drill.ready)) || (save?.upgrades?.drill ?? 0) > 0;
   const buyFeature = async (f: string) => {
     if (!me) return;
     const x = info?.features?.[f];
@@ -222,6 +233,7 @@ export function HillHopperPage() {
         glide={has('glide') && (save.glide ?? false)}
         flipWheels={powersOn.includes('flip-wheels')}
         drill={powersOn.includes('drill')}
+        digTime={digTimeFor(save.upgrades.drill ?? 0)}
         best={save.bests[world.id] || null}
         controls={save.controls}
         onEnd={(r) => {
@@ -419,12 +431,14 @@ export function HillHopperPage() {
             <span className="hint">With it on, there are ☁️ coins worth double and the odd ⛽ can up in the sky. Upgrade it to glide farther.</span>
           </span>
         </label>
-        {(['gas', 'brake', 'jump'] as const).filter((p) => p !== 'jump' || (save.jump && has('jump')) || (save.glide && has('glide'))).map((p) => {
-          const keys = p === 'gas' ? save.controls.gasKeys : p === 'brake' ? save.controls.brakeKeys : jumpKeysOf(save.controls);
+        {(['gas', 'brake', 'jump', 'dig'] as const)
+          .filter((p) => (p !== 'jump' || (save.jump && has('jump')) || (save.glide && has('glide'))) && (p !== 'dig' || drillKnown))
+          .map((p) => {
+          const keys = p === 'gas' ? save.controls.gasKeys : p === 'brake' ? save.controls.brakeKeys : p === 'dig' ? digKeysOf(save.controls) : jumpKeysOf(save.controls);
           return (
             <div key={p} className="hill-garage__upgrade">
               <span>
-                {p === 'gas' ? '🟢 Gas' : p === 'brake' ? '🔴 Brake' : '🦘 Jump'} key: <strong>{keys.length ? keys.map(keyName).join(' / ') : 'none'}</strong>
+                {p === 'gas' ? '🟢 Gas' : p === 'brake' ? '🔴 Brake' : p === 'dig' ? '⛏️ Dig' : '🦘 Jump'} key: <strong>{keys.length ? keys.map(keyName).join(' / ') : 'none'}</strong>
               </span>
               <button type="button" className="secondary" onClick={() => setListening(listening === p ? null : p)}>
                 {listening === p ? 'Press a key… (Esc = cancel)' : 'Change'}
@@ -464,7 +478,7 @@ export function HillHopperPage() {
 
       <section className="panel">
         <h2>🔧 Upgrades</h2>
-        {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : [])].map((k) => {
+        {[...UPGRADE_KEYS, ...(save.jump && has('jump') ? (['jump'] as const) : []), ...(save.glide && has('glide') ? (['glide'] as const) : []), ...(drillKnown ? (['drill'] as const) : [])].map((k) => {
           const lvl = save.upgrades[k] ?? 0;
           const cost = UPGRADE_COST[lvl];
           return (
@@ -521,6 +535,7 @@ export function HillHopperPage() {
           <li>The car is bouncy: gas lifts the nose, and too much on a hill flips you over backwards. Ease off, or tap the brake to bring the nose down. Landing on your head — or on your back — ends the run.</li>
           <li>In the air, gas tips you back and brake tips you forward: land on your wheels, or do a flip for coins.</li>
           <li>Grab ⛽ cans before the tank runs dry. They get further apart the further you go.</li>
+          <li>⛏️ With the 🏆 Drill on: on the ground, press the dig key (↓ / S unless you changed it) or the ⛏️ DIG button to tunnel into the hill. Gas digs faster, brake slower. After a few seconds (more with 🔧 Drill time) it drills straight back up by itself. Secret things are buried in the hills — 💰 💎 🦴 🛢️ fuel, and deep down 🏺 🧰 👑. A ✨ on the hill means something rare is below.</li>
           <li>🦘 With Jump on (🎮 Controls): press the jump key (Space unless you changed it) or your jump button — the middle of the screen, an on-screen JUMP button or the mouse wheel click — to hop.</li>
         </ul>
       </section>

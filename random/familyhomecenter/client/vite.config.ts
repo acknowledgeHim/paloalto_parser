@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process';
 /** Which commit this client was built from, shown in Settings → App version (so you can tell the Pi is up to date). */
 function buildId(): string {
   try {
-    return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8' }).trim();
+    return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
     return 'unknown';
   }

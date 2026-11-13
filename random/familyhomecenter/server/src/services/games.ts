@@ -52,7 +52,7 @@ export const GAMES: Game[] = [
     ],
     prizes: [
       { id: 'flip-wheels', name: '🛞 Flip-proof wheels', blurb: 'Wheels on the roof too — land upside down and you just roll back over. You can never flip out!', unit: 'drive', subject: 'math', uses: 10 },
-      { id: 'drill', name: '⛏️ Drill', blurb: 'A drill on the front of your ride: drive into the ✨ sparkly hill spots to dig up secret treasure — big coins, gems and fuel.', unit: 'drive', subject: 'science', uses: 10 },
+      { id: 'drill', name: '⛏️ Drill', blurb: 'A drill on the front of your ride: press the dig key (↓ / S) or ⛏️ DIG to tunnel into the hill for a few seconds — secret treasure is buried inside (💎 🦴 🧰 👑 and fuel). Upgrade ⛏️ Drill time to dig longer.', unit: 'drive', subject: 'science', uses: 10 },
     ],
   },
   {

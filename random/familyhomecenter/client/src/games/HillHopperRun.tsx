@@ -17,6 +17,7 @@ import {
   type World,
 } from './hillPhysics.js';
 import { FullscreenButton, useFullscreen } from '../utils/fullscreen.js';
+import { Digger, buriedLook } from './hillDig.js';
 import { CROUCH, DINO, EGG_LIMIT, HAZARD_COINS, HAZARD_WORLDS, Hazards, sharkAt } from './hillHazards.js';
 
 export interface Driver {
@@ -38,11 +39,14 @@ export interface Controls {
   /** 🦘 how the mouse / a finger jumps: tap the middle of the game, an on-screen JUMP button, the
    *  middle mouse button (wheel click), or keys only. Old saves don't have it → middle. */
   jumpTap?: JumpTap;
+  /** ⛏️ keys that dig into the hill (with the 🏆 drill); old saves don't have it → ↓ / S */
+  digKeys?: string[];
   /** pedals: only the on-screen pedals · buttons: left button = gas, right = brake · sides: right half = gas, left half = brake */
   mouse: 'pedals' | 'buttons' | 'sides';
 }
 export const DEFAULT_CONTROLS: Controls = { gasKeys: ['arrowright', 'd'], brakeKeys: ['arrowleft', 'a'], jumpKeys: [' '], mouse: 'pedals' };
 export const jumpKeysOf = (c: Controls) => c.jumpKeys ?? [' '];
+export const digKeysOf = (c: Controls) => c.digKeys ?? ['arrowdown', 's'];
 export type JumpTap = 'middle' | 'button' | 'wheel' | 'none';
 export const jumpTapOf = (c: Controls): JumpTap => c.jumpTap ?? 'middle';
 export const JUMP_TAP_LABEL: Record<JumpTap, string> = {
@@ -115,6 +119,7 @@ export function HillHopperRun({
   glide = false,
   flipWheels = false,
   drill = false,
+  digTime = 3,
   best,
   controls,
   onEnd,
@@ -131,8 +136,10 @@ export function HillHopperRun({
   glide?: boolean;
   /** 🏆 🛞 wheels on the roof too: flipping over rolls you back onto your wheels */
   flipWheels?: boolean;
-  /** 🏆 ⛏️ a drill on the front: dig into ✨ spots in the hills for treasure */
+  /** 🏆 ⛏️ a drill on the front: the dig key tunnels into the hill, where secret things are buried */
   drill?: boolean;
+  /** ⛏️ seconds each dig lasts (🔧 Drill time upgrade) */
+  digTime?: number;
   best: number | null;
   controls: Controls;
   onEnd: (r: RunResult) => void;
@@ -146,12 +153,19 @@ export function HillHopperRun({
   const jumpHeld = useRef(false);
   const jumpers = useRef(new Set<number>());
   const usesJumpKey = jump || glide;
+  /** ⛏️ a dig asked for (the dig key or the DIG button) */
+  const digAsk = useRef(false);
   const quit = useRef(false);
   const [, setPressed] = useState(0);
 
   useEffect(() => {
     const keys = (down: boolean) => (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
+      if (drill && digKeysOf(controls).includes(k)) {
+        if (down && !e.repeat) digAsk.current = true;
+        e.preventDefault();
+        return;
+      }
       if (usesJumpKey && jumpKeysOf(controls).includes(k)) {
         if (down && !e.repeat) jumpAsk.current = performance.now();
         jumpHeld.current = down;
@@ -217,27 +231,8 @@ export function HillHopperRun({
         skyTo += 110 + skyRand() * 110;
       }
     };
-    // ⛏️ with the drill: ✨ treasure spots in the hills (dig in by driving into one)
-    const treasure: Array<{ x: number; dug: boolean }> = [];
-    if (drill) {
-      let tx = startX + 45;
-      let tseed = world.seed * 13 + 5;
-      const trand = () => {
-        tseed = (tseed * 1103515245 + 12345) & 0x7fffffff;
-        return tseed / 0x7fffffff;
-      };
-      while (tx < startX + 20000) {
-        treasure.push({ x: tx, dug: false });
-        tx += 90 + trand() * 130;
-      }
-    }
-    let digging = 0; // seconds of digging left
-    let digAt: { x: number; y: number } | null = null;
-    let digSeed = world.seed * 31 + 7;
-    const digRand = () => {
-      digSeed = (digSeed * 1103515245 + 12345) & 0x7fffffff;
-      return digSeed / 0x7fffffff;
-    };
+    // ⛏️ with the drill: tunnels, and secret things buried in the hills
+    const digger = drill ? new Digger(terrain, world, startX, digTime) : null;
     let jumpReady = 0; // seconds until another jump is allowed
     let shake = 0;
     let zoom = 1;
@@ -281,6 +276,42 @@ export function HillHopperRun({
       const input = p.gas && !p.brake ? 1 : p.brake && !p.gas ? -1 : 0;
       if (input !== 0) started = true;
       if (started) fuel = Math.max(0, fuel - FUEL_PER_SEC * world.fuelBurn * DT);
+      // ⛏️ dig: underground the drill moves the car (no bumps, no flips); it pops back out by itself
+      if (digger) {
+        if (digAsk.current) {
+          digAsk.current = false;
+          if (digger.start(car)) {
+            started = true;
+            airRot = 0;
+            airTime = 0;
+            say('⛏️ Drilling in!');
+          }
+        }
+        if (digger.underground) {
+          const g = digger.step(car, input, DT);
+          const far = car.x - startX;
+          const tier = far > 1500 ? 2 : far > 600 ? 1 : 0;
+          for (const b of g.found) {
+            const look = buriedLook(b.kind, world);
+            if (b.kind === 'fuel') {
+              fuel = stats.tank;
+              say(`${look.emoji} ${look.name}!`);
+              continue;
+            }
+            const v = Math.round(look.value[tier] * world.coinMul);
+            coins += v;
+            say(`${look.emoji} ${look.name}! +${v}`);
+          }
+          if (g.out) say('⛏️ Back up top!');
+          if (hz) {
+            const h = hz.update(car, DT, startX); // safe from them underground
+            coins += h.coins;
+          }
+          maxX = Math.max(maxX, car.x);
+          return;
+        }
+        digger.step(car, 0, DT); // (cool-down, and burying more ahead)
+      }
       // 🦘 Jump: only from the ground (a press up to 0.2 s early still counts).
       jumpReady = Math.max(0, jumpReady - DT);
       const onGround = car.wheels.some((w) => w.ground);
@@ -318,45 +349,6 @@ export function HillHopperRun({
         shake = Math.max(shake, 0.25);
         say('🛞 Flip-proof wheels — back on your wheels!');
       } else if (r.crashed) return finish(car.tipped > 1 ? 'tipped' : 'crash');
-      // ⛏️ the drill: driving into a ✨ spot digs it up (slows you for a moment), then the treasure
-      if (drill) {
-        const nose = bodyPoint(car, 1.9, 0);
-        if (!digging) {
-          for (const tr of treasure) {
-            if (tr.dug || Math.abs(tr.x - nose.x) > 0.9) continue;
-            if (nose.y - terrain.h(tr.x) > 1.2) continue; // flying over it doesn't count
-            tr.dug = true;
-            digging = 0.8;
-            digAt = { x: tr.x, y: terrain.h(tr.x) };
-            break;
-          }
-        } else {
-          digging = Math.max(0, digging - DT);
-          car.vx *= Math.exp(-2.5 * DT);
-          for (const w of car.wheels) w.vx *= Math.exp(-2.5 * DT);
-          if (digging === 0) {
-            const far = car.x - startX;
-            const roll = digRand();
-            if (roll < 0.15) {
-              fuel = stats.tank;
-              say('⛏️ Buried fuel — full tank! ⛽');
-            } else if (roll < 0.4) {
-              const v = Math.round((far > 1500 ? 600 : far > 600 ? 300 : 150) * world.coinMul);
-              coins += v;
-              say(`⛏️ A gem! 💎 +${v}`);
-            } else if (roll < 0.5) {
-              const v = Math.round((far > 1500 ? 1000 : far > 600 ? 500 : 250) * world.coinMul);
-              coins += v;
-              say(`⛏️ A treasure chest!! 🧰 +${v}`);
-            } else {
-              const v = Math.round((far > 1500 ? 200 : far > 600 ? 100 : 50) * world.coinMul);
-              coins += v;
-              say(`⛏️ Buried coins! 💰 +${v}`);
-            }
-            started = true;
-          }
-        }
-      }
       if (hz) {
         const h = hz.update(car, DT, startX);
         coins += h.coins;
@@ -754,6 +746,45 @@ export function HillHopperRun({
       ctx.lineJoin = 'round';
       ctx.stroke();
 
+      // ⛏️ tunnels dug, and (lit by the headlight, underground) the things buried nearby
+      if (digger) {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (const path of digger.tunnels) {
+          if (path.length < 2 || path[path.length - 1].x < x0 - 2 || path[0].x > x1 + 2) continue;
+          ctx.beginPath();
+          path.forEach((pt, i) => (i ? ctx.lineTo(sx(pt.x), sy(pt.y)) : ctx.moveTo(sx(pt.x), sy(pt.y))));
+          ctx.strokeStyle = 'rgba(30,18,10,0.85)';
+          ctx.lineWidth = S * 1.9;
+          ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
+        if (digger.underground) {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          for (const b of digger.buried) {
+            if (b.taken || b.x < x0 - 1 || b.x > x1 + 1) continue;
+            const d = Math.hypot(b.x - car.x, b.y - car.y);
+            if (d > 9) continue;
+            ctx.globalAlpha = Math.min(1, (9 - d) / 3);
+            ctx.font = `${Math.round(S * 1.1)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+            ctx.fillStyle = '#000';
+            ctx.fillText(buriedLook(b.kind, world).emoji, sx(b.x), sy(b.y));
+          }
+          ctx.globalAlpha = 1;
+          // dirt flying off the drill
+          const nose = bodyPoint(car, 2, 0);
+          ctx.fillStyle = '#a1887f';
+          for (let k = 0; k < 10; k++) {
+            const ph = (performance.now() / 110 + k * 0.37) % 1;
+            const ang = car.a + Math.PI + (((k * 0.618) % 1) - 0.5) * 2.4;
+            ctx.beginPath();
+            ctx.arc(sx(nose.x + Math.cos(ang) * ph * 1.4), sy(nose.y + Math.sin(ang) * ph * 1.4), S * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
       // Scenery along the road (the same spots every run).
       ctx.font = `${Math.round(S * 1.5)}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
@@ -817,27 +848,14 @@ export function HillHopperRun({
         if (f.taken || f.x < x0 || f.x > x1) continue;
         ctx.fillText('⛽', sx(f.x), sy(terrain.h(f.x) + 0.8));
       }
-      // ⛏️ ✨ treasure spots (with the drill), and the dirt flying while it digs
-      for (const tr of treasure) {
-        if (tr.dug || tr.x < x0 - 1 || tr.x > x1 + 1) continue;
-        const gy = terrain.h(tr.x);
-        ctx.fillStyle = '#6d4c41';
-        ctx.beginPath();
-        ctx.ellipse(sx(tr.x), sy(gy), S * 0.7, S * 0.28, 0, Math.PI, 0);
-        ctx.fill();
-        const tw = 0.85 + 0.25 * Math.sin(performance.now() / 180 + tr.x);
-        ctx.font = `${Math.round(S * 0.9 * tw)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      // ⛏️ ✨ a sparkle on the surface above something rare buried below
+      if (digger) {
         ctx.fillStyle = '#000';
-        ctx.fillText('✨', sx(tr.x), sy(gy + 0.6));
-      }
-      if (digging && digAt) {
-        ctx.fillStyle = '#795548';
-        for (let k = 0; k < 10; k++) {
-          const ph = (performance.now() / 120 + k * 0.37) % 1;
-          const ang = Math.PI * (0.15 + 0.7 * ((k * 0.618) % 1));
-          ctx.beginPath();
-          ctx.arc(sx(digAt.x + Math.cos(ang) * ph * 1.6), sy(digAt.y + Math.sin(ang) * ph * 1.6), S * 0.12, 0, Math.PI * 2);
-          ctx.fill();
+        for (const b of digger.buried) {
+          if (b.taken || b.x < x0 - 1 || b.x > x1 + 1 || !buriedLook(b.kind, world).rare) continue;
+          const tw = 0.8 + 0.3 * Math.sin(performance.now() / 180 + b.x);
+          ctx.font = `${Math.round(S * 0.8 * tw)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+          ctx.fillText('✨', sx(b.x), sy(terrain.h(b.x) + 0.5));
         }
       }
       ctx.font = `${Math.round(S * 1.1)}px system-ui, sans-serif`;
@@ -912,7 +930,7 @@ export function HillHopperRun({
       ctx.rotate(-car.a);
       if (drill) {
         // ⛏️ the drill: a cone on the nose, its stripes turning (faster while digging)
-        const spin = (performance.now() / (digging ? 40 : 160)) % 1;
+        const spin = (performance.now() / (digger?.underground ? 40 : 160)) % 1;
         ctx.fillStyle = '#9e9e9e';
         ctx.strokeStyle = '#424242';
         ctx.lineWidth = Math.max(1.5, S * 0.05);
@@ -1064,6 +1082,27 @@ export function HillHopperRun({
         ctx.fillRect(pad + 156 + 38, pad + 37, (fw * 0.6 * Math.max(0, glideLeft)) / glideMax, 16);
         ctx.fillStyle = '#fff';
         ctx.fillText('🪂', pad + 164, pad + 35);
+      }
+      if (digger) {
+        // ⛏️ time left underground (or ready to dig)
+        const dg = digger.dig;
+        const y0 = pad + 36;
+        const bw = 126;
+        const x0d = W - pad - 170;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(x0d, y0, 170, 26);
+        ctx.fillStyle = dg ? '#ffb74d' : digger.cool > 0 ? '#8d6e63' : '#bcaaa4';
+        ctx.fillRect(x0d + 38, y0 + 5, dg ? (bw * Math.max(0, dg.left)) / dg.total : bw * (1 - digger.cool), 16);
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('⛏️', x0d + 8, y0 + 3);
+        if (!dg && digger.cool <= 0) {
+          ctx.font = 'bold 13px system-ui, sans-serif';
+          ctx.fillStyle = '#3e2723';
+          ctx.fillText(`DIG: ${digKeysOf(controls).map(keyName).join(' / ') || 'button'}`, x0d + 44, y0 + 6);
+        }
+        ctx.font = 'bold 18px system-ui, sans-serif';
       }
       const dist = Math.max(0, Math.floor(maxX - startX));
       ctx.textAlign = 'right';
@@ -1220,6 +1259,21 @@ export function HillHopperRun({
         >
           {jump ? '🦘 JUMP' : '🪂 GLIDE'}
           <small>{keysFor(jumpKeysOf(controls))}</small>
+        </button>
+      )}
+      {drill && (
+        <button
+          type="button"
+          className="hill-run__pedal hill-run__pedal--dig"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            digAsk.current = true;
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+          aria-label="Dig"
+        >
+          ⛏️ DIG
+          <small>{keysFor(digKeysOf(controls))}</small>
         </button>
       )}
       <button

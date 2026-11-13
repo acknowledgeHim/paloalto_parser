@@ -136,7 +136,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 // Which commit the running server is (read once at start): Settings → App version compares it with the screen's build.
 const SERVER_BUILD = (() => {
   try {
-    return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8', cwd: path.dirname(fileURLToPath(import.meta.url)) }).trim();
+    return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: path.dirname(fileURLToPath(import.meta.url)) }).trim();
   } catch {
     return 'unknown';
   }
