@@ -1,0 +1,20 @@
+[Unit]
+Description=Family Home Center server (built-only deploy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+# The built-only checkout of the fhc-deploy branch (see scripts/deploy/README.md).
+WorkingDirectory=/home/pi/fhc/server
+# .env is a symlink the setup script makes to the existing .env (your secrets never move into git).
+EnvironmentFile=/home/pi/fhc/.env
+Environment=ORT_DISABLE_TELEMETRY=1
+Environment=UV_THREADPOOL_SIZE=32
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

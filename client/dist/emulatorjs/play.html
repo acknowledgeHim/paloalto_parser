@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Classic game</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+      }
+      #game {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Self-hosted EmulatorJS host page. Family Home Center opens this in an iframe so the emulator,
+      its audio and WASM are torn down cleanly when the player navigates away (the iframe is removed).
+      Everything is served locally from /emulatorjs/ — no external CDN at play time.
+      Query: core (nes|snes), rom (URL of the ROM bytes), name (title shown).
+    -->
+    <div id="game"></div>
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search);
+        window.EJS_player = '#game';
+        window.EJS_core = q.get('core') || 'nes';
+        window.EJS_gameUrl = q.get('rom') || '';
+        window.EJS_gameName = q.get('name') || 'Classic game';
+        window.EJS_pathtodata = '/emulatorjs/data/';
+        window.EJS_startOnLoaded = true;
+        window.EJS_threads = false; // no cross-origin isolation over plain http → use the -legacy cores
+        window.EJS_backgroundColor = '#000000';
+        window.EJS_color = '#5b8def';
+        // on-screen controls for the touchscreen; a USB gamepad and the keyboard also work
+        window.EJS_VirtualGamepadSettings = undefined;
+      })();
+    </script>
+    <script src="/emulatorjs/data/loader.js"></script>
+  </body>
+</html>

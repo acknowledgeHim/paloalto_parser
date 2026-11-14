@@ -1,0 +1,168 @@
+import { db } from '../db.js';
+import { taskAppliesOn, todayStr } from '../utils/recurrence.js';
+export function assigneesFor(taskId) {
+    return db.prepare('SELECT family_member_id FROM task_assignees WHERE task_id = ?').all(taskId).map((r) => r.family_member_id);
+}
+/**
+ * A "once" task (with or without a due date — see taskAppliesOn) applies every single day from
+ * whenever it starts mattering until it's done (taskAppliesOn has no concept of completions, so
+ * by itself it just returns true forever from that point on). Its real timeframe is "whenever
+ * someone gets to it" — once it has a completion from an earlier day, that timeframe has passed,
+ * so it should stop applying (and therefore stop counting as done, in every progress bar/list/log
+ * that trusts tasksForDate's output) on every day after that, instead of permanently lingering on
+ * every future day's board. It's still included on the exact day it was completed, so it shows
+ * crossed out there.
+ */
+function onceTaskStillOpenOn(task, date) {
+    if (task.recurrence !== 'once')
+        return true;
+    const row = db.prepare('SELECT 1 FROM task_completions WHERE task_id = ? AND completed_on < ? LIMIT 1').get(task.id, date);
+    return !row;
+}
+/** Every active task applicable on `date`, each with its assignees and that date's completions
+ *  (or, for a "once" task, every completion up through `date` — see routes/tasks.ts's GET /). */
+/** The people a chore takes turns between, in order (null = it doesn't rotate). */
+export function rotationIds(task) {
+    if (!task.rotation)
+        return null;
+    try {
+        const ids = JSON.parse(task.rotation);
+        return Array.isArray(ids) && ids.length > 0 && ids.every((x) => typeof x === 'string') ? ids : null;
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Whose turn a rotating chore is on `date`. Turns pass on when it's *done*, not by the calendar:
+ * rotation[0] has it from rotation_start until they (or anyone) do it, then the next person has it
+ * until it's done again, and so on — so a chore that isn't needed every day (the dishwasher) still
+ * goes round fairly. On a day it was done, it's the person who did it (so it shows done in their
+ * column). null = not a rotating chore.
+ */
+export function rotationTurn(task, date) {
+    return rotationState(task, date)?.turn ?? null;
+}
+function rotationState(task, date) {
+    const ids = rotationIds(task);
+    if (!ids || !task.rotation_start)
+        return null;
+    const done = db
+        .prepare(`SELECT completed_on, completed_by_id FROM task_completions
+       WHERE task_id = ? AND completed_on >= ? AND completed_on <= ? ORDER BY completed_on, completed_at`)
+        .all(task.id, task.rotation_start, date);
+    // Each day it was done is one turn used (doing a morning and an evening slot is still one turn).
+    const daysBefore = new Set(done.filter((c) => c.completed_on < date).map((c) => c.completed_on)).size;
+    const n = ids.length;
+    const due = ids[daysBefore % n];
+    const today = done.filter((c) => c.completed_on === date);
+    if (today.length) {
+        const by = today.find((c) => c.completed_by_id && ids.includes(c.completed_by_id))?.completed_by_id;
+        const next = ids[(daysBefore + 1) % n];
+        return { turn: by ?? due, next, upcoming: next };
+    }
+    return { turn: due, next: ids[(daysBefore + 1) % n], upcoming: due };
+}
+/** Does a "when needed" chore show on `date`: someone said it needs doing (on or before then), or it was done that day. */
+function asNeededShowsOn(task, date) {
+    if (task.needed_since && task.needed_since <= date)
+        return true;
+    return Boolean(db.prepare('SELECT 1 FROM task_completions WHERE task_id = ? AND completed_on = ? LIMIT 1').get(task.id, date));
+}
+/** A task with who it's on for `date`: for a rotating chore, just whoever's turn it is. */
+function withAssignees(task, date, completions) {
+    const ids = rotationIds(task);
+    const state = ids ? rotationState(task, date) : null;
+    if (ids && state)
+        return { ...task, assignee_ids: [state.turn], completions, rotation_ids: ids, rotation_next_id: state.next };
+    return { ...task, assignee_ids: assigneesFor(task.id), completions };
+}
+/** A "times"/"hours" job's goal, in the units its chunks are logged in (times, or minutes). */
+export function goalUnits(task) {
+    if (!task.goal_type || !task.goal_amount || task.goal_amount <= 0)
+        return null;
+    return task.goal_type === 'hours' ? Math.round(task.goal_amount * 60) : Math.round(task.goal_amount);
+}
+/** Which chunks count toward this job on `date`: every one so far for a one-time job, else that day's. */
+function progressWindow(task) {
+    return task.recurrence === 'once' ? 'logged_on <= ?' : 'logged_on = ?';
+}
+/** How much of a "times"/"hours" job this person has done toward `date`'s goal. */
+export function progressFor(task, memberId, date) {
+    const who = memberId === null ? 'family_member_id IS NULL' : 'family_member_id = ?';
+    const row = db
+        .prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND ${who} AND pending IS NULL AND ${progressWindow(task)}`)
+        .get(task.id, ...(memberId === null ? [] : [memberId]), date);
+    return row.n;
+}
+/** Chunks still waiting for a parent's OK (they don't count yet). */
+export function waitingProgressFor(task, memberId, date) {
+    const who = memberId === null ? 'family_member_id IS NULL' : 'family_member_id = ?';
+    const row = db
+        .prepare(`SELECT COALESCE(SUM(amount), 0) AS n FROM task_progress WHERE task_id = ? AND ${who} AND pending = 1 AND ${progressWindow(task)}`)
+        .get(task.id, ...(memberId === null ? [] : [memberId]), date);
+    return row.n;
+}
+function progressByMember(task, date, waiting = false) {
+    if (!goalUnits(task))
+        return undefined;
+    const rows = db
+        .prepare(`SELECT family_member_id AS m, SUM(amount) AS n FROM task_progress WHERE task_id = ? AND pending IS ${waiting ? '1' : 'NULL'} AND ${progressWindow(task)} GROUP BY family_member_id`)
+        .all(task.id, date);
+    return Object.fromEntries(rows.map((r) => [r.m ?? '', r.n]));
+}
+/** Every person's routine order, by task: task id → { member id: position }. */
+function allPositions() {
+    const rows = db.prepare('SELECT family_member_id, task_id, position FROM task_positions').all();
+    const map = new Map();
+    for (const r of rows)
+        map.set(r.task_id, { ...(map.get(r.task_id) ?? {}), [r.family_member_id]: r.position });
+    return map;
+}
+export function tasksForDate(date) {
+    const tasks = db.prepare('SELECT * FROM tasks WHERE active = 1').all();
+    const positions = allPositions();
+    return tasks
+        .filter((t) => (t.recurrence === 'asneeded' ? asNeededShowsOn(t, date) : taskAppliesOn(t, date)))
+        .filter((t) => onceTaskStillOpenOn(t, date))
+        .map((task) => {
+        const completions = task.recurrence === 'once'
+            ? // Bounded by <= date, not unconditional — otherwise browsing/computing a date before a
+                // once task's actual completion would already show it done, pulling in a completion
+                // from its future relative to that date.
+                db
+                    .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on <= ?')
+                    .all(task.id, date)
+            : db
+                .prepare('SELECT * FROM task_completions WHERE task_id = ? AND completed_on = ?')
+                .all(task.id, date);
+        const pending = task.needs_approval
+            ? db
+                .prepare(`SELECT family_member_id, time_of_day FROM pending_completions WHERE task_id = ? AND ${task.recurrence === 'once' ? 'completed_on <= ?' : 'completed_on = ?'}`)
+                .all(task.id, date)
+            : undefined;
+        return { ...withAssignees(task, date, completions), positions: positions.get(task.id) ?? {}, progress: progressByMember(task, date), progress_waiting: progressByMember(task, date, true), pending };
+    });
+}
+export function allActiveTasks() {
+    const tasks = db.prepare('SELECT * FROM tasks WHERE active = 1').all();
+    // Everyone a rotating chore can land on (for setting things up — rewards, the floor plan…), and
+    // whose turn it is now (for "when needed" chores waiting for a 🔔).
+    const today = todayStr();
+    const positions = allPositions();
+    const finishedOnce = new Set(db
+        .prepare(`SELECT DISTINCT c.task_id FROM task_completions c JOIN tasks t ON t.id = c.task_id WHERE t.recurrence = 'once'`)
+        .all().map((r) => r.task_id));
+    return tasks.map((task) => {
+        const state = rotationState(task, today);
+        return {
+            ...task,
+            positions: positions.get(task.id) ?? {},
+            finished: finishedOnce.has(task.id),
+            assignee_ids: assigneesFor(task.id),
+            completions: [],
+            rotation_ids: rotationIds(task) ?? undefined,
+            rotation_next_id: state?.upcoming,
+        };
+    });
+}

@@ -1,0 +1,190 @@
+/*
+ * Family Home Center — Copyright (c) 2026 the Family Home Center authors.
+ * All rights reserved. Proprietary and confidential; see the LICENSE file.
+ * Not to be copied, distributed, or hosted for others.
+ */
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import './threadpool.js'; // first: more file-reading threads (see threadpool.ts)
+import http from 'node:http';
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import './db.js'; // ensures schema is created on boot
+import { config } from './config.js';
+import { familyMembersRouter } from './routes/familyMembers.js';
+import { tasksRouter } from './routes/tasks.js';
+import { approvalsRouter } from './routes/approvals.js';
+import { calendarRouter } from './routes/calendar.js';
+import { weatherRouter } from './routes/weather.js';
+import { photosRouter } from './routes/photos.js';
+import { settingsRouter } from './routes/settings.js';
+import { backupsRouter } from './routes/backups.js';
+import { startBackupJobs } from './services/backupJobs.js';
+import { musicRouter } from './routes/music.js';
+import { deviceCertRouter } from './routes/deviceCert.js';
+import { authRouter } from './routes/auth.js';
+import { mealsRouter } from './routes/meals.js';
+import { mealCooksRouter, startCookChoreSync } from './routes/mealCooks.js';
+import { recipesRouter } from './routes/recipes.js';
+import { prizesRouter } from './routes/prizes.js';
+import { bankRouter } from './routes/bank.js';
+import { bankTransfersRouter } from './routes/bankTransfers.js';
+import { groceryRouter } from './routes/grocery.js';
+import { contactsRouter } from './routes/contacts.js';
+import { kbMediaGate, knowledgeBaseRouter } from './routes/knowledgeBase.js';
+import { passwordsRouter } from './routes/passwords.js';
+import { typingRouter } from './routes/typing.js';
+import { callingRouter } from './routes/calling.js';
+import { moviesRouter } from './routes/movies.js';
+import { internetRouter } from './routes/internet.js';
+import { photoDocumentsRouter } from './routes/photoDocuments.js';
+import { albumsRouter } from './routes/albums.js';
+import { relativesRouter } from './routes/relatives.js';
+import { accessRouter } from './routes/access.js';
+import { facesRouter } from './routes/faces.js';
+import { floorplansRouter } from './routes/floorplans.js';
+import { appsRouter } from './routes/apps.js';
+import { movieLibraryRouter } from './routes/movieLibrary.js';
+import { startMovieLibrary } from './services/movieLibrary.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { startCalendarSyncSchedule } from './services/calendar/aggregator.js';
+import { startThumbnailWarmSchedule } from './services/photos.js';
+import { allFaces, facesEnabled } from './services/faces/index.js';
+import { startGroceryEmailSchedule } from './services/groceryEmail.js';
+import { startWeeklyReportSchedule } from './services/weeklyReport.js';
+import { outfitsRouter } from './routes/outfits.js';
+import { gamesRouter } from './routes/games.js';
+import { tokensRouter } from './routes/tokens.js';
+import { resourcesRouter } from './routes/resources.js';
+import { learningRouter } from './routes/learning.js';
+import { lessonsRouter } from './routes/lessons.js';
+import { learningProgressRouter } from './routes/learningProgress.js';
+import { limitsRouter } from './routes/limits.js';
+import { mealPollsRouter } from './routes/mealPolls.js';
+import { reportsRouter } from './routes/reports.js';
+import { heightsRouter, journalRouter, notesRouter, presenceRouter } from './routes/familyLife.js';
+import { camerasRouter } from './routes/cameras.js';
+import { startCameraStorage } from './services/cameraStorage.js';
+import { startInboxSorting } from './services/photoFiling.js';
+import { attachIntercomWebSocket } from './services/intercom/wsServer.js';
+import { startInternetSchedule } from './services/internetControl.js';
+import { localizeExistingRecipeImages } from './services/recipeImages.js';
+const app = express();
+app.use(cors());
+// Default 100kb is too small for a family member's avatar photo, a custom completion-sound MP3,
+// or a Knowledge Base how-to video (all sent as base64 data URLs) â the avatar is downsized
+// client-side first, but an uploaded MP3/video isn't, so leave real headroom (base64 inflates
+// ~33% over the raw file size; 80mb comfortably covers a short (~1 min) phone-recorded clip).
+app.use(express.json({ limit: '80mb' }));
+// Twilio's TwiML webhook (routes/calling.ts's POST /voice) posts form-encoded, not JSON â express.json
+// above simply ignores a non-JSON content-type, so this doesn't conflict with it.
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use('/api/auth', authRouter);
+app.use('/api/family-members', familyMembersRouter);
+app.use('/api/tasks', tasksRouter);
+app.use('/api/approvals', approvalsRouter);
+app.use('/api/calendar', calendarRouter);
+app.use('/api/weather', weatherRouter);
+app.use('/api/photos', photosRouter);
+app.use('/api/settings', settingsRouter);
+app.use('/api/backups', backupsRouter);
+app.use('/api/music', musicRouter);
+app.use('/api/device-cert', deviceCertRouter);
+app.use('/api/meal-cooks', mealCooksRouter);
+app.use('/api/meals', mealsRouter);
+app.use('/api/recipes', recipesRouter);
+app.use('/api/prizes', prizesRouter);
+app.use('/api/family-members/:memberId/bank', bankRouter);
+app.use('/api/bank', bankTransfersRouter);
+app.use('/api/grocery', groceryRouter);
+app.use('/api/contacts', contactsRouter);
+app.use('/api/knowledge-base', knowledgeBaseRouter);
+app.use('/api/passwords', passwordsRouter);
+app.use('/api/typing', typingRouter);
+app.use('/api/calling', callingRouter);
+app.use('/api/movies', moviesRouter);
+app.use('/api/movie-library', movieLibraryRouter);
+app.use('/api/internet', internetRouter);
+app.use('/api/photo-documents', photoDocumentsRouter);
+app.use('/api/albums', albumsRouter);
+app.use('/api/access', accessRouter);
+app.use('/api/faces', facesRouter);
+app.use('/api/floorplans', floorplansRouter);
+app.use('/api/apps', appsRouter);
+app.use('/api/outfits', outfitsRouter);
+app.use('/api/games', gamesRouter);
+app.use('/api/tokens', tokensRouter);
+app.use('/api/resources', resourcesRouter);
+app.use('/api/learning/lessons', lessonsRouter);
+app.use('/api/learning/progress', learningProgressRouter);
+app.use('/api/learning', learningRouter);
+app.use('/api/limits', limitsRouter);
+app.use('/api/meal-polls', mealPollsRouter);
+app.use('/api/reports', reportsRouter);
+app.use('/api/journal', journalRouter);
+app.use('/api/relatives', relativesRouter);
+app.use('/api/heights', heightsRouter);
+app.use('/api/notes', notesRouter);
+app.use('/api/presence', presenceRouter);
+app.use('/api/cameras', camerasRouter);
+// Uploaded KB pictures/videos, and rendered movies â express.static (not a custom route) so it
+// handles HTTP Range requests, which video playback/seeking needs.
+app.use('/api/kb-media', kbMediaGate, express.static(config.kbMediaDir));
+app.use('/api/movies-media', express.static(config.moviesDir));
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+// Which commit the running server is (read once at start): Settings â App version compares it with the screen's build.
+const SERVER_BUILD = (() => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    // An auto-deployed build ships a BUILD_ID file (the source commit it was built from), so Settings →
+    // App version matches the screen even though the Pi only has the built output, not the git source.
+    try {
+        const id = readFileSync(path.join(here, 'BUILD_ID'), 'utf8').trim();
+        if (id)
+            return id;
+    }
+    catch {
+        /* no BUILD_ID (a source checkout) — fall back to git */
+    }
+    try {
+        return execSync('git log -1 --format="%h · %cs"', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: here }).trim();
+    }
+    catch {
+        return 'unknown';
+    }
+})();
+const SERVER_STARTED = new Date().toISOString();
+app.get('/api/version', (_req, res) => res.json({ server: SERVER_BUILD, started: SERVER_STARTED }));
+// Serve the built React app (npm run build in client/) so one process/port runs everything on the Pi.
+app.use(express.static(config.clientDistDir));
+app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/'))
+        return next();
+    res.sendFile('index.html', { root: config.clientDistDir }, (err) => {
+        if (err)
+            next(err);
+    });
+});
+app.use(errorHandler);
+const server = http.createServer(app);
+attachIntercomWebSocket(server);
+server.listen(config.port, config.host, () => {
+    console.log(`Family Home Center server listening on http://${config.host}:${config.port}`);
+    startCalendarSyncSchedule();
+    startThumbnailWarmSchedule();
+    // Face suggestions take a few seconds to work out for a big library â do it now, not on first visit.
+    if (facesEnabled())
+        allFaces().catch((e) => console.warn('[faces] warm-up failed', e));
+    startGroceryEmailSchedule();
+    startCookChoreSync();
+    startWeeklyReportSchedule();
+    startCameraStorage();
+    startInboxSorting();
+    startMovieLibrary();
+    startInternetSchedule();
+    startBackupJobs();
+    localizeExistingRecipeImages().catch((err) => console.warn('[recipes] picture migration failed', err));
+});

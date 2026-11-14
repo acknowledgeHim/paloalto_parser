@@ -1,0 +1,1817 @@
+import fs from 'node:fs';
+import Database from 'better-sqlite3';
+import { config } from './config.js';
+fs.mkdirSync(config.dataDir, { recursive: true });
+export const db = new Database(config.dbPath);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS family_members (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#5b8def',
+    avatar TEXT,
+    is_parent INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('chore', 'todo')),
+    title TEXT NOT NULL,
+    notes TEXT,
+    assignee_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    recurrence TEXT NOT NULL DEFAULT 'once',
+    due_date TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- A task's assignee_id column (still present for legacy data) is no longer the source of
+  -- truth — a task can now be assigned to any number of people. See routes/tasks.ts.
+  CREATE TABLE IF NOT EXISTS task_assignees (
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    PRIMARY KEY (task_id, family_member_id)
+  );
+
+  -- UNIQUE is (task_id, completed_on, completed_by_id, time_of_day) — not just (task_id,
+  -- completed_on) — so a task assigned to multiple people lets each of them complete (and earn
+  -- Prize Bank rewards for) their own instance independently, and a task with more than one
+  -- time-of-day slot (e.g. "morning,evening") lets each slot be completed independently too.
+  -- time_of_day is NULL for a task with zero or one slot (unchanged single-checkbox behavior).
+  -- See the migrations below for databases created before each of these.
+  CREATE TABLE IF NOT EXISTS task_completions (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    completed_on TEXT NOT NULL,
+    completed_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    completed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    time_of_day TEXT,
+    UNIQUE(task_id, completed_on, completed_by_id, time_of_day)
+  );
+
+  CREATE TABLE IF NOT EXISTS local_events (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    location TEXT,
+    start_at TEXT NOT NULL,
+    end_at TEXT NOT NULL,
+    all_day INTEGER NOT NULL DEFAULT 0,
+    color TEXT NOT NULL DEFAULT '#5b8def',
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    for_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS external_events_cache (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL CHECK (source IN ('google', 'apple')),
+    source_calendar_id TEXT,
+    external_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    location TEXT,
+    start_at TEXT NOT NULL,
+    end_at TEXT NOT NULL,
+    all_day INTEGER NOT NULL DEFAULT 0,
+    color TEXT NOT NULL DEFAULT '#8a8a8a',
+    synced_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(source, external_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS google_tokens (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token TEXT,
+    refresh_token TEXT,
+    scope TEXT,
+    token_type TEXT,
+    expiry_date INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('idle_timeout_seconds', '300');
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('slideshow_interval_seconds', '12');
+
+  -- One row per physical DAC8x zone (1-4). Wiring/ALSA device is fixed by zone id;
+  -- only the friendly name is user-editable (see routes/music.ts).
+  CREATE TABLE IF NOT EXISTS zones (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO zones (id, name) VALUES (1, 'Zone 1');
+  INSERT OR IGNORE INTO zones (id, name) VALUES (2, 'Zone 2');
+  INSERT OR IGNORE INTO zones (id, name) VALUES (3, 'Zone 3');
+  INSERT OR IGNORE INTO zones (id, name) VALUES (4, 'Zone 4');
+
+  -- A group makes several zones share one queue/playback state (near-synced, see docs/MUSIC_SETUP.md).
+  CREATE TABLE IF NOT EXISTS zone_groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    zone_ids TEXT NOT NULL, -- JSON array of zone ids, e.g. "[1,2]"
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS spotify_tokens (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token TEXT,
+    refresh_token TEXT,
+    expiry_date INTEGER
+  );
+
+  -- Settings-page login sessions (see services/auth.ts). Everyday use (chores, calendar, music,
+  -- photos, intercom) never checks this — only configuration actions do.
+  CREATE TABLE IF NOT EXISTS admin_sessions (
+    token TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+  );
+
+  -- A recipe is either typed in by hand ('local') or imported from TheMealDB's free public API
+  -- ('themealdb', source_id = their idMeal) — see routes/recipes.ts.
+  CREATE TABLE IF NOT EXISTS recipes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'local' CHECK (source IN ('local', 'themealdb')),
+    source_id TEXT,
+    instructions TEXT,
+    thumbnail_url TEXT,
+    -- Baseline serving count the ingredient quantities below are written for; the client scales
+    -- them proportionally when you ask to size the recipe for a different number of people.
+    servings INTEGER NOT NULL DEFAULT 4,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS recipe_ingredients (
+    id TEXT PRIMARY KEY,
+    recipe_id TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    quantity TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- One meal = one slot (breakfast/lunch/dinner) on one date, optionally for a specific person
+  -- (NULL assignee = whole family). Its ingredients are the union of every linked recipe's
+  -- ingredients plus its own manually-typed ones (meal_ingredients) — see routes/meals.ts.
+  CREATE TABLE IF NOT EXISTS meals (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL,
+    slot TEXT NOT NULL CHECK (slot IN ('breakfast', 'lunch', 'dinner')),
+    assignee_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    notes TEXT,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS meal_ingredients (
+    id TEXT PRIMARY KEY,
+    meal_id TEXT NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    quantity TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS meal_recipes (
+    meal_id TEXT NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+    recipe_id TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (meal_id, recipe_id)
+  );
+
+  -- A prize a kid can redeem: either costs a number of banked stars, or unlocks once a specific
+  -- task has been completed a number of times (by that kid) — see routes/prizes.ts.
+  CREATE TABLE IF NOT EXISTS prizes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    cost_type TEXT NOT NULL CHECK (cost_type IN ('stars', 'task_count')),
+    star_cost INTEGER,
+    task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+    required_count INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS prize_redemptions (
+    id TEXT PRIMARY KEY,
+    prize_id TEXT NOT NULL REFERENCES prizes(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    redeemed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Bank: multiple named accounts per family member (checking, college savings, ...), each with
+  -- its own running-balance ledger. Entirely separate from the Prize Bank star_balance/money_balance
+  -- counters above — see routes/bank.ts's "transfer from Prize Bank earnings" endpoint for the one
+  -- deliberate bridge between the two (a parent/kid moves already-earned money_balance into a named
+  -- account, with a required comment + timestamp).
+  CREATE TABLE IF NOT EXISTS bank_accounts (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- amount is positive for a deposit, negative for a withdrawal/spend; an account's balance is the
+  -- sum of its transactions (no separate stored balance column, so it can never drift out of sync).
+  -- category (see client/src/utils/spendingCategories.ts for the preset list) is what the spending-
+  -- by-category graphs group by — only really meaningful for a spend, but not enforced either way.
+  CREATE TABLE IF NOT EXISTS bank_transactions (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
+    amount REAL NOT NULL,
+    comment TEXT NOT NULL,
+    category TEXT,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- A savings goal ("save for a Lego set", $60), tracked against one specific account's running
+  -- balance (no separate contribution tracking needed — the account balance IS the progress).
+  -- achieved_at is set when marked purchased, which also records a real withdrawal transaction
+  -- (see routes/bank.ts's /goals/:id/achieve) so the spend shows up in the category graphs too.
+  CREATE TABLE IF NOT EXISTS bank_goals (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    target_amount REAL NOT NULL,
+    category TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    achieved_at TEXT
+  );
+
+  -- Important phone numbers/addresses everyone in the family might need — grandparents, doctors,
+  -- neighbors, etc. distance_miles is a cached, best-effort straight-line distance from home
+  -- (see services/geocodeAddress.ts), re-geocoded whenever the address changes; null means it's
+  -- never been successfully looked up (no address, or geocoding failed/hasn't run yet).
+  CREATE TABLE IF NOT EXISTS contacts (
+    id TEXT PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    relationship TEXT,
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    distance_miles REAL,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Household how-to guides ("shut off the main water valve", "reset a tripped breaker") —
+  -- parent-authored reference material, not an everyday list (see routes/knowledgeBase.ts).
+  CREATE TABLE IF NOT EXISTS kb_articles (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    category TEXT,
+    body TEXT,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- An article's attached pictures/videos, in display order. 'image'/'video' store an uploaded
+  -- file (file_name, under config.kbMediaDir — see services/kbMedia.ts); 'video_link' is an
+  -- external URL (e.g. a YouTube link) embedded instead of hosted, so a long video doesn't need
+  -- to live on the Pi's SD card.
+  CREATE TABLE IF NOT EXISTS kb_media (
+    id TEXT PRIMARY KEY,
+    article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('image', 'video', 'video_link')),
+    file_name TEXT,
+    external_url TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- A running "need to buy" list, separate from a meal's own ingredients — anyone can ask for
+  -- something without it being tied to a specific meal, and meal_id is just an optional link
+  -- for when it is (e.g. "we're short a can of tomatoes for Tuesday's chili"). Getting checked
+  -- off (routes/grocery.ts's DELETE) just removes it — there's no need to keep a purchased-item
+  -- A rendered photo-slideshow-with-music video (see services/movieRender.ts) — only ever READS
+  -- from PHOTOS_DIR/MUSIC_LIBRARY_DIR to build file_name under config.moviesDir; the originals are
+  -- never touched. file_name/error are set once rendering finishes (success/failure respectively).
+  CREATE TABLE IF NOT EXISTS movies (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('rendering', 'ready', 'failed')),
+    file_name TEXT,
+    error TEXT,
+    photo_count INTEGER NOT NULL,
+    seconds_per_photo REAL NOT NULL,
+    music_track TEXT,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- history the way task completions or bank transactions do. See services/groceryEmail.ts for
+  -- the nightly digest this feeds.
+  CREATE TABLE IF NOT EXISTS grocery_items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    quantity TEXT,
+    requested_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    meal_id TEXT REFERENCES meals(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+// Simple migration for databases created before for_member_id existed — SQLite has no
+// "ADD COLUMN IF NOT EXISTS", so just try it and ignore the "duplicate column" error.
+try {
+    db.exec('ALTER TABLE local_events ADD COLUMN for_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Which sound (see client/src/utils/sounds.ts for the preset list) plays when this person
+// completes a task. NULL/empty means no sound.
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN complete_sound TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Optional part of the day ('morning'/'afternoon'/'evening') a chore belongs to; NULL = no particular time.
+try {
+    db.exec('ALTER TABLE tasks ADD COLUMN time_of_day TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Prize Bank: what completing this task pays out. NULL reward_type = no reward (an ordinary
+// chore/to-do). Setting these requires the Settings password — see routes/tasks.ts's PATCH /:id/reward.
+try {
+    db.exec('ALTER TABLE tasks ADD COLUMN reward_type TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+try {
+    db.exec('ALTER TABLE tasks ADD COLUMN reward_amount REAL');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Prize Bank running totals, credited on task completion (routes/tasks.ts) and spent on
+// star-cost prize redemption (routes/prizes.ts).
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN star_balance INTEGER NOT NULL DEFAULT 0');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN money_balance REAL NOT NULL DEFAULT 0');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Per-person login (see services/auth.ts). NULL = no password set — open, same "optional, off by
+// default" pattern as everything else; that's the default for kids and is fine for parents until
+// they set one too.
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN password_hash TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// A session now optionally belongs to a specific family member (they entered their own
+// password); NULL keeps working as the legacy single-household ADMIN_PASSWORD recovery login.
+try {
+    db.exec('ALTER TABLE admin_sessions ADD COLUMN family_member_id TEXT REFERENCES family_members(id) ON DELETE CASCADE');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Databases created before spending categories existed (bank_transactions predates bank_goals by
+// one release) need this added on — NULL/empty groups into "Other" in the spending graphs.
+try {
+    db.exec('ALTER TABLE bank_transactions ADD COLUMN category TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// One-time backfill: move any existing single assignee_id into the new task_assignees table.
+// assignee_id itself is left in place (harmless, just unused going forward) — SQLite can't cleanly
+// drop a column referenced the way this one was without a full table rebuild, and there's nothing
+// gained by doing that here.
+db.exec(`
+  INSERT OR IGNORE INTO task_assignees (task_id, family_member_id)
+  SELECT id, assignee_id FROM tasks WHERE assignee_id IS NOT NULL
+`);
+// Databases created before task_completions' UNIQUE constraint included completed_by_id (i.e.
+// before multi-assignee tasks), and/or before it included time_of_day (i.e. before multiple
+// times-a-day slots), need the table rebuilt — SQLite has no ALTER TABLE for changing a UNIQUE
+// constraint. Detect the *actual columns present* via PRAGMA table_info — not by string-matching
+// the raw CREATE TABLE sql, which broke the first time a second migration changed that text (the
+// first migration's check no longer matched once the constraint grew a 4th column, so it kept
+// "detecting" itself as not-yet-run on every single boot and rebuilding back to the 3-column
+// shape — which throws if anyone has two completions for the same task/date/person differing only
+// by time_of_day, i.e. exactly what multi-slot tasks produce. Fixed here; PRAGMA table_info checks
+// actual schema state, so it can't drift out of sync with what any later migration's DDL says.
+function taskCompletionsColumns() {
+    const rows = db.prepare('PRAGMA table_info(task_completions)').all();
+    return new Set(rows.map((r) => r.name));
+}
+if (!taskCompletionsColumns().has('completed_by_id')) {
+    db.transaction(() => {
+        db.exec(`
+      CREATE TABLE task_completions_new (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        completed_on TEXT NOT NULL,
+        completed_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+        completed_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(task_id, completed_on, completed_by_id)
+      );
+      INSERT INTO task_completions_new (id, task_id, completed_on, completed_by_id, completed_at)
+        SELECT id, task_id, completed_on, completed_by_id, completed_at FROM task_completions;
+      DROP TABLE task_completions;
+      ALTER TABLE task_completions_new RENAME TO task_completions;
+    `);
+    })();
+}
+if (!taskCompletionsColumns().has('time_of_day')) {
+    db.transaction(() => {
+        db.exec(`
+      CREATE TABLE task_completions_new2 (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        completed_on TEXT NOT NULL,
+        completed_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+        completed_at TEXT NOT NULL DEFAULT (datetime('now')),
+        time_of_day TEXT,
+        UNIQUE(task_id, completed_on, completed_by_id, time_of_day)
+      );
+      INSERT INTO task_completions_new2 (id, task_id, completed_on, completed_by_id, completed_at)
+        SELECT id, task_id, completed_on, completed_by_id, completed_at FROM task_completions;
+      DROP TABLE task_completions;
+      ALTER TABLE task_completions_new2 RENAME TO task_completions;
+    `);
+    })();
+}
+// Which visual style (see client/src/utils/progressStyles.ts) this person's Family Board
+// progress bars use. NULL = the default plain style.
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN progress_bar_style TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Course category (see client/src/utils/recipeCategories.ts for the preset list) — lets the meal
+// planner group recipes by course when picking one for a meal. NULL/empty groups into "Other".
+try {
+    db.exec('ALTER TABLE recipes ADD COLUMN category TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Lets a parent reorder the profile switcher / Settings roster / Family Board columns (see
+// routes/familyMembers.ts's POST /reorder) instead of being stuck with arrival order. Backfilled
+// from the existing created_at order so nothing visibly reshuffles the first time this runs.
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+    db.exec(`
+    UPDATE family_members SET sort_order = (
+      SELECT COUNT(*) FROM family_members AS earlier
+      WHERE earlier.created_at < family_members.created_at
+         OR (earlier.created_at = family_members.created_at AND earlier.id < family_members.id)
+    )
+  `);
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Where the nightly grocery-list digest goes (services/groceryEmail.ts) — every parent with one
+// set gets it. NULL/empty = doesn't receive it; nothing else in the app currently uses this.
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN email TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// The "Adventure Map" progress_bar_style (client/src/utils/progressStyles.ts) needs a start/end
+// icon per person — NULL falls back to a default (🏠/🏰) client-side, so this never needs backfilling.
+// These three columns are the Chores bar's settings specifically (progress_bar_style/
+// adventure_start_icon/adventure_end_icon predate the chore-vs-to-do split below, so they kept
+// their original names rather than being renamed and re-migrated — nothing here touches their
+// existing values, just narrows what they're understood to mean).
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN adventure_start_icon TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN adventure_end_icon TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// The To-dos bar's own independent style/icons — Chores and To-dos can now look completely
+// different (e.g. Adventure Map with a castle for Chores, plain Rainbow for To-dos). Backfilled
+// from the existing chore-scoped columns (one-time, only on the actual first run of this
+// migration — see the sort_order migration above for the same pattern) so a family that already
+// picked a style/icons keeps seeing exactly that on both bars, instead of To-dos silently
+// reverting to the plain default the moment these columns exist.
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN todo_progress_bar_style TEXT');
+    db.exec('ALTER TABLE family_members ADD COLUMN todo_adventure_start_icon TEXT');
+    db.exec('ALTER TABLE family_members ADD COLUMN todo_adventure_end_icon TEXT');
+    db.exec(`
+    UPDATE family_members SET
+      todo_progress_bar_style = progress_bar_style,
+      todo_adventure_start_icon = adventure_start_icon,
+      todo_adventure_end_icon = adventure_end_icon
+  `);
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// The all-done celebrations (see types.ts's chore_celebration) — null = the default animation.
+for (const column of ['chore_celebration TEXT', 'todo_celebration TEXT']) {
+    try {
+        db.exec(`ALTER TABLE family_members ADD COLUMN ${column}`);
+    }
+    catch (err) {
+        if (!err.message.includes('duplicate column'))
+            throw err;
+    }
+}
+// A chore/to-do's own icon — the Adventure Map progress bar's per-task checkpoint marker (falls
+// back to a generic icon by kind client-side, see client/src/utils/taskIcons.ts, if unset).
+try {
+    db.exec('ALTER TABLE tasks ADD COLUMN icon TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// A contact's email-to-SMS gateway domain (e.g. "vtext.com" for Verizon) — lets the Contacts page
+// text them from a desktop/kiosk browser, where a plain sms: link has nothing to hand off to. See
+// services/contactText.ts. NULL = that option just doesn't show for this contact.
+try {
+    db.exec('ALTER TABLE contacts ADD COLUMN carrier TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Live render progress (0-100), parsed from ffmpeg's own -progress output — see
+// services/movieRender.ts. NULL before rendering starts writing any progress, or once a movie is
+// no longer 'rendering' (the client only ever reads this while it is).
+try {
+    db.exec('ALTER TABLE movies ADD COLUMN progress_percent REAL');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Every music track a movie plays, in order, as a JSON array of library-relative paths — a movie
+// can now string several tracks together. music_track stays as the first of them, so movies made
+// before this column existed (one track at most) still read correctly.
+try {
+    db.exec('ALTER TABLE movies ADD COLUMN music_tracks TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// What a movie was made from, so it can be edited and re-rendered later: photo_paths is a JSON
+// array of photo paths relative to PHOTOS_DIR (in play order), music_track_details a JSON array of
+// the tracks' {file, title, artist, duration} as picked. NULL for movies made before this existed.
+// options: the movie's style (services/movieRender.ts's MovieStyle, as stored by routes/movies.ts);
+// photo_captions: { relative photo path: caption }. NULL on older movies = plain cuts, no captions.
+for (const column of ['photo_paths TEXT', 'music_track_details TEXT', 'options TEXT', 'photo_captions TEXT']) {
+    try {
+        db.exec(`ALTER TABLE movies ADD COLUMN ${column}`);
+    }
+    catch (err) {
+        if (!err.message.includes('duplicate column'))
+            throw err;
+    }
+}
+// movies.living: set (JSON { photo_id, effect, overlay, seconds }) for a "living photo" clip made on
+// the Photos page's ✨ Animate tab (services/livingPhoto.ts) — NULL for a regular slideshow movie.
+try {
+    db.exec('ALTER TABLE movies ADD COLUMN living TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Auto-saved, not-yet-rendered movie maker forms (routes/movies.ts's /drafts), so a half-built movie
+// survives the screensaver, a closed browser, or switching screens. movie_id set = unsaved edits to
+// that existing movie (at most one per movie); NULL = a new movie in progress. state is the form,
+// as JSON, exactly as the client saved it.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS movie_drafts (
+    id TEXT PRIMARY KEY,
+    movie_id TEXT REFERENCES movies(id) ON DELETE CASCADE,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    title TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`);
+// Photo documents (routes/photoDocuments.ts): a title plus sections of text and pictures, turned
+// into a .docx on download. content is JSON — see services/photoDocument.ts's DocumentContent.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_documents (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`);
+// Photo albums (routes/albums.ts) — named collections of photos kept purely in this database: an
+// album item is just a path relative to PHOTOS_DIR, so the files on the share are never moved,
+// copied, or touched. The built-in Favorites album (is_favorites = 1, id 'favorites') always exists
+// and can't be renamed or deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_albums (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    is_favorites INTEGER NOT NULL DEFAULT 0,
+    created_by_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS photo_album_items (
+    album_id TEXT NOT NULL REFERENCES photo_albums(id) ON DELETE CASCADE,
+    path TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (album_id, path)
+  );
+  INSERT OR IGNORE INTO photo_albums (id, name, is_favorites, created_at) VALUES ('favorites', 'Favorites', 1, datetime('now'));
+
+  -- Per-photo fingerprint (64-bit difference hash, hex) and sharpness score, for spotting
+  -- near-duplicates and blurry shots (services/photoAnalysis.ts). mtime_ms re-analyzes a photo
+  -- that's been replaced in place.
+  CREATE TABLE IF NOT EXISTS photo_analysis (
+    path TEXT PRIMARY KEY,
+    mtime_ms REAL NOT NULL,
+    dhash TEXT NOT NULL,
+    sharpness REAL NOT NULL,
+    pixels INTEGER NOT NULL DEFAULT 0
+  );
+`);
+// Hidden photos (routes/photos.ts): photos someone's marked to keep out of sight — out of the
+// Photos grid unless "Show hidden" is on, and out of the slideshow, On this day, and the movie/
+// document pickers. Just a note of the path; the file itself is never touched.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS hidden_photos (
+    path TEXT PRIMARY KEY,
+    hidden_at TEXT NOT NULL
+  );
+`);
+// Face recognition (services/faces/) — opt-in (setting faces_enabled), all on this machine.
+//   people:          named people (not necessarily family members — grandparents, friends…)
+//   faces:           every face found in a photo: box (fractions of the upright image), the 128-number
+//                    "faceprint" (embedding, float32 BLOB), and who it is — person_id with confirmed = 1
+//                    once someone's said so; suggestions are worked out on the fly, never stored.
+//   face_rejections: "that's not Sam" — keeps a suggestion from coming back.
+//   face_scans:      which photos have been looked at (mtime_ms re-scans a replaced photo).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS people (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS faces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    x REAL NOT NULL, y REAL NOT NULL, w REAL NOT NULL, h REAL NOT NULL,
+    score REAL NOT NULL,
+    embedding BLOB NOT NULL,
+    person_id TEXT REFERENCES people(id) ON DELETE SET NULL,
+    confirmed INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS faces_path ON faces(path);
+  CREATE INDEX IF NOT EXISTS faces_person ON faces(person_id);
+  CREATE TABLE IF NOT EXISTS face_rejections (
+    face_id INTEGER NOT NULL REFERENCES faces(id) ON DELETE CASCADE,
+    person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    PRIMARY KEY (face_id, person_id)
+  );
+  -- (faces.quality / ignored / no_group are added below, as migrations.)
+  CREATE TABLE IF NOT EXISTS face_scans (
+    path TEXT PRIMARY KEY,
+    mtime_ms REAL NOT NULL,
+    faces INTEGER NOT NULL,
+    scanned_at TEXT NOT NULL
+  );
+  -- "Sam is in this photo" without a face to name (back of the head, side view, too small to be
+  -- found…): tagged by hand, no box or faceprint, so it never feeds suggestions. Kept apart from
+  -- faces so a re-scan of the photo leaves it alone.
+  CREATE TABLE IF NOT EXISTS photo_people (
+    path TEXT NOT NULL,
+    person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (path, person_id)
+  );
+  CREATE INDEX IF NOT EXISTS photo_people_person ON photo_people(person_id);
+`);
+// photo_dates: each photo's date taken (from EXIF, else the file's mtime), by absolute path — see
+// services/photoDates.ts. Read once, ever, so sorting Photos by date is quick after a restart.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_dates (
+    path TEXT PRIMARY KEY,
+    taken_at TEXT NOT NULL
+  );
+`);
+// Where the date came from: 'exif' (the photo), 'folder' (its YEAR/Month folder — no date inside it),
+// or 'file' (the file's own date). NULL on rows from before this was kept (checked again once).
+try {
+    db.exec('ALTER TABLE photo_dates ADD COLUMN source TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Internet controls (Pi-hole) — see services/internetControl.ts and docs/PIHOLE_SETUP.md. This app
+// is the source of truth for who owns which device and each person's rules; Pi-hole just gets told
+// the result (which of this app's groups each device should be in) every minute.
+db.exec(`
+  -- A device (by MAC address, or IP if it has a fixed one) and whose it is. family_member_id NULL =
+  -- known but not assigned to anyone, so no family rules apply to it.
+  CREATE TABLE IF NOT EXISTS internet_devices (
+    id TEXT PRIMARY KEY,
+    client TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    family_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Per-person state. paused_until: a manual pause (ISO time, far future = until resumed).
+  -- allowed_until: internet allowed even during a scheduled block (bonus time / "resume" during
+  -- bedtime). filtered: their devices get the kids' web filter.
+  CREATE TABLE IF NOT EXISTS internet_members (
+    family_member_id TEXT PRIMARY KEY REFERENCES family_members(id) ON DELETE CASCADE,
+    filtered INTEGER NOT NULL DEFAULT 0,
+    paused_until TEXT,
+    allowed_until TEXT
+  );
+
+  -- Recurring "no internet" windows, e.g. bedtime. days = comma-separated weekday numbers the
+  -- window *starts* on (0 = Sunday); an end time at or before the start time runs past midnight.
+  CREATE TABLE IF NOT EXISTS internet_schedules (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    label TEXT NOT NULL DEFAULT '',
+    days TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1
+  );
+
+  -- A kid's own approved sites, for "approved sites only" mode.
+  CREATE TABLE IF NOT EXISTS internet_member_sites (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    domain TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (family_member_id, domain)
+  );
+
+  -- Sites always allowed (even while paused/filtered) or always blocked for filtered members.
+  CREATE TABLE IF NOT EXISTS internet_sites (
+    id TEXT PRIMARY KEY,
+    domain TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('allow', 'block')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (domain, kind)
+  );
+`);
+// Internet "approved sites only" mode (services/internetControl.ts) — added after internet_members
+// shipped, hence a migration rather than part of its CREATE TABLE.
+try {
+    db.exec('ALTER TABLE internet_members ADD COLUMN approved_only INTEGER NOT NULL DEFAULT 0');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Internet: daily time allowance, earning time from chores, and requests (services/internetControl.ts,
+// services/internetUsage.ts). daily_minutes/weekend_minutes NULL = no limit that day type;
+// minutes_per_chore = bonus minutes per chore/to-do finished today; extra_minutes applies only on
+// extra_minutes_day (a parent's "+30 min today").
+for (const column of [
+    'daily_minutes INTEGER',
+    'weekend_minutes INTEGER',
+    'minutes_per_chore INTEGER NOT NULL DEFAULT 0',
+    'extra_minutes INTEGER NOT NULL DEFAULT 0',
+    'extra_minutes_day TEXT',
+]) {
+    try {
+        db.exec(`ALTER TABLE internet_members ADD COLUMN ${column}`);
+    }
+    catch (err) {
+        if (!err.message.includes('duplicate column'))
+            throw err;
+    }
+}
+db.exec(`
+  -- Minutes a member was actually online, per local day (YYYY-MM-DD).
+  CREATE TABLE IF NOT EXISTS internet_usage (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    minutes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day)
+  );
+  -- Lookups per site per member per day, for the weekly report and the Time online graphs (kept 180 days).
+  CREATE TABLE IF NOT EXISTS internet_site_counts (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    site TEXT NOT NULL,
+    lookups INTEGER NOT NULL DEFAULT 0,
+    blocked INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day, site)
+  );
+  -- Time online graphs (services/internetUsage.ts): minutes a member's devices were online with a
+  -- site in use (a minute can count for more than one site — a video page and a chat at once), and
+  -- online minutes per hour of the day. Added later; they fill in from when they were added.
+  -- internet_site_minutes is kept 180 days like internet_site_counts; the hours are kept for good.
+  CREATE TABLE IF NOT EXISTS internet_site_minutes (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    site TEXT NOT NULL,
+    minutes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day, site)
+  );
+  CREATE TABLE IF NOT EXISTS internet_usage_hours (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    hour INTEGER NOT NULL,
+    minutes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (family_member_id, day, hour)
+  );
+  -- A kid asking a parent for more time or for a website.
+  CREATE TABLE IF NOT EXISTS internet_requests (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('time', 'site')),
+    minutes INTEGER,
+    domain TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+    created_at TEXT NOT NULL,
+    decided_at TEXT
+  );
+`);
+// Faces: quality = how straight-on (0–1; NULL for faces found before it was recorded); ignored = "not
+// a face / a stranger" — left out of everything; no_group = "different people" — named one at a time
+// rather than grouped.
+// face_changes: a log of which face rows changed (by triggers, so nothing can miss it) — lets the
+// face matcher re-read just those instead of every face after each click. Read and emptied by
+// services/faces/index.ts.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS face_changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, face_id INTEGER NOT NULL);
+  CREATE TRIGGER IF NOT EXISTS faces_changed_update AFTER UPDATE ON faces BEGIN
+    INSERT INTO face_changes (face_id) VALUES (NEW.id);
+  END;
+  CREATE TRIGGER IF NOT EXISTS faces_changed_delete AFTER DELETE ON faces BEGIN
+    INSERT INTO face_changes (face_id) VALUES (OLD.id);
+  END;
+`);
+// face_scans.error = this photo couldn't be read (it still counts as looked at, and is tried again
+// only once the file changes — or when someone taps "Try again").
+try {
+    db.exec('ALTER TABLE face_scans ADD COLUMN error TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// face_scans.detector = which way faces were found (services/faces/engine.ts DETECTOR_VERSION;
+// NULL = the first, whole-photo-only way) — older scans get a top-up for the small faces they missed.
+try {
+    db.exec('ALTER TABLE face_scans ADD COLUMN detector INTEGER');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// people.cover_face_id = the face picked as their picture (NULL = choose automatically).
+try {
+    db.exec('ALTER TABLE people ADD COLUMN cover_face_id INTEGER');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+for (const column of ['quality REAL', 'ignored INTEGER NOT NULL DEFAULT 0', 'no_group INTEGER NOT NULL DEFAULT 0']) {
+    try {
+        db.exec(`ALTER TABLE faces ADD COLUMN ${column}`);
+    }
+    catch (err) {
+        if (!err.message.includes('duplicate column'))
+            throw err;
+    }
+}
+// Floor plans (Chores & Tasks → 🏠 By room): a picture per floor / the yard, with rooms marked on
+// it as outlines (points 0–1 across/down the picture, JSON). A chore/to-do can say which room it's
+// in (tasks.room_id) — see routes/floorplans.ts.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS floorplans (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS floorplan_rooms (
+    id TEXT PRIMARY KEY,
+    floorplan_id TEXT NOT NULL REFERENCES floorplans(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    points TEXT NOT NULL,
+    color TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS floorplan_rooms_plan ON floorplan_rooms(floorplan_id);
+`);
+try {
+    db.exec('ALTER TABLE tasks ADD COLUMN room_id TEXT REFERENCES floorplan_rooms(id) ON DELETE SET NULL');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// Where in the room exactly (0–1 across/down the plan's picture; NULL = the middle of the room),
+// and which kids a parent lets put their own chores on the floor plan.
+for (const [table, column] of [
+    ['tasks', 'room_x REAL'],
+    ['tasks', 'room_y REAL'],
+    ['family_members', 'can_place_tasks INTEGER NOT NULL DEFAULT 0'],
+    // 🛒 A kid a parent lets add to the grocery list (parents always can).
+    ['family_members', 'can_add_grocery INTEGER NOT NULL DEFAULT 0'],
+    // 👪 A kid a parent lets add and edit relatives (parents always can; hiding one stays parents-only).
+    ['family_members', 'can_edit_relatives INTEGER NOT NULL DEFAULT 0'],
+    // Taking turns: the people (JSON array of ids, in order) a chore rotates through, one per time
+    // it comes up, counting from rotation_start (whose turn is rotation[0]). See taskQueries.ts.
+    ['tasks', 'rotation TEXT'],
+    ['tasks', 'rotation_start TEXT'],
+    // A "when needed" chore (recurrence 'asneeded'): since when it needs doing; cleared when done.
+    ['tasks', 'needed_since TEXT'],
+    // How big a plan's room labels are (1 = the default; a parent can make them bigger or smaller).
+    ['floorplans', 'label_scale REAL NOT NULL DEFAULT 1'],
+    // …and its starting zoom (NULL = fit), avatar size and job-emoji size.
+    ['floorplans', 'default_zoom REAL'],
+    ['floorplans', 'avatar_scale REAL NOT NULL DEFAULT 1'],
+    ['floorplans', 'job_scale REAL NOT NULL DEFAULT 1'],
+    // How much of it to do: NULL = just check it off (as always); 'times' = goal_amount times (each
+    // goal_minutes long, if set — e.g. basketball 5× at 30 min); 'hours' = goal_amount hours, checked
+    // off in 30-minute chunks (task_progress) — e.g. 6 hours of weeding, a bit at a time.
+    ['tasks', 'goal_type TEXT'],
+    ['tasks', 'goal_amount REAL'],
+    ['tasks', 'goal_minutes INTEGER'],
+    // Prize Bank prizes: what you get — 'money' / 'stars' (reward_amount, paid into the balance when
+    // claimed) or 'custom' (the title says it: "Movie night"); NULL = an older prize, same as custom.
+    // And an emoji for it (NULL = 💲 / ⭐ / 🎁 by kind).
+    ['prizes', 'reward_kind TEXT'],
+    ['prizes', 'reward_amount REAL'],
+    ['prizes', 'emoji TEXT'],
+    // A chore/to-do can pay something other than money or stars (reward_type 'custom'): what it is
+    // ("Movie time", "Friend time", "Special trip"). And the reward's emoji, any type (NULL = 💲 / ⭐ / 🎁).
+    ['tasks', 'reward_text TEXT'],
+    ['tasks', 'reward_emoji TEXT'],
+    // Needs a parent's OK: a kid checking it off (or claiming the prize) waits in the parent's
+    // "To approve" list instead of counting straight away.
+    ['tasks', 'needs_approval INTEGER NOT NULL DEFAULT 0'],
+    ['prizes', 'needs_approval INTEGER NOT NULL DEFAULT 0'],
+    // A prize claim waiting for that OK: 'pending' (NULL = an ordinary, settled claim).
+    ['prize_redemptions', 'status TEXT'],
+    // A prize that's earned once (1): after it's redeemed it moves to the kid's past prizes. NULL =
+    // can be earned again and again (how every prize worked before).
+    ['prizes', 'once INTEGER'],
+    // What redeeming it paid, so a parent unticking "Redeemed" can take exactly that back: the bank
+    // deposit it made (money), or how much money/stars it added to the balances.
+    ['prize_redemptions', 'bank_transaction_id TEXT'],
+    ['prize_redemptions', 'paid_money REAL'],
+    ['prize_redemptions', 'paid_stars INTEGER'],
+    // A kid's chunk of a times/hours job that needs a parent's OK: 1 while it waits in ✅ To approve
+    // (it doesn't count yet); NULL = counted.
+    ['task_progress', 'pending INTEGER'],
+    // 👕 Dress up: what their avatar has on — {"hat": "crown", "pet": "puppy", …} (see services/outfits.ts).
+    ['family_members', 'avatar_outfit TEXT'],
+    // 🏠 Who's home: where they are right now ('home', 'school', 'practice'…), a few words ("at
+    // Jake's"), and when they said so.
+    ['family_members', 'presence TEXT'],
+    ['family_members', 'presence_note TEXT'],
+    ['family_members', 'presence_at TEXT'],
+    // 🍽️ Who a recipe is from ("Aunt Mary") and where it came from ("Huber Family Cookbook, p. 6", "TheMealDB").
+    ['recipes', 'author TEXT'],
+    ['recipes', 'origin TEXT'],
+    // 🛒 A grocery item stays on the list until a parent marks it off: 'purchased' or 'ignored'
+    // (NULL = still on the list). Kept afterwards, with who and when, instead of being deleted.
+    ['grocery_items', 'status TEXT'],
+    ['grocery_items', 'done_at TEXT'],
+    ['grocery_items', 'done_by_id TEXT'],
+]) {
+    try {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
+    }
+    catch (err) {
+        // "no such table": a table made further down (on a brand-new or older database) — it gets the column there.
+        if (!/duplicate column|no such table/.test(err.message))
+            throw err;
+    }
+}
+// 👩‍🍳 Who's cooking (planning + making) a meal: once (date set) or on a repeating schedule
+// (weekdays "2,4" = every Tuesday & Thursday, from start_date until end_date if set). A one-off on
+// a day with a repeating cook takes its place that day; member_id NULL there = "nobody this time".
+// Stopping a schedule sets end_date (one-offs: stopped_at) — rows are kept, never deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meal_cooks (
+    id TEXT PRIMARY KEY,
+    member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    slot TEXT NOT NULL CHECK (slot IN ('breakfast', 'lunch', 'dinner')),
+    date TEXT,
+    weekdays TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    note TEXT,
+    stopped_at TEXT,
+    created_by_id TEXT,
+    created_at TEXT NOT NULL
+  );
+`);
+// The chore made alongside it ("Also put it on their chores") — same days; retired with it.
+try {
+    db.exec('ALTER TABLE meal_cooks ADD COLUMN task_id TEXT');
+}
+catch (err) {
+    if (!/duplicate column/.test(err.message))
+        throw err;
+}
+// The order each person does their chores/to-dos in (1st, 2nd, …) — their routine; the floor plan's
+// avatar walks from one to the next in this order. Per person, since a shared job can sit at a
+// different point in each person's routine. Jobs not in it come after, in the usual order.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS task_positions (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (family_member_id, task_id)
+  );
+`);
+// A chunk of a "times"/"hours" job someone did (amount: 1 per time, or minutes). When they add up
+// to the goal, the job gets its usual completion (so everything else sees it as done).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS task_progress (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    family_member_id TEXT REFERENCES family_members(id) ON DELETE SET NULL,
+    logged_on TEXT NOT NULL,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS task_progress_task ON task_progress(task_id, family_member_id);
+`);
+// (Its `pending` column is added in the list above too; this covers a database where the table was only just made.)
+try {
+    db.exec('ALTER TABLE task_progress ADD COLUMN pending INTEGER');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// A prize earned by doing several jobs (e.g. 4 h weeding + 4 h mulching + 6 h project work):
+// each row is one job and how much of it (times, or hours for an "hours" job). A prize with rows
+// here uses them instead of its single task_id / required_count.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS prize_requirements (
+    prize_id TEXT NOT NULL REFERENCES prizes(id) ON DELETE CASCADE,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    amount REAL NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (prize_id, task_id)
+  );
+`);
+// Who a prize is for: one or more kids. None listed = everyone (how every prize worked before).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS prize_members (
+    prize_id TEXT NOT NULL REFERENCES prizes(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    PRIMARY KEY (prize_id, family_member_id)
+  );
+`);
+// Something a kid has earned that isn't money or stars — from a chore/to-do with a custom reward,
+// or a "something else" prize they claimed. It stays on their list until a parent marks it used.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS earned_rewards (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+    prize_id TEXT REFERENCES prizes(id) ON DELETE SET NULL,
+    text TEXT NOT NULL,
+    emoji TEXT,
+    earned_at TEXT NOT NULL,
+    used_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS earned_rewards_member ON earned_rewards(family_member_id, used_at);
+`);
+// A kid's check-off of a job that needs a parent's OK, waiting for it. Approving turns it into a
+// real completion (and pays the reward); saying no just removes it.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_completions (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    family_member_id TEXT REFERENCES family_members(id) ON DELETE CASCADE,
+    completed_on TEXT NOT NULL,
+    time_of_day TEXT,
+    created_at TEXT NOT NULL
+  );
+`);
+// 👕 Dress up: the outfit pieces each person has bought with stars.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS outfit_items (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL,
+    stars INTEGER NOT NULL DEFAULT 0,
+    bought_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, item_id)
+  );
+`);
+// 🗳️ What's for dinner: a parent offers a few choices for a meal, everyone votes, and closing the
+// vote puts the winner on the meal plan.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meal_polls (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL,
+    slot TEXT NOT NULL DEFAULT 'dinner',
+    question TEXT,
+    created_by_id TEXT,
+    created_at TEXT NOT NULL,
+    closed_at TEXT,
+    winner_option_id TEXT,
+    meal_id TEXT
+  );
+  CREATE TABLE IF NOT EXISTS meal_poll_options (
+    id TEXT PRIMARY KEY,
+    poll_id TEXT NOT NULL REFERENCES meal_polls(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    recipe_id TEXT,
+    emoji TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS meal_poll_votes (
+    poll_id TEXT NOT NULL REFERENCES meal_polls(id) ON DELETE CASCADE,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    option_id TEXT NOT NULL REFERENCES meal_poll_options(id) ON DELETE CASCADE,
+    voted_at TEXT NOT NULL,
+    PRIMARY KEY (poll_id, family_member_id)
+  );
+`);
+// 📔 Journal & 🫙 gratitude jar: a few words (and maybe a drawing) a day. Journal entries are
+// private to the writer and parents; gratitude-jar notes are for the whole family to see.
+// hidden_at = taken off the page (kept, never deleted).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS journal_entries (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'journal',
+    date TEXT NOT NULL,
+    text TEXT,
+    mood TEXT,
+    drawing TEXT,
+    created_at TEXT NOT NULL,
+    hidden_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS journal_entries_member ON journal_entries(family_member_id, date);
+`);
+// 🫙 Who a gratitude-jar note is about, set by hand (services/gratitudePeople.ts): tagged = 1 adds
+// them, 0 takes off a name match that's wrong. Name matches themselves aren't stored. New table only;
+// no foreign keys, so removing someone never removes these rows.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS journal_entry_people (
+    entry_id TEXT NOT NULL,
+    person_kind TEXT NOT NULL,
+    person_id TEXT NOT NULL,
+    tagged INTEGER NOT NULL,
+    set_by TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (entry_id, person_kind, person_id)
+  );
+  CREATE INDEX IF NOT EXISTS journal_entry_people_person ON journal_entry_people(person_kind, person_id);
+`);
+// 📏 Height chart: each measurement, in inches, with an optional photo.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS heights (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    inches REAL NOT NULL,
+    note TEXT,
+    photo TEXT,
+    created_at TEXT NOT NULL,
+    hidden_at TEXT
+  );
+`);
+// 📝 Sticky notes: for the family (or one person), on Home and the screensaver until someone
+// takes them down (done_at — kept, never deleted).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sticky_notes (
+    id TEXT PRIMARY KEY,
+    text TEXT,
+    drawing TEXT,
+    color TEXT,
+    author_id TEXT,
+    for_member_id TEXT,
+    created_at TEXT NOT NULL,
+    done_at TEXT
+  );
+`);
+// 📹 Cameras: a tablet a parent has turned into a camera (Settings → 📹 Cameras), and the clips it
+// saves when it sees movement. Taking a clip or camera away only sets hidden_at — kept, never deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS camera_devices (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    name TEXT NOT NULL,
+    user_agent TEXT,
+    status TEXT,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    facing TEXT NOT NULL DEFAULT 'user',
+    motion INTEGER NOT NULL DEFAULT 0,
+    sensitivity INTEGER NOT NULL DEFAULT 50,
+    show_badge INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT,
+    hidden_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS camera_clips (
+    id TEXT PRIMARY KEY,
+    device_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    frames INTEGER NOT NULL DEFAULT 0,
+    hidden_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_camera_clips_device ON camera_clips (device_id, started_at);
+`);
+// 📹 Camera storage (services/cameraStorage.ts): after 24h a clip's pictures become one small video
+// (archive_file, relative to the cameras folder); backed_up_at once it's copied to the SMB share;
+// purged_at/purge_reason when a parent removed it to free space (never automatic; the row is kept).
+// camera_purges says what was cleared and why, for Settings → 📹 Cameras.
+for (const column of [
+    'archive_file TEXT',
+    'archived_at TEXT',
+    'archive_error TEXT',
+    'bytes INTEGER',
+    'backed_up_at TEXT',
+    'purged_at TEXT',
+    'purge_reason TEXT',
+    // When a parent last downloaded it in a zip (Settings → 📹 Cameras → Download).
+    'downloaded_at TEXT',
+]) {
+    try {
+        db.exec(`ALTER TABLE camera_clips ADD COLUMN ${column}`);
+    }
+    catch (err) {
+        if (!err.message.includes('duplicate column'))
+            throw err;
+    }
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS camera_purges (
+    id TEXT PRIMARY KEY,
+    at TEXT NOT NULL,
+    clips INTEGER NOT NULL,
+    bytes INTEGER NOT NULL,
+    backed_up INTEGER NOT NULL DEFAULT 0,
+    first_at TEXT,
+    last_at TEXT,
+    cameras TEXT,
+    free_before INTEGER,
+    free_after INTEGER,
+    min_free INTEGER,
+    note TEXT
+  );
+`);
+// 📍 Where a photo was taken (services/photoPlaces.ts), by path relative to PHOTOS_DIR:
+// photo_gps — the GPS read once from the photo's EXIF (lat/lon null = it has none);
+// photo_place_edits — the country/state/year a family member set when it was missing or wrong.
+// The photo files themselves are never changed.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_gps (
+    path TEXT PRIMARY KEY,
+    lat REAL,
+    lon REAL,
+    read_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS photo_place_edits (
+    path TEXT PRIMARY KEY,
+    country TEXT,
+    country_code TEXT,
+    state TEXT,
+    year INTEGER,
+    month INTEGER,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+  );
+`);
+// 📥 Photos filed into <YEAR>/<Month> from the Inbox or 📤 Add photos (services/photoFiling.ts) —
+// what happened to each one, for Settings → 📁 Photo library.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photo_filings (
+    id TEXT PRIMARY KEY,
+    at TEXT NOT NULL,
+    source TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    dest_path TEXT,
+    taken_at TEXT,
+    date_from TEXT,
+    result TEXT NOT NULL,
+    note TEXT,
+    by_member TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_photo_filings_at ON photo_filings (at);
+`);
+// 🎬 Movies section (services/movieLibrary.ts): what ffprobe said about each video on the movies
+// share — length, picture size, when it was recorded — so it's read once, not on every visit.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS movie_library_info (
+    rel_path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    mtime_ms INTEGER NOT NULL,
+    duration REAL,
+    width INTEGER,
+    height INTEGER,
+    video_codec TEXT,
+    recorded_at TEXT,
+    probed_at TEXT NOT NULL,
+    error TEXT
+  );
+`);
+// 🎮 Games (routes/games.ts): games a kid unlocked with stars, every run's score, and each
+// person's progress in a game (coins, upgrades). New tables; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_unlocks (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    stars INTEGER NOT NULL DEFAULT 0,
+    unlocked_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id)
+  );
+  CREATE TABLE IF NOT EXISTS game_scores (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    detail TEXT,
+    played_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_game_scores_game ON game_scores (game_id, score);
+  CREATE TABLE IF NOT EXISTS game_saves (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id)
+  );
+`);
+// 🎟️ Games a parent gave a kid a number of plays of (routes/games.ts) — on top of unlocking with
+// stars. New table; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_passes (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    plays_left INTEGER NOT NULL DEFAULT 0,
+    given_by TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id)
+  );
+`);
+// 🔄 Movies turned the right way up (routes/movieLibrary.ts): only how the browser shows them —
+// the video files on the share are never changed. New table; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS movie_rotation (
+    rel_path TEXT PRIMARY KEY,
+    degrees INTEGER NOT NULL,
+    set_at TEXT NOT NULL,
+    by_member TEXT
+  );
+`);
+// 🔒 Knowledge base articles only parents can see (routes/knowledgeBase.ts). Existing articles stay
+// visible to everyone (0).
+try {
+    db.exec('ALTER TABLE kb_articles ADD COLUMN parents_only INTEGER NOT NULL DEFAULT 0');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// ⌨️ Typing practice (routes/typing.ts): every finished lesson or game, for progress and stars.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS typing_results (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    at TEXT NOT NULL,
+    day TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    level INTEGER NOT NULL DEFAULT 0,
+    wpm REAL NOT NULL DEFAULT 0,
+    accuracy REAL NOT NULL DEFAULT 0,
+    chars INTEGER NOT NULL DEFAULT 0,
+    seconds INTEGER NOT NULL DEFAULT 0,
+    score INTEGER NOT NULL DEFAULT 0,
+    passed INTEGER NOT NULL DEFAULT 0,
+    stars INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_typing_results_member ON typing_results (family_member_id, at);
+`);
+// ⌨️ Of a lesson's stars, how many were for its speed (the parent's "10 wpm = 1 ⭐, 20 wpm = 3 ⭐"),
+// so a faster pass later pays just the difference.
+try {
+    db.exec('ALTER TABLE typing_results ADD COLUMN speed_stars INTEGER NOT NULL DEFAULT 0');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+export function getSetting(key, fallback = '') {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    return row?.value ?? fallback;
+}
+export function setSetting(key, value) {
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+}
+// 💎 Tokens: earned and spent inside the app (typing, chores set to pay tokens, swapping stars) and
+// spent on 👕 Dress up and 🎮 Games. Prize Bank ⭐ stars stay separate.
+try {
+    db.exec('ALTER TABLE family_members ADD COLUMN token_balance INTEGER NOT NULL DEFAULT 0');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// What a dress-up piece / game unlock was paid in: 'tokens', or NULL = ⭐ stars (before tokens), so a
+// refund gives back the right thing.
+for (const table of ['outfit_items', 'game_unlocks']) {
+    try {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT`);
+    }
+    catch (err) {
+        if (!err.message.includes('duplicate column'))
+            throw err;
+    }
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS token_log (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    delta INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    by_member_id TEXT,
+    at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_token_log_member ON token_log (family_member_id, at);
+`);
+// Once, when tokens arrive: everyone starts with as many tokens as typing has paid them so far (in
+// stars). Their stars aren't touched. Only the new token_balance column is set.
+if (!getSetting('tokens_started')) {
+    db.transaction(() => {
+        const now = new Date().toISOString();
+        const rows = db
+            .prepare("SELECT family_member_id AS id, SUM(stars) AS n FROM typing_results WHERE stars > 0 GROUP BY family_member_id")
+            .all();
+        for (const r of rows) {
+            if (!db.prepare('SELECT 1 FROM family_members WHERE id = ?').get(r.id))
+                continue;
+            db.prepare('UPDATE family_members SET token_balance = token_balance + ? WHERE id = ?').run(r.n, r.id);
+            db.prepare('INSERT INTO token_log (id, family_member_id, delta, reason, by_member_id, at) VALUES (?, ?, ?, ?, NULL, ?)').run(`start-${r.id}`, r.id, r.n, 'Starting tokens: what typing had earned so far', now);
+        }
+        setSetting('tokens_started', now);
+    })();
+}
+// 📚 Learning (routes/learning.ts): each kid's school grade (set by a parent) and every finished
+// Spelling / Grammar round.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS learning_grades (
+    family_member_id TEXT PRIMARY KEY REFERENCES family_members(id) ON DELETE CASCADE,
+    grade INTEGER NOT NULL,
+    set_by TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS learning_results (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    at TEXT NOT NULL,
+    day TEXT NOT NULL,
+    correct INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    detail TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_results_member ON learning_results (family_member_id, subject, at);
+  -- 🎁 the once-a-day bonus for maxing out the day's tokens in the parent's picked subjects
+  CREATE TABLE IF NOT EXISTS learning_bonus_paid (
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    tokens INTEGER NOT NULL,
+    at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, day)
+  );
+`);
+// 📖 Lessons (📚 Learning: Grammar, Math, US History): a reading, then a quiz. Built-in ones are
+// added once (never over a parent's edits); parents can edit, add and hide (never delete) them.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS learning_lessons (
+    id TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    topic TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    quiz TEXT NOT NULL DEFAULT '[]',
+    tokens INTEGER,
+    sort INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    builtin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_lessons_subject ON learning_lessons (subject, grade, sort);
+  -- Built-in lessons swapped for new ones: each is hidden once (if no parent edited it), then
+  -- recorded here so a parent who un-hides it keeps it. Nothing is deleted. (routes/lessons.ts)
+  CREATE TABLE IF NOT EXISTS learning_lessons_retired (
+    lesson_id TEXT PRIMARY KEY,
+    at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS learning_lessons_done (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    lesson_id TEXT NOT NULL,
+    at TEXT NOT NULL,
+    correct INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    passed INTEGER NOT NULL DEFAULT 0,
+    tokens INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_lessons_done_member ON learning_lessons_done (family_member_id, lesson_id);
+  -- 🔁 a kid passed every lesson at their grade in a subject: from "at" on, each lesson pays again
+  -- (one row per time it happens; tries from before it count as an earlier round). New table only.
+  CREATE TABLE IF NOT EXISTS learning_lesson_rounds (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    lessons INTEGER NOT NULL,
+    at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_lesson_rounds_member ON learning_lesson_rounds (family_member_id, subject, at);
+`);
+// 🔒 A game a kid had unlocked for good that a parent locked again or switched to plays (no refund).
+// The unlock row stays; it counts as ended while this table has a row for that same unlock.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_unlock_ends (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    ended_by TEXT,
+    plays_given INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_game_unlock_ends_member ON game_unlock_ends (family_member_id, game_id);
+`);
+// 🔁 A lesson a parent made repeatable: passing it pays tokens up to this many times each round
+// (NULL = once, like every lesson). New column only.
+try {
+    db.exec('ALTER TABLE learning_lessons ADD COLUMN pay_times INTEGER');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// 🎯 Topic practice (routes/learning.ts): a ➗ math round of just one topic. topic = NULL is a mixed
+// round, as every round before this was. Each topic pays once per 🔁 lap (more if a parent says so);
+// passing every topic at their grade starts a new lap — one row per time. New column/table only.
+try {
+    db.exec('ALTER TABLE learning_results ADD COLUMN topic TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_learning_results_topic ON learning_results (family_member_id, subject, grade, topic);
+  CREATE TABLE IF NOT EXISTS learning_topic_laps (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    topics INTEGER NOT NULL,
+    at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_topic_laps_member ON learning_topic_laps (family_member_id, subject, at);
+`);
+// 👪 Relatives (routes/relatives.ts): family, living or not — names, dates, memories, and the photos
+// and home movies they're in. person_id links a face-recognition person (their faces count as their
+// photos); family_member_id links a household profile who is this relative (their birthday). Media
+// rows point at files by path (nothing is copied or touched); "untagging" sets hidden = 1.
+// New tables; no existing data changes.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS relatives (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    nickname TEXT,
+    relation TEXT,
+    birth_date TEXT,
+    birth_place TEXT,
+    death_date TEXT,
+    death_place TEXT,
+    about TEXT,
+    person_id TEXT,
+    family_member_id TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+  );
+  CREATE TABLE IF NOT EXISTS relative_memories (
+    id TEXT PRIMARY KEY,
+    relative_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    author_member_id TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_relative_memories ON relative_memories (relative_id);
+  CREATE TABLE IF NOT EXISTS relative_media (
+    relative_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    rel_path TEXT NOT NULL,
+    added_by TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (relative_id, kind, rel_path)
+  );
+  CREATE TABLE IF NOT EXISTS birthday_greetings_seen (
+    family_member_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, day)
+  );
+  -- 💾 Learning auto-save: practice rounds kept here (not just in memory) so a closed tab or a
+  -- restart doesn't lose one, and each person's in-progress spot (round, lesson, quiz, typing).
+  CREATE TABLE IF NOT EXISTS learning_open_rounds (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    data TEXT NOT NULL,
+    finished_at TEXT
+  );
+  -- 🔓 Extras inside a game bought with 💎 (Hill Hopper's 🦘 Jump and ⚠️ Obstacles).
+  CREATE TABLE IF NOT EXISTS game_features (
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    feature TEXT NOT NULL,
+    cost INTEGER NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, game_id, feature)
+  );
+  -- 🏆 Prize powers a kid earned by passing every lesson in a subject at their grade: one row per
+  -- earning (uses 0 = unlimited), and one row each time a power was used.
+  CREATE TABLE IF NOT EXISTS game_prize_grants (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    prize TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    grade INTEGER NOT NULL,
+    uses INTEGER NOT NULL,
+    granted_at TEXT NOT NULL,
+    UNIQUE (family_member_id, game_id, prize, subject, grade)
+  );
+  CREATE TABLE IF NOT EXISTS game_roms (
+    id TEXT PRIMARY KEY,
+    file TEXT NOT NULL,
+    title TEXT NOT NULL,
+    system TEXT NOT NULL DEFAULT 'nes',
+    size INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS game_prize_uses (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    prize TEXT NOT NULL,
+    used_at TEXT NOT NULL
+  );
+  -- 💎 Things bought with tokens inside a game (🏘️ Tiny Town's coin bags and special buildings), one row each.
+  CREATE TABLE IF NOT EXISTS game_purchases (
+    id TEXT PRIMARY KEY,
+    family_member_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    item TEXT NOT NULL,
+    cost INTEGER NOT NULL,
+    bought_at TEXT NOT NULL
+  );
+  -- ⏰ Daily limits: how many times and how long each person used each activity, per day.
+  CREATE TABLE IF NOT EXISTS activity_usage (
+    family_member_id TEXT NOT NULL,
+    activity TEXT NOT NULL,
+    day TEXT NOT NULL,
+    times INTEGER NOT NULL DEFAULT 0,
+    seconds INTEGER NOT NULL DEFAULT 0,
+    last_beat_at TEXT,
+    PRIMARY KEY (family_member_id, activity, day)
+  );
+  CREATE TABLE IF NOT EXISTS learning_drafts (
+    family_member_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    data TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (family_member_id, key)
+  );
+`);
+// 👪 A relative's default picture, picked by a parent from their tagged photos: the photo's path
+// under the photos folder (NULL = the usual one). New column only (after the table is made, so a new install works too); the photo itself isn't touched.
+try {
+    db.exec('ALTER TABLE relatives ADD COLUMN cover_path TEXT');
+}
+catch (err) {
+    if (!err.message.includes('duplicate column'))
+        throw err;
+}
+// 📦 Backups the app runs itself (Settings → 💾 Backups → 📦 Photo & movie backups,
+// services/backupJobs.ts): which folders go where, when, and each run's result. A job is never
+// deleted (archived = taken off the list); the backups it made are never touched by the app.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS backup_jobs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    -- JSON array of {key: 'photos' | 'videos' | 'movies' | 'folder', path?: string}
+    sources TEXT NOT NULL,
+    dest TEXT NOT NULL,
+    -- 'history' = restic snapshots (browse + restore any date); 'copy' = plain folders (rsync, older versions kept aside)
+    method TEXT NOT NULL DEFAULT 'history',
+    -- 'off' | 'daily' | 'weekly'
+    schedule TEXT NOT NULL DEFAULT 'daily',
+    at_time TEXT NOT NULL DEFAULT '03:00',
+    weekday INTEGER NOT NULL DEFAULT 0,
+    check_weekly INTEGER NOT NULL DEFAULT 1,
+    restore_dir TEXT,
+    same_disk_ok INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    schedule_set_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+  );
+  -- 🔑 The password a 'history' backup is locked with (restic). Kept in the database so the app's
+  -- own nightly backup (docs/BACKUP.md) keeps a copy; parents can see it to save it elsewhere.
+  CREATE TABLE IF NOT EXISTS backup_job_keys (
+    job_id TEXT PRIMARY KEY,
+    password TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS backup_runs (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    -- 'backup' | 'check' | 'restore'
+    kind TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    -- 'ok' | 'warning' | 'failed' | 'cancelled'; NULL while running (or the app restarted mid-run)
+    result TEXT,
+    message TEXT,
+    -- JSON: files_new, files_changed, bytes_added, snapshot_id, restore target, …
+    stats TEXT,
+    by_member_id TEXT,
+    trigger TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_backup_runs_job ON backup_runs (job_id, started_at);
+`);
