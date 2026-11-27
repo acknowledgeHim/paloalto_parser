@@ -47,6 +47,10 @@ async function scanDir(dir: string): Promise<string[]> {
   }
   const files: string[] = [];
   for (const entry of entries) {
+    // Not photos: hidden files — notably a Mac's "._name.jpg" metadata stubs, which carry the
+    // picture's name and extension but no picture (they showed as broken images) — and the
+    // __MACOSX folder unzipping a Mac-made zip leaves behind, full of them.
+    if (entry.name.startsWith('.') || entry.name === '__MACOSX') continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await scanDir(full)));
