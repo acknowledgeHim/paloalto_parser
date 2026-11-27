@@ -70,8 +70,10 @@ else
 fi
 
 # --- 3. install production dependencies (builds better-sqlite3 + sharp for this device) ---
+# ONNXRUNTIME_NODE_INSTALL=skip: on x86-64 Linux onnxruntime-node otherwise downloads optional CUDA/GPU
+# binaries from nuget.org (fails offline/firewalled). The CPU runtime we use is bundled in the npm package.
 echo "-- Installing production dependencies (compiles native modules; takes a few minutes)"
-( cd "$DEPLOY/server" && npm ci --omit=dev && cp package-lock.json .deployed-lock )
+( cd "$DEPLOY/server" && ONNXRUNTIME_NODE_INSTALL=skip npm ci --omit=dev && cp package-lock.json .deployed-lock )
 
 # --- 4. let the updater restart the service without a password ---
 echo "-- Allowing '$USER_NAME' to restart the service (sudoers drop-in)"

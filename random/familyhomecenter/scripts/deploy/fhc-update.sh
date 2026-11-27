@@ -23,7 +23,7 @@ cd "$DEPLOY/server"
 # native modules — better-sqlite3, sharp — for this Pi, which is why they can't ship from CI).
 if ! cmp -s package-lock.json .deployed-lock 2>/dev/null; then
   echo "fhc-update: dependencies changed — npm ci --omit=dev"
-  npm ci --omit=dev
+  ONNXRUNTIME_NODE_INSTALL=skip npm ci --omit=dev
   cp package-lock.json .deployed-lock
 fi
 
