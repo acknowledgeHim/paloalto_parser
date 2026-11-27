@@ -1990,6 +1990,8 @@ form.people-manage__panel { flex-direction: row; flex-wrap: wrap; align-items: c
   cursor: grab; touch-action: none; user-select: none;
 }
 .fp-unplaced__item .badge { margin: 0; }
+.fp-unplaced__entry { display: inline-flex; align-items: center; gap: 2px; }
+.person-column__upcoming { margin-top: 12px; }
 .fp-pin-menu { max-width: 460px; }
 .fp-pin-menu h2 { margin-bottom: 4px; }
 .fp-pin-menu__buttons { display: flex; flex-direction: column; gap: 8px; }

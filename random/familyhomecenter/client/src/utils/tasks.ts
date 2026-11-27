@@ -104,3 +104,23 @@ export function goalLabel(task: Pick<Task, 'goal_type' | 'goal_amount' | 'goal_m
   if (task.goal_type === 'hours') return `${formatHours(task.goal_amount!)} h`;
   return `${task.goal_amount}×${task.goal_minutes ? ` · ${formatMinutes(task.goal_minutes)} each` : ''}`;
 }
+
+/** A one-time job that's been done — the server says so (GET /tasks?all=true's `finished`). */
+export function isFinishedOnce(task: Task): boolean {
+  return task.recurrence === 'once' && Boolean(task.finished);
+}
+
+/** One-time jobs due on a later day — today's list leaves them off until then, so the boards show
+ *  them under "📅 Coming up" instead of nowhere. `all` = GET /tasks?all=true. Soonest first. */
+export function upcomingOnceTasks(all: Task[], today = new Date().toLocaleDateString('en-CA')): Task[] {
+  return all
+    .filter((t) => t.recurrence === 'once' && t.due_date && t.due_date > today && !isFinishedOnce(t))
+    .sort((a, b) => (a.due_date! < b.due_date! ? -1 : a.due_date! > b.due_date! ? 1 : 0));
+}
+
+/** "Dec 3" (or "Mon, Dec 3" within the next week) for a YYYY-MM-DD due date. */
+export function formatDueDate(due: string): string {
+  const d = new Date(`${due}T00:00:00`);
+  const days = (d.getTime() - new Date(new Date().toDateString()).getTime()) / 86_400_000;
+  return d.toLocaleDateString(undefined, days >= 0 && days < 7 ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' });
+}

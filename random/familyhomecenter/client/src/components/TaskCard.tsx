@@ -7,7 +7,7 @@ import { parseTimeOfDaySlots, timeOfDayIcon, timeOfDayLabel, isSlotWindowPassed 
 import { taskIcon } from '../utils/taskIcons.js';
 import { MemberAvatar } from './MemberAvatar.js';
 import { findRoom, useFloorplans } from '../utils/floorplans.js';
-import { canEditTask, formatHours, formatMinutes, goalUnits } from '../utils/tasks.js';
+import { canEditTask, formatDueDate, formatHours, formatMinutes, goalUnits } from '../utils/tasks.js';
 import { TaskFormModal } from './TaskFormModal.js';
 import { taskRewardEmoji, taskRewardText } from '../utils/prizes.js';
 
@@ -191,6 +191,7 @@ export function TaskCard({ task, onChange, hideAssignee, onEdit, viewerId, order
           <span className={`badge badge--${task.kind}`}>{task.kind === 'chore' ? 'Chore' : 'To-do'}</span>
           {!multiSlot && slots[0] && <span className="badge badge--time">{timeOfDayIcon(slots[0])} {timeOfDayLabel(slots[0])}</span>}
           {room && <span className="badge badge--time" title={room.plan.name}>📍 {room.room.name}</span>}
+          {task.recurrence === 'once' && task.due_date && <span className="badge badge--time">📅 Due {formatDueDate(task.due_date)}</span>}
           {task.recurrence === 'asneeded' && <span className="badge badge--time">🔔 When needed</span>}
           {task.rotation_ids && task.rotation_ids.length > 1 && (
             <span className="badge badge--time" title={`Taking turns: ${task.rotation_ids.map((id) => members.find((m) => m.id === id)?.name).join(' → ')}`}>

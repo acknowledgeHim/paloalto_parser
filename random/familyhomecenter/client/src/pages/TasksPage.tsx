@@ -5,7 +5,7 @@ import { useFamilyMembers } from '../state/FamilyMemberContext.js';
 import { TaskCard } from '../components/TaskCard.js';
 import { TaskFormModal } from '../components/TaskFormModal.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
-import { canEditTask, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, isTaskDoneFor, routineNumber, sortForColumn, upcomingOnceTasks } from '../utils/tasks.js';
 import { FloorplanView } from '../components/FloorplanView.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { usePrizeJobIds } from '../utils/prizes.js';
@@ -59,11 +59,16 @@ export function TasksPage() {
 
   // "When needed" chores (the dishwasher) that don't need doing right now — a 🔔 calls for one.
   const [waiting, setWaiting] = useState<Task[]>([]);
+  // One-time jobs due on a later day — not on today's list yet, so they'd be nowhere without this.
+  const [upcoming, setUpcoming] = useState<Task[]>([]);
   const load = () => {
     api.get<Task[]>('/tasks').then(setTasks).catch(console.error);
     api
       .get<Task[]>('/tasks?all=true')
-      .then((all) => setWaiting(all.filter((t) => t.recurrence === 'asneeded' && !t.needed_since)))
+      .then((all) => {
+        setWaiting(all.filter((t) => t.recurrence === 'asneeded' && !t.needed_since));
+        setUpcoming(upcomingOnceTasks(all));
+      })
       .catch(console.error);
   };
   const callFor = (t: Task) => api.post(`/tasks/${t.id}/needed`, { needed: true }).then(load).catch(console.error);
@@ -72,7 +77,7 @@ export function TasksPage() {
   const startDrag = (e: ReactPointerEvent, taskId: string) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     // A chore taken in turns goes to whoever's turn it is — change that in its ✎ settings instead.
-    if (tasks.find((t) => t.id === taskId)?.rotation_ids?.length) return;
+    if ([...tasks, ...upcoming].find((t) => t.id === taskId)?.rotation_ids?.length) return;
     dragState.current = { taskId, startX: e.clientX, startY: e.clientY, moved: false };
 
     const findColumn = (x: number, y: number) =>
@@ -114,7 +119,8 @@ export function TasksPage() {
   const prizeJobIds = usePrizeJobIds();
   const columnTasks = tasks.filter((t) => !prizeJobIds?.has(t.id));
   const unassigned = sortForColumn(columnTasks.filter((t) => t.assignee_ids.length === 0));
-  const draggedTask = dragTaskId ? tasks.find((t) => t.id === dragTaskId) : null;
+  const columnUpcoming = upcoming.filter((t) => !prizeJobIds?.has(t.id));
+  const draggedTask = dragTaskId ? [...tasks, ...upcoming].find((t) => t.id === dragTaskId) : null;
 
   // Each person's box is collapsed by default, like the Family Board — just their name and how many
   // are left; ▼ opens that one. A job can still be dragged onto a collapsed box.
@@ -188,6 +194,15 @@ export function TasksPage() {
     </div>
   );
 
+  // 📅 Coming up: due on a later day — shown, but not counted in today's numbers.
+  const renderUpcoming = (list: Task[], viewerId?: string) =>
+    list.length > 0 && (
+      <>
+        <h3 className="person-column__upcoming">📅 Coming up</h3>
+        {list.map((t) => renderTask(t, viewerId))}
+      </>
+    );
+
   return (
     <div className="tasks-page">
       <div className="tasks-page__header">
@@ -254,6 +269,7 @@ export function TasksPage() {
       <div className="tasks-page__columns">
         {members.map((member) => {
           const memberTasks = sortForColumn(columnTasks.filter((t) => t.assignee_ids.includes(member.id)), member.id);
+          const memberUpcoming = columnUpcoming.filter((t) => t.assignee_ids.includes(member.id));
           const ordering = orderingId === member.id;
           const expanded = ordering || expandedIds.has(member.id);
           const left = memberTasks.filter((t) => !isTaskDoneFor(t, member.id)).length;
@@ -306,8 +322,9 @@ export function TasksPage() {
                 </div>
               ) : (
                 <>
-                  {memberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}
+                  {memberTasks.length === 0 && <div className="empty-state">Nothing assigned{memberUpcoming.length ? ' today' : ''}</div>}
                   {memberTasks.map((t) => renderTask(t, member.id, memberTasks))}
+                  {renderUpcoming(memberUpcoming, member.id)}
                 </>
               )}
             </section>
@@ -321,12 +338,17 @@ export function TasksPage() {
           <h2>
             Unassigned
             <span className="person-column__count">{unassigned.length}</span>
+            {(() => {
+              const later = columnUpcoming.filter((t) => t.assignee_ids.length === 0).length;
+              return later > 0 ? <span className="hint" title="Due on a later day">+{later} 📅</span> : null;
+            })()}
             {expandButton(UNASSIGNED, 'Unassigned', expandedIds.has(UNASSIGNED))}
           </h2>
           {expandedIds.has(UNASSIGNED) && (
             <>
-              {unassigned.length === 0 && <div className="empty-state">Nothing unclaimed</div>}
+              {unassigned.length === 0 && <div className="empty-state">Nothing unclaimed{columnUpcoming.some((t) => t.assignee_ids.length === 0) ? ' today' : ''}</div>}
               {unassigned.map((t) => renderTask(t))}
+              {renderUpcoming(columnUpcoming.filter((t) => t.assignee_ids.length === 0))}
             </>
           )}
         </section>

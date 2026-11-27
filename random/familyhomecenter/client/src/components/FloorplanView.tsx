@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { api, type Floorplan, type FloorplanRoom, type Task } from '../api/client.js';
 import { useFamilyMembers } from '../state/FamilyMemberContext.js';
-import { canEditTask, isTaskDoneByAll, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, formatDueDate, isFinishedOnce, isTaskDoneByAll, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
 import { taskIcon } from '../utils/taskIcons.js';
 import { canPlaceTask, findRoom, refreshFloorplans, roomAt, useFloorplans } from '../utils/floorplans.js';
 import { usePrizeJobIds } from '../utils/prizes.js';
@@ -9,6 +9,7 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { FloorplanStage, walkerSpots } from './FloorplanStage.js';
 import { MemberAvatar } from './MemberAvatar.js';
 import { TaskCard } from './TaskCard.js';
+import { TaskFormModal } from './TaskFormModal.js';
 import { useSky, type SkyMode } from '../utils/daylight.js';
 import { ReplayLayer, replayEvents, replayLength, replayTimeOfDay, useReplayClock, type ReplayEvent } from './FloorplanReplay.js';
 
@@ -181,10 +182,11 @@ export function FloorplanView({
       .get<Task[]>('/tasks?all=true')
       .then((all) => setAllTasks(shown(all)))
       .catch((err) => setError((err as Error).message));
+  // …and again whenever the page's own list reloads (say, after a job is edited from here).
   useEffect(() => {
     if (placing) loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placing]);
+  }, [placing, givenTasks]);
   const [pinMenu, setPinMenu] = useState<Task | null>(null);
   const [drag, setDrag] = useState<{ task: Task; x: number; y: number } | null>(null);
   const changed = () => {
@@ -449,7 +451,7 @@ export function FloorplanView({
             pins={(allTasks ?? []).filter((t) => t.room_id)}
             onPinPointerDown={(t, e) => (canPlaceTask(t, activeProfile, members) ? startDrag(t, e, true) : setPinMenu(t))}
           />
-          <UnplacedLists tasks={allTasks} onPress={(t, e) => startDrag(t, e, false)} />
+          <UnplacedLists tasks={allTasks} onPress={(t, e) => startDrag(t, e, false)} onEdit={onEdit} onChange={changed} />
           </div>
         </>
       ) : (
@@ -535,10 +537,23 @@ export function FloorplanView({
  * While placing: each person's jobs that aren't on the plan yet, to drag onto it — a kid allowed to
  * place their own sees just theirs. A job on several people shows under each (it's one job).
  */
-function UnplacedLists({ tasks, onPress }: { tasks: Task[] | null; onPress: (task: Task, e: ReactPointerEvent) => void }) {
+function UnplacedLists({
+  tasks,
+  onPress,
+  onEdit,
+  onChange,
+}: {
+  tasks: Task[] | null;
+  onPress: (task: Task, e: ReactPointerEvent) => void;
+  /** The page's own edit form; without one, ✎ opens it right here. */
+  onEdit?: (task: Task) => void;
+  onChange: () => void;
+}) {
   const { members, activeProfile } = useFamilyMembers();
+  const [editing, setEditing] = useState<Task | null>(null);
   if (!tasks) return <div className="empty-state">Loading chores…</div>;
-  const unplaced = sortForColumn(tasks.filter((t) => !t.room_id && canPlaceTask(t, activeProfile, members)));
+  // A one-time job that's already done has no more need of a spot.
+  const unplaced = sortForColumn(tasks.filter((t) => !t.room_id && !isFinishedOnce(t) && canPlaceTask(t, activeProfile, members)));
   const groups = [
     ...members.map((m) => ({ key: m.id, member: m, label: m.name, items: unplaced.filter((t) => t.assignee_ids.includes(m.id)) })),
     { key: 'anyone', member: null, label: 'Anyone (not assigned)', items: unplaced.filter((t) => t.assignee_ids.length === 0) },
@@ -553,14 +568,37 @@ function UnplacedLists({ tasks, onPress }: { tasks: Task[] | null; onPress: (tas
           </h4>
           <div className="fp-unplaced__items">
             {g.items.map((t) => (
-              <button key={t.id} type="button" className="fp-unplaced__item" onPointerDown={(e) => onPress(t, e)} title="Drag onto the plan">
-                <span aria-hidden="true">{taskIcon(t)}</span> {t.title}
-                <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>
-              </button>
+              <span key={t.id} className="fp-unplaced__entry">
+                <button type="button" className="fp-unplaced__item" onPointerDown={(e) => onPress(t, e)} title="Drag onto the plan">
+                  <span aria-hidden="true">{taskIcon(t)}</span> {t.title}
+                  <span className={`badge badge--${t.kind}`}>{t.kind === 'chore' ? 'Chore' : 'To-do'}</span>
+                  {t.recurrence === 'once' && t.due_date && <span className="badge badge--time">📅 {formatDueDate(t.due_date)}</span>}
+                </button>
+                {canEditTask(t, activeProfile) && (
+                  <button
+                    type="button"
+                    className="task-card__edit fp-unplaced__edit"
+                    aria-label={`Edit ${t.title}`}
+                    onClick={() => (onEdit ? onEdit(t) : setEditing(t))}
+                  >
+                    ✎
+                  </button>
+                )}
+              </span>
             ))}
           </div>
         </div>
       ))}
+      {editing && (
+        <TaskFormModal
+          task={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            onChange();
+          }}
+        />
+      )}
     </div>
   );
 }

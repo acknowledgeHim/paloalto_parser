@@ -7,7 +7,7 @@ import { TaskFormModal } from '../components/TaskFormModal.js';
 import { CalendarAgenda } from '../components/CalendarAgenda.js';
 import { MemberAvatar } from '../components/MemberAvatar.js';
 import { AdventureProgressBar } from '../components/AdventureProgressBar.js';
-import { canEditTask, isTaskDoneFor, routineNumber, sortForColumn } from '../utils/tasks.js';
+import { canEditTask, isTaskDoneFor, routineNumber, sortForColumn, upcomingOnceTasks } from '../utils/tasks.js';
 import { isAdventureStyle, progressFillFor } from '../utils/progressStyles.js';
 import { timeOfDayIcon } from '../utils/timeOfDay.js';
 import { taskIcon } from '../utils/taskIcons.js';
@@ -184,7 +184,15 @@ export function FamilyBoardPage() {
     });
   };
 
-  const loadTasks = () => api.get<Task[]>('/tasks').then(setTasks).catch(console.error);
+  // One-time jobs due on a later day — not on today's list yet, so they'd be nowhere without this.
+  const [upcoming, setUpcoming] = useState<Task[]>([]);
+  const loadTasks = () => {
+    api.get<Task[]>('/tasks').then(setTasks).catch(console.error);
+    api
+      .get<Task[]>('/tasks?all=true')
+      .then((all) => setUpcoming(upcomingOnceTasks(all)))
+      .catch(console.error);
+  };
   const [tab, setTabState] = useState<'board' | 'house'>(() => {
     try {
       return localStorage.getItem(BOARD_TAB_KEY) === 'house' ? 'house' : 'board';
@@ -221,6 +229,25 @@ export function FamilyBoardPage() {
   const prizeJobIds = usePrizeJobIds();
   const boardTasks = tasks.filter((t) => !prizeJobIds?.has(t.id));
   const unassignedTasks = sortForColumn(boardTasks.filter((t) => t.assignee_ids.length === 0));
+  const boardUpcoming = upcoming.filter((t) => !prizeJobIds?.has(t.id));
+  const unassignedUpcoming = boardUpcoming.filter((t) => t.assignee_ids.length === 0);
+  // 📅 Coming up: due on a later day — shown, but not counted in today's progress.
+  const renderUpcoming = (list: Task[], viewerId?: string) =>
+    list.length > 0 && (
+      <>
+        <h3 className="person-column__upcoming">📅 Coming up</h3>
+        {list.map((t) => (
+          <TaskCard
+            key={t.id}
+            task={t}
+            onChange={loadTasks}
+            hideAssignee
+            viewerId={viewerId}
+            onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
+          />
+        ))}
+      </>
+    );
   const familyEvents = events.filter((e) => !e.for_member_id);
 
   return (
@@ -285,7 +312,7 @@ export function FamilyBoardPage() {
               {expanded && (
                 <>
                   <h3>Chores &amp; to-dos</h3>
-                  {allMemberTasks.length === 0 && <div className="empty-state">Nothing assigned</div>}
+                  {allMemberTasks.length === 0 && <div className="empty-state">Nothing assigned today</div>}
                   {allMemberTasks.length > 0 && pendingTasks.length === 0 && (
                     <div className="empty-state">All done! 🎉</div>
                   )}
@@ -312,6 +339,8 @@ export function FamilyBoardPage() {
                     />
                   ))}
 
+                  {renderUpcoming(boardUpcoming.filter((t) => t.assignee_ids.includes(member.id)), member.id)}
+
                   <h3>Calendar</h3>
                   {memberEvents.length === 0 && <div className="empty-state">Nothing on the calendar</div>}
                   <CalendarAgenda events={memberEvents} days={7} />
@@ -324,7 +353,7 @@ export function FamilyBoardPage() {
         <section className="panel person-column person-column--unassigned">
           <h2>Unassigned</h2>
           <h3>Chores &amp; to-dos</h3>
-          {unassignedTasks.length === 0 && <div className="empty-state">Nothing unclaimed</div>}
+          {unassignedTasks.length === 0 && <div className="empty-state">Nothing unclaimed{unassignedUpcoming.length ? ' today' : ''}</div>}
           {unassignedTasks.map((t) => (
             <TaskCard
               key={t.id}
@@ -334,6 +363,7 @@ export function FamilyBoardPage() {
               onEdit={canEditTask(t, activeProfile) ? setModalTask : undefined}
             />
           ))}
+          {renderUpcoming(unassignedUpcoming)}
         </section>
       </div>
 
