@@ -1,0 +1,129 @@
+import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { X509Certificate } from 'node:crypto';
+import { config } from '../config.js';
+// Settings → This device's certificate: hands out Caddy's local root certificate (the one behind
+// https://<pi-ip> — see docs/ANDROID_TABLET_SETUP.md) so a phone, tablet or computer can trust it
+// once and stop warning. It's the public certificate only — no private key — so it's open to
+// everyone, which also means a device can fetch it before anyone's logged in on it.
+//
+// Where it comes from, first that works: CADDY_ROOT_CERT (a file path) → server/data/caddy-root.crt
+// (a copy — see docs/ANDROID_TABLET_SETUP.md) → Caddy's admin API on the Pi (127.0.0.1:2019, on by
+// default) → Caddy's own file (usually not readable by the app's user, which is why the copy exists).
+// When none work, /info says what each one ran into, so Settings can show why.
+export const deviceCertRouter = Router();
+const CADDY_FILE = '/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt';
+const COPY_FILE = path.join(config.dataDir, 'caddy-root.crt');
+let cached = null;
+let lastProblems = [];
+async function rootCert() {
+    // Only a found certificate is remembered — a miss is retried on the next visit, so fixing it
+    // (copying the file, starting Caddy) works without restarting the app.
+    if (cached && Date.now() - cached.at < 10 * 60_000)
+        return cached.cert;
+    const problems = [];
+    const fromFile = (file, label) => {
+        try {
+            return fs.readFileSync(file, 'utf8');
+        }
+        catch (err) {
+            const code = err.code;
+            problems.push(`${label} ${file}: ` +
+                (code === 'EACCES' ? "no permission to read it (the app doesn't run as root)" : code === 'ENOENT' ? 'not there' : String(code ?? err)));
+            return null;
+        }
+    };
+    const fromEnv = process.env.CADDY_ROOT_CERT;
+    let pem = fromEnv ? fromFile(fromEnv, 'CADDY_ROOT_CERT') : null;
+    if (!pem)
+        pem = fromFile(COPY_FILE, 'Copy');
+    if (!pem) {
+        try {
+            const resp = await fetch('http://127.0.0.1:2019/pki/ca/local', { signal: AbortSignal.timeout(3000) });
+            if (resp.ok)
+                pem = (await resp.json()).root_certificate ?? null;
+            else
+                problems.push(`Caddy admin API: answered ${resp.status}`);
+        }
+        catch {
+            problems.push("Caddy admin API (127.0.0.1:2019): no answer — Caddy not running, or its admin API is off");
+        }
+    }
+    if (!pem)
+        pem = fromFile(CADDY_FILE, "Caddy's file");
+    if (pem) {
+        try {
+            const cert = new X509Certificate(pem);
+            cached = { at: Date.now(), cert };
+            lastProblems = [];
+            return cert;
+        }
+        catch {
+            problems.push("Found a file but it isn't a certificate (expected Caddy's root.crt)");
+        }
+    }
+    lastProblems = problems;
+    return null;
+}
+/** A stable UUID from the certificate, so installing the profile again replaces the old one. */
+function uuidFrom(hex) {
+    const h = hex.replace(/:/g, '').toLowerCase();
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`.toUpperCase();
+}
+/** GET /info — is there a certificate to hand out, and what to check it against. */
+deviceCertRouter.get('/info', async (_req, res) => {
+    const cert = await rootCert();
+    if (!cert)
+        return res.json({ available: false, problems: lastProblems, copy_path: COPY_FILE });
+    res.json({
+        available: true,
+        name: cert.subject.replace(/^CN=/m, '').split('\n')[0],
+        fingerprint: cert.fingerprint256,
+        expires: new Date(cert.validTo).toISOString(),
+    });
+});
+/** GET /root.crt — the certificate itself (DER), for Android, Windows, Mac, Chromebooks. */
+deviceCertRouter.get('/root.crt', async (_req, res) => {
+    const cert = await rootCert();
+    if (!cert)
+        return res.status(404).json({ error: "Caddy's certificate wasn't found on the Pi" });
+    res.setHeader('Content-Type', 'application/x-x509-ca-cert');
+    res.setHeader('Content-Disposition', 'attachment; filename="FamilyHomeCenter.crt"');
+    res.send(cert.raw);
+});
+/** GET /familyhomecenter.mobileconfig — the same certificate wrapped as an iPhone/iPad profile. */
+deviceCertRouter.get('/familyhomecenter.mobileconfig', async (_req, res) => {
+    const cert = await rootCert();
+    if (!cert)
+        return res.status(404).json({ error: "Caddy's certificate wasn't found on the Pi" });
+    const fp = cert.fingerprint256;
+    const profile = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadCertificateFileName</key><string>FamilyHomeCenter.crt</string>
+      <key>PayloadContent</key><data>${cert.raw.toString('base64')}</data>
+      <key>PayloadDescription</key><string>Lets this device open the Family Home Center over https without a warning.</string>
+      <key>PayloadDisplayName</key><string>Family Home Center</string>
+      <key>PayloadIdentifier</key><string>familyhomecenter.rootca.cert</string>
+      <key>PayloadType</key><string>com.apple.security.root</string>
+      <key>PayloadUUID</key><string>${uuidFrom(fp.slice(48))}</string>
+      <key>PayloadVersion</key><integer>1</integer>
+    </dict>
+  </array>
+  <key>PayloadDisplayName</key><string>Family Home Center certificate</string>
+  <key>PayloadIdentifier</key><string>familyhomecenter.rootca</string>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>${uuidFrom(fp)}</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict>
+</plist>
+`;
+    res.setHeader('Content-Type', 'application/x-apple-aspen-config');
+    res.setHeader('Content-Disposition', 'attachment; filename="FamilyHomeCenter.mobileconfig"');
+    res.send(profile);
+});

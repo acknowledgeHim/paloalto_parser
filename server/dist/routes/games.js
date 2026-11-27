@@ -1,0 +1,626 @@
+import express, { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { countTime, limitHit } from '../services/dailyLimits.js';
+import { v4 as uuidv4 } from 'uuid';
+import { db, getSetting, setSetting } from '../db.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
+import { GAMES, PRIZE_SUBJECTS, gameOf as gameOfStatic } from '../services/games.js';
+import { romGames, romGame, romById, romFilePath, addRom, updateRom, listRoms, detectSystem, romToGame, SYSTEM_CORE } from '../services/roms.js';
+import { subjectMastery } from './lessons.js';
+import { GRADE_NAMES, WORDS } from '../services/spellingWords.js';
+import { misspell } from '../services/spellcheckGen.js';
+import { isParentRequest, isSelfOrParent } from '../services/rewards.js';
+import { addTokens } from '../services/tokens.js';
+/** 🎮 Games: unlock with 💎 tokens (parents play free), play, keep best runs and progress. */
+export const gamesRouter = Router();
+// 🎮 Classic games (uploaded ROMs) are dynamic games with id `rom:<id>`, so they ride the same
+// token economy as the built-in ones. These merge the static list with the current ROMs.
+const listGames = () => [...GAMES, ...romGames()];
+const findGame = (id) => (id.startsWith('rom:') ? romGame(id) : gameOfStatic(id));
+// 🙈 a parent can hide the whole Classic games section from kids (separate from per-game show/hide).
+const CLASSIC_HIDDEN_KEY = 'classic_games_hidden';
+const classicHidden = () => getSetting(CLASSIC_HIDDEN_KEY, '0') === '1';
+const memberOf = (id) => db.prepare('SELECT * FROM family_members WHERE id = ?').get(id);
+/** An unlock a parent 🔒 locked again (game_unlock_ends) doesn't count any more. */
+const NOT_ENDED = 'NOT EXISTS (SELECT 1 FROM game_unlock_ends e WHERE e.family_member_id = u.family_member_id AND e.game_id = u.game_id AND e.unlocked_at = u.unlocked_at)';
+const unlockedFor = (m) => new Set(db.prepare(`SELECT game_id FROM game_unlocks u WHERE family_member_id = ? AND ${NOT_ENDED}`).all(m.id).map((r) => r.game_id));
+const free = (m) => m.is_parent === 1;
+const best = (memberId, gameId) => db.prepare('SELECT MAX(score) AS s FROM game_scores WHERE family_member_id = ? AND game_id = ?').get(memberId, gameId).s;
+/** 🎟️ Plays a parent gave them: game id → how many are left (a row with 0 = had some, all used). */
+const passesFor = (memberId) => new Map(db.prepare('SELECT game_id, plays_left FROM game_passes WHERE family_member_id = ?').all(memberId).map((r) => [r.game_id, r.plays_left]));
+const RULES_KEY = 'game_rules';
+function rules() {
+    let saved = {};
+    try {
+        saved = JSON.parse(getSetting(RULES_KEY, '{}'));
+    }
+    catch {
+        /* defaults */
+    }
+    const n = (v, d) => (v !== undefined && v !== null && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 10000 ? Math.round(Number(v)) : d);
+    return Object.fromEntries(listGames().map((g) => [
+        g.id,
+        {
+            cost: n(saved[g.id]?.cost, g.stars),
+            plays: n(saved[g.id]?.plays, 0),
+            hidden: saved[g.id]?.hidden === true,
+            features: Object.fromEntries((g.features ?? []).map((f) => [f.id, n(saved[g.id]?.features?.[f.id], f.cost)])),
+            shop: Object.fromEntries((g.shop ?? []).map((f) => [f.id, n(saved[g.id]?.shop?.[f.id], f.cost)])),
+            prizes: Object.fromEntries((g.prizes ?? []).map((p) => {
+                const x = saved[g.id]?.prizes?.[p.id];
+                return [
+                    p.id,
+                    {
+                        subject: PRIZE_SUBJECTS.includes(x?.subject) ? x.subject : p.subject,
+                        uses: n(x?.uses, p.uses),
+                        parents_free: x?.parents_free === undefined ? true : x.parents_free === true,
+                    },
+                ];
+            })),
+        },
+    ]));
+}
+const ruleOf = (gameId) => rules()[gameId] ?? { cost: 0, plays: 0, features: {}, shop: {}, prizes: {}, hidden: false };
+/** 🙈 a game a parent hid from kids (parents still see and play everything) */
+const hiddenFor = (m, gameId) => !free(m) && ruleOf(gameId).hidden;
+const HIDDEN_MSG = 'A parent has turned that game off for now';
+/** GET /settings — each game's cost and plays per unlock. */
+gamesRouter.get('/settings', (_req, res) => res.json(rules()));
+/** PUT /settings { [gameId]: { cost, plays } } (parents). Unlocks already bought for good stay theirs (a parent can refund them). */
+gamesRouter.put('/settings', requireAdmin, (req, res) => {
+    if (!isParentRequest(req, req.body?.acting_member_id))
+        return res.status(403).json({ error: 'Only a parent can set what games cost' });
+    const cur = rules();
+    const b = (req.body ?? {});
+    for (const g of listGames()) {
+        const x = b[g.id];
+        if (!x)
+            continue;
+        if (x.hidden !== undefined)
+            cur[g.id].hidden = x.hidden === true;
+        for (const k of ['cost', 'plays']) {
+            if (x[k] === undefined)
+                continue;
+            const v = Math.round(Number(x[k]));
+            if (!(v >= 0 && v <= 10000))
+                return res.status(400).json({ error: `${g.name}: ${k === 'cost' ? 'cost' : 'plays'} must be 0–10000` });
+            cur[g.id][k] = v;
+        }
+        for (const f of g.features ?? []) {
+            const v0 = x.features?.[f.id];
+            if (v0 === undefined)
+                continue;
+            const v = Math.round(Number(v0));
+            if (!(v >= 0 && v <= 10000))
+                return res.status(400).json({ error: `${g.name} ${f.name}: 0–10000` });
+            cur[g.id].features[f.id] = v;
+        }
+        for (const f of g.shop ?? []) {
+            const v0 = x.shop?.[f.id];
+            if (v0 === undefined)
+                continue;
+            const v = Math.round(Number(v0));
+            if (!(v >= 0 && v <= 10000))
+                return res.status(400).json({ error: `${g.name} ${f.name}: 0–10000` });
+            cur[g.id].shop[f.id] = v;
+        }
+        for (const p of g.prizes ?? []) {
+            const y = x.prizes?.[p.id];
+            if (!y)
+                continue;
+            if (y.subject !== undefined) {
+                if (!PRIZE_SUBJECTS.includes(y.subject))
+                    return res.status(400).json({ error: `${g.name} ${p.name}: pick a subject` });
+                cur[g.id].prizes[p.id].subject = y.subject;
+            }
+            if (y.uses !== undefined) {
+                const v = Math.round(Number(y.uses));
+                if (!(v >= 0 && v <= 1000))
+                    return res.status(400).json({ error: `${g.name} ${p.name}: uses 0–1000 (0 = unlimited)` });
+                cur[g.id].prizes[p.id].uses = v;
+            }
+            if (y.parents_free !== undefined)
+                cur[g.id].prizes[p.id].parents_free = y.parents_free === true;
+        }
+    }
+    setSetting(RULES_KEY, JSON.stringify(cur));
+    res.json(cur);
+});
+function shelf(m) {
+    const mine = unlockedFor(m);
+    const passes = passesFor(m.id);
+    const all = rules();
+    return {
+        token_balance: m.token_balance,
+        plays_free: free(m),
+        // 🙈 games a parent hid aren't shown to kids at all
+        games: listGames()
+            .filter((g) => {
+            if (g.id.startsWith('rom:') && !free(m) && classicHidden())
+                return false; // whole classic section hidden
+            return free(m) || !all[g.id]?.hidden; // per-game show/hide
+        })
+            .map((g) => {
+            const owned = free(m) || mine.has(g.id);
+            const plays = passes.get(g.id) ?? null;
+            const r = ruleOf(g.id);
+            // 🏆 prize powers: earned or not, uses left, lesson progress (shown on the game's card)
+            return { ...g, stars: r.cost, plays_per_unlock: r.plays, hidden: r.hidden, owned, plays_left: owned ? null : plays, unlocked: owned || (plays ?? 0) > 0, best: best(m.id, g.id), prize_status: prizesFor(m, g.id) };
+        }),
+    };
+}
+/** GET /?member=ID — the games, which ones they can play, their best scores. */
+gamesRouter.get('/', (req, res) => {
+    const m = memberOf(String(req.query.member ?? ''));
+    if (!m)
+        return res.json({ token_balance: 0, plays_free: false, games: listGames().map((g) => ({ ...g, unlocked: false, best: null })) });
+    res.json(shelf(m));
+});
+/**
+ * POST /:memberId/unlock { game_id, acting_member_id } — spend their 💎 tokens on a game: for good, or (if a
+ * parent set plays per unlock) for that many 🎟️ plays — when they're used up, they unlock it again.
+ */
+gamesRouter.post('/:memberId/unlock', (req, res) => {
+    const { memberId } = req.params;
+    const { game_id, acting_member_id } = req.body ?? {};
+    if (!isSelfOrParent(req, memberId, acting_member_id))
+        return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
+    const g = findGame(String(game_id));
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    if (hiddenFor(m, g.id))
+        return res.status(403).json({ error: HIDDEN_MSG });
+    if (free(m) || unlockedFor(m).has(g.id))
+        return res.json(shelf(m));
+    const r = ruleOf(g.id);
+    if (m.token_balance < r.cost)
+        return res.status(400).json({ error: `Needs ${r.cost} 💎 — ${r.cost - m.token_balance} more to go` });
+    const by = typeof acting_member_id === 'string' ? acting_member_id : null;
+    const now = new Date().toISOString();
+    db.transaction(() => {
+        if (r.plays > 0) {
+            addTokens(m.id, -r.cost, `🎮 ${r.plays} play${r.plays === 1 ? '' : 's'}: ${g.emoji} ${g.name}`, by);
+            db.prepare(`INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = plays_left + excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`).run(m.id, g.id, r.plays, by, now);
+        }
+        else {
+            addTokens(m.id, -r.cost, `🎮 Unlocked: ${g.emoji} ${g.name}`, by);
+            // (an old unlock a parent locked again is reused: its end stays recorded in game_unlock_ends)
+            db.prepare(`INSERT INTO game_unlocks (family_member_id, game_id, stars, unlocked_at, currency) VALUES (?, ?, ?, ?, 'tokens')
+         ON CONFLICT(family_member_id, game_id) DO UPDATE SET stars = excluded.stars, unlocked_at = excluded.unlocked_at, currency = excluded.currency`).run(m.id, g.id, r.cost, now);
+        }
+    })();
+    res.json(shelf(memberOf(m.id)));
+});
+/** POST /:memberId/refund { game_id, acting_member_id } — parents: give back what it cost (💎, or ⭐ if before tokens) and lock it again (scores and progress are kept). */
+gamesRouter.post('/:memberId/refund', (req, res) => {
+    const { memberId } = req.params;
+    const { game_id, acting_member_id } = req.body ?? {};
+    if (!isParentRequest(req, acting_member_id))
+        return res.status(403).json({ error: 'Only a parent can do that' });
+    const row = db.prepare(`SELECT stars, currency FROM game_unlocks u WHERE family_member_id = ? AND game_id = ? AND ${NOT_ENDED}`).get(memberId, game_id);
+    if (!row)
+        return res.status(404).json({ error: 'not found' });
+    db.transaction(() => {
+        db.prepare('DELETE FROM game_unlocks WHERE family_member_id = ? AND game_id = ?').run(memberId, game_id);
+        const g = findGame(String(game_id));
+        if (row.currency === 'tokens')
+            addTokens(memberId, row.stars, `🎮 Refund: ${g ? `${g.emoji} ${g.name}` : game_id}`, typeof acting_member_id === 'string' ? acting_member_id : null);
+        else
+            db.prepare('UPDATE family_members SET star_balance = star_balance + ? WHERE id = ?').run(row.stars, memberId);
+    })();
+    res.json(shelf(memberOf(memberId)));
+});
+/**
+ * POST /:memberId/relock { game_id, plays, acting_member_id } (parents) — 🔒 a game they unlocked for good
+ * goes back to locked, with no refund; plays > 0 gives them that many 🎟️ plays instead (e.g. what one
+ * unlock is worth now). Scores, towns and extras are kept.
+ */
+gamesRouter.post('/:memberId/relock', (req, res) => {
+    const { memberId } = req.params;
+    const { game_id, plays, acting_member_id } = req.body ?? {};
+    if (!isParentRequest(req, acting_member_id))
+        return res.status(403).json({ error: 'Only a parent can do that' });
+    const g = findGame(String(game_id));
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    const row = db.prepare(`SELECT unlocked_at FROM game_unlocks u WHERE family_member_id = ? AND game_id = ? AND ${NOT_ENDED}`).get(m.id, g.id);
+    if (!row)
+        return res.status(404).json({ error: `${m.name} hasn't unlocked ${g.name} for good` });
+    const n = Math.round(Number(plays ?? 0));
+    if (!Number.isFinite(n) || n < 0 || n > 1000)
+        return res.status(400).json({ error: 'How many plays? (0–1000)' });
+    const now = new Date().toISOString();
+    const by = typeof acting_member_id === 'string' ? acting_member_id : null;
+    db.transaction(() => {
+        db.prepare('INSERT INTO game_unlock_ends (id, family_member_id, game_id, unlocked_at, ended_at, ended_by, plays_given) VALUES (?, ?, ?, ?, ?, ?, ?)').run(uuidv4(), m.id, g.id, row.unlocked_at, now, by, n);
+        if (n > 0)
+            db.prepare(`INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = plays_left + excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`).run(m.id, g.id, n, by, now);
+    })();
+    res.json(shelf(memberOf(m.id)));
+});
+/** Can they open the game (garage, saving a run)? Bought, free, or ever given plays (even if used up — so a last run still saves). */
+function mayPlay(m, gameId) {
+    return free(m) || unlockedFor(m).has(gameId) || passesFor(m.id).has(gameId);
+}
+/** POST /:memberId/passes { game_id, plays, mode: 'add' | 'set', acting_member_id } (parents) — 🎟️ give a kid a number of plays. */
+gamesRouter.post('/:memberId/passes', (req, res) => {
+    const { memberId } = req.params;
+    const { game_id, plays, mode, acting_member_id } = req.body ?? {};
+    if (!isParentRequest(req, acting_member_id))
+        return res.status(403).json({ error: 'Only a parent can do that' });
+    const g = findGame(String(game_id));
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    const n = Math.round(Number(plays));
+    if (!Number.isFinite(n) || n < 0 || n > 1000)
+        return res.status(400).json({ error: 'How many plays? (0–1000)' });
+    const now = new Date().toISOString();
+    const by = typeof acting_member_id === 'string' ? acting_member_id : null;
+    if (mode === 'set') {
+        db.prepare(`INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`).run(m.id, g.id, n, by, now);
+    }
+    else {
+        db.prepare(`INSERT INTO game_passes (family_member_id, game_id, plays_left, given_by, updated_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(family_member_id, game_id) DO UPDATE SET plays_left = plays_left + excluded.plays_left, given_by = excluded.given_by, updated_at = excluded.updated_at`).run(m.id, g.id, n, by, now);
+    }
+    res.json(shelf(m));
+});
+/** POST /:gameId/play/:memberId/start { acting_member_id } — a run is starting: uses up one 🎟️ play unless the game is theirs. */
+gamesRouter.post('/:gameId/play/:memberId/start', (req, res) => {
+    const { gameId, memberId } = req.params;
+    if (!isSelfOrParent(req, memberId, req.body?.acting_member_id))
+        return res.status(403).json({ error: 'Only they or a parent can play as them' });
+    const g = findGame(gameId);
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    if (hiddenFor(m, g.id))
+        return res.status(403).json({ error: HIDDEN_MSG });
+    // ⏰ a parent's daily limit for this game (checked first, so a play isn't used up for nothing)
+    const over = limitHit(m.id, `game:${g.id}`);
+    if (over)
+        return res.status(429).json({ error: over, limit: true });
+    if (free(m) || unlockedFor(m).has(g.id)) {
+        countTime(m.id, `game:${g.id}`);
+        return res.json({ ok: true, plays_left: null });
+    }
+    const r = db
+        .prepare('UPDATE game_passes SET plays_left = plays_left - 1, updated_at = ? WHERE family_member_id = ? AND game_id = ? AND plays_left > 0')
+        .run(new Date().toISOString(), m.id, g.id);
+    if (r.changes === 0)
+        return res.status(403).json({ error: `No plays left — unlock ${g.name} again (${ruleOf(g.id).cost} 💎), or ask a parent for more plays` });
+    countTime(m.id, `game:${g.id}`);
+    res.json({ ok: true, plays_left: passesFor(m.id).get(g.id) ?? 0 });
+});
+/**
+ * 🔓 Each extra: its price and whether they have it — bought, free (price 0 or a parent), or
+ * already switched on in their saved game from before extras had a price (that stays theirs).
+ */
+function featuresFor(m, gameId, save) {
+    const g = findGame(gameId);
+    const bought = new Set(db.prepare('SELECT feature FROM game_features WHERE family_member_id = ? AND game_id = ?').all(m.id, gameId).map((x) => x.feature));
+    const sv = (save ?? {});
+    const had = new Set();
+    if (sv.jump)
+        had.add('jump');
+    if (Array.isArray(sv.obstacles) && sv.obstacles.length)
+        had.add('obstacles');
+    // Had it on before it had a price: theirs for good (kept, so turning it off doesn't lose it).
+    for (const f of had)
+        if (!bought.has(f) && g?.features?.some((x) => x.id === f)) {
+            db.prepare('INSERT OR IGNORE INTO game_features (family_member_id, game_id, feature, cost, unlocked_at) VALUES (?, ?, ?, 0, ?)').run(m.id, gameId, f, new Date().toISOString());
+            bought.add(f);
+        }
+    const prices = ruleOf(gameId).features;
+    return Object.fromEntries((g?.features ?? []).map((f) => {
+        const cost = prices[f.id] ?? f.cost;
+        return [f.id, { name: f.name, cost, owned: free(m) || cost === 0 || bought.has(f.id) }];
+    }));
+}
+/** 💎 The token shop: each item's price for them (parents: free) and the coins it gives. */
+function shopFor(m, gameId) {
+    const prices = ruleOf(gameId).shop;
+    return Object.fromEntries((findGame(gameId)?.shop ?? []).map((f) => [f.id, { name: f.name, cost: free(m) ? 0 : (prices[f.id] ?? f.cost), coins: f.coins ?? 0 }]));
+}
+/**
+ * POST /:gameId/play/:memberId/buy { item, acting_member_id } — 💎 buy something in the game's token
+ * shop (each time: a bag of coins, a special building). Answers with what it gives and their balance.
+ */
+gamesRouter.post('/:gameId/play/:memberId/buy', (req, res) => {
+    const { gameId, memberId } = req.params;
+    const { item, acting_member_id } = req.body ?? {};
+    if (!isSelfOrParent(req, memberId, acting_member_id))
+        return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
+    const g = findGame(gameId);
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    if (!mayPlay(m, g.id))
+        return res.status(403).json({ error: 'Unlock it first' });
+    const it = shopFor(m, g.id)[String(item)];
+    if (!it)
+        return res.status(404).json({ error: 'No such thing in the shop' });
+    if (m.token_balance < it.cost)
+        return res.status(400).json({ error: `Needs ${it.cost} 💎 — ${it.cost - m.token_balance} more to go` });
+    db.transaction(() => {
+        if (it.cost)
+            addTokens(m.id, -it.cost, `💎 ${g.emoji} ${g.name}: ${it.name}`, typeof acting_member_id === 'string' ? acting_member_id : null);
+        db.prepare('INSERT INTO game_purchases (id, family_member_id, game_id, item, cost, bought_at) VALUES (?, ?, ?, ?, ?, ?)').run(uuidv4(), m.id, g.id, String(item), it.cost, new Date().toISOString());
+    })();
+    res.json({ item: String(item), coins: it.coins, cost: it.cost, token_balance: memberOf(m.id).token_balance });
+});
+/** POST /:gameId/play/:memberId/feature { feature, acting_member_id } — 🔓 buy an extra with 💎. */
+gamesRouter.post('/:gameId/play/:memberId/feature', (req, res) => {
+    const { gameId, memberId } = req.params;
+    const { feature, acting_member_id } = req.body ?? {};
+    if (!isSelfOrParent(req, memberId, acting_member_id))
+        return res.status(403).json({ error: 'Only they or a parent can spend their tokens' });
+    const g = findGame(gameId);
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    const f = g.features?.find((x) => x.id === feature);
+    if (!f)
+        return res.status(404).json({ error: 'No such extra' });
+    const save = db.prepare('SELECT data FROM game_saves WHERE family_member_id = ? AND game_id = ?').get(m.id, g.id);
+    let data = null;
+    try {
+        data = save ? JSON.parse(save.data) : null;
+    }
+    catch {
+        data = null;
+    }
+    const now = featuresFor(m, g.id, data);
+    if (now[f.id]?.owned)
+        return res.json({ features: now, token_balance: m.token_balance });
+    const cost = now[f.id].cost;
+    if (m.token_balance < cost)
+        return res.status(400).json({ error: `Needs ${cost} 💎 — ${cost - m.token_balance} more to go` });
+    db.transaction(() => {
+        addTokens(m.id, -cost, `🔓 ${g.emoji} ${g.name}: ${f.name}`, typeof acting_member_id === 'string' ? acting_member_id : null);
+        db.prepare('INSERT OR IGNORE INTO game_features (family_member_id, game_id, feature, cost, unlocked_at) VALUES (?, ?, ?, ?, ?)').run(m.id, g.id, f.id, cost, new Date().toISOString());
+    })();
+    const after = memberOf(m.id);
+    res.json({ features: featuresFor(after, g.id, data), token_balance: after.token_balance });
+});
+// ---- 🏆 prize powers: earned by passing every lesson in a subject at your grade ----
+const SUBJECT_NAME = { math: '➗ Math', grammar: '📝 Grammar', history: '🇺🇸 History', science: '🔬 Science', handson: '🔧 Hands-on' };
+const LESSON_SUBJECTS = ['math', 'grammar', 'history', 'science'];
+/** Their prize powers in this game — and any they've just earned get handed out (once per subject per grade). */
+function prizesFor(m, gameId) {
+    const g = findGame(gameId);
+    const rs = ruleOf(gameId).prizes;
+    const out = {};
+    for (const p of g?.prizes ?? []) {
+        const r = rs[p.id] ?? { subject: p.subject, uses: p.uses, parents_free: true };
+        const subjects = r.subject === 'any' || r.subject === 'all' ? [...LESSON_SUBJECTS] : [r.subject];
+        // (for 'any' and 'all', a subject with no lessons at their grade — like US History in some grades — doesn't count)
+        const prog = free(m) ? [] : subjects.map((s) => ({ s, x: subjectMastery(m.id, s) })).filter((y) => subjects.length === 1 || !y.x || y.x.total > 0);
+        const progress = prog
+            .filter((y) => y.x)
+            .map(({ s, x }) => ({ subject: s, label: SUBJECT_NAME[s], grade: GRADE_NAMES[x.grade], passed: x.passed, total: x.total, done: x.done }));
+        // 🎉 hand out what they've earned (each subject, once per grade; 'all' once per grade)
+        const now = new Date().toISOString();
+        const grant = db.prepare('INSERT OR IGNORE INTO game_prize_grants (id, family_member_id, game_id, prize, subject, grade, uses, granted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        if (r.subject === 'all') {
+            if (prog.length && prog.every((y) => y.x?.done))
+                grant.run(uuidv4(), m.id, gameId, p.id, 'all', prog[0].x.grade, r.uses, now);
+        }
+        else
+            for (const y of prog)
+                if (y.x?.done)
+                    grant.run(uuidv4(), m.id, gameId, p.id, y.s, y.x.grade, r.uses, now);
+        const grants = db.prepare('SELECT uses FROM game_prize_grants WHERE family_member_id = ? AND game_id = ? AND prize = ?').all(m.id, gameId, p.id);
+        const used = db.prepare('SELECT COUNT(*) AS n FROM game_prize_uses WHERE family_member_id = ? AND game_id = ? AND prize = ?').get(m.id, gameId, p.id).n;
+        const isFree = free(m) && r.parents_free;
+        const unlimited = grants.some((x) => x.uses === 0);
+        const left = isFree || unlimited ? null : Math.max(0, grants.reduce((a, x) => a + x.uses, 0) - used);
+        out[p.id] = {
+            name: p.name,
+            blurb: p.blurb,
+            unit: p.unit,
+            subject: r.subject,
+            uses_per: r.uses,
+            parents_free: r.parents_free,
+            free: isFree,
+            earned: grants.length > 0,
+            unlimited,
+            left,
+            ready: isFree || unlimited || (left ?? 0) > 0,
+            progress,
+            note: !free(m) && !progress.length ? 'A parent needs to set your grade first (📚 Learning → ⚙️ Grades & tokens)' : null,
+        };
+    }
+    return out;
+}
+/** POST /:gameId/play/:memberId/prize { prize, acting_member_id } — 🏆 use one go of a prize power (a drive, a game, a visit). */
+gamesRouter.post('/:gameId/play/:memberId/prize', (req, res) => {
+    const { gameId, memberId } = req.params;
+    const { prize, acting_member_id } = req.body ?? {};
+    if (!isSelfOrParent(req, memberId, acting_member_id))
+        return res.status(403).json({ error: 'Only they or a parent can play as them' });
+    const g = findGame(gameId);
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    if (!mayPlay(m, g.id))
+        return res.status(403).json({ error: 'Unlock it first' });
+    const st = prizesFor(m, g.id)[String(prize)];
+    if (!st)
+        return res.status(404).json({ error: 'No such prize' });
+    if (!st.ready)
+        return res.status(403).json({ error: st.earned ? `No ${st.name} left — finish another subject's lessons to earn more` : `Pass every lesson to earn ${st.name}` });
+    db.prepare('INSERT INTO game_prize_uses (id, family_member_id, game_id, prize, used_at) VALUES (?, ?, ?, ?, ?)').run(uuidv4(), m.id, g.id, String(prize), new Date().toISOString());
+    res.json({ prizes: prizesFor(m, g.id) });
+});
+/**
+ * GET /letter-maze/words/:memberId?grade=N — 🐝 Letter Maze: spelling words for a game, from the
+ * kid's grade (a parent's grade is picked with ?grade, or 3rd grade). Grades 6–12 also get
+ * misspelled look-alikes to dodge. Their 🔤 spelling words — the same lists as 📚 Learning.
+ */
+gamesRouter.get('/letter-maze/words/:memberId', (req, res) => {
+    const m = memberOf(req.params.memberId);
+    if (!m)
+        return res.status(404).json({ error: 'not found' });
+    const own = db.prepare('SELECT grade FROM learning_grades WHERE family_member_id = ?').get(m.id)?.grade ?? null;
+    const asked = Number(req.query.grade);
+    // kids play their own grade (or lower, for practice); parents any
+    const want = Number.isInteger(asked) && asked >= 0 && asked < WORDS.length ? asked : (own ?? 3);
+    const grade = free(m) || own === null ? want : Math.min(want, own);
+    const list = [...WORDS[grade]].sort(() => Math.random() - 0.5).slice(0, 40);
+    const words = list.map((w) => {
+        const wrong = new Set();
+        if (grade >= 6)
+            for (let k = 0; k < 12 && wrong.size < 4; k++) {
+                const x = misspell(w.word, Math.random);
+                if (x && x.toLowerCase() !== w.word.toLowerCase())
+                    wrong.add(x.toLowerCase());
+            }
+        return { word: w.word.toLowerCase(), meaning: w.meaning, sentence: w.sentence, wrong: [...wrong] };
+    });
+    res.json({ grade, grade_name: GRADE_NAMES[grade], own_grade: own, mode: grade >= 6 ? 'words' : 'letters', words });
+});
+/** GET /:gameId/play/:memberId — their saved progress, best score and the family's top runs. */
+gamesRouter.get('/:gameId/play/:memberId', (req, res) => {
+    const g = findGame(req.params.gameId);
+    const m = memberOf(req.params.memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    if (!mayPlay(m, g.id))
+        return res.status(403).json({ error: `Unlock ${g.name} first (${ruleOf(g.id).cost} 💎), or ask a parent for some plays` });
+    const save = db.prepare('SELECT data FROM game_saves WHERE family_member_id = ? AND game_id = ?').get(m.id, g.id);
+    const top = db
+        .prepare(`SELECT s.family_member_id AS member_id, MAX(s.score) AS score FROM game_scores s WHERE s.game_id = ?
+       GROUP BY s.family_member_id ORDER BY score DESC LIMIT 10`)
+        .all(g.id);
+    let data = null;
+    try {
+        data = save ? JSON.parse(save.data) : null;
+    }
+    catch {
+        data = null;
+    }
+    const owned = free(m) || unlockedFor(m).has(g.id);
+    res.json({ game: g, save: data, best: best(m.id, g.id), top, owned, plays_left: owned ? null : passesFor(m.id).get(g.id) ?? 0, features: featuresFor(m, g.id, data), shop: shopFor(m, g.id), prizes: prizesFor(m, g.id), token_balance: m.token_balance });
+});
+/** POST /:gameId/play/:memberId/result { score, detail, save, acting_member_id } — a finished run, and progress to keep. */
+gamesRouter.post('/:gameId/play/:memberId/result', (req, res) => {
+    const { gameId, memberId } = req.params;
+    const { score, detail, save, acting_member_id } = req.body ?? {};
+    if (!isSelfOrParent(req, memberId, acting_member_id))
+        return res.status(403).json({ error: 'Only they or a parent can play as them' });
+    const g = findGame(gameId);
+    const m = memberOf(memberId);
+    if (!g || !m)
+        return res.status(404).json({ error: 'not found' });
+    if (!mayPlay(m, g.id))
+        return res.status(403).json({ error: 'Unlock it first' });
+    const now = new Date().toISOString();
+    const s = Math.round(Number(score));
+    if (Number.isFinite(s) && s > 0 && s < 1e9) {
+        db.prepare('INSERT INTO game_scores (id, family_member_id, game_id, score, detail, played_at) VALUES (?, ?, ?, ?, ?, ?)').run(uuidv4(), m.id, g.id, s, detail ? JSON.stringify(detail).slice(0, 2000) : null, now);
+    }
+    if (save && typeof save === 'object') {
+        const data = JSON.stringify(save);
+        if (data.length > 80_000)
+            return res.status(400).json({ error: 'Too much to save' });
+        db.prepare(`INSERT INTO game_saves (family_member_id, game_id, data, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(family_member_id, game_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`).run(m.id, g.id, data, now);
+    }
+    res.json({ best: best(m.id, g.id) });
+});
+// ========================= 🎮 Classic games (uploaded ROMs) =========================
+// A parent uploads .nes / .sfc / .smc files; each becomes a game with id `rom:<id>` (above), so the
+// normal 💎 price, show/hide and unlock/plays all apply. Files are kept forever (remove = archive).
+/** POST /roms — a parent uploads one ROM (the file is the raw body; name in the X-Filename header). */
+gamesRouter.post('/roms', requireAdmin, express.raw({ type: '*/*', limit: '16mb' }), (req, res) => {
+    const name = path.basename(decodeURIComponent(String(req.get('x-filename') ?? ''))).replace(/[\\/:*?"<>|]+/g, '-').trim().slice(0, 200);
+    if (!name)
+        return res.status(400).json({ error: 'Missing X-Filename' });
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || buf.length < 16)
+        return res.status(400).json({ error: 'Send the ROM file as the request body (empty or too small)' });
+    const system = detectSystem(name, buf);
+    if (!system)
+        return res.status(400).json({ error: `${name}: not a supported ROM. Use .nes (NES) or .sfc / .smc (SNES).` });
+    const rom = addRom(buf, name, system);
+    res.json(romToGame(rom));
+});
+/** GET /roms — a parent's full list (including archived), for managing them. */
+gamesRouter.get('/roms', requireAdmin, (_req, res) => {
+    res.json(listRoms(true).map((r) => ({ id: r.id, title: r.title, system: r.system, size: r.size, archived: r.hidden === 1, sort: r.sort, created_at: r.created_at })));
+});
+/** PUT /roms/:id — a parent renames, archives/unarchives, or reorders a classic game. */
+gamesRouter.put('/roms/:id', requireAdmin, (req, res) => {
+    const b = (req.body ?? {});
+    const r = updateRom(req.params.id, { title: b.title, hidden: b.archived, sort: b.sort });
+    if (!r)
+        return res.status(404).json({ error: 'not found' });
+    res.json({ id: r.id, title: r.title, system: r.system, size: r.size, archived: r.hidden === 1, sort: r.sort });
+});
+/** GET /roms/:id/meta — what the player needs to boot (no ROM bytes, so no token check). */
+gamesRouter.get('/roms/:id/meta', (req, res) => {
+    const r = romById(req.params.id);
+    if (!r || r.hidden)
+        return res.status(404).json({ error: 'not found' });
+    res.json({ id: r.id, title: r.title, system: r.system, core: SYSTEM_CORE[r.system] });
+});
+/**
+ * GET /roms/:id/rom?member=ID — the ROM bytes for the emulator. Gated exactly like starting any game:
+ * a parent plays free; a kid must own it or spend one 🎟️ play (and it counts toward the daily limit).
+ */
+gamesRouter.get('/roms/:id/rom', (req, res) => {
+    const rom = romById(req.params.id);
+    if (!rom || rom.hidden)
+        return res.status(404).json({ error: 'not found' });
+    const m = memberOf(String(req.query.member ?? ''));
+    if (!m)
+        return res.status(403).json({ error: 'Pick who is playing first' });
+    const gid = `rom:${rom.id}`;
+    const over = limitHit(m.id, `game:${gid}`);
+    if (over)
+        return res.status(429).json({ error: over, limit: true });
+    if (!(free(m) || unlockedFor(m).has(gid))) {
+        const r = db.prepare('UPDATE game_passes SET plays_left = plays_left - 1, updated_at = ? WHERE family_member_id = ? AND game_id = ? AND plays_left > 0').run(new Date().toISOString(), m.id, gid);
+        if (r.changes === 0)
+            return res.status(403).json({ error: `Unlock ${rom.title} to play — no plays left`, locked: true });
+    }
+    countTime(m.id, `game:${gid}`);
+    const file = romFilePath(rom);
+    if (!fs.existsSync(file))
+        return res.status(410).json({ error: 'The ROM file is missing on the server' });
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-store');
+    fs.createReadStream(file).pipe(res);
+});
+/** GET /roms/:id/can-play?member=ID — may they play (owned, or a play left)? Does NOT spend a play. */
+gamesRouter.get('/roms/:id/can-play', (req, res) => {
+    const rom = romById(req.params.id);
+    if (!rom || rom.hidden)
+        return res.status(404).json({ error: 'not found' });
+    const m = memberOf(String(req.query.member ?? ''));
+    if (!m)
+        return res.json({ ok: false, reason: 'Pick who is playing first' });
+    const gid = `rom:${rom.id}`;
+    const over = limitHit(m.id, `game:${gid}`);
+    if (over)
+        return res.json({ ok: false, reason: over, limit: true });
+    const owned = free(m) || unlockedFor(m).has(gid);
+    const ok = owned || (passesFor(m.id).get(gid) ?? 0) > 0;
+    res.json({ ok, owned });
+});
+/** GET /classic-section — is the whole Classic games section hidden from kids? (parents still see it) */
+gamesRouter.get('/classic-section', (_req, res) => res.json({ hidden: getSetting('classic_games_hidden', '0') === '1' }));
+/** PUT /classic-section { hidden } — a parent hides/shows the whole Classic games section. */
+gamesRouter.put('/classic-section', requireAdmin, (req, res) => {
+    const hidden = req.body?.hidden === true;
+    setSetting('classic_games_hidden', hidden ? '1' : '0');
+    res.json({ hidden });
+});

@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull the latest Family Home Center build and restart if changed
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+ExecStart=/home/pi/fhc/update.sh
